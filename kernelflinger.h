@@ -27,5 +27,6 @@
 #define _unused __attribute__((unused))
 
 extern const EFI_GUID fastboot_guid;
+extern const EFI_GUID loader_guid;
 
 #endif
