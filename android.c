@@ -361,6 +361,7 @@ static EFI_STATUS setup_command_line(
         CHAR16 *serialno;
         CHAR16 *tmp;
         CHAR16 *serialport;
+        CHAR16 *var;
 
         EFI_PHYSICAL_ADDRESS cmdline_addr;
         CHAR8 *full_cmdline;
@@ -409,6 +410,32 @@ static EFI_STATUS setup_command_line(
                 cmdline16 = PoolPrint(L"androidboot.mode=charger %s", cmdline16);
 
                 FreePool(tmp);
+                if (!cmdline16) {
+                        ret = EFI_OUT_OF_RESOURCES;
+                        goto out;
+                }
+        }
+
+        var = get_efi_variable_str(&loader_guid, L"LoaderEntryRebootReason");
+        if (var) {
+                set_efi_variable(&loader_guid, L"LoaderEntryRebootReason", 0, NULL, TRUE, TRUE);
+
+                tmp = cmdline16;
+                cmdline16 = PoolPrint(L"bootreason=%s %s",
+                                var, cmdline16);
+                FreePool(var);
+                FreePool(tmp);
+
+                if (!cmdline16) {
+                        ret = EFI_OUT_OF_RESOURCES;
+                        goto out;
+                }
+        } else {
+                tmp = cmdline16;
+                cmdline16 = PoolPrint(L"bootreason=unknown %s", cmdline16);
+
+                FreePool(tmp);
+
                 if (!cmdline16) {
                         ret = EFI_OUT_OF_RESOURCES;
                         goto out;
