@@ -24,13 +24,7 @@ PREBUILT_TOP=$ANDROID_BUILD_TOP/hardware/intel/efi_prebuilts/
 
 copy_to_prebuilts()
 {
-    # Sanity check
-    if [ ! -s "kernelflinger.efi" ] ; then
-        echo "[ERROR] *** $1: kernelflinger.efi does not exist or has size 0. aborting..."
-        exit 1
-    fi
-
-    cp -v kernelflinger.efi kernelflinger.unsigned.efi $PREBUILT_TOP/gummiboot/linux-$1/
+    cp -v kernelflinger.db.efi kernelflinger.vendor.efi kernelflinger.unsigned.efi $PREBUILT_TOP/gummiboot/linux-$1/
 }
 
 add_prebuilts=0
