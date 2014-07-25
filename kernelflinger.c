@@ -116,15 +116,22 @@ enum boot_target {
  * for bootable USB media */
 #define MAGIC_ESP_BOOTIMAGE         L"\\espboot.img"
 
-extern VOID *oem_keystore;
-extern UINTN oem_keystore_size;
-
-extern VOID *oem_key;
-extern UINTN oem_key_size;
-
 static EFI_HANDLE g_parent_image;
 static EFI_HANDLE g_disk_device;
 static EFI_LOADED_IMAGE *g_loaded_image;
+
+extern struct {
+        UINT32 oem_keystore_size;
+        UINT32 oem_key_size;
+        UINT32 oem_keystore_offset;
+        UINT32 oem_key_offset;
+} oem_keystore_table;
+
+static VOID *oem_keystore;
+static UINTN oem_keystore_size;
+
+static VOID *oem_key;
+static UINTN oem_key_size;
 
 #if DEBUG_MESSAGES
 static CHAR16 *boot_target_to_string(enum boot_target bt)
@@ -614,6 +621,14 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 return ret;
         }
         g_disk_device = g_loaded_image->DeviceHandle;
+        oem_keystore = (UINT8 *)&oem_keystore_table +
+                        oem_keystore_table.oem_keystore_offset;
+        oem_keystore_size = oem_keystore_table.oem_keystore_size;
+        oem_key = (UINT8 *)&oem_keystore_table +
+                        oem_keystore_table.oem_key_offset;
+        oem_key_size = oem_keystore_table.oem_key_size;
+        debug("oem key size %d keystore size %d", oem_key_size,
+                        oem_keystore_size);
 
         debug("choosing a boot target");
         boot_target = choose_boot_target(&target_address, &target_path,
