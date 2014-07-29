@@ -606,6 +606,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
         /* gnu-efi initialization */
         InitializeLib(image, sys_table);
+        ux_init();
 
         debug("%s", loader_version);
         set_efi_variable_str(&loader_guid, LOADER_VERSION_VAR,
@@ -659,8 +660,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 selected_keystore = NULL;
                 selected_keystore_size = 0;
 
-                /* XXX cache this decision? */
-                if (!prompt_user_device_unlocked()) {
+                if (!ux_prompt_user_device_unlocked()) {
                         boot_state = BOOT_STATE_RED;
                         boot_target = RECOVERY;
                 }
@@ -668,14 +668,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 debug("examining keystore");
                 UINT8 hash[KEYSTORE_HASH_SIZE];
                 select_keystore(&selected_keystore, &selected_keystore_size);
-                if (!verify_android_keystore(selected_keystore,
+                if (EFI_ERROR(verify_android_keystore(selected_keystore,
                                         selected_keystore_size,
-                                        oem_key, oem_key_size, hash)) {
+                                        oem_key, oem_key_size, hash))) {
                         debug("keystore not validated");
                         boot_state = BOOT_STATE_YELLOW;
 
-                        /* XXX cache this decision? */
-                        if (!prompt_user_keystore_unverified(hash)) {
+                        if (!ux_prompt_user_keystore_unverified(hash)) {
                                 selected_keystore = NULL;
                                 boot_state = BOOT_STATE_RED;
                                 boot_target = RECOVERY;
@@ -702,12 +701,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         /* Recovery itself is unverified. Give up. */
                         if (boot_target == RECOVERY) {
                                 debug("recovery image is bad");
-                                warn_user_unverified_recovery();
+                                ux_warn_user_unverified_recovery();
                                 halt_system();
                                 return ret;
                         }
 
-                        if (!prompt_user_bootimage_unverified())
+                        if (!ux_prompt_user_bootimage_unverified())
                                 halt_system();
 
                         /* Fall back to loading Recovery Console */
