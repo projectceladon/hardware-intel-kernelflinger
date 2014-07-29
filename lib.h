@@ -82,11 +82,11 @@ UINTN strtoul(const CHAR16 *nptr, CHAR16 **endptr, UINTN base);
 /*
  * misc
  */
-
-EFI_STATUS halt_system(VOID);
+VOID halt_system(VOID) __attribute__ ((noreturn));
 
 VOID pause(UINTN seconds);
 
-EFI_STATUS reboot(VOID);
+VOID reboot(VOID) __attribute__ ((noreturn));
+
 
 #endif

@@ -63,35 +63,44 @@ static const struct text_line red_state[] = {
 	{0, NULL} };
 
 static const struct text_line bad_recovery[] = {
-	{EFI_LIGHTRED, L"Your device is unable to start"},
-	{EFI_LIGHTRED, L"because the Recovery Console image has"},
-	{EFI_LIGHTRED, L"failed to verify."},
-	{EFI_LIGHTRED, L""},
+	{EFI_YELLOW, L"FASTBOOT"},
+	{EFI_WHITE, L"Press Volume UP key"},
+	{EFI_WHITE, L""},
+	{EFI_LIGHTRED, L"POWER OFF"},
+	{EFI_WHITE, L"Press Volume DOWN key"},
+	{EFI_WHITE, L""},
+	{EFI_LIGHTGRAY, L"Your device is unable to start"},
+	{EFI_LIGHTGRAY, L"because the Recovery Console image has"},
+	{EFI_LIGHTGRAY, L"failed to verify."},
+	{EFI_LIGHTGRAY, L""},
+	{EFI_LIGHTGRAY, L"You may repair your device with Fastboot."},
 	{0, NULL } };
 
 static const struct text_line device_altered_unlocked[] = {
 	{EFI_YELLOW, L"START"},
 	{EFI_WHITE, L"Press Volume UP key"},
 	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"RECOVER"},
+	{EFI_LIGHTRED, L"FASTBOOT"},
 	{EFI_WHITE, L"Press Volume DOWN key"},
 	{EFI_WHITE, L""},
 	{EFI_LIGHTRED, L"WARNING:"},
 	{EFI_LIGHTGRAY, L"Your device has been altered"},
 	{EFI_LIGHTGRAY, L"from its factory configuration."},
+	{EFI_LIGHTGRAY, L"and is no longer in a locked or"},
+	{EFI_LIGHTGRAY, L"verified state."},
 	{EFI_LIGHTGRAY, L""},
 	{EFI_LIGHTGRAY, L"If you were not responsible for"},
 	{EFI_LIGHTGRAY, L"these changes, the security of"},
 	{EFI_LIGHTGRAY, L"your device may be at risk."},
-	{EFI_LIGHTGRAY, L"Choose \"Recover\" to reset"},
-	{EFI_LIGHTGRAY, L"your device."},
+	{EFI_LIGHTGRAY, L"Choose \"FASTBOOT\" to change"},
+	{EFI_LIGHTGRAY, L"your device's state."},
 	{0, NULL } };
 
 static const struct text_line device_altered_keystore[] = {
 	{EFI_YELLOW, L"START"},
 	{EFI_WHITE, L"Press Volume UP key"},
 	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"RECOVER"},
+	{EFI_LIGHTRED, L"FASTBOOT"},
 	{EFI_WHITE, L"Press Volume DOWN key"},
 	{EFI_WHITE, L""},
 	{EFI_LIGHTRED, L"WARNING:"},
@@ -101,8 +110,8 @@ static const struct text_line device_altered_keystore[] = {
 	{EFI_LIGHTGRAY, L"If you were not responsible for"},
 	{EFI_LIGHTGRAY, L"these changes, the security of"},
 	{EFI_LIGHTGRAY, L"your device may be at risk."},
-	{EFI_LIGHTGRAY, L"Choose \"Recover\" to reset"},
-	{EFI_LIGHTGRAY, L"your device."},
+	{EFI_LIGHTGRAY, L"Choose \"FASTBOOT\" to clear"},
+	{EFI_LIGHTGRAY, L"or upload a new user keystore."},
 	{EFI_LIGHTGRAY, L""},
 	{EFI_LIGHTGRAY, L"The device was unable to verify"},
 	{EFI_LIGHTGRAY, L"the keystore with ID:"},
@@ -170,66 +179,45 @@ static VOID display_text(const struct text_line strings[])
 	}
 }
 
-BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash) {
-	enum key_events e;
+static BOOLEAN input_to_bool(VOID)
+{
+	enum key_events e = wait_for_input();
+	switch (e) {
+	case EV_TIMEOUT:
+		halt_system();
+	case EV_UP:
+		return TRUE;
+	case EV_DOWN:
+		return FALSE;
+	}
+	return FALSE;
+}
 
+
+BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash) {
 	clear_screen();
 	display_text(device_altered_keystore);
 	Print(L"%02x%02x-%02x%02x-%02x%02x\n",
 			hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
-
-	e = wait_for_input();
-	switch (e) {
-	case EV_TIMEOUT:
-		halt_system();
-	case EV_UP:
-		return TRUE;
-	case EV_DOWN:
-		return FALSE;
-	}
-	return FALSE;
+	return input_to_bool();
 }
 
-VOID ux_warn_user_unverified_recovery(VOID) {
+BOOLEAN ux_warn_user_unverified_recovery(VOID) {
 	clear_screen();
 	display_text(bad_recovery);
-	pause(15);
+	return input_to_bool();
 }
 
 BOOLEAN ux_prompt_user_bootimage_unverified(VOID) {
-	enum key_events e;
-
 	clear_screen();
 	display_text(red_state);
-
-	e = wait_for_input();
-	switch (e) {
-	case EV_TIMEOUT:
-		halt_system();
-	case EV_UP:
-		return TRUE;
-	case EV_DOWN:
-		return FALSE;
-	}
-	return FALSE;
+	return input_to_bool();
 }
 
 BOOLEAN ux_prompt_user_device_unlocked(VOID) {
-	enum key_events e;
-
 	clear_screen();
 	display_text(device_altered_unlocked);
-
-	e = wait_for_input();
-	switch (e) {
-	case EV_TIMEOUT:
-		halt_system();
-	case EV_UP:
-		return TRUE;
-	case EV_DOWN:
-		return FALSE;
-	}
-	return FALSE;
+	return input_to_bool();
 }
 
 EFI_STATUS ux_init(VOID) {
