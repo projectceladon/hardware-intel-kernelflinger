@@ -362,17 +362,19 @@ VOID pause(UINTN seconds)
 }
 
 
-EFI_STATUS halt_system(VOID)
+VOID halt_system(VOID)
 {
-        return uefi_call_wrapper(RT->ResetSystem, 4, EfiResetShutdown, EFI_SUCCESS,
+        uefi_call_wrapper(RT->ResetSystem, 4, EfiResetShutdown, EFI_SUCCESS,
                         0, NULL);
+        while (1) { }
 }
 
 
-EFI_STATUS reboot(VOID)
+VOID reboot(VOID)
 {
-        return uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS,
+        uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS,
                         0, NULL);
+        while (1) { }
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

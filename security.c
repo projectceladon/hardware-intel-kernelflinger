@@ -35,19 +35,13 @@
 #include "security.h"
 #include "android.h"
 
-VOID *oem_keystore = NULL;
-UINTN oem_keystore_size = 0;
-
-VOID *oem_key = NULL;
-UINTN oem_key_size = 0;
-
 EFI_STATUS verify_android_boot_image(
         IN VOID *bootimage _unused,
         IN VOID *keystore _unused,
         IN UINTN keystore_size _unused,
         OUT CHAR16 *target)
 {
-        StrCpy(target, L"foobar");
+        StrCpy(target, L"fastboot");
         return EFI_SUCCESS;
 }
 
@@ -56,8 +50,9 @@ EFI_STATUS verify_android_keystore(
         IN UINTN keystore_size _unused,
         IN VOID *key _unused,
         IN UINTN key_size _unused,
-        OUT VOID *keystore_hash _unused)
+        OUT VOID *keystore_hash)
 {
+        memset(keystore_hash, 0xFF, KEYSTORE_HASH_SIZE);
         return EFI_SUCCESS;
 }
 

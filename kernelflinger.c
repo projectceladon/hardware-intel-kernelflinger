@@ -112,9 +112,13 @@ enum boot_target {
 /* How long magic key should be held to force Fastboot mode */
 #define FASTBOOT_HOLD_DELAY         (4 * 1000 * 1000)
 
-/* If we find this in the root of the EFI system partition, boot it. Used
- * for bootable USB media */
-#define MAGIC_ESP_BOOTIMAGE         L"\\espboot.img"
+/* If we find this in the root of the EFI system partition, unconditionally
+ * load the Fastboot image */
+#define FASTBOOT_SENTINEL         L"\\force_fastboot"
+
+/* Path to Fastboot image */
+#define FASTBOOT_PATH             L"\\fastboot.img"
+
 
 static EFI_HANDLE g_parent_image;
 static EFI_HANDLE g_disk_device;
@@ -217,11 +221,11 @@ static VOID select_keystore(VOID **keystore, UINTN *size)
 }
 
 
-static enum boot_target check_esp_bootimage(VOID)
+static enum boot_target check_fastboot_sentinel(VOID)
 {
-        debug("checking ESP for %s", MAGIC_ESP_BOOTIMAGE);
-        if (file_exists(g_disk_device, MAGIC_ESP_BOOTIMAGE))
-                return ESP_BOOTIMAGE;
+        debug("checking ESP for %s", FASTBOOT_SENTINEL);
+        if (file_exists(g_disk_device, FASTBOOT_SENTINEL))
+                return FASTBOOT;
         return NORMAL_BOOT;
 }
 
@@ -457,10 +461,8 @@ static enum boot_target choose_boot_target(VOID **target_address,
         if (ret != NORMAL_BOOT)
                 return ret;
 
-        ret = check_esp_bootimage();
+        ret = check_fastboot_sentinel();
         if (ret != NORMAL_BOOT) {
-                *oneshot = FALSE;
-                *target_path = StrDuplicate(MAGIC_ESP_BOOTIMAGE);
                 return ret;
         }
 
@@ -481,7 +483,6 @@ static EFI_STATUS load_boot_image(
                 IN VOID *keystore,
                 IN UINTN keystore_size,
                 IN CHAR16 *target_path,
-                IN VOID *mem_address,
                 OUT VOID **bootimage,
                 IN BOOLEAN oneshot)
 {
@@ -495,16 +496,10 @@ static EFI_STATUS load_boot_image(
         case RECOVERY:
                 ret = android_image_load_partition(&recovery_ptn_guid, bootimage);
                 break;
-        case FASTBOOT:
-                ret = android_image_load_partition(&fastboot_ptn_guid, bootimage);
-                break;
         case ESP_BOOTIMAGE:
+                /* "fastboot boot" case */
                 ret = android_image_load_file(g_disk_device, target_path, oneshot,
                         bootimage);
-                break;
-        case MEMORY:
-                *bootimage = mem_address;
-                ret = EFI_SUCCESS;
                 break;
         default:
                 return EFI_INVALID_PARAMETER;
@@ -519,12 +514,6 @@ static EFI_STATUS load_boot_image(
 
                 ret = verify_android_boot_image(*bootimage, keystore,
                         keystore_size, target);
-                if (EFI_ERROR(ret) && keystore != oem_keystore) {
-                        debug("selected keystore doesn't verify, try OEM key\n");
-                        ret = verify_android_boot_image(*bootimage,
-                                        oem_keystore, oem_keystore_size,
-                                        target);
-                }
 
                 if (EFI_ERROR(ret)) {
                         debug("boot image doesn't verify");
@@ -534,10 +523,6 @@ static EFI_STATUS load_boot_image(
                 switch (boot_target) {
                 case NORMAL_BOOT:
                         expected = L"boot";
-                        break;
-                case FASTBOOT:
-                case MEMORY:
-                        expected = L"fastboot";
                         break;
                 case RECOVERY:
                         expected = L"recovery";
@@ -554,7 +539,7 @@ static EFI_STATUS load_boot_image(
         }
 
 out:
-        if (EFI_ERROR(ret) && *bootimage != mem_address)
+        if (EFI_ERROR(ret))
                 FreePool(bootimage);
 
         return ret;
@@ -591,6 +576,59 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
 }
 
 
+static VOID enter_fastboot_mode(UINT8 boot_state, VOID *target_address)
+        __attribute__ ((noreturn));
+
+static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
+{
+        /* Fastboot is conceptually part of the bootloader itself. That it
+         * happens to currently be an Android Boot Image, and not part of the
+         * kernelflinger EFI binary, is an implementation detail. Fastboot boot
+         * image is not independently replaceable by end user without also
+         * replacing the bootloader.  On an ARM device the bootloader/fastboot
+         * are a single binary.
+         *
+         * Entering Fastboot is ALWAYS verified by the OEM Keystore, regardless
+         * of the device's current boot state/selected keystore/etc. If it
+         * doesn't verify we unconditionally halt the system. */
+        EFI_STATUS ret;
+        CHAR16 target[BOOT_TARGET_SIZE];
+
+        set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
+                        &boot_state, FALSE, TRUE);
+
+        if (!bootimage) {
+                ret = android_image_load_file(g_disk_device, FASTBOOT_PATH,
+                                FALSE, &bootimage);
+                if (EFI_ERROR(ret)) {
+                        Print(L"Couldn't load Fastboot image\n");
+                        goto die;
+                }
+        }
+
+        ret = verify_android_boot_image(bootimage, oem_keystore,
+                        oem_keystore_size, target);
+        if (EFI_ERROR(ret)) {
+                Print(L"Fastboot image not verified\n");
+                goto die;
+        }
+
+        if (StrCmp(target, L"fastboot")) {
+                Print(L"This does not appear to be a Fastboot image\n");
+                goto die;
+        }
+
+        debug("chainloading fastboot, boot state is %s",
+                        boot_state_to_string(boot_state));
+        debug_pause(5);
+        android_image_start_buffer(g_parent_image, bootimage, FALSE, NULL);
+        Print(L"Couldn't chainload Fastboot image\n");
+die:
+        pause(5);
+        halt_system();
+}
+
+
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
         EFI_STATUS ret;
@@ -603,6 +641,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         enum boot_target boot_target = NORMAL_BOOT;
         UINT8 boot_state = BOOT_STATE_GREEN;
         CHAR16 *loader_version = KERNELFLINGER_VERSION;
+        UINT8 hash[KEYSTORE_HASH_SIZE];
 
         /* gnu-efi initialization */
         InitializeLib(image, sys_table);
@@ -634,6 +673,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         debug("choosing a boot target");
         boot_target = choose_boot_target(&target_address, &target_path,
                         &oneshot);
+        debug("selected '%s'",  boot_target_to_string(boot_target));
 
         if (boot_target == ESP_EFI_BINARY) {
                 debug("entering EFI binary");
@@ -647,8 +687,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 reboot();
         }
 
-        debug("selected '%s'",  boot_target_to_string(boot_target));
-
         debug("checking device state");
         /* select the keystore to use for verification based on some
          * security checks and user input. If not everything checks out,
@@ -659,37 +697,42 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 debug("Device is unlocked or secure boot disabled");
                 selected_keystore = NULL;
                 selected_keystore_size = 0;
-
-                if (!ux_prompt_user_device_unlocked()) {
-                        boot_state = BOOT_STATE_RED;
-                        boot_target = RECOVERY;
-                }
         } else {
                 debug("examining keystore");
-                UINT8 hash[KEYSTORE_HASH_SIZE];
+
                 select_keystore(&selected_keystore, &selected_keystore_size);
                 if (EFI_ERROR(verify_android_keystore(selected_keystore,
                                         selected_keystore_size,
                                         oem_key, oem_key_size, hash))) {
                         debug("keystore not validated");
                         boot_state = BOOT_STATE_YELLOW;
-
-                        if (!ux_prompt_user_keystore_unverified(hash)) {
-                                selected_keystore = NULL;
-                                boot_state = BOOT_STATE_RED;
-                                boot_target = RECOVERY;
-                        }
                 }
         }
 
-        while (1) {
-                if (bootimage && bootimage != target_address)
-                        FreePool(bootimage);
+        if (boot_target == FASTBOOT || boot_target == MEMORY) {
+                debug("entering Fastboot mode");
+                enter_fastboot_mode(boot_state, target_address);
+        }
 
+        /* If the user keystore is bad the only way to fix it is via
+         * fastboot */
+        if (boot_state == BOOT_STATE_YELLOW &&
+                        !ux_prompt_user_keystore_unverified(hash)) {
+                enter_fastboot_mode(BOOT_STATE_RED, NULL);
+        }
+
+        /* If the device is unlocked the only way to re-lock it is
+         * via fastboot */
+        if (boot_state == BOOT_STATE_ORANGE &&
+                        !ux_prompt_user_device_unlocked()) {
+                enter_fastboot_mode(BOOT_STATE_RED, NULL);
+        }
+
+        while (1) {
                 debug("loading boot image");
                 ret = load_boot_image(boot_target, selected_keystore,
                                 selected_keystore_size, target_path,
-                                target_address, &bootimage, oneshot);
+                                &bootimage, oneshot);
                 FreePool(target_path);
                 target_path = NULL;
 
@@ -698,20 +741,24 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         if (ret == EFI_ACCESS_DENIED)
                                 boot_state = BOOT_STATE_RED;
 
-                        /* Recovery itself is unverified. Give up. */
+                        /* Recovery itself is unverified. Only way to
+                         * un-hose this device is through Fastboot */
                         if (boot_target == RECOVERY) {
                                 debug("recovery image is bad");
-                                ux_warn_user_unverified_recovery();
-                                halt_system();
-                                return ret;
+                                if (ux_warn_user_unverified_recovery())
+                                        enter_fastboot_mode(BOOT_STATE_RED, NULL);
+                                else
+                                        halt_system();
                         }
 
                         if (!ux_prompt_user_bootimage_unverified())
                                 halt_system();
 
-                        /* Fall back to loading Recovery Console */
+                        /* Fall back to loading Recovery Console so they
+                         * can sideload an OTA to fix their device */
                         debug("fall back to recovery console");
                         boot_target = RECOVERY;
+                        FreePool(bootimage);
                         continue;
                 }
 
