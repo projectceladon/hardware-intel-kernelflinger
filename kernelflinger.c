@@ -634,8 +634,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         VOID *target_address = NULL;
         VOID *bootimage = NULL;
         BOOLEAN oneshot = FALSE;
-        VOID *selected_keystore;
-        UINTN selected_keystore_size;
+        BOOLEAN lock_prompted = FALSE;
+        VOID *selected_keystore = NULL;
+        UINTN selected_keystore_size = 0;
         enum boot_target boot_target = NORMAL_BOOT;
         UINT8 boot_state = BOOT_STATE_GREEN;
         CHAR16 *loader_version = KERNELFLINGER_VERSION;
@@ -668,6 +669,15 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         debug("oem key size %d keystore size %d", oem_key_size,
                         oem_keystore_size);
 
+        if (!is_efi_secure_boot_enabled()) {
+                debug("uefi secure boot is disabled");
+                boot_state = BOOT_STATE_ORANGE;
+                lock_prompted = TRUE;
+
+                if (!ux_prompt_user_secure_boot_off())
+                        halt_system();
+        }
+
         debug("choosing a boot target");
         boot_target = choose_boot_target(&target_address, &target_path,
                         &oneshot);
@@ -690,12 +700,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
          * security checks and user input. If not everything checks out,
          * the user may be prompted whether they want to continue booting
          * or enter the Recovery Console (unverified) */
-        if (!is_efi_secure_boot_enabled() || !is_device_locked_or_verified()) {
+        if (!is_device_locked_or_verified()) {
                 boot_state = BOOT_STATE_ORANGE;
-                debug("Device is unlocked or secure boot disabled");
-                selected_keystore = NULL;
-                selected_keystore_size = 0;
-        } else {
+                debug("Device is unlocked");
+        } else if (boot_state == BOOT_STATE_GREEN) {
                 debug("examining keystore");
 
                 select_keystore(&selected_keystore, &selected_keystore_size);
@@ -721,7 +729,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
         /* If the device is unlocked the only way to re-lock it is
          * via fastboot */
-        if (boot_state == BOOT_STATE_ORANGE &&
+        if (boot_state == BOOT_STATE_ORANGE && !lock_prompted &&
                         !ux_prompt_user_device_unlocked()) {
                 enter_fastboot_mode(BOOT_STATE_RED, NULL);
         }

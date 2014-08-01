@@ -96,6 +96,27 @@ static const struct text_line device_altered_unlocked[] = {
 	{EFI_LIGHTGRAY, L"your device's state."},
 	{0, NULL } };
 
+static const struct text_line secure_boot_off[] = {
+	{EFI_YELLOW, L"START"},
+	{EFI_WHITE, L"Press Volume UP key"},
+	{EFI_WHITE, L""},
+	{EFI_LIGHTRED, L"POWER OFF"},
+	{EFI_WHITE, L"Press Volume DOWN key"},
+	{EFI_WHITE, L""},
+	{EFI_LIGHTRED, L"WARNING:"},
+	{EFI_LIGHTGRAY, L"Your device has been altered"},
+	{EFI_LIGHTGRAY, L"from its factory configuration."},
+	{EFI_LIGHTGRAY, L"and is no longer in a locked or"},
+	{EFI_LIGHTGRAY, L"verified state due to UEFI Secure"},
+	{EFI_LIGHTGRAY, L"Boot being disabled."},
+	{EFI_LIGHTGRAY, L""},
+	{EFI_LIGHTGRAY, L"If you were not responsible for"},
+	{EFI_LIGHTGRAY, L"these changes, the security of"},
+	{EFI_LIGHTGRAY, L"your device may be at risk."},
+	{EFI_LIGHTGRAY, L"Enter BIOS setup to re-enable"},
+	{EFI_LIGHTGRAY, L"UEFI Secure Boot."},
+	{0, NULL } };
+
 static const struct text_line device_altered_keystore[] = {
 	{EFI_YELLOW, L"START"},
 	{EFI_WHITE, L"Press Volume UP key"},
@@ -211,6 +232,12 @@ BOOLEAN ux_warn_user_unverified_recovery(VOID) {
 BOOLEAN ux_prompt_user_bootimage_unverified(VOID) {
 	clear_screen();
 	display_text(red_state);
+	return input_to_bool();
+}
+
+BOOLEAN ux_prompt_user_secure_boot_off(VOID) {
+	clear_screen();
+	display_text(secure_boot_off);
 	return input_to_bool();
 }
 
