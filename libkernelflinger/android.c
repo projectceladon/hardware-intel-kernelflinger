@@ -266,7 +266,6 @@ static EFI_STATUS setup_ramdisk(UINT8 *bootimage)
                 return EFI_SUCCESS; // no ramdisk, so nothing to do
         }
 
-        /* FIXME Crashes here with GCC 4.7 in some cases, why? */
         bp->hdr.ramdisk_len = rsize;
         debug("ramdisk size %d", rsize);
         ret = emalloc(rsize, 0x1000, &ramdisk_addr);
@@ -517,7 +516,6 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         kernel_start = buf->hdr.pref_address;
         init_size = buf->hdr.init_size;
         buf->hdr.loader_id = 0x1;
-        /* FIXME why does this crash with GCC 4.7? */
         memset(&buf->screen_info, 0x0, sizeof(buf->screen_info));
 
         ret = allocate_pages(AllocateAddress, EfiLoaderData,
@@ -541,7 +539,6 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
                 goto out;
 
         boot_params = (struct boot_params *)(UINTN)boot_addr;
-        /* FIXME why does this crash with GCC 4.7? */
         memset(boot_params, 0x0, 16384);
 
         /* Copy first two sectors to boot_params */

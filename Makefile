@@ -20,7 +20,7 @@ VENDOR_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/vendor
 CPPFLAGS := -I$(GNU_EFI_INCLUDE) -I$(GNU_EFI_INCLUDE)/$(ARCH) -I$(OPENSSL_INCLUDE) -Iinclude/libkernelflinger
 CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
 	 -fshort-wchar -Wall -Werror -mno-red-zone -maccumulate-outgoing-args \
-	 -mno-mmx -mno-sse -fno-builtin
+	 -mno-mmx -mno-sse -fno-builtin -fno-tree-loop-distribute-patterns
 
 ifneq ($(INSECURE_LOADER),)
     CFLAGS += -DINSECURE
@@ -36,8 +36,7 @@ VERITY_PRIVATE_KEY := $(ANDROID_BUILD_TOP)/build/target/product/security/verity_
 KEYSTORE_SIGNER := $(ANDROID_BUILD_TOP)/out/host/linux-x86/bin/keystore_signer
 
 ifeq ($(ARCH),x86_64)
-# FIXME would like to use -DGNU_EFI_USE_MS_ABI, but that requires GCC 4.7
-CFLAGS += -DEFI_FUNCTION_WRAPPER
+CFLAGS += -DEFI_FUNCTION_WRAPPER -DGNU_EFI_USE_MS_ABI
 else
 CFLAGS += -m32
 endif
