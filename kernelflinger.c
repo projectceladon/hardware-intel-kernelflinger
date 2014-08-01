@@ -767,6 +767,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                         &boot_state, FALSE, TRUE);
 
+        if (boot_state != BOOT_STATE_GREEN)
+                android_clear_memory();
+
         debug("chainloading boot image, boot state is %s", boot_state_to_string(boot_state));
         debug_pause(5);
         return android_image_start_buffer(g_parent_image, bootimage,
