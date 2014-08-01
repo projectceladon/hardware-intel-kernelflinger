@@ -24,7 +24,7 @@ PREBUILT_TOP=$ANDROID_BUILD_TOP/hardware/intel/efi_prebuilts/
 
 copy_to_prebuilts()
 {
-    cp -v kernelflinger.db.efi kernelflinger.vendor.efi kernelflinger.unsigned.efi $PREBUILT_TOP/gummiboot/linux-$1/
+    cp -v kernelflinger.db.efi kernelflinger.vendor.efi kernelflinger.unsigned.efi $PREBUILT_TOP/kernelflinger/linux-$1/
 }
 
 add_prebuilts=0
