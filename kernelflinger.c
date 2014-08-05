@@ -618,7 +618,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 
         debug("chainloading fastboot, boot state is %s",
                         boot_state_to_string(boot_state));
-        debug_pause(5);
         android_image_start_buffer(g_parent_image, bootimage, FALSE, NULL);
         Print(L"Couldn't chainload Fastboot image\n");
 die:
@@ -779,7 +778,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 android_clear_memory();
 
         debug("chainloading boot image, boot state is %s", boot_state_to_string(boot_state));
-        debug_pause(5);
         return android_image_start_buffer(g_parent_image, bootimage,
                         boot_target == NORMAL_BOOT, NULL);
 }
