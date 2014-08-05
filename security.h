@@ -56,7 +56,7 @@
  *
  * Return values:
  * EFI_SUCCESS: Boot image is validated
- * EFI_BAD_PARAMETER - Boot image and/or keystore are not well-formed
+ * EFI_INVALID_PARAMETER - Boot image and/or keystore are not well-formed
  * EFI_ACCESS_DENIED - Boot image or AuthenticatedAttributes is not verifiable
  *                     or boot image is unsigned
  */
@@ -83,7 +83,7 @@ EFI_STATUS verify_android_boot_image(
  * Return values:
  * EFI_SUCCESS - Keystore is validated by the OEM key
  * EFI_ACCESS_DENIED - Keystore is not validated
- * EFI_BAD_PARAMETER - Keystore data is not well-formed
+ * EFI_INVALID_PARAMETER - Keystore data is not well-formed
  */
 EFI_STATUS verify_android_keystore(
         IN VOID *keystore,

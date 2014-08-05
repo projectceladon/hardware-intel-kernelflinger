@@ -56,7 +56,7 @@ static const struct text_line red_state[] = {
 	{EFI_WHITE, L""},
 	{EFI_LIGHTGRAY, L"Your device is unable to start"},
 	{EFI_LIGHTGRAY, L"because the boot image has"},
-	{EFI_LIGHTGRAY, L"failed to verify."},
+	{EFI_LIGHTGRAY, L"failed to verify or is corrupted."},
 	{EFI_LIGHTGRAY, L""},
 	{EFI_LIGHTGRAY, L"You may attempt to recover"},
 	{EFI_LIGHTGRAY, L"the device."},
@@ -71,7 +71,7 @@ static const struct text_line bad_recovery[] = {
 	{EFI_WHITE, L""},
 	{EFI_LIGHTGRAY, L"Your device is unable to start"},
 	{EFI_LIGHTGRAY, L"because the Recovery Console image has"},
-	{EFI_LIGHTGRAY, L"failed to verify."},
+	{EFI_LIGHTGRAY, L"failed to verify or is corrupted."},
 	{EFI_LIGHTGRAY, L""},
 	{EFI_LIGHTGRAY, L"You may repair your device with Fastboot."},
 	{0, NULL } };
