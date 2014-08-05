@@ -22,6 +22,10 @@ CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
 	 -fshort-wchar -Wall -Werror -mno-red-zone -maccumulate-outgoing-args \
 	 -mno-mmx -mno-sse -fno-builtin
 
+ifneq ($(INSECURE_LOADER),)
+    CFLAGS += -DINSECURE
+endif
+
 # The keystore and key to store inside the kernelflinger binary, in the
 # .oem_keystore section. The keystore must be signed with the key.
 OEM_KEYSTORE ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/oemkeystore.bin
