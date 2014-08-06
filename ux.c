@@ -30,7 +30,7 @@
  *
  */
 
-#include "kernelflinger.h"
+#include "lib.h"
 #include "ux.h"
 
 #define TIMEOUT_SECS	60

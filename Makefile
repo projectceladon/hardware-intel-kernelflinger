@@ -17,7 +17,7 @@ OPENSSL_INCLUDE := $(OPENSSL_TOP)/Include
 DB_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/DB
 VENDOR_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/vendor
 
-CPPFLAGS := -I$(GNU_EFI_INCLUDE) -I$(GNU_EFI_INCLUDE)/$(ARCH) -I$(OPENSSL_INCLUDE)
+CPPFLAGS := -I$(GNU_EFI_INCLUDE) -I$(GNU_EFI_INCLUDE)/$(ARCH) -I$(OPENSSL_INCLUDE) -Iinclude/libkernelflinger
 CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
 	 -fshort-wchar -Wall -Werror -mno-red-zone -maccumulate-outgoing-args \
 	 -mno-mmx -mno-sse -fno-builtin
@@ -42,13 +42,14 @@ LDFLAGS	:= -nostdlib -znocombreloc -T $(GNU_EFI_LIB)/elf_$(ARCH)_efi.lds \
 	-shared -Bsymbolic -L$(GNU_EFI_LIB) \
 	-L$(OPENSSL_TOP) $(GNU_EFI_LIB)/crt0-efi-$(ARCH).o
 
+LIB_OBJS := libkernelflinger/android.o \
+	    libkernelflinger/efilinux.o \
+	    libkernelflinger/acpi.o \
+	    libkernelflinger/lib.o \
+	    libkernelflinger/options.o \
+	    libkernelflinger/security.o
+
 OBJS := kernelflinger.o \
-	android.o \
-	efilinux.o \
-	options.o \
-	acpi.o \
-	security.o \
-	lib.o \
 	oemkeystore.o \
 	ux.o
 
@@ -96,9 +97,12 @@ kernelflinger.vendor.key: $(VENDOR_KEY_PAIR).pk8
 		-j .debug_line -j .debug_str -j .debug_ranges \
 		--target=efi-app-$(ARCH) $^ $@
 
-kernelflinger.so: $(OBJS)
+libkernelflinger.a: $(LIB_OBJS)
+	ar rcs $@ $^
+
+kernelflinger.so: $(OBJS) libkernelflinger.a
 	$(LD) $(LDFLAGS) $^ -o $@ -lefi $(EFI_LIBS)
 
 clean:
-	rm -f $(OBJS) oem.cer kernelflinger.so kernelflinger.*.efi kernelflinger.*.key
+	rm -f $(OBJS) $(LIB_OBJS) libkernelflinger.a oem.cer kernelflinger.so kernelflinger.*.efi kernelflinger.*.key
 
