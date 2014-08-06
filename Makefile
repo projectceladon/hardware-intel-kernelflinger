@@ -26,10 +26,14 @@ ifneq ($(INSECURE_LOADER),)
     CFLAGS += -DINSECURE
 endif
 
-# The keystore and key to store inside the kernelflinger binary, in the
-# .oem_keystore section. The keystore must be signed with the key.
-OEM_KEYSTORE ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/oemkeystore.bin
+# Key pair used to sign & validate keystores
 OEM_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/oem
+
+# We'll use the verity key in the build as our testing keystore for signing
+# boot images. We'll extract the public key from the PEM private key
+VERITY_PRIVATE_KEY := $(ANDROID_BUILD_TOP)/build/target/product/security/verity_private_dev_key
+
+KEYSTORE_SIGNER := $(ANDROID_BUILD_TOP)/out/host/linux-x86/bin/keystore_signer
 
 ifeq ($(ARCH),x86_64)
 # FIXME would like to use -DGNU_EFI_USE_MS_ABI, but that requires GCC 4.7
@@ -65,12 +69,21 @@ kernelflinger.vendor.efi: kernelflinger.unsigned.efi $(VENDOR_KEY_PAIR).x509.pem
 		--cert $(VENDOR_KEY_PAIR).x509.pem \
 		--output $@ $<
 
+oem.key: $(OEM_KEY_PAIR).pk8
+	openssl pkcs8 -inform DER -nocrypt -in $< -out $@
 
 oem.cer: $(OEM_KEY_PAIR).x509.pem
 	openssl x509 -outform der -in $< -out $@
 
-oemkeystore.o: oemkeystore.S $(OEM_KEYSTORE) oem.cer
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@ -DOEM_KEYSTORE_FILE=\"$(OEM_KEYSTORE)\" -DOEM_KEY_FILE=\"oem.cer\"
+# DER formatted public verity key
+verity.cer: $(VERITY_PRIVATE_KEY)
+	openssl rsa -pubout -inform PEM -outform der -in $< -out $@
+
+keystore.bin: oem.key verity.cer $(KEYSTORE_SIGNER)
+	$(KEYSTORE_SIGNER) oem.key $@ verity.cer
+
+oemkeystore.o: oemkeystore.S keystore.bin oem.cer
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@ -DOEM_KEYSTORE_FILE=\"keystore.bin\" -DOEM_KEY_FILE=\"oem.cer\"
 
 %.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -104,5 +117,5 @@ kernelflinger.so: $(OBJS) libkernelflinger.a
 	$(LD) $(LDFLAGS) $^ -o $@ -lefi $(EFI_LIBS)
 
 clean:
-	rm -f $(OBJS) $(LIB_OBJS) libkernelflinger.a oem.cer kernelflinger.so kernelflinger.*.efi kernelflinger.*.key
+	rm -f $(OBJS) $(LIB_OBJS) *.a *.cer *.key *.bin *.so *.efi
 

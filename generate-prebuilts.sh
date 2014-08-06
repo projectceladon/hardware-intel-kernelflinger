@@ -20,6 +20,11 @@ if [ -z "$ANDROID_BUILD_TOP" ]; then
     exit 2
 fi
 
+if [ ! -e "$ANDROID_BUILD_TOP/out/host/linux-x86/bin/keystore_signer" ]; then
+    echo "[ERROR] keystore_signer not found, run 'mm' in system/extras/verity"
+    exit 3
+fi
+
 PREBUILT_TOP=$ANDROID_BUILD_TOP/hardware/intel/efi_prebuilts/
 
 copy_to_prebuilts()
