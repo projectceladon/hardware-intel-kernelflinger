@@ -41,6 +41,7 @@
 #include "android.h"
 #include "ux.h"
 #include "options.h"
+#include "acpi.h"
 
 /* GUIDs for various interesting Android partitions */
 static const EFI_GUID boot_ptn_guid = { 0x49a4d17f, 0x93a3, 0x45c1,
@@ -91,7 +92,8 @@ enum boot_target {
         FASTBOOT,
         ESP_BOOTIMAGE,
         ESP_EFI_BINARY,
-        MEMORY
+        MEMORY,
+        CHARGER
 };
 
 /* Max wait time for console reset in units of tenths of a second.
@@ -151,6 +153,8 @@ static CHAR16 *boot_target_to_string(enum boot_target bt)
                 return L"ESP efi binary";
         case MEMORY:
                 return L"RAM bootimage";
+        case CHARGER:
+                return L"Charge mode";
         default:
                 return L"unknown";
         }
@@ -434,6 +438,19 @@ out:
 }
 
 
+static enum boot_target check_charge_mode()
+{
+        enum wake_sources wake_source;
+
+        wake_source = rsci_get_wake_source();
+        if ((wake_source == WAKE_USB_CHARGER_INSERTED) ||
+            (wake_source == WAKE_ACDC_CHARGER_INSERTED))
+                return CHARGER;
+
+        return NORMAL_BOOT;
+}
+
+
 /* Policy:
  * 1. Check if the "-a xxxxxxxxx" command line was passed in, if so load an
  *    android boot image from RAM at that location.
@@ -446,6 +463,7 @@ out:
  *    or a boot image file in the ESP. BCB can specify oneshot or persistent
  *    targets.
  * 5. Check LoaderEntryOneShot for a boot target
+ * 6. Check if we should go into charge mode or normal boot
  *
  * target_address - If MEMORY returned, physical address to load data
  * target_path - If ESP_EFI_BINARY or ESP_BOOTIMAGE returned, path to the
@@ -480,7 +498,11 @@ static enum boot_target choose_boot_target(VOID **target_address,
         if (ret != NORMAL_BOOT)
                 return ret;
 
-        return check_loader_entry_one_shot();
+        ret = check_loader_entry_one_shot();
+        if (ret != NORMAL_BOOT)
+                return ret;
+
+        return check_charge_mode();
 }
 
 
@@ -516,6 +538,7 @@ static EFI_STATUS load_boot_image(
 
         switch (boot_target) {
         case NORMAL_BOOT:
+        case CHARGER:
                 ret = android_image_load_partition(&boot_ptn_guid, bootimage);
                 break;
         case RECOVERY:
@@ -547,6 +570,7 @@ static EFI_STATUS load_boot_image(
 
                 switch (boot_target) {
                 case NORMAL_BOOT:
+                case CHARGER:
                         expected = L"boot";
                         break;
                 case RECOVERY:
@@ -824,7 +848,7 @@ fallback:
         debug("chainloading boot image, boot state is %s",
                         boot_state_to_string(boot_state));
         return android_image_start_buffer(g_parent_image, bootimage,
-                        boot_target == NORMAL_BOOT, NULL);
+                        boot_target == CHARGER, NULL);
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

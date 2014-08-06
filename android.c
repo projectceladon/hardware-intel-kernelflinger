@@ -35,7 +35,6 @@
 #include <efilib.h>
 
 #include "kernelflinger.h"
-#include "acpi.h"
 #include "android.h"
 #include "efilinux.h"
 #include "lib.h"
@@ -273,19 +272,6 @@ static EFI_STATUS setup_ramdisk(UINT8 *bootimage)
 }
 
 
-static BOOLEAN get_charge_mode(void)
-{
-        enum wake_sources wake_source;
-
-        wake_source = rsci_get_wake_source();
-        if ((wake_source == WAKE_USB_CHARGER_INSERTED) ||
-            (wake_source == WAKE_ACDC_CHARGER_INSERTED))
-                return TRUE;
-
-        return FALSE;
-}
-
-
 static CHAR16 *get_serial_number(void)
 {
         /* Per Android CDD, the value must be 7-bit ASCII and
@@ -405,7 +391,7 @@ static EFI_STATUS setup_command_line(
                 }
         }
 
-        if (enable_charger && get_charge_mode()) {
+        if (enable_charger) {
                 tmp = cmdline16;
                 cmdline16 = PoolPrint(L"androidboot.mode=charger %s", cmdline16);
 
