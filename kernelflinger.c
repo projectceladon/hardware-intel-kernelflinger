@@ -35,56 +35,19 @@
 #include <efiapi.h>
 #include <efilib.h>
 
-#include "kernelflinger.h"
+#include "vars.h"
 #include "lib.h"
 #include "security.h"
 #include "android.h"
 #include "ux.h"
 #include "options.h"
-#include "acpi.h"
+#include "power.h"
 
-/* GUIDs for various interesting Android partitions */
-static const EFI_GUID boot_ptn_guid = { 0x49a4d17f, 0x93a3, 0x45c1,
-        {0xa0, 0xde, 0xf5, 0x0b, 0x2e, 0xbe, 0x25, 0x99 } };
-static const EFI_GUID recovery_ptn_guid = { 0x4177c722, 0x9e92, 0x4aab,
-        {0x86, 0x44, 0x43, 0x50, 0x2b, 0xfd, 0x55, 0x06 } };
-static const EFI_GUID misc_ptn_guid = { 0xef32a33b, 0xa409, 0x486c,
-        {0x91, 0x41, 0x9f, 0xfb, 0x71, 0x1f, 0x62, 0x66 } };
-
-/* Gummiboot's GUID, included here as we also honor LoaderEntryOneShot */
-const EFI_GUID loader_guid = { 0x4a67b082, 0x0a4c, 0x41cf,
-        {0xb6, 0xc7, 0x44, 0x0b, 0x29, 0xbb, 0x8c, 0x4f} };
-
-#define LOADER_ENTRY_ONESHOT    L"LoaderEntryOneShot"
-/* Report bootloader version */
-#define LOADER_VERSION_VAR      L"LoaderVersion"
+#define KERNELFLINGER_VERSION	L"kernelflinger-00.01"
 
 /* For reading EFI globals */
 static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
-
 #define SECURE_BOOT_VAR         L"SecureBoot"
-
-/* GUID for communicating with Fastboot */
-const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
-        {0x9a, 0x99, 0xde, 0xbe, 0xb4, 0x31, 0xfc, 0xc1} };
-
-/* Current device state, set by Fastboot  */
-#define OEM_LOCK_VAR		L"OEMLock"
-#define OEM_LOCK_UNLOCKED	(1 << 0)
-#define OEM_LOCK_VERIFIED	(1 << 1)
-
-/* Boot state that we report before exiting boot services, per
- * Google's verified boot spec */
-#define BOOT_STATE_VAR		L"BootState"
-#define BOOT_STATE_GREEN	0
-#define BOOT_STATE_YELLOW	1
-#define BOOT_STATE_ORANGE	2
-#define BOOT_STATE_RED		3
-
-/* EFI Variable to store user-supplied key store binary data */
-#define KEYSTORE_VAR		L"KeyStore"
-
-
 
 enum boot_target {
         NORMAL_BOOT,

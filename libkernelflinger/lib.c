@@ -34,7 +34,6 @@
 #include <efilib.h>
 
 #include "lib.h"
-#include "kernelflinger.h"
 
 CHAR16 *stra_to_str(CHAR8 *stra)
 {

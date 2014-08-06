@@ -33,6 +33,27 @@
 #ifndef _KF_LIB_H_
 #define _KF_LIB_H_
 
+#include <efi.h>
+#include <efiapi.h>
+#include <efilib.h>
+
+/* debug stuff */
+
+#define DEBUG_MESSAGES 1
+
+#if DEBUG_MESSAGES
+#define debug(fmt, ...) do { \
+    Print(L##fmt L"\n", ##__VA_ARGS__); \
+} while(0)
+
+#define debug_pause(x) pause(x)
+#else
+#define debug(fmt, ...) (void)0
+#define debug_pause(x) (void)(x)
+#endif
+
+#define efi_perror(ret, x, ...) Print(x L": %r", ##__VA_ARGS__, ret)
+
 
 /*
  * EFI Variables
@@ -82,11 +103,14 @@ UINTN strtoul(const CHAR16 *nptr, CHAR16 **endptr, UINTN base);
 /*
  * misc
  */
+#define _unused __attribute__((unused))
+
 VOID halt_system(VOID) __attribute__ ((noreturn));
 
 VOID pause(UINTN seconds);
 
 VOID reboot(VOID) __attribute__ ((noreturn));
+
 
 
 #endif

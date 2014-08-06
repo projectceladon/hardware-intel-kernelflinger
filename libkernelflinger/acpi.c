@@ -29,10 +29,11 @@
 
 #include <efi.h>
 #include <efilib.h>
-#include "acpi.h"
 
-#include "kernelflinger.h"
+#include "acpi.h"
+#include "power.h"
 #include "efilinux.h"
+#include "lib.h"
 
 static struct RSCI_TABLE *RSCI_table = NULL;
 

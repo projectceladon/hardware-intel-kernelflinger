@@ -35,7 +35,6 @@
 #include <efilib.h>
 
 #include "lib.h"
-#include "kernelflinger.h"
 
 static CHAR16 *tokenize(CHAR16 *str)
 {

@@ -31,9 +31,10 @@
  *
  */
 
-#include "kernelflinger.h"
 #include "security.h"
 #include "android.h"
+#include "lib.h"
+
 
 EFI_STATUS verify_android_boot_image(
         IN VOID *bootimage _unused,

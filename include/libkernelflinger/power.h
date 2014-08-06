@@ -30,8 +30,8 @@
  * any external definitions in order to ease export of it.
  */
 
-#ifndef _BOOTLOGIC_H_
-#define _BOOTLOGIC_H_
+#ifndef _POWER_H_
+#define _POWER_H_
 
 /** RSCI Definitions **/
 
@@ -47,4 +47,6 @@ enum wake_sources {
 	WAKE_ERROR = -1,
 };
 
-#endif /* _BOOTLOGIC_H_ */
+enum wake_sources rsci_get_wake_source(void);
+
+#endif /* _POWER_H_ */

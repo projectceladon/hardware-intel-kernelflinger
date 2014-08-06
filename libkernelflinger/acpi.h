@@ -31,7 +31,9 @@
 #ifndef __ACPI_H__
 #define __ACPI_H__
 
-#include "bootlogic.h"
+#include <efi.h>
+#include <efiapi.h>
+#include <efilib.h>
 
 /** Generic ACPI table header **/
 struct ACPI_DESC_HEADER {
@@ -73,7 +75,5 @@ struct RSCI_TABLE {
 };
 
 EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table);
-
-enum wake_sources rsci_get_wake_source(void);
 
 #endif /* __ACPI_H__ */
