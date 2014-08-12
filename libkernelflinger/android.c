@@ -1001,11 +1001,14 @@ EFI_STATUS android_clear_memory()
         UINTN i;
         UINTN counter;
         CHAR8 *mem_map;
+        EFI_TPL OldTpl;
 
+        OldTpl = uefi_call_wrapper(BS->RaiseTPL, 1, TPL_NOTIFY);
         mem_entries = (CHAR8 *)LibMemoryMap(&nr_entries, &key, &entry_sz, &entry_ver);
-        if (!mem_entries)
+        if (!mem_entries) {
+                uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
                 return EFI_OUT_OF_RESOURCES;
-
+        }
         counter = 0;
         mem_map = mem_entries;
         for (i = 0; i < nr_entries; mem_entries += entry_sz, i++) {
@@ -1020,6 +1023,7 @@ EFI_STATUS android_clear_memory()
                         counter += entry->NumberOfPages;
                 }
         }
+        uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
 
         FreePool((void *)mem_map);
         return EFI_SUCCESS;
