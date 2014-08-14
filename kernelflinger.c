@@ -155,17 +155,29 @@ static BOOLEAN is_efi_secure_boot_enabled(VOID)
 
 static BOOLEAN is_device_locked_or_verified(VOID)
 {
-        UINT8 ds;
+        UINT8 *data;
+        UINTN dsize;
 
         /* If we can't read the state, be safe and assume locked */
-        if (EFI_ERROR(get_efi_variable_byte(&fastboot_guid, OEM_LOCK_VAR,
-                                        &ds)))
+        if (EFI_ERROR(get_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
+                                        &dsize, (void **)&data)) || !dsize) {
+                debug("Couldn't read OEMLock, assuming locked");
+                return TRUE;
+        }
+
+        /* Legacy OEMLock format, used to have string "0" or "1"
+         * for unlocked/locked */
+        if (dsize == 2 && data[1] == '\0') {
+                if (data[0] == '0')
+                        return FALSE;
+                if (data[0] == '1')
+                        return TRUE;
+        }
+
+        if (data[0] & OEM_LOCK_VERIFIED)
                 return TRUE;
 
-        if (ds & OEM_LOCK_VERIFIED)
-                return TRUE;
-
-        if (ds & OEM_LOCK_UNLOCKED)
+        if (data[0] & OEM_LOCK_UNLOCKED)
                 return FALSE;
 
         return TRUE;
