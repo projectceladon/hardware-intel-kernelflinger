@@ -137,7 +137,8 @@ EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
 EFI_STATUS set_efi_variable_str(const EFI_GUID *guid, CHAR16 *key,
                 BOOLEAN nonvol, BOOLEAN runtime, CHAR16 *val)
 {
-        return set_efi_variable(guid, key, val ? (StrLen(val) + 1) : 0,
+        return set_efi_variable(guid, key,
+                        val ? ((StrLen(val) + 1) * sizeof(CHAR16)) : 0,
                         val, nonvol, runtime);
 }
 
