@@ -139,12 +139,18 @@ static const struct text_line device_altered_keystore[] = {
 	{EFI_LIGHTGRAY, L""},
 	{0, NULL } };
 
+static VOID clear_screen(VOID)
+{
+	uefi_call_wrapper(ST->ConOut->ClearScreen, 1, ST->ConOut);
+}
+
 
 static enum key_events wait_for_input(VOID)
 {
 	EFI_INPUT_KEY key;
 	UINT64 timeout_left;
 	EFI_STATUS ret;
+	enum key_events out = EV_TIMEOUT;
 
 	timeout_left = TIMEOUT_SECS * 1000000;
 
@@ -161,12 +167,14 @@ static enum key_events wait_for_input(VOID)
 			case SCAN_PAGE_UP:
 			case SCAN_HOME:
 			case SCAN_RIGHT:
-				return EV_UP;
+				out = EV_UP;
+				goto done;
 			case SCAN_DOWN:
 			case SCAN_PAGE_DOWN:
 			case SCAN_END:
 			case SCAN_LEFT:
-				return EV_DOWN;
+				out = EV_DOWN;
+				goto done;
 			default:
 				break;
 			}
@@ -178,13 +186,9 @@ static enum key_events wait_for_input(VOID)
 		uefi_call_wrapper(BS->Stall, 1, NOT_READY_USECS);
 		timeout_left -= NOT_READY_USECS;
 	}
-	return EV_TIMEOUT;
-}
-
-
-static VOID clear_screen(VOID)
-{
-	uefi_call_wrapper(ST->ConOut->ClearScreen, 1, ST->ConOut);
+done:
+	clear_screen();
+	return out;
 }
 
 
