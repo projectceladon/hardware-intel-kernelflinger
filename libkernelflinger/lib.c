@@ -194,20 +194,6 @@ BOOLEAN file_exists(IN EFI_HANDLE disk, IN const CHAR16 *path)
 }
 
 
-UINTN memcmp(const VOID *ptr1, const VOID *ptr2, UINTN num)
-{
-        CHAR8 *buf1 = (CHAR8 *) ptr1;
-        CHAR8 *buf2 = (CHAR8 *) ptr2;
-        if (!ptr1 || !ptr2 || !num)
-                return -1;
-        while (num-- > 0){
-                if (*buf1++ != *buf2++)
-                        return -1;
-        }
-        return 0;
-}
-
-
 VOID StrNCpy(OUT CHAR16 *dest, IN const CHAR16 *src, UINT32 n)
 {
         UINT32 i;
@@ -274,27 +260,6 @@ EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN len)
 }
 
 
-VOID memset(VOID *dst, CHAR8 ch, UINTN size)
-{
-        UINTN i;
-        CHAR8 *p = (CHAR8 *)dst;
-
-        for (i = 0; i < size; i++)
-                p[i] = ch;
-}
-
-
-VOID memcpy(VOID *dst, const VOID *src, UINTN size)
-{
-        UINTN i;
-        CHAR8 *d = (CHAR8 *)dst;
-        const CHAR8 *s = (const CHAR8 *)src;
-
-        for (i = 0; i < size; i++)
-                *d++ = *s++;
-}
-
-
 /*
  * Parameters Passed : character  : char to be converted to int
  *                     base       : the base of convertion ( hex, dec etc)
@@ -326,7 +291,7 @@ static INTN to_digit(CHAR16 character, UINTN base)
  *
  * This function converts String to unsigned long int.
  */
-UINTN strtoul(const CHAR16 *nptr, CHAR16 **endptr, UINTN base)
+UINTN strtoul16(const CHAR16 *nptr, CHAR16 **endptr, UINTN base)
 {
         UINTN value = 0;
 
