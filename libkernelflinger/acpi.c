@@ -40,8 +40,6 @@ static struct RSCI_TABLE *RSCI_table = NULL;
 #define RSDT_SIG "RSDT"
 #define RSDP_SIG "RSD PTR "
 
-#define offsetof(TYPE, MEMBER) ((UINTN) &((TYPE *)0)->MEMBER)
-
 /* This macro is defined to get a specified field from an acpi table
  * which will be loader if necessary.
  * <table> parameter is the name of the requested table passed as-is.

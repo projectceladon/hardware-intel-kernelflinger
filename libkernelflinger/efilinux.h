@@ -148,40 +148,6 @@ get_memory_map(UINTN *size, EFI_MEMORY_DESCRIPTOR *map, UINTN *key,
                                  key, descr_size, descr_version);
 }
 
-/**
- * exit_BS_serivces - Terminate all BS services
- * @image: firmware-allocated handle that identifies the image
- * @key: key to the latest memory map
- *
- * This function is called when efilinux wants to take complete
- * control of the system. efilinux should not make calls to BS time
- * services after this function is called.
- */
-static inline EFI_STATUS
-exit_BS_services(EFI_HANDLE image, UINTN key)
-{
-        return uefi_call_wrapper(BS->ExitBootServices, 2, image, key);
-}
-
-/**
- * exit - Terminate a loaded EFI image
- * @image: firmware-allocated handle that identifies the image
- * @status: the image's exit code
- * @size: size in bytes of @reason. Ignored if @status is EFI_SUCCESS
- * @reason: a NUL-terminated status string, optionally followed by binary data
- *
- * This function terminates @image and returns control to the BS
- * services. This function MUST NOT be called until all loaded child
- * images have exited. All memory allocated by the image must be freed
- * before calling this function, apart from the buffer @reason, which
- * will be freed by the firmware.
- */
-static inline EFI_STATUS
-exit(EFI_HANDLE image, EFI_STATUS status, UINTN size, CHAR16 *reason)
-{
-        return uefi_call_wrapper(BS->Exit, 4, image, status, size, reason);
-}
-
 #define PAGE_SIZE        4096
 
 static const CHAR16 *memory_types[] = {
