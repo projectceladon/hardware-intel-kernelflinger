@@ -212,6 +212,7 @@ static enum boot_target check_magic_key(VOID)
         int i;
         EFI_STATUS ret;
         EFI_INPUT_KEY key;
+        enum boot_target bt;
 
         debug("checking for magic key");
         uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
@@ -245,13 +246,40 @@ static enum boot_target check_magic_key(VOID)
                         break;
                 }
                 Print(L".");
-        }
-        Print(L"\n");
 
-        if (ret == EFI_SUCCESS)
-                return FASTBOOT;
-        else
-                return RECOVERY;
+                /* flush any stacked up key events in the queue before
+                 * we sleep again */
+                while (uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
+                                ST->ConIn, &key) == EFI_SUCCESS) {
+                }
+        }
+
+        if (ret == EFI_SUCCESS) {
+                bt = FASTBOOT;
+                Print(L"FASTBOOT\n");
+        } else {
+                bt = RECOVERY;
+                Print(L"RECOVERY\n");
+        }
+
+        /* In case we need to prompt the user about something, don't continue
+         * until the key is released */
+        while (1) {
+                uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
+
+                ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
+                                ST->ConIn, &key);
+                if (ret != EFI_SUCCESS) {
+                        debug("err=%r", ret);
+                        break;
+                }
+
+                /* flush */
+                while (uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
+                                ST->ConIn, &key) == EFI_SUCCESS) {
+                }
+        }
+        return bt;
 }
 
 
