@@ -382,7 +382,7 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         set_efi_variable(&loader_guid, LOADER_ENTRY_ONESHOT, 0, NULL,
                         TRUE, TRUE);
 
-        if (!target) {
+        if (!target || !StrCmp(target, L"")) {
                 ret = NORMAL_BOOT;
         } else if (!StrCmp(target, L"fastboot") || !StrCmp(target, L"bootloader")) {
                 ret = FASTBOOT;
