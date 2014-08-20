@@ -34,7 +34,8 @@ copy_to_prebuilts()
 
 copy_insecure_to_prebuilts()
 {
-    cp -v kernelflinger.unsigned.efi $PREBUILT_TOP/kernelflinger/linux-$1/kernelflinger.insecure.efi
+    cp -v kernelflinger.db.efi $PREBUILT_TOP/kernelflinger/linux-$1/kernelflinger.insecure.db.efi
+    cp -v kernelflinger.vendor.efi $PREBUILT_TOP/kernelflinger/linux-$1/kernelflinger.insecure.vendor.efi
 }
 
 add_prebuilts=0
@@ -82,7 +83,7 @@ $MAKE_CMD ARCH=x86_64 kernelflinger.db.efi kernelflinger.vendor.efi libkernelfli
 copy_to_prebuilts x86_64
 $MAKE_CMD ARCH=x86_64 clean
 
-$MAKE_CMD ARCH=x86_64 INSECURE_LOADER=1 kernelflinger.unsigned.efi
+$MAKE_CMD ARCH=x86_64 INSECURE_LOADER=1 kernelflinger.db.efi kernelflinger.vendor.efi
 copy_insecure_to_prebuilts x86_64
 $MAKE_CMD ARCH=x86_64 clean
 
@@ -91,7 +92,7 @@ $MAKE_CMD ARCH=ia32 kernelflinger.db.efi kernelflinger.vendor.efi libkernelfling
 copy_to_prebuilts x86
 $MAKE_CMD ARCH=ia32 clean
 
-$MAKE_CMD ARCH=ia32 INSECURE_LOADER=1 kernelflinger.unsigned.efi
+$MAKE_CMD ARCH=ia32 INSECURE_LOADER=1 kernelflinger.db.efi kernelflinger.vendor.efi
 copy_insecure_to_prebuilts x86
 $MAKE_CMD ARCH=ia32 clean
 
