@@ -43,7 +43,7 @@
 #include "options.h"
 #include "power.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-00.01"
+#define KERNELFLINGER_VERSION	L"kernelflinger-00.02"
 
 /* For reading EFI globals */
 static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
@@ -155,17 +155,29 @@ static BOOLEAN is_efi_secure_boot_enabled(VOID)
 
 static BOOLEAN is_device_locked_or_verified(VOID)
 {
-        UINT8 ds;
+        UINT8 *data;
+        UINTN dsize;
 
         /* If we can't read the state, be safe and assume locked */
-        if (EFI_ERROR(get_efi_variable_byte(&fastboot_guid, OEM_LOCK_VAR,
-                                        &ds)))
+        if (EFI_ERROR(get_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
+                                        &dsize, (void **)&data)) || !dsize) {
+                debug("Couldn't read OEMLock, assuming locked");
+                return TRUE;
+        }
+
+        /* Legacy OEMLock format, used to have string "0" or "1"
+         * for unlocked/locked */
+        if (dsize == 2 && data[1] == '\0') {
+                if (data[0] == '0')
+                        return FALSE;
+                if (data[0] == '1')
+                        return TRUE;
+        }
+
+        if (data[0] & OEM_LOCK_VERIFIED)
                 return TRUE;
 
-        if (ds & OEM_LOCK_VERIFIED)
-                return TRUE;
-
-        if (ds & OEM_LOCK_UNLOCKED)
+        if (data[0] & OEM_LOCK_UNLOCKED)
                 return FALSE;
 
         return TRUE;
@@ -180,8 +192,11 @@ static VOID select_keystore(VOID **keystore, UINTN *size)
         if (EFI_ERROR(get_efi_variable(&fastboot_guid, KEYSTORE_VAR,
                                         size, keystore)) ||
                         *size == 0) {
+                debug("selected OEM keystore");
                 *keystore = oem_keystore;
                 *size = oem_keystore_size;
+        } else {
+                debug("selected User-supplied keystore");
         }
 }
 #endif
@@ -200,6 +215,7 @@ static enum boot_target check_magic_key(VOID)
         int i;
         EFI_STATUS ret;
         EFI_INPUT_KEY key;
+        enum boot_target bt;
 
         debug("checking for magic key");
         uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
@@ -233,13 +249,40 @@ static enum boot_target check_magic_key(VOID)
                         break;
                 }
                 Print(L".");
-        }
-        Print(L"\n");
 
-        if (ret == EFI_SUCCESS)
-                return FASTBOOT;
-        else
-                return RECOVERY;
+                /* flush any stacked up key events in the queue before
+                 * we sleep again */
+                while (uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
+                                ST->ConIn, &key) == EFI_SUCCESS) {
+                }
+        }
+
+        if (ret == EFI_SUCCESS) {
+                bt = FASTBOOT;
+                Print(L"FASTBOOT\n");
+        } else {
+                bt = RECOVERY;
+                Print(L"RECOVERY\n");
+        }
+
+        /* In case we need to prompt the user about something, don't continue
+         * until the key is released */
+        while (1) {
+                uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
+
+                ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
+                                ST->ConIn, &key);
+                if (ret != EFI_SUCCESS) {
+                        debug("err=%r", ret);
+                        break;
+                }
+
+                /* flush */
+                while (uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
+                                ST->ConIn, &key) == EFI_SUCCESS) {
+                }
+        }
+        return bt;
 }
 
 
@@ -379,7 +422,7 @@ static enum boot_target check_command_line(VOID **address)
                                 goto out;
                         }
 
-                        *address = (VOID *)strtoul(argv[pos], NULL, 0);
+                        *address = (VOID *)strtoul16(argv[pos], NULL, 0);
                         bt = MEMORY;
                         continue;
                 }
@@ -534,10 +577,10 @@ static EFI_STATUS load_boot_image(
                 switch (boot_target) {
                 case NORMAL_BOOT:
                 case CHARGER:
-                        expected = L"boot";
+                        expected = L"/boot";
                         break;
                 case RECOVERY:
-                        expected = L"recovery";
+                        expected = L"/recovery";
                         break;
                 default:
                         expected = NULL;
@@ -631,7 +674,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                 goto die;
         }
 
-        if (StrCmp(target, L"fastboot")) {
+        if (StrCmp(target, L"/fastboot")) {
                 Print(L"This does not appear to be a Fastboot image\n");
                 goto die;
         }
@@ -641,7 +684,9 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         android_image_start_buffer(g_parent_image, bootimage, FALSE, NULL);
         Print(L"Couldn't chainload Fastboot image\n");
 die:
-        pause(5);
+        /* Allow plenty of time for the error to be visible before the
+         * screen goes blank */
+        pause(30);
         halt_system();
 }
 
