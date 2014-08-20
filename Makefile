@@ -8,19 +8,22 @@ GNU_EFI_TOP := $(ANDROID_BUILD_TOP)/hardware/intel/efi_prebuilts/gnu-efi/$(ARCH_
 GNU_EFI_INCLUDE := $(GNU_EFI_TOP)/include/efi
 GNU_EFI_LIB :=  $(GNU_EFI_TOP)/lib
 
-EFI_LIBS := -lefi -lgnuefi -lopenssl $(shell $(CC) -print-libgcc-file-name)
-
-OPENSSL_TOP := $(ANDROID_BUILD_TOP)/hardware/intel/efi_prebuilts/uefi_shim/$(ARCH_DIR)/
-OPENSSL_INCLUDE := $(OPENSSL_TOP)/Include
+OPENSSL_TOP := $(ANDROID_BUILD_TOP)/hardware/intel/efi_prebuilts/uefi_shim/
+EFI_LIBS := -lefi -lgnuefi --start-group $(OPENSSL_TOP)/$(ARCH_DIR)/libcryptlib.a \
+		$(OPENSSL_TOP)/$(ARCH_DIR)/libopenssl.a --end-group \
+		$(shell $(CC) -print-libgcc-file-name)
 
 # The key to sign kernelflinger with
 DB_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/DB
 VENDOR_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/vendor
 
-CPPFLAGS := -I$(GNU_EFI_INCLUDE) -I$(GNU_EFI_INCLUDE)/$(ARCH) -I$(OPENSSL_INCLUDE) -Iinclude/libkernelflinger
+CPPFLAGS := -DKERNELFLINGER -I$(GNU_EFI_INCLUDE) \
+	-I$(GNU_EFI_INCLUDE)/$(ARCH) -I$(OPENSSL_TOP)/include -I$(OPENSSL_TOP)/include/Include \
+	-Iinclude/libkernelflinger
+
 CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
-	 -fshort-wchar -Wall -Werror -mno-red-zone -maccumulate-outgoing-args \
-	 -mno-mmx -mno-sse -fno-builtin
+	 -fshort-wchar -Wall -Wextra -Werror -mno-red-zone -maccumulate-outgoing-args \
+	 -mno-mmx -mno-sse -fno-builtin -fno-tree-loop-distribute-patterns
 
 ifneq ($(INSECURE_LOADER),)
     CFLAGS += -DINSECURE
@@ -36,22 +39,25 @@ VERITY_PRIVATE_KEY := $(ANDROID_BUILD_TOP)/build/target/product/security/verity_
 KEYSTORE_SIGNER := $(ANDROID_BUILD_TOP)/out/host/linux-x86/bin/keystore_signer
 
 ifeq ($(ARCH),x86_64)
-# FIXME would like to use -DGNU_EFI_USE_MS_ABI, but that requires GCC 4.7
-CFLAGS += -DEFI_FUNCTION_WRAPPER
+CFLAGS += -DEFI_FUNCTION_WRAPPER -DGNU_EFI_USE_MS_ABI
 else
 CFLAGS += -m32
 endif
 
+PAD_SIZE := 4096
+
 LDFLAGS	:= -nostdlib -znocombreloc -T $(GNU_EFI_LIB)/elf_$(ARCH)_efi.lds \
 	-shared -Bsymbolic -L$(GNU_EFI_LIB) \
-	-L$(OPENSSL_TOP) $(GNU_EFI_LIB)/crt0-efi-$(ARCH).o
+	-L$(OPENSSL_TOP)/$(ARCH_DIR) $(GNU_EFI_LIB)/crt0-efi-$(ARCH).o
 
 LIB_OBJS := libkernelflinger/android.o \
 	    libkernelflinger/efilinux.o \
 	    libkernelflinger/acpi.o \
 	    libkernelflinger/lib.o \
 	    libkernelflinger/options.o \
-	    libkernelflinger/security.o
+	    libkernelflinger/security.o \
+	    libkernelflinger/asn1.o \
+	    libkernelflinger/keystore.o
 
 OBJS := kernelflinger.o \
 	oemkeystore.o \
@@ -73,7 +79,7 @@ oem.key: $(OEM_KEY_PAIR).pk8
 	openssl pkcs8 -inform DER -nocrypt -in $< -out $@
 
 oem.cer: $(OEM_KEY_PAIR).x509.pem
-	openssl x509 -outform der -in $< -out $@
+	openssl x509 -outform der -in $< | dd of=$@ ibs=$(PAD_SIZE) count=1 conv=sync
 
 # DER formatted public verity key
 verity.cer: $(VERITY_PRIVATE_KEY)
@@ -82,8 +88,11 @@ verity.cer: $(VERITY_PRIVATE_KEY)
 keystore.bin: oem.key verity.cer $(KEYSTORE_SIGNER)
 	$(KEYSTORE_SIGNER) oem.key $@ verity.cer
 
-oemkeystore.o: oemkeystore.S keystore.bin oem.cer
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@ -DOEM_KEYSTORE_FILE=\"keystore.bin\" -DOEM_KEY_FILE=\"oem.cer\"
+keystore.padded.bin: keystore.bin
+	dd ibs=$(PAD_SIZE) if=$< of=$@ count=1 conv=sync
+
+oemkeystore.o: oemkeystore.S keystore.padded.bin oem.cer
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@ -DOEM_KEYSTORE_FILE=\"keystore.padded.bin\" -DOEM_KEY_FILE=\"oem.cer\"
 
 %.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

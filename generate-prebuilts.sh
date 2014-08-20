@@ -34,7 +34,8 @@ copy_to_prebuilts()
 
 copy_insecure_to_prebuilts()
 {
-    cp -v kernelflinger.unsigned.efi $PREBUILT_TOP/kernelflinger/linux-$1/kernelflinger.insecure.efi
+    cp -v kernelflinger.db.efi $PREBUILT_TOP/kernelflinger/linux-$1/kernelflinger.insecure.db.efi
+    cp -v kernelflinger.vendor.efi $PREBUILT_TOP/kernelflinger/linux-$1/kernelflinger.insecure.vendor.efi
 }
 
 add_prebuilts=0
@@ -77,31 +78,21 @@ MAKE_CMD="make -j8"
 $MAKE_CMD ARCH=x86_64 clean
 $MAKE_CMD ARCH=ia32 clean
 
-# FIXME remove CC definition and use a host compiler
-
 # Generate prebuilts for x86_64
-$MAKE_CMD ARCH=x86_64 \
-    CC=$ANDROID_BUILD_TOP/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.7-4.6/bin/x86_64-linux-gcc \
-    kernelflinger.db.efi kernelflinger.vendor.efi libkernelflinger.a
+$MAKE_CMD ARCH=x86_64 kernelflinger.db.efi kernelflinger.vendor.efi libkernelflinger.a
 copy_to_prebuilts x86_64
 $MAKE_CMD ARCH=x86_64 clean
 
-$MAKE_CMD ARCH=x86_64 INSECURE_LOADER=1 \
-    CC=$ANDROID_BUILD_TOP/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.7-4.6/bin/x86_64-linux-gcc \
-    kernelflinger.unsigned.efi
+$MAKE_CMD ARCH=x86_64 INSECURE_LOADER=1 kernelflinger.db.efi kernelflinger.vendor.efi
 copy_insecure_to_prebuilts x86_64
 $MAKE_CMD ARCH=x86_64 clean
 
 # Generate prebuilts for ia32
-$MAKE_CMD ARCH=ia32 \
-    CC=$ANDROID_BUILD_TOP//prebuilts/gcc/linux-x86/host/i686-linux-glibc2.7-4.6/bin/i686-linux-gcc \
-    kernelflinger.db.efi kernelflinger.vendor.efi libkernelflinger.a
+$MAKE_CMD ARCH=ia32 kernelflinger.db.efi kernelflinger.vendor.efi libkernelflinger.a
 copy_to_prebuilts x86
 $MAKE_CMD ARCH=ia32 clean
 
-$MAKE_CMD ARCH=ia32 INSECURE_LOADER=1 \
-    CC=$ANDROID_BUILD_TOP//prebuilts/gcc/linux-x86/host/i686-linux-glibc2.7-4.6/bin/i686-linux-gcc \
-    kernelflinger.unsigned.efi
+$MAKE_CMD ARCH=ia32 INSECURE_LOADER=1 kernelflinger.db.efi kernelflinger.vendor.efi
 copy_insecure_to_prebuilts x86
 $MAKE_CMD ARCH=ia32 clean
 

@@ -37,6 +37,16 @@
 #include <efiapi.h>
 #include <efilib.h>
 
+/* pulls in memcpy, memset, bunch of other posix functions */
+#include "OpenSslSupport.h"
+
+/* The offsetof in the uefi shim support library headers generates
+ * warnings, use this instead */
+#ifdef offsetof
+#undef offsetof
+#define offsetof(TYPE, MEMBER) ((UINTN) &((TYPE *)0)->MEMBER)
+#endif
+
 /* debug stuff */
 
 #define DEBUG_MESSAGES 0
@@ -86,19 +96,13 @@ CHAR16 *stra_to_str(CHAR8 *stra);
 
 EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN len);
 
-UINTN memcmp(const VOID *ptr1, const VOID *ptr2, UINTN num);
-
-VOID memcpy(VOID *dst, const VOID *src, UINTN size);
-
-VOID memset(VOID *dst, CHAR8 ch, UINTN size);
-
 VOID StrNCpy(OUT CHAR16 *dest, IN const CHAR16 *src, UINT32 n);
 
 UINT8 getdigit(IN CHAR16 *str);
 
 EFI_STATUS string_to_guid(IN CHAR16 *in_guid_str, OUT EFI_GUID *guid);
 
-UINTN strtoul(const CHAR16 *nptr, CHAR16 **endptr, UINTN base);
+UINTN strtoul16(const CHAR16 *nptr, CHAR16 **endptr, UINTN base);
 
 /*
  * misc
