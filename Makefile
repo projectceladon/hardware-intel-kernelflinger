@@ -107,14 +107,14 @@ kernelflinger.vendor.key: $(VENDOR_KEY_PAIR).pk8
 	objcopy -j .text -j .sdata -j .data \
 		-j .dynamic -j .dynsym  -j .rel \
 		-j .rela -j .reloc -j .eh_frame \
-		-j .oem_keystore \
+		-j .oemkeys \
 		--target=efi-app-$(ARCH) $^ $@
 
 %.debug.efi: %.so
 	objcopy -j .text -j .sdata -j .data \
 		-j .dynamic -j .dynsym  -j .rel \
 		-j .rela -j .reloc -j .eh_frame \
-		-j .oem_keystore \
+		-j .oemkeys \
 		-j .debug_info -j .debug_abbrev -j .debug_aranges \
 		-j .debug_line -j .debug_str -j .debug_ranges \
 		--target=efi-app-$(ARCH) $^ $@
