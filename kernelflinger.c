@@ -586,10 +586,9 @@ static EFI_STATUS load_boot_image(
                         expected = NULL;
                 }
 
-                /* XXX do we need to enforce this? can't cover the ESP case */
-                if (StrCmp(expected, target)) {
+                if (!expected || StrCmp(expected, target)) {
                         debug("boot image has unexpected target name");
-                        // ret = EFI_ACCESS_DENIED;
+                        ret = EFI_ACCESS_DENIED;
                 }
         }
 
