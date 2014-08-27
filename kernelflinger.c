@@ -59,13 +59,14 @@ enum boot_target {
         CHARGER
 };
 
-/* Max wait time for console reset in units of tenths of a second.
+/* Default max wait time for console reset in units of milliseconds if no EFI
+ * variable is set for this platform.
  * You want this value as small as possible as this is added to
  * the boot time for EVERY boot */
-#define EFI_RESET_WAIT_TENTH_SECS   2
+#define EFI_RESET_WAIT_MS           50
 
-/* Interval to check on startup for initial press of magic key */
-#define DETECT_KEY_STALL_TIME       (100 * 1000)
+/* Interval in ms to check on startup for initial press of magic key */
+#define DETECT_KEY_STALL_TIME_MS    1
 
 /* Time between calls to ReadKeyStroke to check if it is being actively held
  * Smaller stall values seem to result in false reporting of no key pressed
@@ -213,21 +214,45 @@ static enum boot_target check_fastboot_sentinel(VOID)
 static enum boot_target check_magic_key(VOID)
 {
         int i;
-        EFI_STATUS ret;
+        EFI_STATUS ret = EFI_NOT_READY;
         EFI_INPUT_KEY key;
         enum boot_target bt;
+        UINT8 *data;
+        UINTN dsize;
+        int wait_ms = EFI_RESET_WAIT_MS;
 
         debug("checking for magic key");
         uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
 
+        /* Some systems require a short stall before we can be sure there
+         * wasn't a keypress at boot. Read the EFI variable which determines
+         * that time for this platform */
+        if (EFI_ERROR(get_efi_variable(&fastboot_guid, MAGIC_KEY_TIMEOUT_VAR,
+                                        &dsize, (void **)&data)) || !dsize) {
+                debug("Couldn't read timeout variable; assuming default");
+        } else {
+                if (data[dsize - 1] != '\0') {
+                        debug("bad data for magic key timeout");
+                        wait_ms = EFI_RESET_WAIT_MS;
+                } else {
+                        wait_ms = strtoul((char *)data, NULL, 10);
+                        if (wait_ms < 0 || wait_ms > 1000) {
+                                debug("pathological magic key timeout, use default");
+                                wait_ms = EFI_RESET_WAIT_MS;
+                        }
+                }
+        }
+
+        debug("Reset wait time: %d", wait_ms);
+
         /* Check for 'magic' key. Some BIOSes are flaky about this
          * so wait for the ConIn to be ready after reset */
-        for (i = 0; i < EFI_RESET_WAIT_TENTH_SECS; i++) {
+        for (i = 0; i <= wait_ms; i += DETECT_KEY_STALL_TIME_MS) {
                 ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
                                         ST->ConIn, &key);
-                if (ret == EFI_SUCCESS)
+                if (ret == EFI_SUCCESS || i == wait_ms)
                         break;
-                uefi_call_wrapper(BS->Stall, 1, DETECT_KEY_STALL_TIME);
+                uefi_call_wrapper(BS->Stall, 1, DETECT_KEY_STALL_TIME_MS * 1000);
         }
 
         if (EFI_ERROR(ret))
