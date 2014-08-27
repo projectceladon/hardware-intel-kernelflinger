@@ -44,8 +44,6 @@ else
 CFLAGS += -m32
 endif
 
-PAD_SIZE := 4096
-
 LDFLAGS	:= -nostdlib -znocombreloc -T $(GNU_EFI_LIB)/elf_$(ARCH)_efi.lds \
 	-shared -Bsymbolic -L$(GNU_EFI_LIB) \
 	-L$(OPENSSL_TOP)/$(ARCH_DIR) $(GNU_EFI_LIB)/crt0-efi-$(ARCH).o
@@ -79,7 +77,7 @@ oem.key: $(OEM_KEY_PAIR).pk8
 	openssl pkcs8 -inform DER -nocrypt -in $< -out $@
 
 oem.cer: $(OEM_KEY_PAIR).x509.pem
-	openssl x509 -outform der -in $< | dd of=$@ ibs=$(PAD_SIZE) count=1 conv=sync
+	openssl x509 -outform der -in $< | dd of=$@ ibs=4096 count=1 conv=sync
 
 # DER formatted public verity key
 verity.cer: $(VERITY_PRIVATE_KEY)
@@ -89,7 +87,7 @@ keystore.bin: oem.key verity.cer $(KEYSTORE_SIGNER)
 	$(KEYSTORE_SIGNER) oem.key $@ verity.cer
 
 keystore.padded.bin: keystore.bin
-	dd ibs=$(PAD_SIZE) if=$< of=$@ count=1 conv=sync
+	dd ibs=32768 if=$< of=$@ count=1 conv=sync
 
 oemkeystore.o: oemkeystore.S keystore.padded.bin oem.cer
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@ -DOEM_KEYSTORE_FILE=\"keystore.padded.bin\" -DOEM_KEY_FILE=\"oem.cer\"
@@ -107,14 +105,14 @@ kernelflinger.vendor.key: $(VENDOR_KEY_PAIR).pk8
 	objcopy -j .text -j .sdata -j .data \
 		-j .dynamic -j .dynsym  -j .rel \
 		-j .rela -j .reloc -j .eh_frame \
-		-j .oem_keystore \
+		-j .oemkeys \
 		--target=efi-app-$(ARCH) $^ $@
 
 %.debug.efi: %.so
 	objcopy -j .text -j .sdata -j .data \
 		-j .dynamic -j .dynsym  -j .rel \
 		-j .rela -j .reloc -j .eh_frame \
-		-j .oem_keystore \
+		-j .oemkeys \
 		-j .debug_info -j .debug_abbrev -j .debug_aranges \
 		-j .debug_line -j .debug_str -j .debug_ranges \
 		--target=efi-app-$(ARCH) $^ $@
