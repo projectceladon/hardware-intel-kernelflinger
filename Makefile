@@ -19,7 +19,7 @@ VENDOR_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/vendor
 
 CPPFLAGS := -DKERNELFLINGER -I$(GNU_EFI_INCLUDE) \
 	-I$(GNU_EFI_INCLUDE)/$(ARCH) -I$(OPENSSL_TOP)/include -I$(OPENSSL_TOP)/include/Include \
-	-Iinclude/libkernelflinger
+	-Iinclude/libkernelflinger -Iinclude/libfastboot
 
 CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
 	 -fshort-wchar -Wall -Wextra -Werror -mno-red-zone -maccumulate-outgoing-args \
@@ -56,6 +56,15 @@ LIB_OBJS := libkernelflinger/android.o \
 	    libkernelflinger/security.o \
 	    libkernelflinger/asn1.o \
 	    libkernelflinger/keystore.o
+
+LIBFASTBOOT_OBJS := \
+	    libfastboot/fastboot.o \
+	    libfastboot/fastboot_oem.o \
+	    libfastboot/fastboot_usb.o \
+	    libfastboot/flash.o \
+	    libfastboot/gpt.o \
+	    libfastboot/sparse.o \
+	    libfastboot/uefi_utils.o
 
 OBJS := kernelflinger.o \
 	oemkeystore.o \
@@ -120,9 +129,12 @@ kernelflinger.vendor.key: $(VENDOR_KEY_PAIR).pk8
 libkernelflinger.a: $(LIB_OBJS)
 	ar rcs $@ $^
 
-kernelflinger.so: $(OBJS) libkernelflinger.a
+libfastboot.a: $(LIBFASTBOOT_OBJS)
+	ar rcs $@ $^
+
+kernelflinger.so: $(OBJS) libkernelflinger.a libfastboot.a
 	$(LD) $(LDFLAGS) $^ -o $@ -lefi $(EFI_LIBS)
 
 clean:
-	rm -f $(OBJS) $(LIB_OBJS) *.a *.cer *.key *.bin *.so *.efi
+	rm -f $(OBJS) $(LIB_OBJS) $(LIBFASTBOOT_OBJS) *.a *.cer *.key *.bin *.so *.efi
 
