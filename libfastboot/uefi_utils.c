@@ -899,7 +899,7 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 
 	len = VSPrint(str16, size * sizeof(CHAR16), format16, ap);
 
-	if (str_to_stra((CHAR8 *)str, str16, len) == EFI_SUCCESS) {
+	if (str_to_stra((CHAR8 *)str, str16, len + 1) == EFI_SUCCESS) {
 		ret = 0;
 		str[len] = '\0';
 	}
