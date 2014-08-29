@@ -40,8 +40,10 @@ typedef void (*start_callback_t)(void);
 
 int usb_write(void *buf, unsigned len);
 int usb_read(void *buf, unsigned len);
-int fastboot_usb_start(start_callback_t start_cb,
-		       data_callback_t rx_cb,
-		       data_callback_t tx_cb);
+EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
+			      data_callback_t rx_cb,
+			      data_callback_t tx_cb,
+			      void **bootimage);
+EFI_STATUS fastboot_usb_stop(void *bootimage);
 
 #endif	/* _FASTBOOT_USB_H_ */

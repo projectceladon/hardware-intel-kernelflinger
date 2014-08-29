@@ -35,12 +35,11 @@
 #include <efi.h>
 #include <efilib.h>
 #include <lib.h>
+#include <vars.h>
 #include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
+
 #include "uefi_utils.h"
 #include "gpt.h"
-
 #include "fastboot.h"
 #include "fastboot_usb.h"
 #include "flash.h"
@@ -54,6 +53,7 @@ struct fastboot_cmd {
 	struct fastboot_cmd *next;
 	const CHAR8 *prefix;
 	unsigned prefix_len;
+	BOOLEAN restricted;
 	fastboot_handle handle;
 };
 
@@ -84,8 +84,37 @@ static enum fastboot_states fastboot_state = STATE_OFFLINE;
 static void *dlbuffer;
 static unsigned dlsize;
 
+static const char *flash_verified_whitelist[] = {
+	"bootloader",
+	"boot",
+	"system",
+	"oem", /* alternate name for vendor */
+	"vendor",
+	"recovery",
+	/* Following three needed even though not specifically listed
+	 * since formatting a partition necessitates flashing a sparse
+	 * filesystem image */
+	"cache",
+	"data",
+	"userdata",
+	NULL
+};
+
+static const char *erase_verified_whitelist[] = {
+	"cache",
+	"data",
+	"userdata",
+	/* following three needed so we can flash them even though not
+	 * specifically listed, they all contain filesystems which can
+	 * be sent over as sparse images */
+	"system",
+	"vendor",
+	"oem",
+	NULL
+};
+
 static void cmd_register(struct fastboot_cmd **list, const char *prefix,
-			 fastboot_handle handle)
+			 fastboot_handle handle, BOOLEAN restricted)
 {
 	struct fastboot_cmd *cmd;
 	cmd = AllocatePool(sizeof(*cmd));
@@ -95,21 +124,24 @@ static void cmd_register(struct fastboot_cmd **list, const char *prefix,
 	}
 	cmd->prefix = (CHAR8 *)prefix;
 	cmd->prefix_len = strlen((const CHAR8 *)prefix);
+	cmd->restricted = restricted;
 	cmd->handle = handle;
 	cmd->next = *list;
 	*list = cmd;
 }
 
 void fastboot_register(const char *prefix,
-		       fastboot_handle handle)
+		       fastboot_handle handle,
+		       BOOLEAN restricted)
 {
-	cmd_register(&cmdlist, prefix, handle);
+	cmd_register(&cmdlist, prefix, handle, restricted);
 }
 
 void fastboot_oem_register(const char *prefix,
-			   fastboot_handle handle)
+			   fastboot_handle handle,
+			   BOOLEAN restricted)
 {
-	cmd_register(&oem_cmdlist, prefix, handle);
+	cmd_register(&oem_cmdlist, prefix, handle, restricted);
 }
 
 struct fastboot_var *fastboot_getvar(const char *name)
@@ -258,10 +290,29 @@ void fastboot_okay(const char *fmt, ...)
 	fastboot_state = STATE_COMPLETE;
 }
 
+static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
+{
+	do {
+		if (!strcmp(key, (CHAR8 *)*white_list))
+			return TRUE;
+	} while (white_list++);
+
+	return FALSE;
+}
+
 static void cmd_flash(CHAR8 *arg)
 {
 	EFI_STATUS ret;
-	CHAR16 *label = stra_to_str((CHAR8*)arg);
+	CHAR16 *label;
+
+	if (device_is_verified()
+	    && !is_in_white_list(arg, flash_verified_whitelist)) {
+		error(L"Flash %a is prohibited in verified state.\n", arg);
+		fastboot_fail("Prohibited command in verified state.");
+		return;
+	}
+
+	label = stra_to_str((CHAR8*)arg);
 	if (!label) {
 		error(L"Failed to get label %a\n", arg);
 		fastboot_fail("Allocation error");
@@ -286,7 +337,16 @@ static void cmd_flash(CHAR8 *arg)
 static void cmd_erase(CHAR8 *arg)
 {
 	EFI_STATUS ret;
-	CHAR16 *label = stra_to_str((CHAR8*)arg);
+	CHAR16 *label;
+
+	if (device_is_verified()
+	    && !is_in_white_list(arg, erase_verified_whitelist)) {
+		error(L"Erase %a is prohibited in verified state.\n", arg);
+		fastboot_fail("Prohibited command in verified state.");
+		return;
+	}
+
+	label = stra_to_str((CHAR8*)arg);
 	if (!label) {
 		error(L"Failed to get label %a\n", arg);
 		fastboot_fail("Allocation error");
@@ -301,21 +361,17 @@ static void cmd_erase(CHAR8 *arg)
 		fastboot_okay("");
 }
 
-/* static void cmd_boot(CHAR8 *arg) */
-/* { */
-/* 	struct bootimg_hooks hooks; */
-/* 	EFI_STATUS ret; */
+static void cmd_boot(__attribute__((__unused__)) CHAR8 *arg)
+{
+	if (device_is_verified()) {
+		error(L"Boot command is prohibited in verified state.\n", arg);
+		fastboot_fail("Prohibited command in verified state.");
+		return;
+	}
 
-/* 	info(L"Booting custom image\n", arg); */
-
-/* 	hooks.before_exit = boot_ok; */
-/* 	hooks.watchdog = tco_start_watchdog; */
-/* 	hooks.before_jump = NULL; */
-
-/* 	ret = android_image_start_buffer(dlbuffer, NULL, &hooks); */
-
-/* 	fastboot_fail("boot failure: %r", ret); */
-/* } */
+	fastboot_usb_stop(dlbuffer);
+	fastboot_okay("");
+}
 
 static void worker_getvar_all(struct fastboot_var *start)
 {
@@ -353,12 +409,30 @@ static void cmd_reboot(__attribute__((__unused__)) CHAR8 *arg)
 	uefi_reset_system(EfiResetCold);
 }
 
+static void cmd_reboot_bootloader(__attribute__((__unused__)) CHAR8 *arg)
+{
+        EFI_STATUS ret = set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
+                                              TRUE, TRUE, L"bootloader");
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("unable to set bootloader reboot target");
+		return;
+	}
+
+	info(L"Rebooting to bootloader\n");
+	fastboot_okay("");
+	reboot();
+}
+
 static struct fastboot_cmd *get_cmd(struct fastboot_cmd *list, const CHAR8 *name)
 {
 	struct fastboot_cmd *cmd;
 	for (cmd = list; cmd; cmd = cmd->next)
-		if (!memcmp(name, cmd->prefix, cmd->prefix_len))
+		if (!memcmp(name, cmd->prefix, cmd->prefix_len)) {
+			if (cmd->restricted && device_is_locked())
+				return NULL;
 			return cmd;
+		}
+
 	return NULL;
 }
 
@@ -513,7 +587,7 @@ static void fastboot_start_callback(void)
 	fastboot_read_command();
 }
 
-int fastboot_start()
+EFI_STATUS fastboot_start(void **bootimage)
 {
 	char download_max_str[30];
 
@@ -522,19 +596,22 @@ int fastboot_start()
 	else
 		fastboot_publish("max-download-size", download_max_str);
 
-	fastboot_register("reboot", cmd_reboot);
-	fastboot_register("continue", cmd_reboot);
-	fastboot_register("flash:", cmd_flash);
-	fastboot_register("getvar:", cmd_getvar);
-	fastboot_register("download:", cmd_download);
-	fastboot_register("erase:", cmd_erase);
+	fastboot_register("download:", cmd_download, TRUE);
+	fastboot_register("flash:", cmd_flash, TRUE);
+	fastboot_register("erase:", cmd_erase, TRUE);
+	fastboot_register("getvar:", cmd_getvar, FALSE);
+	fastboot_register("boot", cmd_boot, TRUE);
+	fastboot_register("continue", cmd_reboot, FALSE);
+	fastboot_register("reboot", cmd_reboot, FALSE);
+	fastboot_register("reboot-bootloader", cmd_reboot_bootloader, FALSE);
 
 	publish_partsize();
 
-	fastboot_register("oem", cmd_oem);
+	fastboot_register("oem", cmd_oem, FALSE);
 	fastboot_oem_init();
 
-	fastboot_usb_start(fastboot_start_callback, fastboot_process_rx, fastboot_process_tx);
-
-	return 0;
+	return fastboot_usb_start(fastboot_start_callback,
+				  fastboot_process_rx,
+				  fastboot_process_tx,
+				  bootimage);
 }

@@ -41,15 +41,7 @@ extern const EFI_GUID loader_guid;
 /* Report bootloader version */
 #define LOADER_VERSION_VAR      L"LoaderVersion"
 
-/* GUID for variables used to communicate with Fastboot */
-extern const EFI_GUID fastboot_guid;
-
 #define SERIAL_PORT_VAR         L"SerialPort"
-
-/* Current device state, set by Fastboot  */
-#define OEM_LOCK_VAR		L"OEMLock"
-#define OEM_LOCK_UNLOCKED	(1 << 0)
-#define OEM_LOCK_VERIFIED	(1 << 1)
 
 /* Boot state that we report before exiting boot services, per
  * Google's verified boot spec */

@@ -33,6 +33,7 @@
  */
 #include <efi.h>
 #include <efilib.h>
+#include <fastboot.h>
 
 #include "android.h"
 #include "efilinux.h"
@@ -44,10 +45,6 @@
 /* Gummiboot's GUID, we use some of the same variables */
 const EFI_GUID loader_guid = { 0x4a67b082, 0x0a4c, 0x41cf,
         {0xb6, 0xc7, 0x44, 0x0b, 0x29, 0xbb, 0x8c, 0x4f} };
-
-/* GUID for communicating with Fastboot */
-const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
-        {0x9a, 0x99, 0xde, 0xbe, 0xb4, 0x31, 0xfc, 0xc1} };
 
 /* GUIDs for various interesting Android partitions */
 const EFI_GUID boot_ptn_guid = { 0x49a4d17f, 0x93a3, 0x45c1,

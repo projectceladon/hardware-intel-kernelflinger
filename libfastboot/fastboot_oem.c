@@ -33,8 +33,132 @@
  */
 
 #include <lib.h>
+
+#include "uefi_utils.h"
+#include "flash.h"
 #include "fastboot.h"
 
+const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
+				 {0x9a, 0x99, 0xde, 0xbe, 0xb4, 0x31, 0xfc, 0xc1} };
+
+#define OEM_LOCK_VAR L"OEMLock"
+
+enum device_state {
+	UNKNOWN = -1,
+	UNLOCKED,
+	LOCKED,
+	VERIFIED
+};
+
+static enum device_state current_state = UNKNOWN;
+
+static void fastboot_oem_publish(void)
+{
+	fastboot_publish("secure", device_is_locked() ? "yes" : "no");
+	fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
+}
+
+static enum device_state get_current_state()
+{
+	UINT32 *stored_state;
+	UINTN dsize;
+	EFI_STATUS ret;
+	UINT32 flags;
+
+	if (current_state == UNKNOWN) {
+		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK_VAR,
+				       &dsize, (void **)&stored_state, &flags);
+		/* If we can't read the state, be safe and assume locked */
+		if (EFI_ERROR(ret) || !dsize) {
+			error(L"Couldn't read %s, assuming locked\n", OEM_LOCK_VAR);
+			current_state = LOCKED;
+		} else if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
+			error(L"%s has RUNTIME_ACCESS flag, assuming locked\n", OEM_LOCK_VAR);
+			current_state = LOCKED;
+		} else
+			current_state = *stored_state;
+	}
+
+	return current_state;
+}
+
+static EFI_STATUS set_current_state(enum device_state state)
+{
+	UINT32 stored_state = state;
+	EFI_STATUS ret = set_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
+					  sizeof(stored_state), &stored_state,
+					  TRUE, FALSE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Failed to set %a variable", OEM_LOCK_VAR);
+		return ret;
+	}
+
+	current_state = state;
+	fastboot_oem_publish();
+
+	return EFI_SUCCESS;
+}
+
+BOOLEAN device_is_unlocked()
+{
+	return get_current_state() == UNLOCKED;
+}
+
+BOOLEAN device_is_locked()
+{
+	return get_current_state() == LOCKED;
+}
+
+BOOLEAN device_is_verified()
+{
+	return get_current_state() == VERIFIED;
+}
+
+static void change_device_state(enum device_state new_state)
+{
+	EFI_STATUS ret;
+
+	if (get_current_state() == new_state) {
+		info(L"Device already in the required state.\n");
+		fastboot_okay("");
+	}
+
+	/* TODO: UI confirmation.  */
+
+	info(L"Erasing userdata\n");
+	ret = erase_by_label(L"data");
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to wipe data.\n");
+		return;
+	}
+
+	ret = set_current_state(new_state);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to change the device state\n");
+		return;
+	}
+
+	fastboot_okay("");
+}
+
+static void cmd_oem_lock(__attribute__((__unused__)) CHAR8 *arg)
+{
+	change_device_state(LOCKED);
+}
+
+static void cmd_oem_unlock(__attribute__((__unused__)) CHAR8 *arg)
+{
+	change_device_state(UNLOCKED);
+}
+
+static void cmd_oem_verified(__attribute__((__unused__)) CHAR8 *arg)
+{
+	change_device_state(VERIFIED);
+}
+
 void fastboot_oem_init(void) {
-	/* fastboot_oem_register("reboot", oem_reboot); */
+	fastboot_oem_register("lock", cmd_oem_lock, FALSE);
+	fastboot_oem_register("unlock", cmd_oem_unlock, FALSE);
+	fastboot_oem_register("verified", cmd_oem_verified, FALSE);
+	fastboot_oem_publish();
 }
