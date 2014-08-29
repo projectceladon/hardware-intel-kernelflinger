@@ -35,13 +35,26 @@
 #ifndef _FASTBOOT_H_
 #define _FASTBOOT_H_
 
+#include <efidef.h>
+
+/* GUID for variables used to communicate with Fastboot */
+extern const EFI_GUID fastboot_guid;
+
 typedef void (*fastboot_handle) (CHAR8 *arg);
 
+void fastboot_publish(const char *name, const char *value);
 void fastboot_okay(const char *fmt, ...);
 void fastboot_fail(const char *fmt, ...);
 void fastboot_info(const char *fmt, ...);
-void fastboot_register(const char *prefix, fastboot_handle handle);
-void fastboot_oem_register(const char *prefix, fastboot_handle handle);
-int fastboot_start();
+void fastboot_register(const char *prefix, fastboot_handle handle,
+		       BOOLEAN restricted);
+void fastboot_oem_register(const char *prefix, fastboot_handle handle,
+			   BOOLEAN restricted);
+
+BOOLEAN device_is_unlocked();
+BOOLEAN device_is_locked();
+BOOLEAN device_is_verified();
+
+EFI_STATUS fastboot_start();
 
 #endif	/* _FASTBOOT_H_ */

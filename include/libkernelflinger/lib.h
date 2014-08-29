@@ -69,7 +69,7 @@
  * EFI Variables
  */
 EFI_STATUS get_efi_variable(const EFI_GUID *guid, CHAR16 *key,
-                UINTN *size_p, VOID **data_p);
+                UINTN *size_p, VOID **data_p,  UINT32 *flags_p);
 
 CHAR16 *get_efi_variable_str(const EFI_GUID *guid, CHAR16 *key);
 CHAR16 *get_efi_variable_str8(const EFI_GUID *guid, CHAR16 *key);

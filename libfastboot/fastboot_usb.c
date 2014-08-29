@@ -288,9 +288,25 @@ static int fastboot_usb_init(void)
 	return 0;
 }
 
-int fastboot_usb_start(start_callback_t start_cb,
-		       data_callback_t rx_cb,
-		       data_callback_t tx_cb)
+static void *fastboot_bootimage;
+
+EFI_STATUS fastboot_usb_stop(void *bootimage)
+{
+	EFI_STATUS ret;
+
+	fastboot_bootimage = bootimage;
+
+	ret = uefi_call_wrapper(usb_device->Stop, 1, usb_device);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, "Failed to Stop USB", ret);
+
+	return ret;
+}
+
+EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
+			      data_callback_t rx_cb,
+			      data_callback_t tx_cb,
+			      void **bootimage)
 {
 	EFI_STATUS ret;
 
@@ -300,18 +316,36 @@ int fastboot_usb_start(start_callback_t start_cb,
 
 	ret = fastboot_usb_init();
 	if (EFI_ERROR(ret))
-		goto out;
+		goto error;
 
 	ret = uefi_call_wrapper(usb_device->Connect, 1, usb_device);
 	if (EFI_ERROR(ret)) {
 		debug("Failed to connect: %r\n", ret);
-		goto out;
+		goto error;
 	}
 
 	ret = uefi_call_wrapper(usb_device->Run, 2, usb_device, 6000000);
-	if (EFI_ERROR(ret))
+	if (EFI_ERROR(ret)) {
 		debug("Error occurred during run: %r\n", ret);
+		goto error;
+	}
 
-out:
-	return EFI_ERROR(ret);
+	ret = uefi_call_wrapper(usb_device->DisConnect, 1, usb_device);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Failed to disconnect USB", ret);
+		goto error;
+	}
+
+	ret = uefi_call_wrapper(usb_device->UnBind, 1, usb_device);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, "Failed to unbind USB", ret);
+		goto error;
+
+	FreePool(usb_device);
+	*bootimage = fastboot_bootimage;
+
+	return EFI_SUCCESS;
+
+error:
+	return ret;
 }

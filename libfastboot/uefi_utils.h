@@ -59,9 +59,6 @@ EFI_STATUS find_device_partition(const EFI_GUID *guid, EFI_HANDLE **handles, UIN
 void uefi_reset_system(EFI_RESET_TYPE reset_type);
 EFI_STATUS uefi_create_directory(EFI_FILE *parent, CHAR16 *dirname);
 EFI_STATUS uefi_create_directory_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *dirname);
-EFI_STATUS uefi_set_simple_var(CHAR8 *name, EFI_GUID *guid, int size, void *data,
-			       BOOLEAN persistent);
-INT8 uefi_get_simple_var(CHAR8 *name, EFI_GUID *guid);
 EFI_STATUS uefi_usleep(UINTN useconds);
 EFI_STATUS uefi_msleep(UINTN mseconds);
 

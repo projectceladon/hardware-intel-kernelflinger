@@ -53,10 +53,11 @@ CHAR16 *stra_to_str(CHAR8 *stra)
 
 
 EFI_STATUS get_efi_variable(const EFI_GUID *guid, CHAR16 *key,
-                UINTN *size_p, VOID **data_p)
+                UINTN *size_p, VOID **data_p, UINT32 *flags_p)
 {
         VOID *data;
         UINTN size;
+        UINT32 flags;
         EFI_STATUS ret;
 
         size = EFI_MAXIMUM_VARIABLE_SIZE;
@@ -65,7 +66,7 @@ EFI_STATUS get_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 return EFI_OUT_OF_RESOURCES;
 
         ret = uefi_call_wrapper(RT->GetVariable, 5, key, (EFI_GUID *)guid,
-                        NULL, &size, data);
+                        &flags, &size, data);
 
         if (EFI_ERROR(ret)) {
                 FreePool(data);
@@ -74,6 +75,8 @@ EFI_STATUS get_efi_variable(const EFI_GUID *guid, CHAR16 *key,
 
         if (size_p)
                 *size_p = size;
+        if (flags_p)
+                *flags_p = flags;
         *data_p = data;
 
         return EFI_SUCCESS;
@@ -86,7 +89,7 @@ CHAR16 *get_efi_variable_str(const EFI_GUID *guid, CHAR16 *key)
         EFI_STATUS ret;
         UINTN size;
 
-        ret = get_efi_variable(guid, key, &size, (VOID **)&data);
+        ret = get_efi_variable(guid, key, &size, (VOID **)&data, NULL);
         if (EFI_ERROR(ret))
                 return NULL;
 
@@ -127,7 +130,7 @@ EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte)
         EFI_STATUS ret;
         UINTN size;
 
-        ret = get_efi_variable(guid, key, &size, (VOID **)&data);
+        ret = get_efi_variable(guid, key, &size, (VOID **)&data, NULL);
         if (EFI_ERROR(ret))
                 return ret;
 

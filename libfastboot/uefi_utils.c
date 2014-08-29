@@ -336,50 +336,6 @@ EFI_STATUS uefi_create_directory_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *dirname
 	return uefi_create_directory(root, dirname);
 }
 
-EFI_STATUS uefi_set_simple_var(CHAR8 *name, EFI_GUID *guid, int size, void *data,
-			       BOOLEAN persistent)
-{
-	EFI_STATUS ret;
-	CHAR16 *name16 = stra_to_str((CHAR8 *)name);
-
-	if (persistent)
-		ret = LibSetNVVariable(name16, guid, size, data);
-	else
-		ret = LibSetVariable(name16, guid, size, data);
-
-	FreePool(name16);
-	return ret;
-}
-
-INT8 uefi_get_simple_var(CHAR8 *name, EFI_GUID *guid)
-{
-	void *buffer;
-	UINT64 ret;
-	UINTN size;
-	CHAR16 *name16 = stra_to_str((CHAR8 *)name);
-	buffer = LibGetVariableAndSize(name16, guid, &size);
-
-	if (buffer == NULL) {
-		error(L"Failed to get variable %s\n", name16);
-		ret = -1;
-		goto out;
-	}
-
-	if (size > sizeof(ret)) {
-		error(L"Tried to get UEFI variable larger than %d bytes (%d bytes)."
-		      " Please use an appropriate retrieve method.\n", sizeof(ret), size);
-		ret = -1;
-		goto out;
-	}
-
-	ret = *(INT8 *)buffer;
-out:
-	FreePool(name16);
-	if (buffer)
-		FreePool(buffer);
-	return ret;
-}
-
 EFI_STATUS uefi_usleep(UINTN useconds)
 {
 	return uefi_call_wrapper(BS->Stall, 1, useconds);
