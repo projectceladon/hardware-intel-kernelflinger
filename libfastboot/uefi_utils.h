@@ -43,19 +43,11 @@
 
 typedef UINTN size_t;
 
-#define UINTN_MAX ((UINTN)-1);
-#define offsetof(TYPE, MEMBER) ((UINTN) &((TYPE *)0)->MEMBER)
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
-#define max(x,y) (x < y ? y : x)
 
 #define DIV_ROUND_UP(x, y) (((x) + (y) - 1)/(y))
 #define ALIGN(x, y) ((y) * DIV_ROUND_UP((x), (y)))
 #define ALIGN_DOWN(x, y) ((y) * ((x) / (y)))
-
-struct EFI_LOAD_OPTION {
-	UINT32 Attributes;
-	UINT16 FilePathListLength;
-} __attribute__((packed));
 
 EFI_STATUS get_esp_handle(EFI_HANDLE *esp);
 EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs);
@@ -72,24 +64,6 @@ EFI_STATUS uefi_set_simple_var(CHAR8 *name, EFI_GUID *guid, int size, void *data
 INT8 uefi_get_simple_var(CHAR8 *name, EFI_GUID *guid);
 EFI_STATUS uefi_usleep(UINTN useconds);
 EFI_STATUS uefi_msleep(UINTN mseconds);
-
-UINT32 swap_bytes32(UINT32 n);
-UINT16 swap_bytes16(UINT16 n);
-void copy_and_swap_guid(EFI_GUID *dst, const EFI_GUID *src);
-EFI_STATUS open_partition(IN const EFI_GUID *guid,
-			  OUT UINT32 *MediaIdPtr,
-			  OUT EFI_BLOCK_IO **BlockIoPtr,
-			  OUT EFI_DISK_IO **DiskIoPtr);
-void path_to_dos(CHAR16 *path);
-CHAR8 *append_strings(CHAR8 *s1, CHAR8 *s2);
-
-void dump_buffer(CHAR8 *b, UINTN size);
-
-
-EFI_STATUS memory_map(EFI_MEMORY_DESCRIPTOR **map_buf,
-		      UINTN *map_size, UINTN *map_key,
-		      UINTN *desc_size, UINT32 *desc_version);
-
 
 int sprintf(char *str, const char *format, ...);
 int snprintf(char *str, size_t size, const char *format, ...);
