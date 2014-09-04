@@ -298,16 +298,25 @@ EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interf
 {
 	EFI_STATUS ret;
 	UINTN p;
+	CHAR16 *prefix = L"android_";
+	UINTN len;
 
 	ret = gpt_cache_partition();
 	if (EFI_ERROR(ret))
 		return ret;
 
+	len = StrLen(prefix) + StrLen(label);
 	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
 		struct gpt_partition *part;
 
 		part = &sdisk.partitions[p];
-		if (!CompareGuid(&part->type, &NullGuid) || StrCmp(label, part->name))
+		if (!CompareGuid(&part->type, &NullGuid))
+			continue;
+
+		if (StrLen(part->name) != len)
+			continue;
+
+		if (StrCmp(prefix,part->name) || StrCmp(label, &part->name[8]))
 			continue;
 
 		debug("Found label %s in partition %d\n", label, p);
