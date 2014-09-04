@@ -38,21 +38,9 @@
 #include "protocol.h"
 #include "uefi_utils.h"
 
-EFI_STATUS find_device_partition(const EFI_GUID *guid, EFI_HANDLE **handles, UINTN *no_handles)
-{
-	EFI_STATUS ret;
-	*handles = NULL;
-
-	ret = LibLocateHandleByDiskSignature(
-		MBR_TYPE_EFI_PARTITION_TABLE_HEADER,
-		SIGNATURE_TYPE_GUID,
-		(void *)guid,
-		no_handles,
-		handles);
-	if (EFI_ERROR(ret) || *no_handles == 0)
-		error(L"Failed to found partition %g\n", guid);
-	return ret;
-}
+/* GUID for ESP partition on gmin */
+const EFI_GUID esp_ptn_guid = { 0x2568845d, 0x2332, 0x4675,
+		{0xbc, 0x39, 0x8f, 0xa5, 0xa4, 0x74, 0x8d, 0x15}};
 
 EFI_STATUS get_esp_handle(EFI_HANDLE *esp)
 {
@@ -60,28 +48,28 @@ EFI_STATUS get_esp_handle(EFI_HANDLE *esp)
 	UINTN no_handles;
 	EFI_HANDLE *handles;
 
-	ret = find_device_partition(&EfiPartTypeSystemPartitionGuid, &handles, &no_handles);
+	ret = LibLocateHandleByDiskSignature(
+		MBR_TYPE_EFI_PARTITION_TABLE_HEADER,
+		SIGNATURE_TYPE_GUID,
+		(void *)&esp_ptn_guid,
+		&no_handles,
+		&handles);
+
 	if (EFI_ERROR(ret)) {
 		error(L"Failed to found partition: %r\n", ret);
-		goto out;
+		return ret;
 	}
 
-	if (no_handles == 0) {
-		error(L"Can't find loader partition!\n");
-		ret = EFI_NOT_FOUND;
-		goto out;
+	if (no_handles == 1) {
+		*esp = handles[0];
+		ret = EFI_SUCCESS;
+	} else {
+		error(L"%d handles found for ESP, expecting 1\n", no_handles);
+		ret = EFI_VOLUME_CORRUPTED;
 	}
-	if (no_handles > 1) {
-		error(L"Multiple loader partition found!\n");
-		goto free_handles;
-	}
-	*esp = handles[0];
-	return EFI_SUCCESS;
 
-free_handles:
 	if (handles)
 		FreePool(handles);
-out:
 	return ret;
 }
 
@@ -101,10 +89,9 @@ EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs)
 	ret = handle_protocol(esp_handle, &SimpleFileSystemProtocol,
 			      (void **)&esp);
 	if (EFI_ERROR(ret)) {
-		error(L"HandleProtocol", ret);
+		efi_perror(ret, L"HandleProtocol for ESP partition failed");
 		return ret;
 	}
-
 	*esp_fs = esp;
 
 	return ret;
