@@ -132,3 +132,8 @@ enum wake_sources rsci_get_wake_source(void)
         return get_acpi_field(RSCI, wake_source);
 }
 
+enum reset_sources rsci_get_reset_source(void)
+{
+	return get_acpi_field(RSCI, reset_source);
+}
+

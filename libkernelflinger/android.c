@@ -39,6 +39,7 @@
 #include "lib.h"
 #include "security.h"
 #include "vars.h"
+#include "power.h"
 
 /* Gummiboot's GUID, we use some of the same variables */
 const EFI_GUID loader_guid = { 0x4a67b082, 0x0a4c, 0x41cf,
@@ -349,6 +350,47 @@ static CHAR16 *get_serial_port(void)
 }
 
 
+static BOOLEAN is_reset_watchdog(void)
+{
+        enum reset_sources reset_source;
+
+        reset_source = rsci_get_reset_source();
+        if ((reset_source == RESET_KERNEL_WATCHDOG) ||
+            (reset_source == RESET_PMC_WATCHDOG) ||
+            (reset_source == RESET_EC_WATCHDOG) ||
+            (reset_source == RESET_PLATFORM_WATCHDOG))
+                return TRUE;
+
+        return FALSE;
+}
+
+
+static EFI_STATUS prepend_command_line(CHAR16 **cmdline, CHAR16 *fmt, ...)
+{
+        CHAR16 *old;
+        va_list args;
+        CHAR16 *string;
+        CHAR16 *new;
+
+        old = *cmdline;
+        va_start(args, fmt);
+        string = VPoolPrint(fmt, args);
+        va_end(args);
+
+        if (!string)
+                return EFI_OUT_OF_RESOURCES;
+
+        new = PoolPrint(L"%s %s", string, old);
+        FreePool(string);
+        if (!new)
+                return EFI_OUT_OF_RESOURCES;
+
+        FreePool(old);
+        *cmdline = new;
+        return EFI_SUCCESS;
+}
+
+
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
                 BOOLEAN enable_charger,
@@ -356,9 +398,8 @@ static EFI_STATUS setup_command_line(
 {
         CHAR16 *cmdline16 = NULL;
         CHAR16 *serialno;
-        CHAR16 *tmp;
         CHAR16 *serialport;
-        CHAR16 *var;
+        CHAR16 *bootreason;
 
         EFI_PHYSICAL_ADDRESS cmdline_addr;
         CHAR8 *full_cmdline;
@@ -391,76 +432,51 @@ static EFI_STATUS setup_command_line(
         /* Append serial number from DMI */
         serialno = get_serial_number();
         if (serialno) {
-                tmp = cmdline16;
-                cmdline16 = PoolPrint(L"androidboot.serialno=%s g_ffs.iSerialNumber=%s %s",
-                        serialno, serialno, cmdline16);
-                FreePool(tmp);
-                FreePool(serialno);
-                if (!cmdline16) {
-                        ret = EFI_OUT_OF_RESOURCES;
+                ret = prepend_command_line(&cmdline16,
+                                L"androidboot.serialno=%s g_ffs.iSerialNumber=%s",
+                                serialno, serialno);
+                if (EFI_ERROR(ret))
                         goto out;
-                }
         }
 
         if (enable_charger) {
-                tmp = cmdline16;
-                cmdline16 = PoolPrint(L"androidboot.mode=charger %s", cmdline16);
-
-                FreePool(tmp);
-                if (!cmdline16) {
-                        ret = EFI_OUT_OF_RESOURCES;
+                ret = prepend_command_line(&cmdline16,
+                                L"androidboot.mode=charger");
+                if (EFI_ERROR(ret))
                         goto out;
-                }
         }
 
-        var = get_efi_variable_str(&loader_guid, L"LoaderEntryRebootReason");
-        if (var) {
-                set_efi_variable(&loader_guid, L"LoaderEntryRebootReason", 0, NULL, TRUE, TRUE);
-
-                tmp = cmdline16;
-                cmdline16 = PoolPrint(L"bootreason=%s %s",
-                                var, cmdline16);
-                FreePool(var);
-                FreePool(tmp);
-
-                if (!cmdline16) {
-                        ret = EFI_OUT_OF_RESOURCES;
-                        goto out;
-                }
+        if (is_reset_watchdog()) {
+                bootreason = StrDuplicate(L"watchdog");
         } else {
-                tmp = cmdline16;
-                cmdline16 = PoolPrint(L"bootreason=unknown %s", cmdline16);
-
-                FreePool(tmp);
-
-                if (!cmdline16) {
-                        ret = EFI_OUT_OF_RESOURCES;
-                        goto out;
-                }
+                bootreason = get_efi_variable_str(&loader_guid, L"LoaderEntryRebootReason");
+                if (!bootreason)
+                        bootreason = StrDuplicate(L"unknown");
         }
+        set_efi_variable(&loader_guid, L"LoaderEntryRebootReason", 0, NULL, TRUE, TRUE);
+
+        if (!bootreason) {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto out;
+        }
+
+        ret = prepend_command_line(&cmdline16, L"bootreason=%s", bootreason);
+        if (EFI_ERROR(ret))
+                goto out;
 
         if (swap_guid) {
-                tmp = cmdline16;
-                cmdline16 = PoolPrint(L"resume=PARTUUID=%g %s",
-                        swap_guid, cmdline16);
-                FreePool(tmp);
-                if (!cmdline16) {
-                        ret = EFI_OUT_OF_RESOURCES;
+                ret = prepend_command_line(&cmdline16, L"resume=PARTUUID=%g",
+                        swap_guid);
+                if (EFI_ERROR(ret))
                         goto out;
-                }
         }
 
         serialport = get_serial_port();
         if (serialport) {
-                tmp = cmdline16;
-                cmdline16 = PoolPrint(L"console=%s %s",
-                        serialport, cmdline16);
-                FreePool(serialport);
-                FreePool(tmp);
-                if (!cmdline16) {
-                        ret = EFI_OUT_OF_RESOURCES;
+                ret = prepend_command_line(&cmdline16, L"console=%s",
+                        serialport);
+                if (EFI_ERROR(ret))
                         goto out;
-                }
         }
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
