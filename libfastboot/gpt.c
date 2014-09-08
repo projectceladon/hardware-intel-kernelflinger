@@ -202,6 +202,28 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 	return ret;
 }
 
+/* Remove the "android_" prefix to partition name
+ * When we are doing the cache.
+ * Note that CopyMem must handle overlapping (ie memmove)
+ */
+static void gpt_remove_prefix(void)
+{
+	const CHAR16 *prefix = L"android_";
+	UINTN prefix_len = StrLen(prefix);
+	UINTN p;
+
+	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
+		struct gpt_partition *part;
+
+		part = &sdisk.partitions[p];
+		if (!CompareGuid(&part->type, &NullGuid))
+			continue;
+
+		if (!StrnCmp(part->name, prefix, prefix_len))
+			CopyMem(part->name, &part->name[prefix_len], sizeof(part->name) - prefix_len);
+	}
+}
+
 static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
 {
 	EFI_STATUS ret;
@@ -213,6 +235,8 @@ static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
 		error(L"Failed to read GPT partitions: %r\n", ret);
 		return ret;
 	}
+	gpt_remove_prefix();
+
 	return EFI_SUCCESS;
 }
 
@@ -298,25 +322,16 @@ EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interf
 {
 	EFI_STATUS ret;
 	UINTN p;
-	CHAR16 *prefix = L"android_";
-	UINTN len;
 
 	ret = gpt_cache_partition();
 	if (EFI_ERROR(ret))
 		return ret;
 
-	len = StrLen(prefix) + StrLen(label);
 	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
 		struct gpt_partition *part;
 
 		part = &sdisk.partitions[p];
-		if (!CompareGuid(&part->type, &NullGuid))
-			continue;
-
-		if (StrLen(part->name) != len)
-			continue;
-
-		if (StrCmp(prefix,part->name) || StrCmp(label, &part->name[8]))
+		if (!CompareGuid(&part->type, &NullGuid) || StrCmp(part->name, label))
 			continue;
 
 		debug("Found label %s in partition %d\n", label, p);
