@@ -327,11 +327,39 @@ static CHAR16 *get_serial_number(void)
 
 static CHAR16 *get_serial_port(void)
 {
+        CHAR8 *data;
+        UINTN size;
         CHAR16 *val, *pos;
+        EFI_STATUS ret;
 
-        val = get_efi_variable_str(&fastboot_guid, SERIAL_PORT_VAR);
-        if (!val)
+        ret = get_efi_variable(&fastboot_guid, SERIAL_PORT_VAR,
+                        &size, (VOID **)&data);
+        if (EFI_ERROR(ret))
                 return NULL;
+
+        if (size < 3) {
+                FreePool(data);
+                return NULL;
+        }
+
+        /* Historical: older Fastboot versions saved this as a 16-bit
+         * string, newer ones as 8-bit. Do a little inspection to
+         * see which is the case, and upconvert as necessary */
+        if (data[0] && data[1]) {
+                /* 16 bit string with 8bit data would have at least one 0*/
+                data[size - 1] = '\0';
+                val = stra_to_str(data);
+                FreePool(data);
+        } else {
+                if (size % 2 == 0) {
+                        data[size - 1] = '\0';
+                        data[size - 2] = '\0';
+                        val = (CHAR16 *)data;
+                } else {
+                        FreePool(data);
+                        return NULL;
+                }
+        }
 
         pos = val;
 
