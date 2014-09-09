@@ -49,7 +49,7 @@
 
 /* debug stuff */
 
-#define DEBUG_MESSAGES 1
+#define DEBUG_MESSAGES 0
 
 #if DEBUG_MESSAGES
 #define debug(fmt, ...) do { \
