@@ -37,6 +37,7 @@
 #include <lib.h>
 #include <vars.h>
 #include <string.h>
+#include <ui.h>
 
 #include "uefi_utils.h"
 #include "gpt.h"
@@ -44,6 +45,7 @@
 #include "fastboot_usb.h"
 #include "flash.h"
 #include "fastboot_oem.h"
+#include "fastboot_ui.h"
 
 #define MAGIC_LENGTH 64
 #define MAX_DOWNLOAD_SIZE 512*1024*1024
@@ -119,7 +121,7 @@ static void cmd_register(struct fastboot_cmd **list, const char *prefix,
 	struct fastboot_cmd *cmd;
 	cmd = AllocatePool(sizeof(*cmd));
 	if (!cmd) {
-		error(L"Failed to allocate fastboot command %a\n", prefix);
+		error(L"Failed to allocate fastboot command %a", prefix);
 		return;
 	}
 	cmd->prefix = (CHAR8 *)prefix;
@@ -187,14 +189,14 @@ void fastboot_publish(const char *name, const char *value)
 
 	if (namelen > sizeof(var->name) ||
 	    valuelen > sizeof(var->value)) {
-		error(L"name or value too long\n");
+		error(L"name or value too long");
 		return;
 	}
 	var = fastboot_getvar(name);
 	if (!var) {
 		var = AllocateZeroPool(sizeof(*var));
 		if (!var) {
-			error(L"Failed to allocate variable %a\n", name);
+			error(L"Failed to allocate variable %a", name);
 			return;
 		}
 		var->next = varlist;
@@ -217,16 +219,20 @@ static void publish_partsize(void)
 		char partsize[MAX_VARIABLE_LENGTH];
 		UINT64 size;
 
-		size = gparti[i].bio->Media->BlockSize * (gparti[i].part.ending_lba + 1 - gparti[i].part.starting_lba);
+		size = gparti[i].bio->Media->BlockSize
+			* (gparti[i].part.ending_lba + 1 - gparti[i].part.starting_lba);
 
-		if (snprintf(fastboot_var, sizeof(fastboot_var), "partition-size:%s", gparti[i].part.name) < 0)
+		if (EFI_ERROR(snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
+				       (CHAR8 *)"partition-size:%s", gparti[i].part.name)))
 			continue;
-		if (snprintf(partsize, sizeof(partsize), "0x%lX", size) < 0)
+		if (EFI_ERROR(snprintf((CHAR8 *)partsize, sizeof(partsize),
+				       (CHAR8 *)"0x%lX", size)))
 			continue;
 
 		fastboot_publish(fastboot_var, partsize);
 
-		if (snprintf(fastboot_var, sizeof(fastboot_var), "partition-type:%s", gparti[i].part.name) < 0)
+		if (EFI_ERROR(snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
+				       (CHAR8 *)"partition-type:%s", gparti[i].part.name)))
 			continue;
 
 		if (!CompareGuid(&gparti[i].part.type, &guid_linux_data))
@@ -240,21 +246,23 @@ static void publish_partsize(void)
 
 static void fastboot_ack(const char *code, const char *format, va_list ap)
 {
-	char response[MAGIC_LENGTH];
-	char reason[MAGIC_LENGTH];
+	CHAR8 response[MAGIC_LENGTH];
+	CHAR8 reason[MAGIC_LENGTH];
+	EFI_STATUS ret;
 	int i;
 
-	if (vsnprintf(reason, MAGIC_LENGTH, format, ap) < 0) {
-		error(L"Failed to build reason string\n");
+	ret = vsnprintf(reason, MAGIC_LENGTH, (CHAR8 *)format, ap);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Failed to build reason string");
 		return;
 	}
 	ZeroMem(response, sizeof(response));
 
 	/* Nip off trailing newlines */
-	for (i = strlen((CHAR8 *)reason); (i > 0) && reason[i - 1] == '\n'; i--)
+	for (i = strlen(reason); (i > 0) && reason[i - 1] == '\n'; i--)
 		reason[i - 1] = '\0';
-	snprintf(response, MAGIC_LENGTH, "%a%a", code, reason);
-	debug("SENT %a %a\n", code, reason);
+	snprintf(response, MAGIC_LENGTH, (CHAR8 *)"%a%a", code, reason);
+	debug(L"SENT %a %a", code, reason);
 	if (usb_write(response, MAGIC_LENGTH) < 0)
 		fastboot_state = STATE_ERROR;
 }
@@ -307,24 +315,25 @@ static void cmd_flash(CHAR8 *arg)
 
 	if (device_is_verified()
 	    && !is_in_white_list(arg, flash_verified_whitelist)) {
-		error(L"Flash %a is prohibited in verified state.\n", arg);
+		error(L"Flash %a is prohibited in verified state.", arg);
 		fastboot_fail("Prohibited command in verified state.");
 		return;
 	}
 
 	label = stra_to_str((CHAR8*)arg);
 	if (!label) {
-		error(L"Failed to get label %a\n", arg);
+		error(L"Failed to get label %a", arg);
 		fastboot_fail("Allocation error");
 		return;
 	}
-	debug("Writing %s\n", label);
+	ui_print(L"Flashing %s ...", label);
 
 	ret = flash(dlbuffer, dlsize, label);
 	FreePool(label);
 	if (EFI_ERROR(ret))
 		fastboot_fail("Flash failure: %r", ret);
 	else {
+		ui_print(L"Flash done.");
 		fastboot_okay("");
 		/* update partition variable in case it has changed */
 		if (ret & REFRESH_PARTITION_VAR) {
@@ -341,35 +350,39 @@ static void cmd_erase(CHAR8 *arg)
 
 	if (device_is_verified()
 	    && !is_in_white_list(arg, erase_verified_whitelist)) {
-		error(L"Erase %a is prohibited in verified state.\n", arg);
+		error(L"Erase %a is prohibited in verified state.", arg);
 		fastboot_fail("Prohibited command in verified state.");
 		return;
 	}
 
 	label = stra_to_str((CHAR8*)arg);
 	if (!label) {
-		error(L"Failed to get label %a\n", arg);
+		error(L"Failed to get label %a", arg);
 		fastboot_fail("Allocation error");
 		return;
 	}
-	info(L"Erasing %s\n", label);
+	ui_print(L"Erasing %s ...", label);
 	ret = erase_by_label(label);
 	FreePool(label);
-	if (EFI_ERROR(ret))
-		fastboot_fail("Flash failure: %r", ret);
-	else
-		fastboot_okay("");
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Erase failure: %r", ret);
+		return;
+	}
+
+	ui_print(L"Erase done.");
+	fastboot_okay("");
 }
 
 static void cmd_boot(__attribute__((__unused__)) CHAR8 *arg)
 {
 	if (device_is_verified()) {
-		error(L"Boot command is prohibited in verified state.\n", arg);
+		error(L"Boot command is prohibited in verified state.", arg);
 		fastboot_fail("Prohibited command in verified state.");
 		return;
 	}
 
 	fastboot_usb_stop(dlbuffer);
+	ui_print(L"Booting received image ...");
 	fastboot_okay("");
 }
 
@@ -404,9 +417,9 @@ static void cmd_getvar(CHAR8 *arg)
 
 static void cmd_reboot(__attribute__((__unused__)) CHAR8 *arg)
 {
-	info(L"Rebooting\n");
+	ui_print(L"Rebooting ...");
 	fastboot_okay("");
-	uefi_reset_system(EfiResetCold);
+	reboot();
 }
 
 static void cmd_reboot_bootloader(__attribute__((__unused__)) CHAR8 *arg)
@@ -418,7 +431,7 @@ static void cmd_reboot_bootloader(__attribute__((__unused__)) CHAR8 *arg)
 		return;
 	}
 
-	info(L"Rebooting to bootloader\n");
+	ui_print(L"Rebooting to bootloader ...");
 	fastboot_okay("");
 	reboot();
 }
@@ -465,7 +478,7 @@ static void cmd_download(CHAR8 *arg)
 
 	newdlsize = strtoul((const char *)arg, NULL, 16);
 
-	debug("Receiving %d bytes\n", newdlsize);
+	ui_print(L"Receiving %d bytes ...", newdlsize);
 	if (newdlsize == 0) {
 		fastboot_fail("no data to download");
 		return;
@@ -482,7 +495,7 @@ static void cmd_download(CHAR8 *arg)
 		dlbuffer = AllocatePool(newdlsize);
 	}
 	if (!dlbuffer) {
-		error(L"Failed to allocate download buffer (0x%x bytes)\n", dlsize);
+		error(L"Failed to allocate download buffer (0x%x bytes)", dlsize);
 		fastboot_fail("Memory allocation failure");
 		return;
 	}
@@ -506,7 +519,7 @@ static void worker_download(void)
 		len = dlsize;
 
 	if (usb_read(dlbuffer, len)) {
-		error(L"Failed to receive %d bytes\n", dlsize);
+		error(L"Failed to receive %d bytes", dlsize);
 		fastboot_fail("Usb receive failed");
 		return;
 	}
@@ -543,9 +556,9 @@ static void fastboot_process_rx(void *buf, unsigned len)
 	case STATE_DOWNLOAD:
 		received_len += len;
 		if (dlsize > MiB)
-			Print(L"\rRX %d MiB / %d MiB", received_len/MiB, dlsize / MiB);
+			debug(L"\rRX %d MiB / %d MiB", received_len/MiB, dlsize / MiB);
 		else
-			Print(L"\rRX %d KiB / %d KiB", received_len/1024, dlsize / 1024);
+			debug(L"\rRX %d KiB / %d KiB", received_len/1024, dlsize / 1024);
 		if (received_len < dlsize) {
 			s = buf;
 			req_len = dlsize - received_len;
@@ -553,14 +566,13 @@ static void fastboot_process_rx(void *buf, unsigned len)
 				req_len = BLK_DOWNLOAD;
 			usb_read(&s[len], req_len);
 		} else {
-			Print(L"\n");
 			fastboot_state = STATE_COMMAND;
 			fastboot_okay("");
 		}
 		break;
 	case STATE_COMPLETE:
 		((CHAR8 *)buf)[len] = 0;
-		debug("GOT %a\n", (CHAR8 *)buf);
+		debug(L"GOT %a", (CHAR8 *)buf);
 
 		fastboot_state = STATE_COMMAND;
 
@@ -572,12 +584,12 @@ static void fastboot_process_rx(void *buf, unsigned len)
 			if (fastboot_state == STATE_COMMAND)
 				fastboot_fail("unknown reason");
 		} else {
-			error(L"unknown command '%a'\n", buf);
+			error(L"unknown command '%a'", buf);
 			fastboot_fail("unknown command");
 		}
 		break;
 	default:
-		error(L"Inconsistent fastboot state: 0x%x\n", fastboot_state);
+		error(L"Inconsistent fastboot state: 0x%x", fastboot_state);
 	}
 }
 
@@ -587,12 +599,14 @@ static void fastboot_start_callback(void)
 	fastboot_read_command();
 }
 
-EFI_STATUS fastboot_start(void **bootimage)
+EFI_STATUS fastboot_start(void **bootimage, enum boot_target *target)
 {
+	EFI_STATUS ret;
 	char download_max_str[30];
 
-	if (snprintf(download_max_str, sizeof(download_max_str), "0x%lX", MAX_DOWNLOAD_SIZE))
-		debug("Failed to set download_max_str string\n");
+	if (EFI_ERROR(snprintf((CHAR8 *)download_max_str, sizeof(download_max_str),
+			       (CHAR8 *)"0x%lX", MAX_DOWNLOAD_SIZE)))
+		debug(L"Failed to set download_max_str string");
 	else
 		fastboot_publish("max-download-size", download_max_str);
 
@@ -609,9 +623,13 @@ EFI_STATUS fastboot_start(void **bootimage)
 
 	fastboot_register("oem", cmd_oem, FALSE);
 	fastboot_oem_init();
+	ret = fastboot_ui_init();
+	if (EFI_ERROR(ret))
+		efi_perror(ret, "Fastboot UI initialization failed, continue anyway.");
 
-	return fastboot_usb_start(fastboot_start_callback,
-				  fastboot_process_rx,
-				  fastboot_process_tx,
-				  bootimage);
+	ret = fastboot_usb_start(fastboot_start_callback, fastboot_process_rx,
+				 fastboot_process_tx, bootimage, target);
+
+	fastboot_ui_destroy();
+	return ret;
 }

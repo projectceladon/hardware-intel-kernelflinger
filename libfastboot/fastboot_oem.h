@@ -35,6 +35,14 @@
 #ifndef _FASTBOOT_OEM_H_
 #define _FASTBOOT_OEM_H_
 
+enum device_state {
+	UNKNOWN_STATE = -1,
+	UNLOCKED,
+	LOCKED,
+	VERIFIED
+};
+
+enum device_state get_current_state();
 void fastboot_oem_init(void);
 
 #endif	/* _FASTBOOT_OEM_H_ */

@@ -43,7 +43,8 @@ int usb_read(void *buf, unsigned len);
 EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 			      data_callback_t rx_cb,
 			      data_callback_t tx_cb,
-			      void **bootimage);
+			      void **bootimage,
+			      enum boot_target *target);
 EFI_STATUS fastboot_usb_stop(void *bootimage);
 
 #endif	/* _FASTBOOT_USB_H_ */

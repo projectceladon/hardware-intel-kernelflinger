@@ -30,234 +30,248 @@
  *
  */
 
+#include <ui.h>
+
 #include "lib.h"
 #include "ux.h"
 
 #define TIMEOUT_SECS	60
-#define NOT_READY_USECS	(100 * 1000)
 
-enum key_events {
-	EV_UP,
-	EV_DOWN,
-	EV_TIMEOUT,
+static const ui_textline_t red_state[] = {
+	{ &COLOR_YELLOW,	"RECOVER",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
+	{ &COLOR_WHITE,		"",					FALSE },
+	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },
+	{ &COLOR_WHITE,		"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"Your device is unable to start",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"because the boot image has",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"failed to verify or is corrupted.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"You may attempt to recover",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"the device.",				FALSE },
+	{ NULL, NULL, FALSE}
 };
 
-struct text_line {
-	UINTN color;
-	CHAR16 *text;
+static const ui_textline_t bad_recovery[] = {
+	{ &COLOR_YELLOW,	"FASTBOOT",					TRUE },
+	{ &COLOR_WHITE,		"Press Volume UP key",				FALSE },
+	{ &COLOR_WHITE,		"",						FALSE },
+	{ &COLOR_LIGHTRED,	"POWER OFF",					TRUE },
+	{ &COLOR_WHITE,		"Press Volume DOWN key",			FALSE },
+	{ &COLOR_WHITE,		"",						FALSE },
+	{ &COLOR_LIGHTGRAY,	"Your device is unable to start",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"because the Recovery Console image has",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"failed to verify or is corrupted.",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"",						FALSE },
+	{ &COLOR_LIGHTGRAY,	"You may repair your device with Fastboot.",	FALSE },
+	{ NULL, NULL, FALSE }
 };
 
-static const struct text_line red_state[] = {
-	{EFI_LIGHTRED, L"RECOVER"},
-	{EFI_WHITE, L"Press Volume UP key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"POWER OFF"},
-	{EFI_WHITE, L"Press Volume DOWN key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTGRAY, L"Your device is unable to start"},
-	{EFI_LIGHTGRAY, L"because the boot image has"},
-	{EFI_LIGHTGRAY, L"failed to verify or is corrupted."},
-	{EFI_LIGHTGRAY, L""},
-	{EFI_LIGHTGRAY, L"You may attempt to recover"},
-	{EFI_LIGHTGRAY, L"the device."},
-	{0, NULL} };
+static const ui_textline_t device_altered_unlocked[] = {
+	{ &COLOR_YELLOW, 	"START",				TRUE },
+	{ &COLOR_WHITE, 	"Press Volume UP key",			FALSE },
+	{ &COLOR_WHITE, 	"",					FALSE },
+	{ &COLOR_LIGHTRED, 	"FASTBOOT",				TRUE },
+	{ &COLOR_WHITE, 	"Press Volume DOWN key",		FALSE },
+	{ &COLOR_WHITE, 	"",					FALSE },
+	{ &COLOR_LIGHTRED, 	"WARNING:",				TRUE },
+	{ &COLOR_LIGHTGRAY, 	"Your device has been altered",		FALSE },
+	{ &COLOR_LIGHTGRAY, 	"from its factory configuration.",	FALSE },
+	{ &COLOR_LIGHTGRAY, 	"and is no longer in a locked or",	FALSE },
+	{ &COLOR_LIGHTGRAY, 	"verified state.",			FALSE },
+	{ &COLOR_LIGHTGRAY, 	"",					FALSE },
+	{ &COLOR_LIGHTGRAY, 	"If you were not responsible for",	FALSE },
+	{ &COLOR_LIGHTGRAY, 	"these changes, the security of",	FALSE },
+	{ &COLOR_LIGHTGRAY, 	"your device may be at risk.",		FALSE },
+	{ &COLOR_LIGHTGRAY, 	"Choose \"FASTBOOT\" to change",	FALSE },
+	{ &COLOR_LIGHTGRAY, 	"your device's state.",			FALSE },
+	{ NULL, NULL, FALSE }
+};
 
-static const struct text_line bad_recovery[] = {
-	{EFI_YELLOW, L"FASTBOOT"},
-	{EFI_WHITE, L"Press Volume UP key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"POWER OFF"},
-	{EFI_WHITE, L"Press Volume DOWN key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTGRAY, L"Your device is unable to start"},
-	{EFI_LIGHTGRAY, L"because the Recovery Console image has"},
-	{EFI_LIGHTGRAY, L"failed to verify or is corrupted."},
-	{EFI_LIGHTGRAY, L""},
-	{EFI_LIGHTGRAY, L"You may repair your device with Fastboot."},
-	{0, NULL } };
+static const ui_textline_t secure_boot_off[] = {
+	{ &COLOR_YELLOW,	"START",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
+	{ &COLOR_WHITE,		"",					FALSE },
+	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },
+	{ &COLOR_WHITE,		"",					FALSE },
+	{ &COLOR_LIGHTRED,	"WARNING:",				TRUE },
+	{ &COLOR_LIGHTGRAY,	"Your device has been altered",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"from its factory configuration.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"and is no longer in a locked or",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"verified state due to UEFI Secure",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"Boot being disabled.",			FALSE },
+	{ &COLOR_LIGHTGRAY,	"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"If you were not responsible for",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"these changes, the security of",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"your device may be at risk.",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"Enter BIOS setup to re-enable",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"UEFI Secure Boot.",			FALSE },
+	{ NULL, NULL, FALSE }
+};
 
-static const struct text_line device_altered_unlocked[] = {
-	{EFI_YELLOW, L"START"},
-	{EFI_WHITE, L"Press Volume UP key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"FASTBOOT"},
-	{EFI_WHITE, L"Press Volume DOWN key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"WARNING:"},
-	{EFI_LIGHTGRAY, L"Your device has been altered"},
-	{EFI_LIGHTGRAY, L"from its factory configuration."},
-	{EFI_LIGHTGRAY, L"and is no longer in a locked or"},
-	{EFI_LIGHTGRAY, L"verified state."},
-	{EFI_LIGHTGRAY, L""},
-	{EFI_LIGHTGRAY, L"If you were not responsible for"},
-	{EFI_LIGHTGRAY, L"these changes, the security of"},
-	{EFI_LIGHTGRAY, L"your device may be at risk."},
-	{EFI_LIGHTGRAY, L"Choose \"FASTBOOT\" to change"},
-	{EFI_LIGHTGRAY, L"your device's state."},
-	{0, NULL } };
+static const ui_textline_t device_altered_keystore[] = {
+	{ &COLOR_YELLOW,	"START",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
+	{ &COLOR_WHITE,		"",					FALSE },
+	{ &COLOR_LIGHTRED,	"FASTBOOT",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },
+	{ &COLOR_WHITE,		"",					FALSE },
+	{ &COLOR_LIGHTRED,	"WARNING:",				TRUE },
+	{ &COLOR_LIGHTGRAY,	"Your device has been altered",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"from its factory configuration.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"If you were not responsible for",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"these changes, the security of",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"your device may be at risk.",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"Choose \"FASTBOOT\" to clear",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"or upload a new user keystore.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"The device was unable to verify",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"the keystore with ID:",		FALSE },
+	{ NULL, NULL, FALSE }
+};
 
-static const struct text_line secure_boot_off[] = {
-	{EFI_YELLOW, L"START"},
-	{EFI_WHITE, L"Press Volume UP key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"POWER OFF"},
-	{EFI_WHITE, L"Press Volume DOWN key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"WARNING:"},
-	{EFI_LIGHTGRAY, L"Your device has been altered"},
-	{EFI_LIGHTGRAY, L"from its factory configuration."},
-	{EFI_LIGHTGRAY, L"and is no longer in a locked or"},
-	{EFI_LIGHTGRAY, L"verified state due to UEFI Secure"},
-	{EFI_LIGHTGRAY, L"Boot being disabled."},
-	{EFI_LIGHTGRAY, L""},
-	{EFI_LIGHTGRAY, L"If you were not responsible for"},
-	{EFI_LIGHTGRAY, L"these changes, the security of"},
-	{EFI_LIGHTGRAY, L"your device may be at risk."},
-	{EFI_LIGHTGRAY, L"Enter BIOS setup to re-enable"},
-	{EFI_LIGHTGRAY, L"UEFI Secure Boot."},
-	{0, NULL } };
+static const char *VENDOR_IMG_NAME = "splash_intel";
 
-static const struct text_line device_altered_keystore[] = {
-	{EFI_YELLOW, L"START"},
-	{EFI_WHITE, L"Press Volume UP key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"FASTBOOT"},
-	{EFI_WHITE, L"Press Volume DOWN key"},
-	{EFI_WHITE, L""},
-	{EFI_LIGHTRED, L"WARNING:"},
-	{EFI_LIGHTGRAY, L"Your device has been altered"},
-	{EFI_LIGHTGRAY, L"from its factory configuration."},
-	{EFI_LIGHTGRAY, L""},
-	{EFI_LIGHTGRAY, L"If you were not responsible for"},
-	{EFI_LIGHTGRAY, L"these changes, the security of"},
-	{EFI_LIGHTGRAY, L"your device may be at risk."},
-	{EFI_LIGHTGRAY, L"Choose \"FASTBOOT\" to clear"},
-	{EFI_LIGHTGRAY, L"or upload a new user keystore."},
-	{EFI_LIGHTGRAY, L""},
-	{EFI_LIGHTGRAY, L"The device was unable to verify"},
-	{EFI_LIGHTGRAY, L"the keystore with ID:"},
-	{EFI_LIGHTGRAY, L""},
-	{0, NULL } };
+static UINTN swidth;
+static UINTN sheight;
 
-static VOID clear_screen(VOID)
-{
-	uefi_call_wrapper(ST->ConOut->ClearScreen, 1, ST->ConOut);
-}
-
-
-static enum key_events wait_for_input(VOID)
-{
-	EFI_INPUT_KEY key;
-	UINT64 timeout_left;
+static EFI_STATUS display_text(const ui_textline_t *text1,
+			       const ui_textline_t *text2) {
+	UINTN width, height, margin, x, y, swidth, sheight;
+	ui_image_t *vendor;
+	ui_font_t *font;
 	EFI_STATUS ret;
-	enum key_events out = EV_TIMEOUT;
 
-	timeout_left = TIMEOUT_SECS * 1000000;
+	ret = ui_init(&swidth, &sheight);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Unable to initialize UI");
+		return ret;
+	}
 
-	uefi_call_wrapper(BS->Stall, 1, 500 * 1000);
-        uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
+	ui_clear_screen();
 
-	while (timeout_left) {
-		ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
-				ST->ConIn, &key);
+	margin = swidth / 10;
 
-		if (ret == EFI_SUCCESS) {
-			switch (key.ScanCode) {
-			case SCAN_UP:
-			case SCAN_PAGE_UP:
-			case SCAN_HOME:
-			case SCAN_RIGHT:
-				out = EV_UP;
-				goto done;
-			case SCAN_DOWN:
-			case SCAN_PAGE_DOWN:
-			case SCAN_END:
-			case SCAN_LEFT:
-				out = EV_DOWN;
-				goto done;
-			default:
-				break;
-			}
+	vendor = ui_image_get(VENDOR_IMG_NAME);
+	if (!vendor) {
+		efi_perror(EFI_UNSUPPORTED, "Unable to load '%a' image",
+			   VENDOR_IMG_NAME);
+		return EFI_UNSUPPORTED;
+	}
+
+	font = ui_font_get("18x32");
+	if (!font) {
+		efi_perror(EFI_UNSUPPORTED, "Unable to find 18x32 font");
+		return EFI_UNSUPPORTED;
+	}
+
+	if (swidth > sheight) {	/* Landscape orientation. */
+		width = (swidth / 2) - (2 * margin);
+		height = vendor->height * width / vendor->width;
+		x = margin;
+		y = (sheight / 2) - (height / 2);
+		ui_image_draw_scale(vendor, x, y , width, height);
+
+		ret = ui_textarea_display_text(text1, font, swidth / 2 + margin, &y);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, "Unable to display text.");
+			return ret;
 		}
+	} else {		/* Portrait orientation. */
+		height = sheight / 3;
+		width = vendor->width * height / vendor->height;
+		x = (swidth / 2) - (width / 2);
+		y = margin;
+		ui_image_draw_scale(vendor, x, y , width, height);
 
-		/* If we get here, either we had EFI_NOT_READY indicating
-		 * no pending keystroke, EFI_DEVICE_ERROR, or some key
-		 * we don't care about was pressed */
-		uefi_call_wrapper(BS->Stall, 1, NOT_READY_USECS);
-		timeout_left -= NOT_READY_USECS;
+		y += height + margin;
+		ret = ui_textarea_display_text(text1, font, x, &y);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, "Unable to display text.");
+			return ret;
+		}
 	}
-done:
-	clear_screen();
-	return out;
-}
 
-
-static VOID display_text(const struct text_line strings[])
-{
-	int i = 0;
-
-	while (strings[i].text) {
-		uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
-				strings[i].color | EFI_BACKGROUND_BLACK);
-		Print(L"%s\n", strings[i].text);
-		i++;
+	if (text2) {
+		ret = ui_textarea_display_text(text2, font, x, &y);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, "Unable to display text.");
+			return ret;
+		}
 	}
-}
-
-static BOOLEAN input_to_bool(VOID)
-{
-	enum key_events e = wait_for_input();
-	switch (e) {
-	case EV_TIMEOUT:
-		halt_system();
-	case EV_UP:
-		return TRUE;
-	case EV_DOWN:
-		return FALSE;
-	}
-	return FALSE;
-}
-
-
-BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash) {
-	clear_screen();
-	display_text(device_altered_keystore);
-	Print(L"%02x%02x-%02x%02x-%02x%02x\n",
-			hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
-	return input_to_bool();
-}
-
-BOOLEAN ux_warn_user_unverified_recovery(VOID) {
-	clear_screen();
-	display_text(bad_recovery);
-	return input_to_bool();
-}
-
-BOOLEAN ux_prompt_user_bootimage_unverified(VOID) {
-	clear_screen();
-	display_text(red_state);
-	return input_to_bool();
-}
-
-BOOLEAN ux_prompt_user_secure_boot_off(VOID) {
-	clear_screen();
-	display_text(secure_boot_off);
-	return input_to_bool();
-}
-
-BOOLEAN ux_prompt_user_device_unlocked(VOID) {
-	clear_screen();
-	display_text(device_altered_unlocked);
-	return input_to_bool();
-}
-
-EFI_STATUS ux_init(VOID) {
-	uefi_call_wrapper(ST->ConOut->Reset, 2, ST->ConOut, FALSE);
-        uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
-			EFI_WHITE | EFI_BACKGROUND_BLACK);
-	uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, FALSE);
 
 	return EFI_SUCCESS;
 }
 
+static EFI_STATUS clear_text() {
+	EFI_STATUS ret;
+	UINTN margin;
 
+	ret = ui_init(&swidth, &sheight);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Unable to initialize UI");
+		return ret;
+	}
+
+	margin = sheight / 10;
+	if (swidth > sheight)	/* Landscape orientation. */
+		return ui_clear_area(swidth / 2, margin,
+				     swidth / 2, sheight - (2 * margin));
+	/* Portrait orientation. */
+	return ui_clear_area(0, sheight / 3 + margin,
+			     swidth, sheight - (sheight / 3) - margin);
+}
+
+BOOLEAN ux_prompt_user(const ui_textline_t *text1,
+		       const ui_textline_t *text2) {
+	BOOLEAN answer;
+
+	display_text(text1, text2);
+	answer = ui_input_to_bool(TIMEOUT_SECS);
+	clear_text();
+	return answer;
+}
+
+BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash) {
+	char buf[15];
+	const ui_textline_t hash_text[] = {
+		{ &COLOR_WHITE, buf, FALSE },
+		{ NULL, NULL, FALSE }
+	};
+
+	snprintf((CHAR8 *)buf, sizeof(buf),
+		 (CHAR8 *)"%02x%02x-%02x%02x-%02x%02x",
+		 hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
+
+	return ux_prompt_user(device_altered_keystore, hash_text);
+}
+
+BOOLEAN ux_warn_user_unverified_recovery(VOID) {
+	return ux_prompt_user(bad_recovery, NULL);
+}
+
+BOOLEAN ux_prompt_user_bootimage_unverified(VOID) {
+	return ux_prompt_user(red_state, NULL);
+}
+
+BOOLEAN ux_prompt_user_secure_boot_off(VOID) {
+	return ux_prompt_user(secure_boot_off, NULL);
+}
+
+BOOLEAN ux_prompt_user_device_unlocked(VOID) {
+	return ux_prompt_user(device_altered_unlocked, NULL);
+}
+
+EFI_STATUS ux_init(VOID) {
+	UINTN swidth, sheight;
+
+	uefi_call_wrapper(ST->ConOut->Reset, 2, ST->ConOut, FALSE);
+        uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
+			  EFI_WHITE | EFI_BACKGROUND_BLACK);
+	uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, FALSE);
+
+	return ui_init(&swidth, &sheight);
+}

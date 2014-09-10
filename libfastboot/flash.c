@@ -59,7 +59,7 @@ static UINT64 cur_offset;
 EFI_STATUS flash_skip(UINT64 size)
 {
 	if (!is_inside_partition(cur_offset, size)) {
-		error(L"Attempt to skip outside of partition [%ld %ld] [%ld %ld]\n",
+		error(L"Attempt to skip outside of partition [%ld %ld] [%ld %ld]",
 				part_start, part_end, cur_offset, cur_offset + size);
 		return EFI_INVALID_PARAMETER;
 	}
@@ -75,13 +75,13 @@ EFI_STATUS flash_write(VOID *data, UINTN size)
 		return EFI_INVALID_PARAMETER;
 
 	if (!is_inside_partition(cur_offset, size)) {
-		error(L"Attempt to write outside of partition [%ld %ld] [%ld %ld]\n",
+		error(L"Attempt to write outside of partition [%ld %ld] [%ld %ld]",
 				part_start, part_end, cur_offset, cur_offset + size);
 		return EFI_INVALID_PARAMETER;
 	}
 	ret = uefi_call_wrapper(gparti.dio->WriteDisk, 5, gparti.dio, gparti.bio->Media->MediaId, cur_offset, size, data);
 	if (EFI_ERROR(ret))
-		error(L"Failed to write bytes: %r\n", ret);
+		efi_perror(ret, "Failed to write bytes");
 
 	cur_offset += size;
 	return ret;
@@ -112,7 +112,7 @@ static EFI_STATUS flash_into_esp(VOID *data, UINTN size, CHAR16 *label)
 
 	ret = get_esp_fs(&io);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to get partition ESP, error %r\n", ret);
+		efi_perror(ret, "Failed to get partition ESP");
 		return ret;
 	}
 	return uefi_write_file_with_dir(io, label, data, size);
@@ -184,7 +184,7 @@ EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 
 	ret = gpt_get_partition_by_label(label, &gparti);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to get partition %s, error %r\n", label, ret);
+		efi_perror(ret, "Failed to get partition %s", label);
 		return ret;
 	}
 
@@ -213,19 +213,19 @@ EFI_STATUS flash_file(EFI_HANDLE image, CHAR16 *filename, CHAR16 *label)
 
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, image, &FileSystemProtocol, (void *)&io);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to get FileSystemProtocol: %r\n", ret);
+		efi_perror(ret, "Failed to get FileSystemProtocol");
 		goto out;
 	}
 
 	ret = uefi_read_file(io, filename, &buffer, &size);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to read file %s: %r\n", filename, ret);
+		efi_perror(ret, "Failed to read file %s", filename);
 		goto out;
 	}
 
 	ret = flash(buffer, size, label);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to flash file %s on partition %s: %r\n", filename, label, ret);
+		efi_perror(ret, "Failed to flash file %s on partition %s", filename, label);
 		goto free_buffer;
 	}
 
@@ -243,23 +243,23 @@ EFI_STATUS secure_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT64 start, UINT64 end,
 	CARD_STATUS status;
 	EFI_STATUS ret;
 
-	debug("Secure erase lba %ld -> %ld\n", start, end);
+	debug(L"Secure erase lba %ld -> %ld", start, end);
 
 	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, ERASE_GROUP_START, start, NoData, NULL, 0, ResponseR1, SDIO_DFLT_TIMEOUT, (UINT32 *) &status);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed set start erase %r\n", ret);
+		efi_perror(ret, "Failed set start erase");
 		return ret;
 	}
 
 	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, ERASE_GROUP_END, end, NoData, NULL, 0, ResponseR1, SDIO_DFLT_TIMEOUT, (UINT32 *) &status);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed set end erase %r\n", ret);
+		efi_perror(ret, "Failed set end erase");
 		return ret;
 	}
 
 	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, ERASE, 0x80000000, NoData, NULL, 0, ResponseR1, timeout, (UINT32 *) &status);
 	if (EFI_ERROR(ret)) {
-		error(L"Secure Erase Failed %r\n", ret);
+		efi_perror(ret, "Secure Erase Failed");
 		return ret;
 	}
 
@@ -267,11 +267,11 @@ EFI_STATUS secure_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT64 start, UINT64 end,
 		uefi_call_wrapper(BS->Stall, 1, 100000);
 		ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, SEND_STATUS, CARD_ADDRESS, NoData, NULL, 0, ResponseR1, SDIO_DFLT_TIMEOUT, (UINT32 *) &status);
 		if (EFI_ERROR(ret)) {
-			error(L"failed get status %r\n", ret);
+			efi_perror(ret, "failed get status");
 			return ret;
 		}
 	} while (!status.READY_FOR_DATA);
-	debug("Secure erase success\n");
+	debug(L"Secure erase success");
 	return ret;
 }
 
@@ -286,7 +286,7 @@ EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 	VOID *emptyblock;
 	EFI_STATUS ret;
 
-	debug("Erase lba %d -> %d\n", start, end);
+	debug(L"Erase lba %d -> %d", start, end);
 	emptyblock = AllocateZeroPool(bio->Media->BlockSize * N_BLOCK);
 	if (!emptyblock)
 		return EFI_OUT_OF_RESOURCES;
@@ -299,7 +299,7 @@ EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 
 		ret = uefi_call_wrapper(bio->WriteBlocks, 5, bio, bio->Media->MediaId, lba, bio->Media->BlockSize * size, emptyblock);
 		if (EFI_ERROR(ret)) {
-			error(L"Failed to erase block %ld: %r\n", lba, ret);
+			efi_perror(ret, "Failed to erase block %ld", lba);
 			goto free_block;
 		}
 	}
@@ -331,7 +331,7 @@ EFI_STATUS get_mmc_info(EFI_SD_HOST_IO_PROTOCOL *sdio, UINTN *erase_grp_size, UI
 
 	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, SEND_EXT_CSD, CARD_ADDRESS, InData, (void *)ext_csd, sizeof(EXT_CSD), ResponseR1, SDIO_DFLT_TIMEOUT, &status);
 	if (EFI_ERROR(ret)) {
-		error(L"failed get ext_csd %r\n", ret);
+		efi_perror(ret, "failed get ext_csd");
 		goto out;
 	}
 
@@ -341,7 +341,7 @@ EFI_STATUS get_mmc_info(EFI_SD_HOST_IO_PROTOCOL *sdio, UINTN *erase_grp_size, UI
 	*erase_grp_size = 1024 * ext_csd->HC_ERASE_GRP_SIZE;
 	*timeout = 300 * ext_csd->ERASE_TIMEOUT_MULT;
 
-	debug("eMMC parameter: erase grp size %d sectors, timeout %d ms\n", *erase_grp_size, *timeout);
+	debug(L"eMMC parameter: erase grp size %d sectors, timeout %d ms", *erase_grp_size, *timeout);
 
 out:
 	FreePool(rawbuffer);
@@ -359,17 +359,17 @@ EFI_STATUS erase_blocks(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 
 	/* size in MB for debug */
 	/* size = (bio->Media->BlockSize * (end - start + 1)) / MiB; */
-	/* debug("Erasing partition start %ld end %ld Size %ld MB\n", start, end, size); */
+	/* debug("Erasing partition start %ld end %ld Size %ld MB", start, end, size); */
 
 	/* check if we can use secure erase command */
 	ret = LibLocateProtocol(&gEfiSdHostIoProtocolGuid, (void **)&sdio);
 	if (EFI_ERROR(ret)) {
-		debug("failed to get sdio protocol, fallback to filling with zeros\n");
+		debug(L"failed to get sdio protocol, fallback to filling with zeros");
 		goto fallback;
 	}
 	ret = get_mmc_info(sdio, &erase_grp_size, &timeout);
 	if (EFI_ERROR(ret)) {
-		debug("failed to get mmc parameter, fallback to filling with zeros\n");
+		debug(L"failed to get mmc parameter, fallback to filling with zeros");
 		goto fallback;
 	}
 	if ((end - start + 1) < erase_grp_size)
@@ -379,7 +379,7 @@ EFI_STATUS erase_blocks(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 	if (reminder) {
 		ret = fill_zero(bio, start, start + erase_grp_size - reminder - 1);
 		if (EFI_ERROR(ret)) {
-			error(L"failed to fill with zeros\n");
+			error(L"failed to fill with zeros");
 			return ret;
 		}
 		start += erase_grp_size - reminder;
@@ -389,7 +389,7 @@ EFI_STATUS erase_blocks(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 	if (reminder) {
 		ret = fill_zero(bio, end + 1 - reminder, end);
 		if (EFI_ERROR(ret)) {
-			error(L"failed to fill with zeros\n");
+			error(L"failed to fill with zeros");
 			return ret;
 		}
 		end -= reminder;
@@ -407,12 +407,12 @@ EFI_STATUS erase_by_label(CHAR16 *label)
 
 	ret = gpt_get_partition_by_label(label, &gparti);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to get partition %s, error %r\n", label, ret);
+		efi_perror(ret, "Failed to get partition %s", label);
 		return ret;
 	}
 	ret = erase_blocks(gparti.bio, gparti.part.starting_lba, gparti.part.ending_lba);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to erase partition %s, error %r\n", label, ret);
+		efi_perror(ret, "Failed to erase partition %s", label);
 		return ret;
 	}
 	if (!CompareGuid(&gparti.part.type, &EfiPartTypeSystemPartitionGuid))

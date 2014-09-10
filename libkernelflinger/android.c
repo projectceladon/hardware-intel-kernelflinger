@@ -34,6 +34,7 @@
 #include <efi.h>
 #include <efilib.h>
 #include <fastboot.h>
+#include <ui.h>
 
 #include "android.h"
 #include "efilinux.h"
@@ -203,13 +204,6 @@ static inline void handover_jump(EFI_HANDLE image, struct boot_params *bp,
 }
 
 
-static VOID error(CHAR16 *str, EFI_STATUS ret)
-{
-        Print(L"ERROR %s: %r\n", str, ret);
-        uefi_call_wrapper(BS->Stall, 1, 2 * 1000 * 1000);
-}
-
-
 
 static UINT32 pagealign(struct boot_img_hdr *hdr, UINT32 blob_size)
 {
@@ -260,18 +254,18 @@ static EFI_STATUS setup_ramdisk(UINT8 *bootimage)
                         aosp_header->kernel_size);
         rsize = aosp_header->ramdisk_size;
         if (!rsize) {
-                debug("boot image has no ramdisk");
+                debug(L"boot image has no ramdisk");
                 return EFI_SUCCESS; // no ramdisk, so nothing to do
         }
 
         bp->hdr.ramdisk_len = rsize;
-        debug("ramdisk size %d", rsize);
+        debug(L"ramdisk size %d", rsize);
         ret = emalloc(rsize, 0x1000, &ramdisk_addr);
         if (EFI_ERROR(ret))
                 return ret;
 
         if ((UINTN)ramdisk_addr > bp->hdr.ramdisk_max) {
-                Print(L"Ramdisk address is too high!\n");
+                error(L"Ramdisk address is too high!");
                 efree(ramdisk_addr, rsize);
                 return EFI_OUT_OF_RESOURCES;
         }
@@ -548,7 +542,7 @@ static EFI_STATUS setup_command_line(
         cmdline = (CHAR8 *)(UINTN)cmdline_addr;
         ret = str_to_stra(cmdline, cmdline16, cmdlen + 1);
         if (EFI_ERROR(ret)) {
-                Print(L"Non-ascii characters in command line\n");
+                error(L"Non-ascii characters in command line");
                 free_pages(cmdline_addr, EFI_SIZE_TO_PAGES(cmdlen + 1));
                 goto out;
         }
@@ -612,6 +606,9 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
                              EFI_SIZE_TO_PAGES(16384), &boot_addr);
         if (EFI_ERROR(ret))
                 goto out;
+
+        /* Free UI resources. */
+        ui_free();
 
         boot_params = (struct boot_params *)(UINTN)boot_addr;
         memset(boot_params, 0x0, 16384);
@@ -687,12 +684,12 @@ static EFI_STATUS open_partition(
                                 &NoHandles,
                                 &HandleBuffer);
                 if (EFI_ERROR(ret)) {
-                        error(L"LibLocateHandle", ret);
+                        efi_perror(ret, "LibLocateHandle");
                         return ret;
                 }
         }
         if (NoHandles != 1) {
-                Print(L"%d handles found for GUID, expecting 1: %g\n",
+                error(L"%d handles found for GUID, expecting 1: %g",
                                 NoHandles, guid);
                 ret = EFI_VOLUME_CORRUPTED;
                 goto out;
@@ -709,13 +706,13 @@ static EFI_STATUS open_partition(
                         &BlockIoProtocol,
                         (void **)&BlockIo);
         if (EFI_ERROR(ret)) {
-                error(L"HandleProtocol (BlockIoProtocol)", ret);
+                efi_perror(ret, "HandleProtocol (BlockIoProtocol)");
                 goto out;;
         }
         ret = uefi_call_wrapper(BS->HandleProtocol, 3, HandleBuffer[0],
                         &DiskIoProtocol, (void **)&DiskIo);
         if (EFI_ERROR(ret)) {
-                error(L"HandleProtocol (DiskIoProtocol)", ret);
+                efi_perror(ret, "HandleProtocol (DiskIoProtocol)");
                 goto out;
         }
         MediaId = BlockIo->Media->MediaId;
@@ -741,20 +738,20 @@ EFI_STATUS android_image_load_partition(
         EFI_STATUS ret;
         struct boot_img_hdr aosp_header;
 
-        debug("Locating boot image");
+        debug(L"Locating boot image");
         ret = open_partition(guid, &MediaId, &BlockIo, &DiskIo);
         if (EFI_ERROR(ret))
                 return ret;
 
-        debug("Reading boot image header");
+        debug(L"Reading boot image header");
         ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
                         sizeof(aosp_header), &aosp_header);
         if (EFI_ERROR(ret)) {
-                error(L"ReadDisk (header)", ret);
+                efi_perror(ret, "ReadDisk (header)");
                 return ret;
         }
         if (strncmpa((CHAR8 *)BOOT_MAGIC, aosp_header.magic, BOOT_MAGIC_SIZE)) {
-                Print(L"This partition does not appear to contain an Android boot image\n");
+                error(L"This partition does not appear to contain an Android boot image");
                 return EFI_INVALID_PARAMETER;
         }
 
@@ -763,11 +760,11 @@ EFI_STATUS android_image_load_partition(
         if (!bootimage)
                 return EFI_OUT_OF_RESOURCES;
 
-        debug("Reading full boot image (%d bytes)", img_size);
+        debug(L"Reading full boot image (%d bytes)", img_size);
         ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
                         img_size, bootimage);
         if (EFI_ERROR(ret)) {
-                error(L"ReadDisk", ret);
+                efi_perror(ret, "ReadDisk");
                 FreePool(bootimage);
                 return ret;
         }
@@ -794,10 +791,10 @@ EFI_STATUS android_image_load_file(
         UINTN buffersize = sizeof(EFI_FILE_INFO);
         struct boot_img_hdr *aosp_header;
 
-        debug("Locating boot image from file %s", loader);
+        debug(L"Locating boot image from file %s", loader);
         path = FileDevicePath(device, loader);
         if (!path) {
-                Print(L"Error getting device path.");
+                error(L"Error getting device path.");
                 uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
                 return EFI_INVALID_PARAMETER;
         }
@@ -806,12 +803,12 @@ EFI_STATUS android_image_load_file(
         ret = uefi_call_wrapper(BS->HandleProtocol, 3, device,
                         &SimpleFileSystemProtocol, (void **)&drive);
         if (EFI_ERROR(ret)) {
-                error(L"HandleProtocol", ret);
+                efi_perror(ret, "HandleProtocol");
                 return ret;
         }
         ret = uefi_call_wrapper(drive->OpenVolume, 2, drive, &root);
         if (EFI_ERROR(ret)) {
-                error(L"OpenVolume", ret);
+                efi_perror(ret, "OpenVolume");
                 return ret;
         }
 
@@ -820,7 +817,7 @@ EFI_STATUS android_image_load_file(
         ret = uefi_call_wrapper(root->Open, 5, root, &imagefile, loader,
                         EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0);
         if (EFI_ERROR(ret)) {
-                error(L"Open", ret);
+                efi_perror(ret, "Open");
                 return ret;
         }
         fileinfo = AllocatePool(buffersize);
@@ -840,7 +837,7 @@ EFI_STATUS android_image_load_file(
                         &EfiFileInfoId, &buffersize, fileinfo);
         }
         if (EFI_ERROR(ret)) {
-                error(L"GetInfo", ret);
+                efi_perror(ret, "GetInfo");
                 goto out;
         }
         buffersize = fileinfo->FileSize;
@@ -871,15 +868,15 @@ EFI_STATUS android_image_load_file(
                         &buffersize, bootimage);
         }
         if (EFI_ERROR(ret)) {
-                error(L"Read", ret);
+                efi_perror(ret, "Read");
                 goto out;
         }
 
-        debug("Read boot image from file (%d bytes)", buffersize);
+        debug(L"Read boot image from file (%d bytes)", buffersize);
 
         aosp_header = (struct boot_img_hdr *)bootimage;
         if (strncmpa((CHAR8 *)BOOT_MAGIC, aosp_header->magic, BOOT_MAGIC_SIZE)) {
-                Print(L"File does not appear to contain an Android boot image\n");
+                error(L"File does not appear to contain an Android boot image");
                 ret = EFI_INVALID_PARAMETER;
         }
 out:
@@ -887,13 +884,13 @@ out:
                 //this should close handle and flush FS
                 ret2 = uefi_call_wrapper(imagefile->Delete, 1, imagefile);
                 if (EFI_ERROR(ret2)) {
-                        error(L"Couldn't delete source file", ret2);
+                        efi_perror(ret2, "Couldn't delete source file");
                         goto out_free;
                 }
         } else {
                 ret2 = uefi_call_wrapper(imagefile->Close, 1, imagefile);
                 if (EFI_ERROR(ret2)) {
-                        error(L"Couldn't close source file", ret2);
+                        efi_perror(ret2, "Couldn't close source file");
                         goto out_free;
                 }
         }
@@ -924,7 +921,7 @@ EFI_STATUS android_image_start_buffer(
 
         aosp_header = (struct boot_img_hdr *)bootimage;
         if (strncmpa((CHAR8 *)BOOT_MAGIC, aosp_header->magic, BOOT_MAGIC_SIZE)) {
-                Print(L"buffer does not appear to contain an Android boot image\n");
+                error(L"buffer does not appear to contain an Android boot image");
                 return EFI_INVALID_PARAMETER;
         }
 
@@ -932,27 +929,27 @@ EFI_STATUS android_image_start_buffer(
 
         /* Check boot sector signature */
         if (buf->hdr.signature != 0xAA55) {
-                Print(L"bzImage kernel corrupt\n");
+                error(L"bzImage kernel corrupt");
                 return EFI_INVALID_PARAMETER;
         }
 
         if (buf->hdr.header != SETUP_HDR) {
-                Print(L"Setup code version is invalid\n");
+                error(L"Setup code version is invalid");
                 return EFI_INVALID_PARAMETER;
         }
 
         if (buf->hdr.version < 0x20c) {
                 /* Protocol 2.12, kernel 3.8 required */
-                Print(L"Kernel header version %x too old\n", buf->hdr.version);
+                error(L"Kernel header version %x too old", buf->hdr.version);
                 return EFI_INVALID_PARAMETER;
         }
 
 #if __LP64__
         if (!(buf->hdr.xloadflags & XLF_EFI_HANDOVER_64)) {
-                Print(L"This kernel does not support 64-bit EFI Handover protocol\n");
+                error(L"This kernel does not support 64-bit EFI Handover protocol");
 #else
         if (!(buf->hdr.xloadflags & XLF_EFI_HANDOVER_32)) {
-                Print(L"This kernel does not support 32-bit EFI Handover protocol\n");
+                error(L"This kernel does not support 32-bit EFI Handover protocol");
 #endif
                 return EFI_INVALID_PARAMETER;
         }
@@ -962,23 +959,23 @@ EFI_STATUS android_image_start_buffer(
                 return EFI_INVALID_PARAMETER;
         }
 
-        debug("Creating command line");
+        debug(L"Creating command line");
         ret = setup_command_line(bootimage, enable_charger, swap_guid);
         if (EFI_ERROR(ret)) {
-                error(L"setup_command_line", ret);
+                efi_perror(ret, "setup_command_line");
                 return ret;
         }
 
-        debug("Loading the ramdisk");
+        debug(L"Loading the ramdisk");
         ret = setup_ramdisk(bootimage);
         if (EFI_ERROR(ret)) {
-                error(L"setup_ramdisk", ret);
+                efi_perror(ret, "setup_ramdisk");
                 goto out_cmdline;
         }
 
-        debug("Loading the kernel");
+        debug(L"Loading the kernel");
         ret = handover_kernel(bootimage, parent_image);
-        error(L"handover_kernel", ret);
+        efi_perror(ret, "handover_kernel");
 
         efree(buf->hdr.ramdisk_start, buf->hdr.ramdisk_len);
         buf->hdr.ramdisk_start = 0;
@@ -999,7 +996,7 @@ VOID dump_bcb(IN struct bootloader_message *bcb)
         cmd16 = stra_to_str(bcb->command);
         stat16 = stra_to_str(bcb->status);
         if (cmd16 && stat16)
-                debug("BCB: cmd '%s' status '%s'",
+                debug(L"BCB: cmd '%s' status '%s'",
                         cmd16, stat16);
         FreePool(cmd16);
         FreePool(stat16);
@@ -1017,16 +1014,16 @@ EFI_STATUS read_bcb(
         EFI_DISK_IO *DiskIo;
         UINT32 MediaId;
 
-        debug("Locating BCB");
+        debug(L"Locating BCB");
         ret = open_partition(bcb_guid, &MediaId, &BlockIo, &DiskIo);
         if (EFI_ERROR(ret))
                 return EFI_INVALID_PARAMETER;
 
-        debug("Reading BCB");
+        debug(L"Reading BCB");
         ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
                         sizeof(*bcb), bcb);
         if (EFI_ERROR(ret)) {
-                error(L"ReadDisk (bcb)", ret);
+                efi_perror(ret, "ReadDisk (bcb)");
                 return ret;
         }
         bcb->command[31] = '\0';
@@ -1047,16 +1044,16 @@ EFI_STATUS write_bcb(
         EFI_DISK_IO *DiskIo;
         UINT32 MediaId;
 
-        debug("Locating BCB");
+        debug(L"Locating BCB");
         ret = open_partition(bcb_guid, &MediaId, &BlockIo, &DiskIo);
         if (EFI_ERROR(ret))
                 return EFI_INVALID_PARAMETER;
 
-        debug("Writing BCB");
+        debug(L"Writing BCB");
         ret = uefi_call_wrapper(DiskIo->WriteDisk, 5, DiskIo, MediaId, 0,
                         sizeof(*bcb), bcb);
         if (EFI_ERROR(ret)) {
-                error(L"WriteDisk (bcb)", ret);
+                efi_perror(ret, "WriteDisk (bcb)");
                 return ret;
         }
         dump_bcb(bcb);

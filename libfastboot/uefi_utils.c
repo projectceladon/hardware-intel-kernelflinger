@@ -56,7 +56,7 @@ EFI_STATUS get_esp_handle(EFI_HANDLE *esp)
 		&handles);
 
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to found partition: %r\n", ret);
+		efi_perror(ret, "Failed to found partition");
 		return ret;
 	}
 
@@ -64,7 +64,7 @@ EFI_STATUS get_esp_handle(EFI_HANDLE *esp)
 		*esp = handles[0];
 		ret = EFI_SUCCESS;
 	} else {
-		error(L"%d handles found for ESP, expecting 1\n", no_handles);
+		error(L"%d handles found for ESP, expecting 1", no_handles);
 		ret = EFI_VOLUME_CORRUPTED;
 	}
 
@@ -82,7 +82,7 @@ EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs)
 
 	ret = get_esp_handle(&esp_handle);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to get ESP partition: %r\n", ret);
+		error(L"Failed to get ESP partition: %r", ret);
 		return ret;
 	}
 
@@ -142,7 +142,7 @@ close:
 	uefi_call_wrapper(file->Close, 1, file);
 out:
 	if (EFI_ERROR(ret))
-		error(L"Failed to read file %s:%r\n", filename, ret);
+		error(L"Failed to read file %s:%r", filename, ret);
 	return ret;
 }
 
@@ -164,7 +164,7 @@ EFI_STATUS uefi_write_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, void *da
 
 out:
 	if (EFI_ERROR(ret))
-		error(L"Failed to write file %s:%r\n", filename, ret);
+		error(L"Failed to write file %s:%r", filename, ret);
 	return ret;
 }
 
@@ -187,7 +187,7 @@ EFI_STATUS uefi_write_file_with_dir(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename,
 
 	ret = uefi_call_wrapper(io->OpenVolume, 2, io, &dirs[0]);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to open root directory, error %r\n", ret);
+		error(L"Failed to open root directory, error %r", ret);
 		return ret;
 	}
 	start = filename;
@@ -200,20 +200,20 @@ EFI_STATUS uefi_write_file_with_dir(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename,
 		}
 
 		*end = 0;
-		debug("create directory %s\n", start);
+		debug(L"create directory %s", start);
 		ret = uefi_create_dir(dirs[subdir], &dirs[subdir + 1], start);
 		*end = '/';
 		if (EFI_ERROR(ret))
 			goto out;
 		subdir++;
 		if (subdir >= MAX_SUBDIR - 1) {
-			error(L"too many subdirectories, limit is %d\n", MAX_SUBDIR);
+			error(L"too many subdirectories, limit is %d", MAX_SUBDIR);
 			ret = EFI_INVALID_PARAMETER;
 			goto out;
 		}
 		start = end + 1;
 	}
-	debug("write file %s\n", start);
+	debug(L"write file %s", start);
 	ret = uefi_call_wrapper(dirs[subdir]->Open, 5, dirs[subdir], &file, start, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
 	if (EFI_ERROR(ret))
 		goto out;
@@ -226,7 +226,7 @@ out:
 		uefi_call_wrapper(dirs[subdir]->Close, 1, dirs[subdir]);
 
 	if (EFI_ERROR(ret))
-		error(L"Failed to write file %s: %r\n", filename, ret);
+		error(L"Failed to write file %s: %r", filename, ret);
 	return ret;
 }
 
@@ -259,7 +259,7 @@ EFI_STATUS uefi_delete_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename)
 
 out:
 	if (EFI_ERROR(ret) || ret == EFI_WARN_DELETE_FAILURE)
-		error(L"Failed to delete file %s:%r\n", filename, ret);
+		error(L"Failed to delete file %s:%r", filename, ret);
 
 	return ret;
 }
@@ -274,7 +274,7 @@ BOOLEAN uefi_exist_file(EFI_FILE *parent, CHAR16 *filename)
 	if (!EFI_ERROR(ret))
 		uefi_call_wrapper(file->Close, 1, file);
 	else if (ret != EFI_NOT_FOUND) // IO error
-		error(L"Failed to found file %s:%r\n", filename, ret);
+		error(L"Failed to found file %s:%r", filename, ret);
 
 	return ret == EFI_SUCCESS;
 }
@@ -286,7 +286,7 @@ BOOLEAN uefi_exist_file_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename)
 
 	ret = uefi_call_wrapper(io->OpenVolume, 2, io, &root);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to open volume %s:%r\n", filename, ret);
+		error(L"Failed to open volume %s:%r", filename, ret);
 		return FALSE;
 	}
 
@@ -301,7 +301,7 @@ EFI_STATUS uefi_create_directory(EFI_FILE *parent, CHAR16 *dirname)
 	ret = uefi_create_dir(parent, &dir, dirname);
 
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to create directory %s:%r\n", dirname, ret);
+		error(L"Failed to create directory %s:%r", dirname, ret);
 	} else {
 		uefi_call_wrapper(dir->Close, 1, dir);
 	}
@@ -316,7 +316,7 @@ EFI_STATUS uefi_create_directory_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *dirname
 
 	ret = uefi_call_wrapper(io->OpenVolume, 2, io, &root);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to open volume %s:%r\n", dirname, ret);
+		error(L"Failed to open volume %s:%r", dirname, ret);
 		return ret;
 	}
 
@@ -363,38 +363,3 @@ free_format16:
 	return ret;
 }
 
-int snprintf(char *str, size_t size, const char *format, ...)
-{
-	va_list args;
-	int ret;
-
-	va_start(args, format);
-	ret = vsnprintf(str, size, format, args);
-	va_end(args);
-	return ret;
-}
-
-int vsnprintf(char *str, size_t size, const char *format, va_list ap)
-{
-	UINTN len;
-	int ret = -1;
-	CHAR16 *format16 = stra_to_str((CHAR8 *)format);
-	if (!format16)
-		return -1;
-
-	CHAR16 *str16 = AllocatePool(size * sizeof(CHAR16));
-	if (!str16)
-		goto free_format16;
-
-	len = VSPrint(str16, size * sizeof(CHAR16), format16, ap);
-
-	if (str_to_stra((CHAR8 *)str, str16, len + 1) == EFI_SUCCESS) {
-		ret = 0;
-		str[len] = '\0';
-	}
-
-	FreePool(str16);
-free_format16:
-	FreePool(format16);
-	return ret;
-}

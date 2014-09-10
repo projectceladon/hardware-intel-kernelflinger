@@ -49,10 +49,10 @@ BOOLEAN is_sparse_image(void *data, UINT64 size)
 
 	sph = data;
 
-	debug("sparse header : magic %08x, major %d, minor %d, fdhrsz %d, chdrsz %d, bz %d\n",
+	debug(L"sparse header : magic %08x, major %d, minor %d, fdhrsz %d, chdrsz %d, bz %d",
 	      sph->magic, sph->major_version, sph->minor_version,
 	      sph->file_hdr_sz, sph->chunk_hdr_sz, sph->blk_sz);
-	debug("tot blk %d, tot chk %d\n", sph->total_blks, sph->total_chunks);
+	debug(L"tot blk %d, tot chk %d", sph->total_blks, sph->total_chunks);
 
 	if (sph->magic != SPARSE_HEADER_MAGIC)
 		return FALSE;
@@ -63,7 +63,7 @@ BOOLEAN is_sparse_image(void *data, UINT64 size)
 	if (sph->chunk_hdr_sz < sizeof(struct chunk_header))
 		return FALSE;
 
-	debug("Found a valid sparse image \n");
+	debug(L"Found a valid sparse image");
 	return TRUE;
 }
 
@@ -72,7 +72,7 @@ static EFI_STATUS flash_chunk(struct sparse_header *sph, struct chunk_header *ck
 	switch (ckh->chunk_type) {
 	case CHUNK_TYPE_RAW:
 		if (size % sph->blk_sz || size != ckh->chunk_sz * sph->blk_sz) {
-			error(L"inconsistent raw chunk\n");
+			error(L"inconsistent raw chunk");
 			return EFI_INVALID_PARAMETER;
 		}
 		return flash_write(data, size);
@@ -81,10 +81,10 @@ static EFI_STATUS flash_chunk(struct sparse_header *sph, struct chunk_header *ck
 	case CHUNK_TYPE_FILL:
 		return flash_fill(*((UINT32 *) data), ckh->chunk_sz * sph->blk_sz);
 	case CHUNK_TYPE_CRC32:
-		debug("crc chunk not implemented yet %d\n", size);
+		debug(L"crc chunk not implemented yet %d", size);
 		break;
 	default:
-		error(L"Unknow chunk type %04x\n", ckh->chunk_type);
+		error(L"Unknow chunk type %04x", ckh->chunk_type);
 		return EFI_INVALID_PARAMETER;
 	}
 	return EFI_SUCCESS;
@@ -108,11 +108,11 @@ EFI_STATUS flash_sparse(void *data, UINT64 size)
 		ckh = (struct chunk_header *) s;
 
 		if (rlen < sph->chunk_hdr_sz || rlen < ckh->total_sz) {
-			error(L"sparse chunk truncated, %ld, %ld\n", rlen, size);
+			error(L"sparse chunk truncated, %ld, %ld", rlen, size);
 			return EFI_INVALID_PARAMETER;
 		}
 		if (ckh->total_sz < sph->chunk_hdr_sz) {
-			error(L"sparse chunk malformated, %d, %d\n", ckh->total_sz, sph->chunk_hdr_sz);
+			error(L"sparse chunk malformated, %d, %d", ckh->total_sz, sph->chunk_hdr_sz);
 			return EFI_INVALID_PARAMETER;
 		}
 		ret = flash_chunk(sph, ckh, s + sph->chunk_hdr_sz, ckh->total_sz - sph->chunk_hdr_sz);

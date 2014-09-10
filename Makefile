@@ -19,7 +19,7 @@ VENDOR_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/vendor
 
 CPPFLAGS := -DKERNELFLINGER -I$(GNU_EFI_INCLUDE) \
 	-I$(GNU_EFI_INCLUDE)/$(ARCH) -I$(OPENSSL_TOP)/include -I$(OPENSSL_TOP)/include/Include \
-	-Iinclude/libkernelflinger -Iinclude/libfastboot
+	-Iinclude/libkernelflinger -Iinclude/libfastboot -Iinclude/libui
 
 CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
 	 -fshort-wchar -Wall -Wextra -Werror -mno-red-zone -maccumulate-outgoing-args \
@@ -57,10 +57,17 @@ LIB_OBJS := libkernelflinger/android.o \
 	    libkernelflinger/asn1.o \
 	    libkernelflinger/keystore.o
 
+LIBUI_OBJS := \
+	    libui/ui.o \
+	    libui/ui_font.o \
+	    libui/ui_textarea.o \
+	    libui/ui_image.o
+
 LIBFASTBOOT_OBJS := \
 	    libfastboot/fastboot.o \
 	    libfastboot/fastboot_oem.o \
 	    libfastboot/fastboot_usb.o \
+	    libfastboot/fastboot_ui.o \
 	    libfastboot/flash.o \
 	    libfastboot/gpt.o \
 	    libfastboot/sparse.o \
@@ -132,9 +139,19 @@ libkernelflinger.a: $(LIB_OBJS)
 libfastboot.a: $(LIBFASTBOOT_OBJS)
 	ar rcs $@ $^
 
-kernelflinger.so: $(OBJS) libkernelflinger.a libfastboot.a
+libui/res/font_res.h:
+	./libui/tools/gen_fonts.sh ./libui/res/fonts/ $@
+
+libui/res/img_res.h:
+	./libui/tools/gen_images.sh ./libui/res/images/ $@
+
+$(LIBUI_OBJS): libui/res/font_res.h libui/res/img_res.h
+
+libui.a: $(LIBUI_OBJS)
+	ar rcs $@ $^
+
+kernelflinger.so: $(OBJS) libkernelflinger.a libfastboot.a libui.a
 	$(LD) $(LDFLAGS) $^ -o $@ -lefi $(EFI_LIBS)
 
 clean:
-	rm -f $(OBJS) $(LIB_OBJS) $(LIBFASTBOOT_OBJS) *.a *.cer *.key *.bin *.so *.efi
-
+	rm -f $(OBJS) $(LIB_OBJS) $(LIBFASTBOOT_OBJS) $(LIBUI_OBJS) *.a *.cer *.key *.bin *.so *.efi libui/res/font_res.h libui/res/img_res.h

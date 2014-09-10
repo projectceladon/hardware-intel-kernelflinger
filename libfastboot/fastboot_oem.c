@@ -37,20 +37,16 @@
 #include "uefi_utils.h"
 #include "flash.h"
 #include "fastboot.h"
+#include "fastboot_ui.h"
+
+#include "fastboot_oem.h"
 
 const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
 				 {0x9a, 0x99, 0xde, 0xbe, 0xb4, 0x31, 0xfc, 0xc1} };
 
 #define OEM_LOCK_VAR L"OEMLock"
 
-enum device_state {
-	UNKNOWN = -1,
-	UNLOCKED,
-	LOCKED,
-	VERIFIED
-};
-
-static enum device_state current_state = UNKNOWN;
+static enum device_state current_state = UNKNOWN_STATE;
 
 static void fastboot_oem_publish(void)
 {
@@ -58,22 +54,22 @@ static void fastboot_oem_publish(void)
 	fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
 }
 
-static enum device_state get_current_state()
+enum device_state get_current_state()
 {
 	UINT32 *stored_state;
 	UINTN dsize;
 	EFI_STATUS ret;
 	UINT32 flags;
 
-	if (current_state == UNKNOWN) {
+	if (current_state == UNKNOWN_STATE) {
 		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK_VAR,
 				       &dsize, (void **)&stored_state, &flags);
 		/* If we can't read the state, be safe and assume locked */
 		if (EFI_ERROR(ret) || !dsize) {
-			error(L"Couldn't read %s, assuming locked\n", OEM_LOCK_VAR);
+			error(L"Couldn't read %s, assuming locked", OEM_LOCK_VAR);
 			current_state = LOCKED;
 		} else if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
-			error(L"%s has RUNTIME_ACCESS flag, assuming locked\n", OEM_LOCK_VAR);
+			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK_VAR);
 			current_state = LOCKED;
 		} else
 			current_state = *stored_state;
@@ -95,6 +91,7 @@ static EFI_STATUS set_current_state(enum device_state state)
 
 	current_state = state;
 	fastboot_oem_publish();
+	fastboot_ui_refresh();
 
 	return EFI_SUCCESS;
 }
@@ -119,18 +116,22 @@ static void change_device_state(enum device_state new_state)
 	EFI_STATUS ret;
 
 	if (get_current_state() == new_state) {
-		info(L"Device already in the required state.\n");
+		error(L"Device is already in the required state.");
 		fastboot_okay("");
+		return;
 	}
 
-	/* TODO: UI confirmation.  */
+	if (!fastboot_ui_confirm_for_state(new_state))
+		goto exit;
 
-	info(L"Erasing userdata\n");
+	ui_print(L"Erasing userdata...");
 	ret = erase_by_label(L"data");
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to wipe data.\n");
 		return;
 	}
+
+	ui_print(L"Erase done.");
 
 	ret = set_current_state(new_state);
 	if (EFI_ERROR(ret)) {
@@ -138,6 +139,7 @@ static void change_device_state(enum device_state new_state)
 		return;
 	}
 
+exit:
 	fastboot_okay("");
 }
 
