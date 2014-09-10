@@ -2,9 +2,7 @@
  * Copyright (c) 2014, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,30 +30,15 @@
  *
  */
 
-#ifndef _FASTBOOT_H_
-#define _FASTBOOT_H_
+#ifndef _FASTBOOT_UI_H_
+#define _FASTBOOT_UI_H_
 
-#include <efidef.h>
-#include <lib.h>
+#include "fastboot_oem.h"
 
-/* GUID for variables used to communicate with Fastboot */
-extern const EFI_GUID fastboot_guid;
+EFI_STATUS fastboot_ui_init(void);
+void fastboot_ui_destroy(void);
+enum boot_target fastboot_ui_event_handler(void);
+BOOLEAN fastboot_ui_confirm_for_state(enum device_state target);
+void fastboot_ui_refresh(void);
 
-typedef void (*fastboot_handle) (CHAR8 *arg);
-
-void fastboot_publish(const char *name, const char *value);
-void fastboot_okay(const char *fmt, ...);
-void fastboot_fail(const char *fmt, ...);
-void fastboot_info(const char *fmt, ...);
-void fastboot_register(const char *prefix, fastboot_handle handle,
-		       BOOLEAN restricted);
-void fastboot_oem_register(const char *prefix, fastboot_handle handle,
-			   BOOLEAN restricted);
-
-BOOLEAN device_is_unlocked(void);
-BOOLEAN device_is_locked(void);
-BOOLEAN device_is_verified(void);
-
-EFI_STATUS fastboot_start(void **bootimage, enum boot_target *target);
-
-#endif	/* _FASTBOOT_H_ */
+#endif  /* _FASTBOOT_UI_H_ */

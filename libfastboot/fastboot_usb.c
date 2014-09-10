@@ -33,6 +33,9 @@
  */
 
 #include <lib.h>
+#include <ui.h>
+
+#include "fastboot_ui.h"
 #include "protocol.h"
 #include "uefi_utils.h"
 #include "fastboot_usb.h"
@@ -168,7 +171,7 @@ int usb_write(void *pBuf, uint32_t size)
 	/* queue the Tx request */
 	ret = uefi_call_wrapper(usb_device->EpTxData, 2, usb_device, &ioReq);
 	if (EFI_ERROR(ret))
-		error(L"failed to queue Tx request: %r\n", ret);
+		error(L"failed to queue Tx request: %r", ret);
 	return EFI_ERROR(ret);
 }
 
@@ -190,7 +193,7 @@ int usb_read(void *buf, unsigned len)
 	/* queue the  receive request */
 	ret = uefi_call_wrapper(usb_device->EpRxData, 2, usb_device, &ioReq);
 	if (EFI_ERROR(ret))
-		error(L"failed to queue Rx request: %r\n", ret);
+		error(L"failed to queue Rx request: %r", ret);
 
 	return EFI_ERROR(ret);
 }
@@ -213,7 +216,7 @@ static EFIAPI EFI_STATUS config_handler(UINT8 cfgVal)
 		if (start_callback)
 			start_callback();
 	} else {
-		error(L"invalid configuration value: 0x%x\n", cfgVal);
+		error(L"invalid configuration value: 0x%x", cfgVal);
 		status = EFI_INVALID_PARAMETER;
 	}
 
@@ -260,20 +263,19 @@ static void fbInitDriverObjs(void)
 	gEndpointObjs[1].EndpointCompDesc  = NULL;
 }
 
-static int fastboot_usb_init(void)
+static EFI_STATUS fastboot_usb_init(void)
 {
-
 	EFI_STATUS ret;
 
 	ret = LibLocateProtocol(&gEfiUsbDeviceModeProtocolGuid, (void **)&usb_device);
 	if (EFI_ERROR(ret) || !usb_device) {
-		error(L"Failed to locate usb device protocol\n");
-		return -1;
+		error(L"Failed to locate usb device protocol");
+		return EFI_ERROR(ret) ? ret : EFI_UNSUPPORTED;
 	}
 	ret = uefi_call_wrapper(usb_device->InitXdci, 1, usb_device);
 	if (EFI_ERROR(ret)) {
-		error(L"Init XDCI failed: %r\n", ret);
-		return -1;
+		efi_perror(ret, "Init XDCI failed");
+		return ret;
 	}
 
 	fbInitDriverObjs();
@@ -281,11 +283,11 @@ static int fastboot_usb_init(void)
 	/* Bind this Fastboot layer to the USB device driver layer */
 	ret = uefi_call_wrapper(usb_device->Bind, 2, usb_device, &gDevObj);
 	if (EFI_ERROR(ret)) {
-		debug("Failed to initialize USB Device driver layer: %r\n", ret);
-		return -1;
+		debug(L"Failed to initialize USB Device driver layer: %r", ret);
+		return ret;
 	}
 
-	return 0;
+	return EFI_SUCCESS;
 }
 
 static void *fastboot_bootimage;
@@ -306,7 +308,8 @@ EFI_STATUS fastboot_usb_stop(void *bootimage)
 EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 			      data_callback_t rx_cb,
 			      data_callback_t tx_cb,
-			      void **bootimage)
+			      void **bootimage,
+			      enum boot_target *target)
 {
 	EFI_STATUS ret;
 
@@ -320,26 +323,42 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 
 	ret = uefi_call_wrapper(usb_device->Connect, 1, usb_device);
 	if (EFI_ERROR(ret)) {
-		debug("Failed to connect: %r\n", ret);
+		efi_perror(ret, "Failed to connect");
 		goto error;
 	}
 
-	ret = uefi_call_wrapper(usb_device->Run, 2, usb_device, 6000000);
-	if (EFI_ERROR(ret)) {
-		debug("Error occurred during run: %r\n", ret);
-		goto error;
+	fastboot_bootimage = NULL;
+	*target = UNKNOWN_TARGET;
+
+	for (;;) {
+		*target = fastboot_ui_event_handler();
+		if (*target != UNKNOWN_TARGET)
+			break;
+
+		ret = uefi_call_wrapper(usb_device->Run, 2, usb_device, 600);
+		if (ret == EFI_TIMEOUT)
+			continue;
+
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, "Error occurred during run");
+			goto error;
+		}
+
+		if (fastboot_bootimage)
+			break;
 	}
 
 	ret = uefi_call_wrapper(usb_device->DisConnect, 1, usb_device);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to disconnect USB", ret);
+		efi_perror(ret, "Failed to disconnect USB");
 		goto error;
 	}
 
 	ret = uefi_call_wrapper(usb_device->UnBind, 1, usb_device);
-	if (EFI_ERROR(ret))
-		efi_perror(ret, "Failed to unbind USB", ret);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Failed to unbind USB");
 		goto error;
+	}
 
 	FreePool(usb_device);
 	*bootimage = fastboot_bootimage;

@@ -2,14 +2,14 @@
  * Copyright (c) 2014, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Authors:  Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
  *    * Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *    * Redistributions in binary form must reproduce the above copyright
@@ -32,33 +32,25 @@
  *
  */
 
-#ifndef __UEFI_UTILS_H__
-#define __UEFI_UTILS_H__
+#include <lib.h>
+#include <ui.h>
 
-#include <efi.h>
-#include <efilib.h>
-
-typedef UINTN size_t;
+#include "res/font_res.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
 
-#define DIV_ROUND_UP(x, y) (((x) + (y) - 1)/(y))
-#define ALIGN(x, y) ((y) * DIV_ROUND_UP((x), (y)))
-#define ALIGN_DOWN(x, y) ((y) * ((x) / (y)))
+ui_font_t *ui_font_get_default(void)
+{
+	return &ui_fonts[0];
+}
 
-EFI_STATUS get_esp_handle(EFI_HANDLE *esp);
-EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs);
-EFI_STATUS uefi_read_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, void **data, UINTN *size);
-EFI_STATUS uefi_write_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, void *data, UINTN *size);
-EFI_STATUS uefi_write_file_with_dir(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, void *data, UINTN size);
-EFI_STATUS uefi_create_dir(EFI_FILE *parent, EFI_FILE **dir, CHAR16 *dirname);
-EFI_STATUS find_device_partition(const EFI_GUID *guid, EFI_HANDLE **handles, UINTN *no_handles);
-void uefi_reset_system(EFI_RESET_TYPE reset_type);
-EFI_STATUS uefi_create_directory(EFI_FILE *parent, CHAR16 *dirname);
-EFI_STATUS uefi_create_directory_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *dirname);
-EFI_STATUS uefi_usleep(UINTN useconds);
-EFI_STATUS uefi_msleep(UINTN mseconds);
+ui_font_t *ui_font_get(char *name)
+{
+	UINTN i;
 
-int sprintf(char *str, const char *format, ...);
+	for (i = 0; i < ARRAY_SIZE(ui_fonts); i++)
+		if (!strcmp((CHAR8 *)ui_fonts[i].name, (CHAR8 *)name))
+			return &ui_fonts[i];
 
-#endif /* __UEFI_UTILS_H__ */
+	return NULL;
+}

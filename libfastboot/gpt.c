@@ -113,7 +113,7 @@ static EFI_STATUS calculate_crc32(void *data, UINTN size, UINT32 *crc)
 
 	ret = uefi_call_wrapper(BS->CalculateCrc32, 3, data, size, crc);
 	if (EFI_ERROR(ret))
-		error(L"CalculateCrc32 failed, %r\n", ret);
+		efi_perror(ret, "CalculateCrc32 failed");
 	return ret;
 }
 
@@ -134,7 +134,7 @@ static EFI_STATUS read_gpt_header(struct gpt_disk *disk)
 
 	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio, disk->bio->Media->MediaId, disk->bio->Media->BlockSize, sizeof(disk->gpt_hd), (VOID *)&disk->gpt_hd);
 	if (EFI_ERROR(ret))
-		error(L"Failed to read disk for GPT header: %r\n", ret);
+		efi_perror(ret, "Failed to read disk for GPT header");
 
 	return ret;
 }
@@ -155,13 +155,13 @@ static EFI_STATUS read_gpt_partitions(struct gpt_disk *disk)
 
 	disk->partitions = AllocatePool(size);
 	if (!disk->partitions) {
-		error(L"Failed to allocate %d bytes for partitions\n", size);
+		error(L"Failed to allocate %d bytes for partitions", size);
 		return EFI_OUT_OF_RESOURCES;
 	}
 
 	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio, disk->bio->Media->MediaId, offset, size, disk->partitions);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to read GPT partitions: %r\n", ret);
+		efi_perror(ret, "Failed to read GPT partitions");
 		goto free_partitions;
 	}
 	return ret;
@@ -178,7 +178,7 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &BlockIoProtocol, (VOID *)&disk->bio);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to get block io protocol: %r\n", ret);
+		efi_perror(ret, "Failed to get block io protocol");
 		return ret;
 	}
 
@@ -190,13 +190,13 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &DiskIoProtocol, (VOID *)&disk->dio);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to get disk io protocol: %r\n", ret);
+		efi_perror(ret, "Failed to get disk io protocol");
 		return ret;
 	}
 
 	ret = read_gpt_header(disk);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to read GPT header: %r\n", ret);
+		efi_perror(ret, "Failed to read GPT header");
 		return ret;
 	}
 	return ret;
@@ -232,7 +232,7 @@ static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
 		return EFI_NOT_FOUND;
 	ret = read_gpt_partitions(disk);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to read GPT partitions: %r\n", ret);
+		efi_perror(ret, "Failed to read GPT partitions");
 		return ret;
 	}
 	gpt_remove_prefix();
@@ -258,10 +258,10 @@ static EFI_STATUS gpt_cache_partition(void)
 
 	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol, &BlockIoProtocol, NULL, &nb_handle, &handles);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to locate Block IO Protocol: %r\n", ret);
+		efi_perror(ret, "Failed to locate Block IO Protocol");
 		return ret;
 	}
-	debug("Found %d block io protocols\n", nb_handle);
+	debug(L"Found %d block io protocols", nb_handle);
 
 	for (i = 0; i < nb_handle && !found; i++) {
 		ZeroMem(&sdisk, sizeof(sdisk));
@@ -269,12 +269,12 @@ static EFI_STATUS gpt_cache_partition(void)
 		if (EFI_ERROR(ret))
 			continue;
 
-		debug("Found System disk as block io %d\n", i);
+		debug(L"Found System disk as block io %d", i);
 		sdisk.handle = handles[i];
 		found = TRUE;
 	}
 	if (!found) {
-		error(L"No System disk found\n");
+		error(L"No System disk found");
 		ret = EFI_NOT_FOUND;
 		goto free_handles;
 	}
@@ -304,12 +304,12 @@ EFI_STATUS gpt_refresh(void)
 
 	ret = uefi_call_wrapper(sdisk.bio->FlushBlocks, 1, sdisk.bio);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to flush block io interface: %r\n", ret);
+		efi_perror(ret, "Failed to flush block io interface");
 		return ret;
 	}
 	ret = uefi_call_wrapper(BS->ReinstallProtocolInterface, 4, sdisk.handle, &BlockIoProtocol, sdisk.bio, sdisk.bio);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to Reinstall block io interface on System disk: %r\n", ret);
+		efi_perror(ret, "Failed to Reinstall block io interface on System disk");
 		return ret;
 	}
 	/* invalid gpt cache to force to get new handle next time */
@@ -334,7 +334,7 @@ EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interf
 		if (!CompareGuid(&part->type, &NullGuid) || StrCmp(part->name, label))
 			continue;
 
-		debug("Found label %s in partition %d\n", label, p);
+		debug(L"Found label %s in partition %d", label, p);
 		CopyMem(&gpart->part, part, sizeof(*part));
 		gpart->bio = sdisk.bio;
 		gpart->dio = sdisk.dio;
@@ -403,7 +403,7 @@ static void gpt_new(struct gpt_header *gh, UINTN start_lba, UINTN blocksize, UIN
 		gh->first_usable_lba = MiB / blocksize;
 	gh->last_usable_lba = ALIGN_DOWN(lastblock - (gpt_size), (MiB / blocksize)) - 1;
 
-	debug("first usable lba %ld, last usable lba %ld\n",
+	debug(L"first usable lba %ld, last usable lba %ld",
 	      gh->first_usable_lba, gh->last_usable_lba);
 	/* TODO generate unique UUID for disk */
 }
@@ -422,12 +422,12 @@ static EFI_STATUS gpt_check_partition_list(UINTN part_count, struct gpt_bin_part
 
 	for (i = 0; i < part_count; i++) {
 		if (gbp[i].length == 0 || gbp[i].length < -1) {
-			error(L"Wrong length for partition %d\n", i);
+			error(L"Wrong length for partition %d", i);
 			return EFI_INVALID_PARAMETER;
 		}
 		if (gbp[i].length == -1) {
 			if (part_data >= 0) {
-				error(L"More than 1 partition has -1 length %d\n", i);
+				error(L"More than 1 partition has -1 length %d", i);
 				return EFI_INVALID_PARAMETER;
 			}
 			part_data = i;
@@ -438,7 +438,7 @@ static EFI_STATUS gpt_check_partition_list(UINTN part_count, struct gpt_bin_part
 	disksize = ((sdisk.gpt_hd.last_usable_lba + 1 - sdisk.gpt_hd.first_usable_lba) * sdisk.bio->Media->BlockSize) / MiB;
 
 	if (totsize > disksize) {
-		error(L"partitions are bigger than the disk, partitions %ld MiB disk %ld MiB\n", totsize, disksize);
+		error(L"partitions are bigger than the disk, partitions %ld MiB disk %ld MiB", totsize, disksize);
 		return EFI_INVALID_PARAMETER;
 	}
 	gbp[part_data].length = disksize - totsize;
@@ -465,7 +465,7 @@ static struct gpt_partition *gpt_fill_entries(UINTN part_count, struct gpt_bin_p
 		gp[i].starting_lba = start_lba;
 		gp[i].ending_lba = start_lba - 1 + gbp[i].length * (MiB / sdisk.bio->Media->BlockSize);
 		start_lba = gp[i].ending_lba + 1;
-		debug("partition %s, start %ld, end %ld\n", gp[i].name, gp[i].starting_lba, gp[i].ending_lba);
+		debug(L"partition %s, start %ld, end %ld", gp[i].name, gp[i].starting_lba, gp[i].ending_lba);
 	}
 	return gp;
 }
@@ -488,7 +488,7 @@ static EFI_STATUS gpt_write_mbr(void)
 	ret = uefi_call_wrapper(sdisk.dio->WriteDisk, 5, sdisk.dio, sdisk.bio->Media->MediaId,
 				440, sizeof(struct mbr), &mbr);
 	if (EFI_ERROR(ret))
-		error(L"Couldn't write MBR\n");
+		error(L"Couldn't write MBR");
 
 	return ret;
 }
@@ -505,7 +505,7 @@ static EFI_STATUS gpt_write_table_to_disk(struct gpt_header *gh)
 	ret = uefi_call_wrapper(sdisk.dio->WriteDisk, 5, sdisk.dio, sdisk.bio->Media->MediaId,
 				header_offset, sizeof(struct gpt_header), gh);
 	if (EFI_ERROR(ret)) {
-		error(L"Couldn't write GPT header\n");
+		error(L"Couldn't write GPT header");
 		return ret;
 	}
 
@@ -513,7 +513,7 @@ static EFI_STATUS gpt_write_table_to_disk(struct gpt_header *gh)
 				entries_offset, entries_size,
 				sdisk.partitions);
 	if (EFI_ERROR(ret))
-		error(L"Couldn't write GPT entries array\n");
+		error(L"Couldn't write GPT entries array");
 
 	return ret;
 }
@@ -543,16 +543,16 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	debug("Write first GPT Header at %d\n", gh->my_lba);
+	debug(L"Write first GPT Header at %d", gh->my_lba);
 	ret = gpt_write_table_to_disk(gh);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to write primary GPT header\n");
+		efi_perror(ret, "Failed to write primary GPT header");
 		return ret;
 	}
 
 	gh_backup = AllocatePool(sizeof(struct gpt_header));
 	if (!gh_backup) {
-		error(L"Cannot allocate alternate GPT header\n");
+		error(L"Cannot allocate alternate GPT header");
 		return EFI_OUT_OF_RESOURCES;
 	}
 
@@ -566,14 +566,14 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	debug("Write alternate GPT Header at %d\n", gh_backup->my_lba);
+	debug(L"Write alternate GPT Header at %d", gh_backup->my_lba);
 	ret = gpt_write_table_to_disk(gh_backup);
 	FreePool(gh_backup);
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to write alternate GPT header\n");
+		efi_perror(ret, "Failed to write alternate GPT header");
 		return ret;
 	}
-	debug("Write protective MBR\n");
+	debug(L"Write protective MBR");
 	ret = gpt_write_mbr();
 	if (EFI_ERROR(ret))
 		return ret;
