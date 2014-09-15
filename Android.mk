@@ -41,9 +41,10 @@ ifeq ($(KERNELFLINGER_TXE_BIND_ROOT_TRUST),true)
 endif
 
 KERNELFLINGER_STATIC_LIBRARIES := \
-	libcryptlib \
-	libopenssl-efi \
+	libuefi_ssl_static \
+	libuefi_crypto_static \
 	libgnuefi \
+	libopensslsupport \
 	libefi
 
 include $(call all-subdir-makefiles)

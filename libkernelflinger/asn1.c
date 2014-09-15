@@ -24,6 +24,7 @@
 #ifndef KERNELFLINGER
 #include "userfastboot_ui.h"
 #else
+#define malloc AllocatePool
 #include "lib.h"
 #define pr_error(x, ...) error(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
 #define pr_debug(x, ...) debug(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
