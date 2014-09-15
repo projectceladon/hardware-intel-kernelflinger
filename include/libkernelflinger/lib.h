@@ -39,15 +39,10 @@
 #include <ui.h>
 #include <log.h>
 
-/* pulls in memcpy, memset, bunch of other posix functions */
-#include "OpenSslSupport.h"
+typedef UINTN size_t;
+typedef INTN ssize_t;
 
-/* The offsetof in the uefi shim support library headers generates
- * warnings, use this instead */
-#ifdef offsetof
-#undef offsetof
 #define offsetof(TYPE, MEMBER) ((UINTN) &((TYPE *)0)->MEMBER)
-#endif
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
 
@@ -132,6 +127,36 @@ char *strtok_r(char *str, const char *delim, char **saveptr);
 
 CHAR16 *StrStr(const CHAR16 *s, const CHAR16 *find);
 
+CHAR8 *strchr(const CHAR8 *s, int c);
+
+int strcmp(const CHAR8 *s1, const CHAR8 *s2);
+
+int strncasecmp(const char *s1, const char *s2, size_t n);
+
+int strncmp(const CHAR8 *s1, const CHAR8 *s2, size_t n);
+
+CHAR8 *strcpy(CHAR8 *dest, const CHAR8 *src);
+
+CHAR8 *strncpy(CHAR8 *dest, const CHAR8 *src, size_t n);
+
+size_t strlen(const CHAR8 *s);
+
+void *memcpy(void *dest, const void *source, size_t count);
+
+unsigned long strtoul(const char *nptr, char **endptr, int base);
+
+int isalnum(int c);
+
+int isspace(int c);
+
+int isdigit(int c);
+
+int isupper(int c);
+
+int isxdigit(int c);
+
+int tolower(int c);
+
 /*
  * misc
  */
@@ -142,6 +167,10 @@ VOID halt_system(VOID) __attribute__ ((noreturn));
 VOID pause(UINTN seconds);
 
 VOID reboot(CHAR16 *target) __attribute__ ((noreturn));
+
+void *memset(void *s, int c, size_t n);
+
+int memcmp(const void *s1, const void *s2, size_t n);
 
 EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
                          UINTN size, UINTN align);

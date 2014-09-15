@@ -36,7 +36,6 @@
 #include <efilib.h>
 #include <lib.h>
 #include <vars.h>
-#include <string.h>
 #include <ui.h>
 #include <em.h>
 #include <transport.h>

@@ -72,6 +72,103 @@
 
 EFI_HANDLE g_parent_image;
 
+CHAR8 *strchr(const CHAR8 *s, int c)
+{
+        do {
+                if (*s == (char)c)
+                        return (CHAR8 *)s;
+        } while (*s++);
+        return NULL;
+}
+
+int strcmp(const CHAR8 *s1, const CHAR8 *s2)
+{
+        return strcmpa(s1, s2);
+}
+
+int strncmp(const CHAR8 *s1, const CHAR8 *s2, size_t n)
+{
+        return strncmpa(s1, s2, n);
+}
+
+size_t strlen(const CHAR8 *s)
+{
+        return strlena(s);
+}
+
+CHAR8 *strcpy(CHAR8 *dest, const CHAR8 *src)
+{
+        unsigned int i;
+
+        for (i = 0; src[i] != '\0'; i++)
+                dest[i] = src[i];
+        dest[i] = '\0';
+
+        return dest;
+}
+
+CHAR8 *strncpy(CHAR8 *dest, const CHAR8 *src, size_t n)
+{
+        unsigned int i;
+
+        for (i = 0; i < n && src[i] != '\0'; i++)
+                dest[i] = src[i];
+        for (; i < n; i++)
+                dest[i] = '\0';
+
+        return dest;
+}
+
+int strncasecmp(const char *s1, const char *s2, size_t n)
+{
+        if (!n)
+                return 0;
+
+        do {
+                if (tolower(*s1) != tolower(*s2++))
+                        return (tolower(*s1) - tolower(*--s2));
+                if (*s1++ == '\0')
+                        break;
+        } while (--n != 0);
+        return 0;
+}
+
+int tolower(int c)
+{
+        if (('A' <= c) && (c <= 'Z'))
+                return c - ('A' - 'a');
+        return c;
+}
+
+int isupper(int c)
+{
+        return ('A' <= c) && (c <= 'Z');
+}
+
+int isxdigit(int c)
+{
+        return (('0' <= c) && (c <= '9')) ||
+                (('a' <= c) && (c <= 'f')) ||
+                (('A' <= c) && (c <= 'F'));
+}
+
+int isalnum(int c)
+{
+        return (('0' <= c) && (c <= '9')) ||
+                (('a' <= c) && (c <= 'z')) ||
+                (('A' <= c) && (c <= 'Z'));
+}
+
+int isspace(int c)
+{
+        return c == ' ';
+}
+
+int isdigit(int c)
+{
+        return ('0' <= c) && (c <= '9');
+}
+
 char *strdup(const char *s)
 {
 	UINTN size;
@@ -590,6 +687,35 @@ static INTN to_digit(CHAR16 character, UINTN base)
         return value < base ? (INTN)value : -1;
 }
 
+/* Convert strings to an unsigned long-integer value */
+unsigned long strtoul(const char *nptr, char **endptr, int base)
+{
+        unsigned long value = 0;
+
+        if (!nptr)
+                goto out;
+
+        if ((base == 0 || base == 16) &&
+            (strlena((CHAR8 *)nptr) > 2 && nptr[0] == '0' && nptr[1] == 'x')) {
+                nptr += 2;
+                base = 16;
+        }
+
+        if (base == 0)
+                base = 10;
+
+        for (; *nptr != '\0' ; nptr++) {
+                int t = to_digit(*nptr, base);
+                if (t == -1)
+                        goto out;
+                value = (value * base) + t;
+        }
+
+out:
+        if (endptr)
+                *endptr = (char *)nptr;
+        return value;
+}
 
 /*
  * Parameters Passed : nptr  : Pointer to the string to be converted to int
@@ -750,6 +876,23 @@ EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
                 *aligned_addr = *free_addr;
 
         return EFI_SUCCESS;
+}
+
+int memcmp(const void *s1, const void *s2, size_t n)
+{
+        return CompareMem(s1, s2, n);
+}
+
+void *memset(void *s, int c, size_t n)
+{
+        SetMem(s, n, (UINT8)c);
+        return s;
+}
+
+void *memcpy(void *dest, const void *source, size_t count)
+{
+        CopyMem(dest, source, (UINTN)count);
+        return dest;
 }
 
 

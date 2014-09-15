@@ -110,7 +110,7 @@ static EFI_STATUS get_hash_buffer(UINTN nid, VOID **hash, UINTN *hashsz)
                 return EFI_UNSUPPORTED;
         }
 
-        *hash = malloc(*hashsz);
+        *hash = AllocatePool(*hashsz);
         if (!*hash)
                 return EFI_OUT_OF_RESOURCES;
         return EFI_SUCCESS;
@@ -179,7 +179,7 @@ static EFI_STATUS hash_bootimage(struct boot_signature *bs,
                 /* nothing to do */
                 break;
         }
-        free(*hash);
+        FreePool(*hash);
         return EFI_INVALID_PARAMETER;
 }
 
@@ -233,7 +233,7 @@ static EFI_STATUS check_bootimage(CHAR8 *bootimage, UINTN imgsize,
 free_pkey:
         EVP_PKEY_free(pkey);
 free_hash:
-        free(hash);
+        FreePool(hash);
         return ret;
 }
 

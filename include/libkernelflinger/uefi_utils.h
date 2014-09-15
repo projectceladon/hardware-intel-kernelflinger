@@ -38,8 +38,6 @@
 #include <efi.h>
 #include <efilib.h>
 
-typedef UINTN size_t;
-
 #define DIV_ROUND_UP(x, y) (((x) + (y) - 1)/(y))
 #define ALIGN(x, y) ((y) * DIV_ROUND_UP((x), (y)))
 #define ALIGN_DOWN(x, y) ((y) * ((x) / (y)))
