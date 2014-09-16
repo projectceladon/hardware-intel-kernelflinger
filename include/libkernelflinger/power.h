@@ -47,6 +47,22 @@ enum wake_sources {
 	WAKE_ERROR = -1,
 };
 
+enum reset_sources {
+	RESET_NOT_APPLICABLE,
+	RESET_OS_INITIATED,
+	RESET_FORCED,
+	RESET_FW_UPDATE,
+	RESET_KERNEL_WATCHDOG,
+	RESET_SECURITY_WATCHDOG,
+	RESET_SECURITY_INITIATED,
+	RESET_PMC_WATCHDOG,
+	RESET_EC_WATCHDOG,
+	RESET_PLATFORM_WATCHDOG,
+	RESET_ERROR = -1,
+};
+
 enum wake_sources rsci_get_wake_source(void);
+
+enum reset_sources rsci_get_reset_source(void);
 
 #endif /* _POWER_H_ */

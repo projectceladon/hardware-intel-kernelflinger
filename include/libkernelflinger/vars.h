@@ -62,10 +62,18 @@ extern const EFI_GUID fastboot_guid;
 /* EFI Variable to store user-supplied key store binary data */
 #define KEYSTORE_VAR		L"KeyStore"
 
+/* If set to the string "0", disable entering charge mode and
+ * boot normally instead */
+#define OFF_MODE_CHARGE		L"off-mode-charge"
+
 /* Various interesting partition GUIDs */
 extern const EFI_GUID boot_ptn_guid;
 extern const EFI_GUID recovery_ptn_guid;
 extern const EFI_GUID misc_ptn_guid;
+
+/* EFI variable which stores the max timeout for checking whether the
+ * magic key was pressed at startup */
+#define MAGIC_KEY_TIMEOUT_VAR   L"MagicKeyTimeout"
 
 #endif /* _VARS_H_ */
 
