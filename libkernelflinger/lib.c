@@ -90,12 +90,34 @@ CHAR16 *get_efi_variable_str(const EFI_GUID *guid, CHAR16 *key)
         if (EFI_ERROR(ret))
                 return NULL;
 
-        if (!size) {
+        if (!size || size % 2 != 0 || data[(size / 2) - 1] != 0) {
                 FreePool(data);
                 return NULL;
         }
 
         return data;
+}
+
+
+CHAR16 *get_efi_variable_str8(const EFI_GUID *guid, CHAR16 *key)
+{
+        CHAR8 *data;
+        CHAR16 *value;
+        EFI_STATUS ret;
+        UINTN size;
+
+        ret = get_efi_variable(guid, key, &size, (VOID **)&data);
+        if (EFI_ERROR(ret) || !data || !size)
+                return NULL;
+
+        if (data[size - 1] != '\0') {
+                FreePool(data);
+                return NULL;
+        }
+
+        value = stra_to_str(data);
+        FreePool(data);
+        return value;
 }
 
 
