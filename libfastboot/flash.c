@@ -35,6 +35,8 @@
 #include <efi.h>
 #include <efilib.h>
 #include <lib.h>
+#include <keystore.h>
+#include <fastboot.h>
 #include "uefi_utils.h"
 #include "gpt.h"
 #include "gpt_bin.h"
@@ -42,6 +44,8 @@
 #include "SdHostIo.h"
 #include "Mmc.h"
 #include "sparse.h"
+
+#define KEYSTORE_VAR L"KeyStore"
 
 static struct gpt_partition_interface gparti;
 static UINT64 cur_offset;
@@ -136,19 +140,47 @@ static EFI_STATUS flash_gpt(VOID *data, UINTN size)
 	return (EFI_SUCCESS | REFRESH_PARTITION_VAR);
 }
 
+static EFI_STATUS flash_keystore(VOID *data, UINTN size)
+{
+	EFI_STATUS ret;
+
+	if (size) {
+		struct keystore *ks = get_keystore(data, size);
+
+		if (!ks) {
+			error(L"keystore data is invalid");
+			return EFI_INVALID_PARAMETER;
+		}
+
+		free_keystore(ks);
+	}
+
+	ret = set_efi_variable(&fastboot_guid, KEYSTORE_VAR,
+			       size, data, TRUE, FALSE);
+	if (ret)
+		efi_perror(ret, "Coudn't modify KeyStore");
+
+	return ret;
+}
+
 EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 {
-	CHAR16 esp[5] = L"/ESP/";
-	CHAR16 gpt[3] = L"gpt";
+	CHAR16 *esp = L"/ESP/";
+	CHAR16 *gpt = L"gpt";
+	CHAR16 *keystore = L"keystore";
 	EFI_STATUS ret;
 
 	/* special case for writing inside esp partition */
-	if (StrLen(label) > ARRAY_SIZE(esp) && !CompareMem(label, esp, sizeof(esp)))
+	if (!StrnCmp(esp, label, StrLen(esp)))
 		return flash_into_esp(data, size, &label[ARRAY_SIZE(esp)]);
 
 	/* special case for writing gpt partition table */
-	if (StrLen(label) == ARRAY_SIZE(gpt) && !CompareMem(label, gpt, sizeof(gpt)))
+	if (!StrCmp(gpt, label))
 		return flash_gpt(data, size);
+
+	/* Special case for writing keystore */
+	if (!StrCmp(keystore, label))
+		return flash_keystore(data, size);
 
 	ret = gpt_get_partition_by_label(label, &gparti);
 	if (EFI_ERROR(ret)) {
