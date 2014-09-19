@@ -360,24 +360,24 @@ out:
 EFI_STATUS verify_android_keystore(IN VOID *keystore, IN UINTN keystore_size,
                 IN VOID *key, IN UINTN key_size, OUT VOID *keystore_hash)
 {
-        struct keystore *ks;
-        EFI_STATUS ret;
+        struct keystore *ks = NULL;
         UINTN hash_sz;
-        CHAR8 *hash;
+        CHAR8 *hash = NULL;
+        EFI_STATUS ret = EFI_INVALID_PARAMETER;
 
         if (!keystore || !key || !keystore_hash)
-                return EFI_INVALID_PARAMETER;
+                goto out;
 
         memset(keystore_hash, 0xFF, KEYSTORE_HASH_SIZE);
         debug("decoding keystore data");
         ks = get_keystore(keystore, keystore_size);
         if (!ks)
-                return EFI_INVALID_PARAMETER;
+                goto out;
 
         debug("hashing keystore data");
         ret = hash_keystore(ks, (VOID **)&hash, &hash_sz);
         if (EFI_ERROR(ret))
-                return EFI_INVALID_PARAMETER;
+                goto out;
 
         debug("keystore hash is %02x%02x-%02x%02x-%02x%02x",
                         hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
@@ -386,6 +386,7 @@ EFI_STATUS verify_android_keystore(IN VOID *keystore, IN UINTN keystore_size,
 
         debug("verifying keystore data");
         ret = check_keystore(hash, hash_sz, ks, key, key_size);
+out:
         free(hash);
         free_keystore(ks);
         return ret;
