@@ -54,10 +54,6 @@ extern const EFI_GUID loader_guid;
 /* EFI Variable to store user-supplied key store binary data */
 #define KEYSTORE_VAR		L"KeyStore"
 
-/* If set to the string "0", disable entering charge mode and
- * boot normally instead */
-#define OFF_MODE_CHARGE		L"off-mode-charge"
-
 /* Various interesting partition GUIDs */
 extern const EFI_GUID boot_ptn_guid;
 extern const EFI_GUID recovery_ptn_guid;

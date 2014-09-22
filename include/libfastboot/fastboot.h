@@ -41,7 +41,7 @@
 /* GUID for variables used to communicate with Fastboot */
 extern const EFI_GUID fastboot_guid;
 
-typedef void (*fastboot_handle) (CHAR8 *arg);
+typedef void (*fastboot_handle) (INTN argc, CHAR8 **argv);
 
 void fastboot_publish(const char *name, const char *value);
 void fastboot_okay(const char *fmt, ...);
@@ -55,6 +55,7 @@ void fastboot_oem_register(const char *prefix, fastboot_handle handle,
 BOOLEAN device_is_unlocked(void);
 BOOLEAN device_is_locked(void);
 BOOLEAN device_is_verified(void);
+BOOLEAN get_current_off_mode_charge(void);
 
 EFI_STATUS fastboot_start(void **bootimage, enum boot_target *target);
 

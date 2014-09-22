@@ -44,14 +44,43 @@
 const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
 				 {0x9a, 0x99, 0xde, 0xbe, 0xb4, 0x31, 0xfc, 0xc1} };
 
-#define OEM_LOCK_VAR L"OEMLock"
+#define OEM_LOCK_VAR		L"OEMLock"
+
+#define OFF_MODE_CHARGE_VAR	L"off-mode-charge"
+#define OFF_MODE_CHARGE		"off-mode-charge"
 
 static enum device_state current_state = UNKNOWN_STATE;
+static CHAR8 current_off_mode_charge[2];
+
+BOOLEAN get_current_off_mode_charge(void)
+{
+	UINTN size;
+	CHAR8 *data;
+
+	if (current_off_mode_charge[0] == '\0') {
+		get_efi_variable((EFI_GUID *)&fastboot_guid, OFF_MODE_CHARGE_VAR,
+				 &size, (VOID **)&data, NULL);
+		if (!data)
+			return FALSE;
+
+		if (size != sizeof(current_off_mode_charge)
+		    || (strcmp(data, (CHAR8 *)"0") && strcmp(data, (CHAR8 *)"1"))) {
+			FreePool(data);
+			return FALSE;
+		}
+
+		memcpy(current_off_mode_charge, data, sizeof(current_off_mode_charge));
+		FreePool(data);
+	}
+
+	return !strcmp(current_off_mode_charge, (CHAR8 *)"0");
+}
 
 static void fastboot_oem_publish(void)
 {
 	fastboot_publish("secure", device_is_locked() ? "yes" : "no");
 	fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
+	fastboot_publish(OFF_MODE_CHARGE, get_current_off_mode_charge() ? "1" : "0");
 }
 
 enum device_state get_current_state()
@@ -153,24 +182,57 @@ exit:
 	fastboot_okay("");
 }
 
-static void cmd_oem_lock(__attribute__((__unused__)) CHAR8 *arg)
+static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
+			 __attribute__((__unused__)) CHAR8 **argv)
 {
 	change_device_state(LOCKED);
 }
 
-static void cmd_oem_unlock(__attribute__((__unused__)) CHAR8 *arg)
+static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
+			   __attribute__((__unused__)) CHAR8 **argv)
 {
 	change_device_state(UNLOCKED);
 }
 
-static void cmd_oem_verified(__attribute__((__unused__)) CHAR8 *arg)
+static void cmd_oem_verified(__attribute__((__unused__)) INTN argc,
+			     __attribute__((__unused__)) CHAR8 **argv)
 {
 	change_device_state(VERIFIED);
+}
+
+static void cmd_oem_off_mode_charge(__attribute__((__unused__)) INTN argc,
+				    CHAR8 **argv)
+{
+	EFI_STATUS ret;
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	if (strcmp(argv[1], (CHAR8* )"1") && strcmp(argv[1], (CHAR8 *)"0")) {
+		fastboot_fail("Invalid value");
+		error(L"Please specify 1 or 0 to enable/disable charge mode");
+		return;
+	}
+
+	ret = set_efi_variable(&fastboot_guid, OFF_MODE_CHARGE_VAR,
+			       strlen(argv[1]) + 1, argv[1], TRUE, FALSE);
+	if (EFI_ERROR(ret)) {
+		error(L"Failed to set %a variable", OFF_MODE_CHARGE_VAR);
+		fastboot_fail("Failed to set %a", OFF_MODE_CHARGE);
+		return;
+	}
+
+	memcpy(current_off_mode_charge, argv[1], ARRAY_SIZE(current_off_mode_charge));
+	fastboot_oem_publish();
+	fastboot_okay("");
 }
 
 void fastboot_oem_init(void) {
 	fastboot_oem_register("lock", cmd_oem_lock, FALSE);
 	fastboot_oem_register("unlock", cmd_oem_unlock, FALSE);
 	fastboot_oem_register("verified", cmd_oem_verified, FALSE);
+	fastboot_oem_register(OFF_MODE_CHARGE, cmd_oem_off_mode_charge, FALSE);
 	fastboot_oem_publish();
 }

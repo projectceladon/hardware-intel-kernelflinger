@@ -392,16 +392,9 @@ static enum boot_target check_loader_entry_one_shot(VOID)
 static enum boot_target check_charge_mode()
 {
         enum wake_sources wake_source;
-        CHAR16 *offmode;
 
-        offmode = get_efi_variable_str8(&fastboot_guid, OFF_MODE_CHARGE);
-        if (offmode) {
-                BOOLEAN charger_off = !StrCmp(offmode, L"0");
-                FreePool(offmode);
-                if (charger_off) {
-                        return NORMAL_BOOT;
-                }
-        }
+        if (get_current_off_mode_charge())
+                return NORMAL_BOOT;
 
         wake_source = rsci_get_wake_source();
         if ((wake_source == WAKE_USB_CHARGER_INSERTED) ||
