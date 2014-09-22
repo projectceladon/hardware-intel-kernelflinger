@@ -308,21 +308,26 @@ static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
 	return FALSE;
 }
 
-static void cmd_flash(CHAR8 *arg)
+static void cmd_flash(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
 	CHAR16 *label;
 
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
 	if (device_is_verified()
-	    && !is_in_white_list(arg, flash_verified_whitelist)) {
-		error(L"Flash %a is prohibited in verified state.", arg);
+	    && !is_in_white_list(argv[1], flash_verified_whitelist)) {
+		error(L"Flash %a is prohibited in verified state.", argv[1]);
 		fastboot_fail("Prohibited command in verified state.");
 		return;
 	}
 
-	label = stra_to_str((CHAR8*)arg);
+	label = stra_to_str((CHAR8*)argv[1]);
 	if (!label) {
-		error(L"Failed to get label %a", arg);
+		error(L"Failed to get label %a", argv[1]);
 		fastboot_fail("Allocation error");
 		return;
 	}
@@ -343,21 +348,26 @@ static void cmd_flash(CHAR8 *arg)
 	}
 }
 
-static void cmd_erase(CHAR8 *arg)
+static void cmd_erase(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
 	CHAR16 *label;
 
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
 	if (device_is_verified()
-	    && !is_in_white_list(arg, erase_verified_whitelist)) {
-		error(L"Erase %a is prohibited in verified state.", arg);
+	    && !is_in_white_list(argv[1], erase_verified_whitelist)) {
+		error(L"Erase %a is prohibited in verified state.", argv[1]);
 		fastboot_fail("Prohibited command in verified state.");
 		return;
 	}
 
-	label = stra_to_str((CHAR8*)arg);
+	label = stra_to_str((CHAR8*)argv[1]);
 	if (!label) {
-		error(L"Failed to get label %a", arg);
+		error(L"Failed to get label %a", argv[1]);
 		fastboot_fail("Allocation error");
 		return;
 	}
@@ -373,10 +383,11 @@ static void cmd_erase(CHAR8 *arg)
 	fastboot_okay("");
 }
 
-static void cmd_boot(__attribute__((__unused__)) CHAR8 *arg)
+static void cmd_boot(__attribute__((__unused__)) INTN argc,
+		     __attribute__((__unused__)) CHAR8 **argv)
 {
 	if (device_is_verified()) {
-		error(L"Boot command is prohibited in verified state.", arg);
+		error(L"Boot command is prohibited in verified state.");
 		fastboot_fail("Prohibited command in verified state.");
 		return;
 	}
@@ -399,14 +410,19 @@ static void worker_getvar_all(struct fastboot_var *start)
 		fastboot_okay("");
 }
 
-static void cmd_getvar(CHAR8 *arg)
+static void cmd_getvar(INTN argc, CHAR8 **argv)
 {
-	if (!strcmp(arg, (CHAR8 *)"all")) {
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	if (!strcmp(argv[1], (CHAR8 *)"all")) {
 		fastboot_state = STATE_GETVAR;
 		worker_getvar_all(varlist);
 	} else {
 		struct fastboot_var *var;
-		var = fastboot_getvar((char *)arg);
+		var = fastboot_getvar((char *)argv[1]);
 		if (var && var->value) {
 			fastboot_okay("%a", var->value);
 		} else {
@@ -415,14 +431,16 @@ static void cmd_getvar(CHAR8 *arg)
 	}
 }
 
-static void cmd_reboot(__attribute__((__unused__)) CHAR8 *arg)
+static void cmd_reboot(__attribute__((__unused__)) INTN argc,
+		       __attribute__((__unused__)) CHAR8 **argv)
 {
 	ui_print(L"Rebooting ...");
 	fastboot_okay("");
 	reboot();
 }
 
-static void cmd_reboot_bootloader(__attribute__((__unused__)) CHAR8 *arg)
+static void cmd_reboot_bootloader(__attribute__((__unused__)) INTN argc,
+				  __attribute__((__unused__)) CHAR8 **argv)
 {
         EFI_STATUS ret = set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
                                               TRUE, TRUE, L"bootloader");
@@ -449,20 +467,22 @@ static struct fastboot_cmd *get_cmd(struct fastboot_cmd *list, const CHAR8 *name
 	return NULL;
 }
 
-static void cmd_oem(CHAR8 *arg)
+static void cmd_oem(INTN argc, CHAR8 **argv)
 {
 	struct fastboot_cmd *cmd;
 
-	while (arg[0] == ' ')
-		arg++;
-
-	cmd = get_cmd(oem_cmdlist, arg);
-	if (!cmd) {
-		fastboot_fail("unknown command 'oem %a'", arg);
+	if (argc < 2) {
+		fastboot_fail("Invalid parameter");
 		return;
 	}
 
-	cmd->handle(arg + cmd->prefix_len);
+	cmd = get_cmd(oem_cmdlist, argv[1]);
+	if (!cmd) {
+		fastboot_fail("unknown command 'oem %a'", argv[1]);
+		return;
+	}
+
+	cmd->handle(argc - 1, argv + 1);
 }
 
 static void fastboot_read_command(void)
@@ -471,12 +491,18 @@ static void fastboot_read_command(void)
 }
 #define BLK_DOWNLOAD (8*1024*1024)
 
-static void cmd_download(CHAR8 *arg)
+static void cmd_download(INTN argc,
+			 CHAR8 **argv)
 {
 	char response[MAGIC_LENGTH];
 	UINTN newdlsize;
 
-	newdlsize = strtoul((const char *)arg, NULL, 16);
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	newdlsize = strtoul((const char *)argv[1], NULL, 16);
 
 	ui_print(L"Receiving %d bytes ...", newdlsize);
 	if (newdlsize == 0) {
@@ -545,11 +571,30 @@ static void fastboot_process_tx(__attribute__((__unused__)) void *buf,
 	}
 }
 
+#define MAX_ARGS 64
+
+static void split_args(CHAR8 *str, INTN *argc, CHAR8 *argv[])
+{
+	argv[0] = str;
+	while (*str != ' ' && *str != ':' && str != '\0')
+		str++;
+
+	*argc = 1;
+	while (*str != '\0' && *argc < MAX_ARGS) {
+		*str++ = '\0';
+		argv[(*argc)++] = str;
+		while (*str != '\0' && *str != ' ')
+			str++;
+	}
+}
+
 static void fastboot_process_rx(void *buf, unsigned len)
 {
 	struct fastboot_cmd *cmd;
 	static unsigned received_len = 0;
 	CHAR8 *s;
+	CHAR8 *argv[MAX_ARGS];
+	INTN argc;
 	int req_len;
 
 	switch (fastboot_state) {
@@ -578,7 +623,8 @@ static void fastboot_process_rx(void *buf, unsigned len)
 
 		cmd = get_cmd(cmdlist, buf);
 		if (cmd) {
-			cmd->handle(buf + cmd->prefix_len);
+			split_args(buf, &argc, argv);
+			cmd->handle(argc, argv);
 			received_len = 0;
 
 			if (fastboot_state == STATE_COMMAND)
