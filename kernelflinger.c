@@ -202,7 +202,7 @@ static enum boot_target check_magic_key(VOID)
          * wasn't a keypress at boot. Read the EFI variable which determines
          * that time for this platform */
         if (EFI_ERROR(get_efi_variable(&fastboot_guid, MAGIC_KEY_TIMEOUT_VAR,
-                                        &dsize, (void **)&data)) || !dsize) {
+                                       &dsize, (void **)&data, NULL)) || !dsize) {
                 debug("Couldn't read timeout variable; assuming default");
         } else {
                 if (data[dsize - 1] != '\0') {
