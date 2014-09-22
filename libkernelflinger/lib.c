@@ -109,7 +109,7 @@ CHAR16 *get_efi_variable_str8(const EFI_GUID *guid, CHAR16 *key)
         EFI_STATUS ret;
         UINTN size;
 
-        ret = get_efi_variable(guid, key, &size, (VOID **)&data);
+        ret = get_efi_variable(guid, key, &size, (VOID **)&data, NULL);
         if (EFI_ERROR(ret) || !data || !size)
                 return NULL;
 

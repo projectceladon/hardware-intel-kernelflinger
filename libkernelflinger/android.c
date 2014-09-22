@@ -330,7 +330,7 @@ static CHAR16 *get_serial_port(void)
         EFI_STATUS ret;
 
         ret = get_efi_variable(&fastboot_guid, SERIAL_PORT_VAR,
-                        &size, (VOID **)&data);
+                        &size, (VOID **)&data, NULL);
         if (EFI_ERROR(ret))
                 goto error;
 
