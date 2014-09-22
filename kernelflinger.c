@@ -43,7 +43,7 @@
 #include "options.h"
 #include "power.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-00.03"
+#define KERNELFLINGER_VERSION	L"kernelflinger-00.04"
 
 /* For reading EFI globals */
 static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
