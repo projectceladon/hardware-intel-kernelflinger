@@ -33,6 +33,7 @@
  */
 
 #include <lib.h>
+#include <vars.h>
 
 #include "uefi_utils.h"
 #include "flash.h"
@@ -229,10 +230,76 @@ static void cmd_oem_off_mode_charge(__attribute__((__unused__)) INTN argc,
 	fastboot_okay("");
 }
 
-void fastboot_oem_init(void) {
+static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	CHAR16 *varname;
+	CHAR8 *value = NULL;
+
+	if (argc < 2 || argc > 3) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	varname = stra_to_str(argv[1]);
+	if (argc == 3)
+		value = argv[2];
+
+	ret = set_efi_variable(&fastboot_guid, varname,
+			       value ? strlen(value) + 1 : 0, value,
+			       TRUE, FALSE);
+	if (EFI_ERROR(ret))
+		fastboot_fail("Unable to %a '%s' variable",
+			      value ? "set" : "clear", varname);
+	else
+		fastboot_okay("");
+
+	FreePool(varname);
+}
+
+static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
+{
+	CHAR16 *target;
+        EFI_STATUS ret;
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	target = stra_to_str(argv[1]);
+	if (!target) {
+		fastboot_fail("Unable to convert string");
+		return;
+	}
+
+	ret = set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
+				   TRUE, TRUE, target);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("unable to set %a reboot target",
+			      target);
+		FreePool(target);
+		return;
+	}
+
+	ui_print(L"Rebooting to %s ...", target);
+	FreePool(target);
+	fastboot_okay("");
+	reboot();
+}
+
+void fastboot_oem_init(void)
+{
+	fastboot_oem_publish();
 	fastboot_oem_register("lock", cmd_oem_lock, FALSE);
 	fastboot_oem_register("unlock", cmd_oem_unlock, FALSE);
 	fastboot_oem_register("verified", cmd_oem_verified, FALSE);
 	fastboot_oem_register(OFF_MODE_CHARGE, cmd_oem_off_mode_charge, FALSE);
-	fastboot_oem_publish();
+
+	/* The following commands are not part of the Google
+	 * requirements.  They are provided for engineering and
+	 * provisioning purpose only and those which modifie the
+	 * device are restricted to the unlocked state.  */
+	fastboot_oem_register("setvar", cmd_oem_setvar, TRUE);
+	fastboot_oem_register("reboot", cmd_oem_reboot, FALSE);
 }
