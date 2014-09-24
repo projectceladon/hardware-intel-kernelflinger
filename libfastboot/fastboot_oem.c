@@ -64,7 +64,13 @@ enum device_state get_current_state()
 	if (current_state == UNKNOWN_STATE) {
 		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK_VAR,
 				       &dsize, (void **)&stored_state, &flags);
-		/* If we can't read the state, be safe and assume locked */
+		/* If the variable does not exist, assume unlocked. */
+		if (ret == EFI_NOT_FOUND) {
+			current_state = UNLOCKED;
+			goto exit;
+		}
+
+		/* If we can't read the state, be safe and assume locked. */
 		if (EFI_ERROR(ret) || !dsize) {
 			error(L"Couldn't read %s, assuming locked", OEM_LOCK_VAR);
 			current_state = LOCKED;
@@ -75,6 +81,7 @@ enum device_state get_current_state()
 			current_state = *stored_state;
 	}
 
+exit:
 	return current_state;
 }
 
