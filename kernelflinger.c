@@ -45,6 +45,9 @@
 
 #define KERNELFLINGER_VERSION	L"kernelflinger-00.04"
 
+/* Ensure this is embedded in the EFI binary somewhere */
+static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
+
 /* For reading EFI globals */
 static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
 #define SECURE_BOOT_VAR         L"SecureBoot"
