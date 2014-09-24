@@ -616,6 +616,8 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
                                              TRUE, TRUE, L"bootloader");
                 case REBOOT:
                         reboot();
+                case POWER_OFF:
+                        halt_system();
                 case NORMAL_BOOT:
                 case RECOVERY:
                         break;

@@ -85,7 +85,8 @@ enum boot_target {
         ESP_EFI_BINARY,
         MEMORY,
         CHARGER,
-        REBOOT
+        REBOOT,
+        POWER_OFF
 };
 
 /*

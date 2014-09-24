@@ -123,11 +123,12 @@ static struct res_action {
 	const char *img_name;
 	ui_image_t *image;
 	enum boot_target target;
-} menu_actions[4] = {
+} menu_actions[] = {
 	{ "start",		NULL,	NORMAL_BOOT },
-	{ "reboot",		NULL,	REBOOT },
+	{ "restartbootloader",	NULL,	FASTBOOT },
 	{ "recoverymode",	NULL,	RECOVERY },
-	{ "restartbootloader",	NULL,	FASTBOOT }
+	{ "reboot",		NULL,	REBOOT },
+	{ "power_off",		NULL,	POWER_OFF }
 };
 
 static UINTN margin;
@@ -375,7 +376,7 @@ enum boot_target fastboot_ui_event_handler()
 	case EV_UP:
 		return menu_actions[menu_current].target;
 	case EV_DOWN:
-		menu_current = (menu_current - 1) % ARRAY_SIZE(menu_actions);
+		menu_current = (menu_current + 1) % ARRAY_SIZE(menu_actions);
 		fastboot_ui_menu_draw(area_x, area_y);
 	default:
 		break;
