@@ -335,11 +335,11 @@ static CHAR16 *get_serial_port(void)
         ret = get_efi_variable(&fastboot_guid, SERIAL_PORT_VAR,
                         &size, (VOID **)&data);
         if (EFI_ERROR(ret))
-                return NULL;
+                goto error;
 
         if (size < 3) {
                 FreePool(data);
-                return NULL;
+                goto error;
         }
 
         /* Historical: older Fastboot versions saved this as a 16-bit
@@ -357,24 +357,26 @@ static CHAR16 *get_serial_port(void)
                         val = (CHAR16 *)data;
                 } else {
                         FreePool(data);
-                        return NULL;
+                        goto error;
                 }
         }
 
         pos = val;
 
-        /* Only [0-9a-zA-Z,] acceptable. Any funny business, return NULL */
+        /* Only [0-9a-zA-Z,] acceptable. Any funny business, give up */
         while (*pos) {
                 if ( ! ( (*pos >= L'0' && *pos <= L'9') ||
                          (*pos >= L'a' && *pos <= L'z') ||
                          (*pos >= L'A' && *pos <= L'Z') ||
                          *pos == L',')) {
                         FreePool(val);
-                        return NULL;
+                        goto error;
                 }
                 pos++;
         }
         return val;
+error:
+        return StrDuplicate(L"tty0");
 }
 
 
@@ -425,9 +427,9 @@ static EFI_STATUS setup_command_line(
                 IN EFI_GUID *swap_guid)
 {
         CHAR16 *cmdline16 = NULL;
-        CHAR16 *serialno;
-        CHAR16 *serialport;
-        CHAR16 *bootreason;
+        CHAR16 *serialno = NULL;
+        CHAR16 *serialport = NULL;
+        CHAR16 *bootreason = NULL;
 
         EFI_PHYSICAL_ADDRESS cmdline_addr;
         CHAR8 *full_cmdline;
@@ -500,12 +502,14 @@ static EFI_STATUS setup_command_line(
         }
 
         serialport = get_serial_port();
-        if (serialport) {
-                ret = prepend_command_line(&cmdline16, L"console=%s",
-                        serialport);
-                if (EFI_ERROR(ret))
-                        goto out;
+        if (!serialport) {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto out;
         }
+
+        ret = prepend_command_line(&cmdline16, L"console=%s", serialport);
+        if (EFI_ERROR(ret))
+                goto out;
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */
@@ -530,6 +534,9 @@ static EFI_STATUS setup_command_line(
 out:
         FreePool(cmdline16);
         FreePool(full_cmdline);
+        FreePool(bootreason);
+        FreePool(serialport);
+        FreePool(serialno);
 
         return ret;
 }
