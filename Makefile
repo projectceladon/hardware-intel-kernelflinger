@@ -23,7 +23,7 @@ CPPFLAGS := -DKERNELFLINGER -I$(GNU_EFI_INCLUDE) \
 
 CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
 	 -fshort-wchar -Wall -Wextra -Werror -mno-red-zone -maccumulate-outgoing-args \
-	 -mno-mmx -mno-sse -fno-builtin -fno-tree-loop-distribute-patterns
+	 -mno-mmx -fno-builtin -fno-tree-loop-distribute-patterns
 
 ifneq ($(INSECURE_LOADER),)
     CFLAGS += -DINSECURE
