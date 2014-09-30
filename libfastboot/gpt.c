@@ -340,6 +340,10 @@ EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interf
 		gpart->dio = sdisk.dio;
 		return EFI_SUCCESS;
 	}
+
+	if (!StrCmp(label, L"userdata"))
+		return gpt_get_partition_by_label(L"data", gpart);
+
 	return EFI_NOT_FOUND;
 }
 
