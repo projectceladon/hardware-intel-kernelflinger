@@ -51,6 +51,8 @@ const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
 #define OFF_MODE_CHARGE		"off-mode-charge"
 
 static enum device_state current_state = UNKNOWN_STATE;
+static BOOLEAN provisioning_mode = FALSE;
+
 static CHAR8 current_off_mode_charge[2];
 
 BOOLEAN get_current_off_mode_charge(void)
@@ -96,6 +98,7 @@ enum device_state get_current_state()
 				       &dsize, (void **)&stored_state, &flags);
 		/* If the variable does not exist, assume unlocked. */
 		if (ret == EFI_NOT_FOUND) {
+			provisioning_mode = TRUE;
 			current_state = UNLOCKED;
 			goto exit;
 		}
@@ -158,7 +161,7 @@ static void change_device_state(enum device_state new_state)
 		return;
 	}
 
-	if (!fastboot_ui_confirm_for_state(new_state))
+	if (!provisioning_mode && !fastboot_ui_confirm_for_state(new_state))
 		goto exit;
 
 	ui_print(L"Erasing userdata...");
@@ -178,6 +181,8 @@ static void change_device_state(enum device_state new_state)
 		fastboot_fail("Failed to change the device state\n");
 		return;
 	}
+
+	provisioning_mode = FALSE;
 
 exit:
 	fastboot_okay("");
