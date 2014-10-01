@@ -424,6 +424,8 @@ static enum boot_target check_loader_entry_one_shot(VOID)
                 ret = FASTBOOT;
         } else if (!StrCmp(target, L"recovery")) {
                 ret = RECOVERY;
+        } else if (!StrCmp(target, L"charging")) {
+                ret = CHARGER;
         } else {
                 Print(L"Unknown oneshot boot target: '%s'\n", target);
                 ret = NORMAL_BOOT;
