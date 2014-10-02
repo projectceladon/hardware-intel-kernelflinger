@@ -71,7 +71,8 @@ LIBFASTBOOT_OBJS := \
 	    libfastboot/flash.o \
 	    libfastboot/gpt.o \
 	    libfastboot/sparse.o \
-	    libfastboot/uefi_utils.o
+	    libfastboot/uefi_utils.o \
+	    libfastboot/smbios.o
 
 OBJS := kernelflinger.o \
 	oemkeystore.o \

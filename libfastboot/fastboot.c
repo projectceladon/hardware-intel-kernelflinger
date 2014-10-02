@@ -46,6 +46,7 @@
 #include "flash.h"
 #include "fastboot_oem.h"
 #include "fastboot_ui.h"
+#include "smbios.h"
 
 #define MAGIC_LENGTH 64
 #define MAX_DOWNLOAD_SIZE 512*1024*1024

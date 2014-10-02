@@ -40,6 +40,7 @@
 #include "uefi_utils.h"
 #include "fastboot_usb.h"
 #include "UsbDeviceModeProtocol.h"
+#include "smbios.h"
 
 #define CONFIG_COUNT            1
 #define INTERFACE_COUNT         1
@@ -235,8 +236,37 @@ EFIAPI EFI_STATUS data_handler(EFI_USB_DEVICE_XFER_INFO *XferInfo)
 	return EFI_SUCCESS;
 }
 
+static void fbSetSerialNumber(void)
+{
+	CHAR16 *str;
+	UINTN length;
+	char *serial;
+
+	serial = smbios_get_serial_number();
+	if (serial == SMBIOS_UNDEFINED)
+		return;
+
+	str = stra_to_str((CHAR8 *)serial);
+	length = StrLen(str);
+
+	if (length >= sizeof(string_table[3].LangID)) {
+		error(L"Serial number from SMBIOS table is too long.");
+		goto exit;
+	}
+
+	memcpy(string_table[3].LangID, str, length * sizeof(CHAR16));
+
+	string_table[3].LangID[length] = 0;
+	string_table[3].Length = (length + 1) * sizeof(CHAR16);
+
+ exit:
+	FreePool(str);
+}
+
 static void fbInitDriverObjs(void)
 {
+	fbSetSerialNumber();
+
 	/* Device driver objects */
 	gDevObj.DeviceDesc                 = &device_descriptor;
 	gDevObj.ConfigObjs                 = device_configs;
