@@ -39,6 +39,7 @@
 #include "uefi_utils.h"
 #include "fastboot_oem.h"
 #include "fastboot_ui.h"
+#include "smbios.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
 
@@ -181,16 +182,14 @@ static struct state_to_str {
 };
 static char buf[256];
 
-static void fastboot_ui_info_lock_state(ui_textline_t *line)
-{
-	enum device_state state = get_current_state();
-	line->str = STATE_TO_STR[state].name;
-	line->color = STATE_TO_STR[state].color;
-}
-
 static void fastboot_ui_info_not_available(ui_textline_t *line)
 {
 	line->str = "N/A";
+}
+
+static void fastboot_ui_info_hw_version(ui_textline_t *line)
+{
+	line->str = smbios_get_hw_version();
 }
 
 static void fastboot_ui_info_loader_version(ui_textline_t *line)
@@ -203,16 +202,33 @@ static void fastboot_ui_info_loader_version(ui_textline_t *line)
 	line->str = buf;
 }
 
+static void fastboot_ui_info_ifwi_version(ui_textline_t *line)
+{
+	line->str = smbios_get_ifwi_version();
+}
+
+static void fastboot_ui_info_serial_number(ui_textline_t *line)
+{
+	line->str = smbios_get_serial_number();
+}
+
+static void fastboot_ui_info_lock_state(ui_textline_t *line)
+{
+	enum device_state state = get_current_state();
+	line->str = STATE_TO_STR[state].name;
+	line->color = STATE_TO_STR[state].color;
+}
+
 struct info_text_fun {
 	const char *header;
 	void (*get_value)(ui_textline_t *textline);
 } const INFOS[] = {
 	{ "PRODUCT NAME", fastboot_ui_info_not_available },
 	{ "VARIANT", fastboot_ui_info_not_available },
-	{ "HW_VERSION", fastboot_ui_info_not_available },
+	{ "HW_VERSION", fastboot_ui_info_hw_version },
 	{ "BOOTLOADER VERSION", fastboot_ui_info_loader_version },
-	{ "IFWI VERSION", fastboot_ui_info_not_available },
-	{ "SERIAL NUMBER", fastboot_ui_info_not_available },
+	{ "IFWI VERSION", fastboot_ui_info_ifwi_version },
+	{ "SERIAL NUMBER", fastboot_ui_info_serial_number },
 	{ "SIGNING", fastboot_ui_info_not_available },
 	{ "SECURE BOOT", fastboot_ui_info_not_available },
 	{ "LOCK STATE", fastboot_ui_info_lock_state }
