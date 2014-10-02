@@ -49,10 +49,6 @@
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 
-/* For reading EFI globals */
-static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
-#define SECURE_BOOT_VAR         L"SecureBoot"
-
 /* Default max wait time for console reset in units of milliseconds if no EFI
  * variable is set for this platform.
  * You want this value as small as possible as this is added to
@@ -137,17 +133,6 @@ static CHAR16 *boot_state_to_string(UINT8 boot_state)
 #endif
 
 #ifndef INSECURE
-static BOOLEAN is_efi_secure_boot_enabled(VOID)
-{
-        UINT8 sb;
-
-        if (EFI_ERROR(get_efi_variable_byte(&global_guid, SECURE_BOOT_VAR,
-                                        &sb)))
-                return FALSE;
-        return sb != 0;
-}
-
-
 /* If a user-provided keystore is present it must be selected for later.
  * If no user-provided keystore is present then the original factory
  * keystore must be selected instead. Selection of a keystore is
