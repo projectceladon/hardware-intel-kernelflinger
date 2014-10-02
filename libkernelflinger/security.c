@@ -44,6 +44,7 @@
 #include "android.h"
 #include "keystore.h"
 #include "lib.h"
+#include "vars.h"
 
 static VOID pr_error_openssl(void)
 {
@@ -390,6 +391,32 @@ out:
         free(hash);
         free_keystore(ks);
         return ret;
+}
+
+/* UEFI specification 2.4. Section 3.3
+   The platform firmware is operating in secure boot mode if the value
+   of the SetupMode variable is 0 and the SecureBoot variable is set
+   to 1. A platform cannot operate in secure boot mode if the
+   SetupMode variable is set to 1. The SecureBoot variable should be
+   treated as read- only. */
+BOOLEAN is_efi_secure_boot_enabled(VOID)
+{
+        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+        EFI_STATUS ret;
+        UINT8 value;
+
+        ret = get_efi_variable_byte(&global_guid, SETUP_MODE_VAR, &value);
+        if (EFI_ERROR(ret))
+                return FALSE;
+
+        if (value != 0)
+                return FALSE;
+
+        ret = get_efi_variable_byte(&global_guid, SECURE_BOOT_VAR, &value);
+        if (EFI_ERROR(ret))
+                return FALSE;
+
+        return value != 0;
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

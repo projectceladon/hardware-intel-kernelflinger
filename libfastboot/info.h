@@ -2,7 +2,7 @@
  * Copyright (c) 2014, Intel Corporation
  * All rights reserved.
  *
- * Author: Andrew Boie <andrew.p.boie@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,42 +30,16 @@
  *
  */
 
-#ifndef _VARS_H_
-#define _VARS_H_
+#ifndef __INFO_H__
+#define __INFO_H__
 
-/* Gummiboot's loader GUID, for compatibility we honor some of the
- * same variables */
-extern const EFI_GUID loader_guid;
+#include <efi.h>
 
-#define LOADER_ENTRY_ONESHOT    L"LoaderEntryOneShot"
-/* Report bootloader version */
-#define LOADER_VERSION_VAR      L"LoaderVersion"
+char *INFO_UNDEFINED;
 
-#define SERIAL_PORT_VAR         L"SerialPort"
+char *info_bootloader_version(void);
+char *info_variant(void);
+char *info_product(void);
+BOOLEAN info_is_production_signing(void);
 
-/* UEFI Setup */
-#define SETUP_MODE_VAR	        L"SetupMode"
-#define SECURE_BOOT_VAR         L"SecureBoot"
-
-/* Boot state that we report before exiting boot services, per
- * Google's verified boot spec */
-#define BOOT_STATE_VAR		L"BootState"
-#define BOOT_STATE_GREEN	0
-#define BOOT_STATE_YELLOW	1
-#define BOOT_STATE_ORANGE	2
-#define BOOT_STATE_RED		3
-
-/* EFI Variable to store user-supplied key store binary data */
-#define KEYSTORE_VAR		L"KeyStore"
-
-/* Various interesting partition GUIDs */
-extern const EFI_GUID boot_ptn_guid;
-extern const EFI_GUID recovery_ptn_guid;
-extern const EFI_GUID misc_ptn_guid;
-
-/* EFI variable which stores the max timeout for checking whether the
- * magic key was pressed at startup */
-#define MAGIC_KEY_TIMEOUT_VAR   L"MagicKeyTimeout"
-
-#endif /* _VARS_H_ */
-
+#endif	/* __INFO_H__ */

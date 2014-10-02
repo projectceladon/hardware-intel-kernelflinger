@@ -35,11 +35,13 @@
 #include <lib.h>
 #include <vars.h>
 #include <ui.h>
+#include <security.h>
 
 #include "uefi_utils.h"
 #include "fastboot_oem.h"
 #include "fastboot_ui.h"
 #include "smbios.h"
+#include "info.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
 
@@ -180,11 +182,15 @@ static struct state_to_str {
 	{ "VERIFIED", &COLOR_WHITE },
 	{ "LOCKED", &COLOR_WHITE }
 };
-static char buf[256];
 
-static void fastboot_ui_info_not_available(ui_textline_t *line)
+static void fastboot_ui_info_product_name(ui_textline_t *line)
 {
-	line->str = "N/A";
+	line->str = info_product();
+}
+
+static void fastboot_ui_info_variant(ui_textline_t *line)
+{
+	line->str = info_variant();
 }
 
 static void fastboot_ui_info_hw_version(ui_textline_t *line)
@@ -192,14 +198,9 @@ static void fastboot_ui_info_hw_version(ui_textline_t *line)
 	line->str = smbios_get_hw_version();
 }
 
-static void fastboot_ui_info_loader_version(ui_textline_t *line)
+static void fastboot_ui_info_bootloader_version(ui_textline_t *line)
 {
-	CHAR16 *version = get_efi_variable_str(&loader_guid, LOADER_VERSION_VAR);
-	UINTN prefix_len = strlen((CHAR8 *)"kernelflinger-");
-
-	str_to_stra((CHAR8 *)buf, version + prefix_len, StrLen(version) - prefix_len);
-	FreePool(version);
-	line->str = buf;
+	line->str = info_bootloader_version();
 }
 
 static void fastboot_ui_info_ifwi_version(ui_textline_t *line)
@@ -210,6 +211,21 @@ static void fastboot_ui_info_ifwi_version(ui_textline_t *line)
 static void fastboot_ui_info_serial_number(ui_textline_t *line)
 {
 	line->str = smbios_get_serial_number();
+}
+
+static void fastboot_ui_info_signing(ui_textline_t *line)
+{
+	BOOLEAN state = info_is_production_signing();
+
+	line->str = state ? "PRODUCTION" : "DEVELOPMENT";
+}
+
+static void fastboot_ui_info_secure_boot(ui_textline_t *line)
+{
+	BOOLEAN state = is_efi_secure_boot_enabled();
+
+	line->str = state ? "ENABLED" : "DISABLED";
+	line->color = state ? &COLOR_GREEN : &COLOR_RED;
 }
 
 static void fastboot_ui_info_lock_state(ui_textline_t *line)
@@ -223,14 +239,14 @@ struct info_text_fun {
 	const char *header;
 	void (*get_value)(ui_textline_t *textline);
 } const INFOS[] = {
-	{ "PRODUCT NAME", fastboot_ui_info_not_available },
-	{ "VARIANT", fastboot_ui_info_not_available },
+	{ "PRODUCT NAME", fastboot_ui_info_product_name },
+	{ "VARIANT", fastboot_ui_info_variant },
 	{ "HW_VERSION", fastboot_ui_info_hw_version },
-	{ "BOOTLOADER VERSION", fastboot_ui_info_loader_version },
+	{ "BOOTLOADER VERSION", fastboot_ui_info_bootloader_version },
 	{ "IFWI VERSION", fastboot_ui_info_ifwi_version },
 	{ "SERIAL NUMBER", fastboot_ui_info_serial_number },
-	{ "SIGNING", fastboot_ui_info_not_available },
-	{ "SECURE BOOT", fastboot_ui_info_not_available },
+	{ "SIGNING", fastboot_ui_info_signing },
+	{ "SECURE BOOT", fastboot_ui_info_secure_boot },
 	{ "LOCK STATE", fastboot_ui_info_lock_state }
 };
 
