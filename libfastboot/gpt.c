@@ -318,6 +318,22 @@ EFI_STATUS gpt_refresh(void)
 	return EFI_SUCCESS;
 }
 
+EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart)
+{
+	EFI_STATUS ret;
+
+	ret = gpt_cache_partition();
+	if (EFI_ERROR(ret))
+		return ret;
+
+	gpart->part.starting_lba = 0;
+	gpart->part.ending_lba = sdisk.bio->Media->LastBlock;
+	gpart->bio = sdisk.bio;
+	gpart->dio = sdisk.dio;
+
+	return EFI_SUCCESS;
+}
+
 EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart)
 {
 	EFI_STATUS ret;
