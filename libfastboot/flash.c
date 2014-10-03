@@ -37,6 +37,8 @@
 #include <lib.h>
 #include <keystore.h>
 #include <fastboot.h>
+#include <openssl/rand.h>
+
 #include "fastboot_usb.h"
 #include "uefi_utils.h"
 #include "gpt.h"
@@ -281,42 +283,53 @@ EFI_STATUS secure_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT64 start, UINT64 end,
 	return ret;
 }
 
-/* It is faster to erase multiple block at once
- * 4096 * 512 => 2MB
- */
-#define N_BLOCK (4096)
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+static EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
+			    VOID *pattern, UINTN pattern_blocks)
 {
 	UINT64 lba;
 	UINT64 size;
-	VOID *emptyblock;
 	EFI_STATUS ret;
 
-	debug(L"Erase lba %d -> %d", start, end);
-	emptyblock = AllocateZeroPool(bio->Media->BlockSize * N_BLOCK);
-	if (!emptyblock)
-		return EFI_OUT_OF_RESOURCES;
-
-	for (lba = start; lba <= end; lba += N_BLOCK) {
-		if (lba + N_BLOCK > end + 1)
+	debug(L"Fill lba %d -> %d", start, end);
+	for (lba = start; lba <= end; lba += pattern_blocks) {
+		if (lba + pattern_blocks > end + 1)
 			size = end - lba + 1;
 		else
-			size = N_BLOCK;
+			size = pattern_blocks;
 
-		ret = uefi_call_wrapper(bio->WriteBlocks, 5, bio, bio->Media->MediaId, lba, bio->Media->BlockSize * size, emptyblock);
+		ret = uefi_call_wrapper(bio->WriteBlocks, 5, bio, bio->Media->MediaId, lba, bio->Media->BlockSize * size, pattern);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, "Failed to erase block %ld", lba);
-			goto free_block;
+			goto exit;
 		}
 	}
 	ret = EFI_SUCCESS;
 
-free_block:
-	FreePool(emptyblock);
+ exit:
 	return ret;
 }
 
-EFI_STATUS get_mmc_info(EFI_SD_HOST_IO_PROTOCOL *sdio, UINTN *erase_grp_size, UINTN *timeout)
+/* It is faster to erase multiple block at once
+ * 4096 * 512 => 2MB
+ */
+#define N_BLOCK (4096)
+static EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+{
+	EFI_STATUS ret;
+	VOID *emptyblock;
+
+	emptyblock = AllocateZeroPool(bio->Media->BlockSize * N_BLOCK);
+	if (!emptyblock)
+		return EFI_OUT_OF_RESOURCES;
+
+	ret = fill_with(bio, start, end, emptyblock, N_BLOCK);
+
+	FreePool(emptyblock);
+
+	return ret;
+}
+
+static EFI_STATUS get_mmc_info(EFI_SD_HOST_IO_PROTOCOL *sdio, UINTN *erase_grp_size, UINTN *timeout)
 {
 	EXT_CSD *ext_csd;
 	void *rawbuffer;
@@ -425,4 +438,70 @@ EFI_STATUS erase_by_label(CHAR16 *label)
 		return gpt_refresh();
 
 	return EFI_SUCCESS;
+}
+
+static EFI_STATUS generate_random_number_chunk(VOID *chunk, UINTN size)
+{
+	EFI_STATUS ret;
+	EFI_TIME time;
+	UINTN i;
+
+	/* Initialize OpenSSL Random number generator.  */
+#define ENTROPY_NEEDED 32
+	ret = uefi_call_wrapper(RT->GetTime, 2, &time, NULL);
+	if (ret != EFI_SUCCESS)
+		return ret;
+
+	UINT64 seed = ((UINT64)time.Year << 48) | ((UINT64)time.Month << 40) |
+		((UINT64)time.Day << 32) | ((UINT64)time.Hour << 24) |
+		((UINT64)time.Minute << 16) | ((UINT64)time.Second << 8) |
+		((UINT64)time.Daylight);
+
+	for (i = 0; i <= (ENTROPY_NEEDED / sizeof(seed)) + 1; i++)
+		RAND_seed(&seed, sizeof(seed));
+
+	if (RAND_status() != 1) {
+		error(L"OpenSSL Random number generator initialization failed");
+		return EFI_NOT_READY;
+	}
+
+	if (RAND_bytes(chunk, size) != 1) {
+		error(L"Failed to generate buffer of random numbers");
+		return EFI_UNSUPPORTED;
+	}
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS garbage_disk(void)
+{
+	struct gpt_partition_interface gparti;
+	EFI_STATUS ret;
+	VOID *chunk;
+	UINTN size;
+
+	ret = gpt_get_root_disk(&gparti);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Failed to get disk information");
+		return ret;
+	}
+
+	size = gparti.bio->Media->BlockSize * N_BLOCK;
+	chunk = AllocatePool(size);
+	if (!chunk) {
+		error(L"Unable to allocate the garbage chunk");
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	ret = generate_random_number_chunk(chunk, size);
+	if (EFI_ERROR(ret)) {
+		FreePool(chunk);
+		return ret;
+	}
+
+	ret = fill_with(gparti.bio, gparti.part.starting_lba,
+			gparti.part.ending_lba, chunk, N_BLOCK);
+
+	FreePool(chunk);
+	return gpt_refresh();
 }

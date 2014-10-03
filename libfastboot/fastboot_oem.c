@@ -314,6 +314,17 @@ static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
 	reboot();
 }
 
+static void cmd_oem_garbage_disk(__attribute__((__unused__)) INTN argc,
+				 __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret = garbage_disk();
+
+	if (ret == EFI_SUCCESS)
+		fastboot_okay("");
+	else
+		fastboot_fail("Garbage disk failed, %r", ret);
+}
+
 void fastboot_oem_init(void)
 {
 	fastboot_oem_publish();
@@ -327,5 +338,6 @@ void fastboot_oem_init(void)
 	 * provisioning purpose only and those which modifie the
 	 * device are restricted to the unlocked state.  */
 	fastboot_oem_register("setvar", cmd_oem_setvar, TRUE);
+	fastboot_oem_register("garbage-disk", cmd_oem_garbage_disk, TRUE);
 	fastboot_oem_register("reboot", cmd_oem_reboot, FALSE);
 }

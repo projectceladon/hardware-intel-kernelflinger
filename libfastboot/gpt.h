@@ -64,5 +64,6 @@ EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interf
 EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count);
 EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp);
 EFI_STATUS gpt_refresh(void);
+EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart);
 
 #endif	/* _GPT_H_ */
