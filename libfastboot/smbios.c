@@ -41,10 +41,7 @@ char *SMBIOS_UNDEFINED = "N/A";
 /* Allow cast to pointer from integer of different size.  */
 #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
 
-#define SMBIOS_GET_STRING(type, field) \
-	smbios_get_string(type, offsetof(SMBIOS_TYPE##type, field))
-
-static char *smbios_get_string(UINT8 type, UINT8 offset)
+char *smbios_get_string(UINT8 type, UINT8 offset)
 {
 	SMBIOS_STRUCTURE_TABLE *table;
 	EFI_STATUS ret;
@@ -69,19 +66,4 @@ static char *smbios_get_string(UINT8 type, UINT8 offset)
 	str = LibGetSmbiosString(&sm_struct, sm_struct.Raw[offset]);
 
 	return str ? (char *)str : SMBIOS_UNDEFINED;
-}
-
-char *smbios_get_hw_version(void)
-{
-	return SMBIOS_GET_STRING(1, Version);
-}
-
-char *smbios_get_ifwi_version(void)
-{
-	return SMBIOS_GET_STRING(0, BiosVersion);
-}
-
-char *smbios_get_serial_number(void)
-{
-	return SMBIOS_GET_STRING(1, SerialNumber);
 }

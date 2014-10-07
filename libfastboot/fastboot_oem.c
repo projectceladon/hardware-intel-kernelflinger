@@ -51,6 +51,17 @@ const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
 #define OFF_MODE_CHARGE		"off-mode-charge"
 
 static enum device_state current_state = UNKNOWN_STATE;
+
+static struct state_display {
+	char *string;
+	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color;
+} STATE_DISPLAY[] = {
+	{ "unknown", &COLOR_RED },
+	{ "unlocked", &COLOR_RED },
+	{ "verified", &COLOR_WHITE },
+	{ "locked", &COLOR_WHITE }
+};
+
 static BOOLEAN provisioning_mode = FALSE;
 
 static CHAR8 current_off_mode_charge[2];
@@ -86,7 +97,7 @@ static void fastboot_oem_publish(void)
 	fastboot_publish(OFF_MODE_CHARGE, get_current_off_mode_charge() ? "1" : "0");
 }
 
-enum device_state get_current_state()
+static enum device_state get_current_state()
 {
 	UINT32 *stored_state;
 	UINTN dsize;
@@ -116,6 +127,16 @@ enum device_state get_current_state()
 
 exit:
 	return current_state;
+}
+
+char *get_current_state_string()
+{
+	return STATE_DISPLAY[get_current_state() + 1].string;
+}
+
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color()
+{
+	return STATE_DISPLAY[get_current_state() + 1].color;
 }
 
 static EFI_STATUS set_current_state(enum device_state state)

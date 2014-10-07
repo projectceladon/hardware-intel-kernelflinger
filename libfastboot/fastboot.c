@@ -48,6 +48,7 @@
 #include "fastboot_ui.h"
 #include "smbios.h"
 #include "info.h"
+#include "intel_variables.h"
 
 #define MAGIC_LENGTH 64
 #define MAX_DOWNLOAD_SIZE 512*1024*1024
@@ -655,6 +656,7 @@ EFI_STATUS fastboot_start(void **bootimage, enum boot_target *target)
 	if (info_product() != INFO_UNDEFINED)
 		fastboot_publish("product", info_product());
 	fastboot_publish("version-bootloader", info_bootloader_version());
+	publish_intel_variables();
 
 	if (EFI_ERROR(snprintf((CHAR8 *)download_max_str, sizeof(download_max_str),
 			       (CHAR8 *)"0x%lX", MAX_DOWNLOAD_SIZE)))

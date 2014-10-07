@@ -174,15 +174,6 @@ static EFI_STATUS fastboot_ui_clear_dynamic_part(void)
 			     sheight - area_y - margin);
 }
 
-static struct state_to_str {
-	char *name;
-	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color;
-} const STATE_TO_STR[] = {
-	{ "UNLOCKED", &COLOR_RED },
-	{ "VERIFIED", &COLOR_WHITE },
-	{ "LOCKED", &COLOR_WHITE }
-};
-
 static void fastboot_ui_info_product_name(ui_textline_t *line)
 {
 	line->str = info_product();
@@ -195,7 +186,7 @@ static void fastboot_ui_info_variant(ui_textline_t *line)
 
 static void fastboot_ui_info_hw_version(ui_textline_t *line)
 {
-	line->str = smbios_get_hw_version();
+	line->str = SMBIOS_GET_STRING(1, Version);
 }
 
 static void fastboot_ui_info_bootloader_version(ui_textline_t *line)
@@ -205,12 +196,12 @@ static void fastboot_ui_info_bootloader_version(ui_textline_t *line)
 
 static void fastboot_ui_info_ifwi_version(ui_textline_t *line)
 {
-	line->str = smbios_get_ifwi_version();
+	line->str = SMBIOS_GET_STRING(0, BiosVersion);
 }
 
 static void fastboot_ui_info_serial_number(ui_textline_t *line)
 {
-	line->str = smbios_get_serial_number();
+	line->str = SMBIOS_GET_STRING(1, SerialNumber);
 }
 
 static void fastboot_ui_info_signing(ui_textline_t *line)
@@ -230,9 +221,8 @@ static void fastboot_ui_info_secure_boot(ui_textline_t *line)
 
 static void fastboot_ui_info_lock_state(ui_textline_t *line)
 {
-	enum device_state state = get_current_state();
-	line->str = STATE_TO_STR[state].name;
-	line->color = STATE_TO_STR[state].color;
+	line->str = get_current_state_string();
+	line->color = get_current_state_color();
 }
 
 struct info_text_fun {

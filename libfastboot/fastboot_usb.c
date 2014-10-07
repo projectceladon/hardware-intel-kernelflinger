@@ -242,7 +242,7 @@ static void fbSetSerialNumber(void)
 	UINTN length;
 	char *serial;
 
-	serial = smbios_get_serial_number();
+	serial = SMBIOS_GET_STRING(1, SerialNumber);
 	if (serial == SMBIOS_UNDEFINED)
 		return;
 
