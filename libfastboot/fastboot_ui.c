@@ -336,7 +336,7 @@ EFI_STATUS fastboot_ui_init(void)
 	UINTN width, height, x, y;
 	EFI_STATUS ret = EFI_SUCCESS;
 
-	ret = ui_init(&swidth, &sheight);
+	ret = ui_init(&swidth, &sheight, FALSE);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, "Init screen failed");
 		return ret;
@@ -410,5 +410,6 @@ enum boot_target fastboot_ui_event_handler()
 void fastboot_ui_destroy(void)
 {
 	ui_print_clear();
+	ui_clear_screen();
 	ui_default_screen();
 }

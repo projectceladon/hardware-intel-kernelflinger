@@ -66,8 +66,9 @@ static UINTN default_textarea_x;
 static UINTN default_textarea_y;
 
 static const char *VENDOR_IMG_NAME = "splash_intel";
+static BOOLEAN ui_display_splash = FALSE;
 
-EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
+EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p, BOOLEAN display_splash)
 {
 	UINT32 mode;
 	UINTN info_size;
@@ -80,6 +81,8 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 		*height_p = graphic.height;
 		return EFI_SUCCESS;
 	}
+
+	ui_display_splash = display_splash;
 
 	ret = LibLocateProtocol(&GraphicsOutputProtocol, (VOID **)&graphic.output);
 	if (EFI_ERROR(ret)) {
@@ -135,8 +138,6 @@ EFI_STATUS ui_default_screen(void)
 	if (!graphic.output)
 		return EFI_UNSUPPORTED;
 
-	ui_clear_screen();
-
 	/* Initialize log area */
 	margin = graphic.width / 10;
 	if (!default_textarea) {
@@ -155,6 +156,11 @@ EFI_STATUS ui_default_screen(void)
 		default_textarea_x = margin;
 		default_textarea_y = graphic.height - margin;
 	}
+
+	if (!ui_display_splash)
+		return EFI_SUCCESS;
+
+	ui_clear_screen();
 
 	/* Vendor splash */
 	vendor = ui_image_get(VENDOR_IMG_NAME);

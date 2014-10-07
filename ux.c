@@ -34,6 +34,7 @@
 
 #include "lib.h"
 #include "ux.h"
+#include "vars.h"
 
 #define TIMEOUT_SECS	60
 
@@ -140,16 +141,10 @@ static UINTN sheight;
 
 static EFI_STATUS display_text(const ui_textline_t *text1,
 			       const ui_textline_t *text2) {
-	UINTN width, height, margin, x, y, swidth, sheight;
+	UINTN width, height, margin, x, y;
 	ui_image_t *vendor;
 	ui_font_t *font;
 	EFI_STATUS ret;
-
-	ret = ui_init(&swidth, &sheight);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Unable to initialize UI");
-		return ret;
-	}
 
 	ui_clear_screen();
 
@@ -207,14 +202,7 @@ static EFI_STATUS display_text(const ui_textline_t *text1,
 }
 
 static EFI_STATUS clear_text() {
-	EFI_STATUS ret;
 	UINTN margin;
-
-	ret = ui_init(&swidth, &sheight);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Unable to initialize UI");
-		return ret;
-	}
 
 	margin = sheight / 10;
 	if (swidth > sheight)	/* Landscape orientation. */
@@ -265,13 +253,22 @@ BOOLEAN ux_prompt_user_device_unlocked(VOID) {
 	return ux_prompt_user(device_altered_unlocked, NULL);
 }
 
-EFI_STATUS ux_init(VOID) {
-	UINTN swidth, sheight;
+BOOLEAN ux_display_splash() {
+	UINT8 value;
+	EFI_STATUS ret;
 
+	ret = get_efi_variable_byte(&loader_guid, L"UIDisplaySplash", &value);
+	if (EFI_ERROR(ret) || value != 1)
+		return FALSE;
+
+	return TRUE;
+}
+
+EFI_STATUS ux_init(VOID) {
 	uefi_call_wrapper(ST->ConOut->Reset, 2, ST->ConOut, FALSE);
         uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
 			  EFI_WHITE | EFI_BACKGROUND_BLACK);
 	uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, FALSE);
 
-	return ui_init(&swidth, &sheight);
+	return ui_init(&swidth, &sheight, ux_display_splash());
 }
