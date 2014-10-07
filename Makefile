@@ -73,7 +73,8 @@ LIBFASTBOOT_OBJS := \
 	    libfastboot/sparse.o \
 	    libfastboot/uefi_utils.o \
 	    libfastboot/smbios.o \
-	    libfastboot/info.o
+	    libfastboot/info.o \
+	    libfastboot/intel_variables.o
 
 OBJS := kernelflinger.o \
 	oemkeystore.o \

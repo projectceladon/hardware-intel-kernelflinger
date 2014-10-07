@@ -35,8 +35,9 @@
 
 char *SMBIOS_UNDEFINED;
 
-char *smbios_get_hw_version(void);
-char *smbios_get_ifwi_version(void);
-char *smbios_get_serial_number(void);
+char *smbios_get_string(UINT8 type, UINT8 offset);
+
+#define SMBIOS_GET_STRING(type, field) \
+	smbios_get_string(type, offsetof(SMBIOS_TYPE##type, field))
 
 #endif	/* _SMBIOS_H_ */
