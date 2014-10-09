@@ -395,7 +395,7 @@ static void cmd_boot(__attribute__((__unused__)) INTN argc,
 		return;
 	}
 
-	fastboot_usb_stop(dlbuffer);
+	fastboot_usb_stop(dlbuffer, NULL, 0);
 	ui_print(L"Booting received image ...");
 	fastboot_okay("");
 }
@@ -648,7 +648,8 @@ static void fastboot_start_callback(void)
 	fastboot_read_command();
 }
 
-EFI_STATUS fastboot_start(void **bootimage, enum boot_target *target)
+EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
+			  enum boot_target *target)
 {
 	EFI_STATUS ret;
 	char download_max_str[30];
@@ -682,7 +683,8 @@ EFI_STATUS fastboot_start(void **bootimage, enum boot_target *target)
 		efi_perror(ret, "Fastboot UI initialization failed, continue anyway.");
 
 	ret = fastboot_usb_start(fastboot_start_callback, fastboot_process_rx,
-				 fastboot_process_tx, bootimage, target);
+				 fastboot_process_tx, bootimage, efiimage,
+				 imagesize, target);
 
 	fastboot_ui_destroy();
 	return ret;

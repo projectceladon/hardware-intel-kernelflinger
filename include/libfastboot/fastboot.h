@@ -57,6 +57,7 @@ BOOLEAN device_is_locked(void);
 BOOLEAN device_is_verified(void);
 BOOLEAN get_current_off_mode_charge(void);
 
-EFI_STATUS fastboot_start(void **bootimage, enum boot_target *target);
+EFI_STATUS fastboot_start(void **bootimage, void **efiimage,
+			  UINTN *imagesize, enum boot_target *target);
 
 #endif	/* _FASTBOOT_H_ */

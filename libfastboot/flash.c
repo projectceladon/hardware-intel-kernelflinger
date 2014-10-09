@@ -37,6 +37,7 @@
 #include <lib.h>
 #include <keystore.h>
 #include <fastboot.h>
+#include "fastboot_usb.h"
 #include "uefi_utils.h"
 #include "gpt.h"
 #include "gpt_bin.h"
@@ -168,6 +169,7 @@ EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 	CHAR16 *esp = L"/ESP/";
 	CHAR16 *gpt = L"gpt";
 	CHAR16 *keystore = L"keystore";
+	CHAR16 *efirun = L"efirun";
 	EFI_STATUS ret;
 
 	/* special case for writing inside esp partition */
@@ -181,6 +183,10 @@ EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 	/* Special case for writing keystore */
 	if (!StrCmp(keystore, label))
 		return flash_keystore(data, size);
+
+	/* Special case for run an EFI application */
+	if (!StrCmp(efirun, label))
+		return fastboot_usb_stop(NULL, data, size);
 
 	ret = gpt_get_partition_by_label(label, &gparti);
 	if (EFI_ERROR(ret)) {

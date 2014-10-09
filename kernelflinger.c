@@ -661,6 +661,9 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
 {
         EFI_STATUS ret = EFI_SUCCESS;
         enum boot_target target;
+        EFI_HANDLE image;
+        void *efiimage;
+        UINTN imagesize;
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
@@ -688,10 +691,11 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
         /* Otherwise, start the internal fastboot protocol
            implementation.  */
         for (;;) {
+                efiimage = NULL;
                 bootimage = NULL;
                 target = UNKNOWN_TARGET;
 
-                ret = fastboot_start(&bootimage, &target);
+                ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, "Fastboot mode failed");
                         break;
@@ -699,6 +703,21 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
 
                 if (bootimage)
                         goto start_image;
+
+                if (efiimage) {
+                        ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
+                                                NULL, efiimage, imagesize, &image);
+                        if (EFI_ERROR(ret)) {
+                                efi_perror(ret, L"Unable to load the received EFI image");
+                                continue;
+                        }
+                        ret = uefi_call_wrapper(BS->StartImage, 3, image, NULL, NULL);
+                        if (EFI_ERROR(ret))
+                                efi_perror(ret, L"Unable to start the received EFI image");
+
+                        uefi_call_wrapper(BS->UnloadImage, 1, image);
+                        continue;
+                }
 
                 if (target == UNKNOWN_TARGET)
                         continue;
@@ -913,4 +932,3 @@ fallback:
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
-
