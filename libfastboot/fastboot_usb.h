@@ -44,7 +44,10 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 			      data_callback_t rx_cb,
 			      data_callback_t tx_cb,
 			      void **bootimage,
+			      void **efiimage,
+			      UINTN *imagesize,
 			      enum boot_target *target);
-EFI_STATUS fastboot_usb_stop(void *bootimage);
+EFI_STATUS fastboot_usb_stop(void *bootimage, void *efiimage,
+			     UINTN imagesize);
 
 #endif	/* _FASTBOOT_USB_H_ */
