@@ -323,14 +323,17 @@ static EFI_STATUS fastboot_usb_init(void)
 static void *fastboot_bootimage;
 static void *fastboot_efiimage;
 static UINTN fastboot_imagesize;
+static enum boot_target fastboot_target;
 
-EFI_STATUS fastboot_usb_stop(void *bootimage, void *efiimage, UINTN imagesize)
+EFI_STATUS fastboot_usb_stop(void *bootimage, void *efiimage, UINTN imagesize,
+			     enum boot_target target)
 {
 	EFI_STATUS ret;
 
 	fastboot_bootimage = bootimage;
 	fastboot_efiimage = efiimage;
 	fastboot_imagesize = imagesize;
+	fastboot_target = target;
 
 	ret = uefi_call_wrapper(usb_device->Stop, 1, usb_device);
 	if (EFI_ERROR(ret))
@@ -365,6 +368,7 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 
 	fastboot_bootimage = NULL;
 	fastboot_efiimage = NULL;
+	fastboot_target = UNKNOWN_TARGET;
 	*target = UNKNOWN_TARGET;
 
 	for (;;) {
@@ -379,6 +383,11 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, "Error occurred during run");
 			goto error;
+		}
+
+		if (fastboot_target != UNKNOWN_TARGET) {
+			*target = fastboot_target;
+			break;
 		}
 
 		if (fastboot_bootimage || fastboot_efiimage)

@@ -395,7 +395,7 @@ static void cmd_boot(__attribute__((__unused__)) INTN argc,
 		return;
 	}
 
-	fastboot_usb_stop(dlbuffer, NULL, 0);
+	fastboot_usb_stop(dlbuffer, NULL, 0, UNKNOWN_TARGET);
 	ui_print(L"Booting received image ...");
 	fastboot_okay("");
 }
@@ -432,6 +432,14 @@ static void cmd_getvar(INTN argc, CHAR8 **argv)
 			fastboot_okay("");
 		}
 	}
+}
+
+static void cmd_continue(__attribute__((__unused__)) INTN argc,
+			 __attribute__((__unused__)) CHAR8 **argv)
+{
+	ui_print(L"Continuing ...");
+	fastboot_usb_stop(NULL, NULL, 0, NORMAL_BOOT);
+	fastboot_okay("");
 }
 
 static void cmd_reboot(__attribute__((__unused__)) INTN argc,
@@ -670,7 +678,7 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 	fastboot_register("erase:", cmd_erase, TRUE);
 	fastboot_register("getvar:", cmd_getvar, FALSE);
 	fastboot_register("boot", cmd_boot, TRUE);
-	fastboot_register("continue", cmd_reboot, FALSE);
+	fastboot_register("continue", cmd_continue, FALSE);
 	fastboot_register("reboot", cmd_reboot, FALSE);
 	fastboot_register("reboot-bootloader", cmd_reboot_bootloader, FALSE);
 
