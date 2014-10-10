@@ -186,7 +186,7 @@ EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 
 	/* Special case for run an EFI application */
 	if (!StrCmp(efirun, label))
-		return fastboot_usb_stop(NULL, data, size);
+		return fastboot_usb_stop(NULL, data, size, UNKNOWN_TARGET);
 
 	ret = gpt_get_partition_by_label(label, &gparti);
 	if (EFI_ERROR(ret)) {
