@@ -37,6 +37,7 @@
 
 #include "uefi_utils.h"
 #include "flash.h"
+#include "hashes.h"
 #include "fastboot.h"
 #include "fastboot_ui.h"
 
@@ -286,7 +287,7 @@ static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
 static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
 {
 	CHAR16 *target;
-        EFI_STATUS ret;
+	EFI_STATUS ret;
 
 	if (argc != 2) {
 		fastboot_fail("Invalid parameter");
@@ -325,6 +326,16 @@ static void cmd_oem_garbage_disk(__attribute__((__unused__)) INTN argc,
 		fastboot_fail("Garbage disk failed, %r", ret);
 }
 
+static void cmd_oem_gethashes(__attribute__((__unused__)) INTN argc,
+			__attribute__((__unused__)) CHAR8 **argv)
+{
+	get_boot_image_hash(L"boot");
+	get_boot_image_hash(L"recovery");
+	get_esp_hash();
+	get_ext4_hash(L"system");
+	fastboot_okay("");
+}
+
 void fastboot_oem_init(void)
 {
 	fastboot_oem_publish();
@@ -335,9 +346,10 @@ void fastboot_oem_init(void)
 
 	/* The following commands are not part of the Google
 	 * requirements.  They are provided for engineering and
-	 * provisioning purpose only and those which modifie the
+	 * provisioning purpose only and those which modify the
 	 * device are restricted to the unlocked state.  */
 	fastboot_oem_register("setvar", cmd_oem_setvar, TRUE);
 	fastboot_oem_register("garbage-disk", cmd_oem_garbage_disk, TRUE);
 	fastboot_oem_register("reboot", cmd_oem_reboot, FALSE);
+	fastboot_oem_register("get-hashes", cmd_oem_gethashes, FALSE);
 }
