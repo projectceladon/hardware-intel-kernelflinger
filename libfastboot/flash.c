@@ -166,29 +166,70 @@ static EFI_STATUS flash_keystore(VOID *data, UINTN size)
 	return ret;
 }
 
+static EFI_STATUS flash_efirun(VOID *data, UINTN size)
+{
+	return fastboot_usb_stop(NULL, data, size, UNKNOWN_TARGET);
+}
+
+static EFI_STATUS flash_sfu(VOID *data, UINTN size)
+{
+	return flash_into_esp(data, size, L"BIOSUPDATE.fv");
+}
+
+static EFI_STATUS flash_ifwi(VOID *data, UINTN size)
+{
+	return flash_into_esp(data, size, L"ifwi.bin");
+}
+
+#define MBR_CODE_SIZE	440
+static EFI_STATUS flash_mbr(VOID *data, UINTN size)
+{
+	struct gpt_partition_interface gparti;
+	EFI_STATUS ret;
+
+	if (size > MBR_CODE_SIZE)
+		return EFI_INVALID_PARAMETER;
+
+	ret = gpt_get_root_disk(&gparti);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Failed to get disk information");
+		return ret;
+	}
+
+	ret = uefi_call_wrapper(gparti.dio->WriteDisk, 5, gparti.dio,
+				gparti.bio->Media->MediaId, 0, size, data);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, "Failed to flash MBR");
+
+	return ret;
+}
+
+static struct label_exception {
+	CHAR16 *name;
+	EFI_STATUS (*flash_func)(VOID *data, UINTN size);
+} LABEL_EXCEPTIONS[] = {
+	{ L"gpt", flash_gpt },
+	{ L"keystore", flash_keystore },
+	{ L"efirun", flash_efirun },
+	{ L"sfu", flash_sfu },
+	{ L"ifwi", flash_ifwi },
+	{ L"mbr", flash_mbr }
+};
+
 EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 {
 	CHAR16 *esp = L"/ESP/";
-	CHAR16 *gpt = L"gpt";
-	CHAR16 *keystore = L"keystore";
-	CHAR16 *efirun = L"efirun";
+	UINTN i;
 	EFI_STATUS ret;
 
 	/* special case for writing inside esp partition */
 	if (!StrnCmp(esp, label, StrLen(esp)))
 		return flash_into_esp(data, size, &label[ARRAY_SIZE(esp)]);
 
-	/* special case for writing gpt partition table */
-	if (!StrCmp(gpt, label))
-		return flash_gpt(data, size);
-
-	/* Special case for writing keystore */
-	if (!StrCmp(keystore, label))
-		return flash_keystore(data, size);
-
-	/* Special case for run an EFI application */
-	if (!StrCmp(efirun, label))
-		return fastboot_usb_stop(NULL, data, size, UNKNOWN_TARGET);
+	/* special cases */
+	for (i = 0; i < ARRAY_SIZE(LABEL_EXCEPTIONS); i++)
+		if (!StrCmp(LABEL_EXCEPTIONS[i].name, label))
+			return LABEL_EXCEPTIONS[i].flash_func(data, size);
 
 	ret = gpt_get_partition_by_label(label, &gparti);
 	if (EFI_ERROR(ret)) {
