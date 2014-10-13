@@ -2,9 +2,7 @@
  * Copyright (c) 2014, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,20 +30,11 @@
  *
  */
 
-#ifndef _FASTBOOT_OEM_H_
-#define _FASTBOOT_OEM_H_
+#ifndef __OEMVARS_H__
+#define __OEMVARS_H__
 
-const EFI_GUID fastboot_guid;
+#include <efi.h>
 
-enum device_state {
-	UNKNOWN_STATE = -1,
-	UNLOCKED,
-	LOCKED,
-	VERIFIED
-};
-char *get_current_state_string(void);
-EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color();
+EFI_STATUS flash_oemvars(VOID *data, UINTN size);
 
-void fastboot_oem_init(void);
-
-#endif	/* _FASTBOOT_OEM_H_ */
+#endif	/* __OEMVARS_H__ */

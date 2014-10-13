@@ -47,6 +47,7 @@
 #include "SdHostIo.h"
 #include "Mmc.h"
 #include "sparse.h"
+#include "oemvars.h"
 
 #define KEYSTORE_VAR L"KeyStore"
 
@@ -213,7 +214,8 @@ static struct label_exception {
 	{ L"efirun", flash_efirun },
 	{ L"sfu", flash_sfu },
 	{ L"ifwi", flash_ifwi },
-	{ L"mbr", flash_mbr }
+	{ L"mbr", flash_mbr },
+	{ L"oemvars", flash_oemvars }
 };
 
 EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
