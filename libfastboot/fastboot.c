@@ -446,8 +446,8 @@ static void cmd_reboot(__attribute__((__unused__)) INTN argc,
 		       __attribute__((__unused__)) CHAR8 **argv)
 {
 	ui_print(L"Rebooting ...");
+	fastboot_usb_stop(NULL, NULL, 0, REBOOT);
 	fastboot_okay("");
-	reboot();
 }
 
 static void cmd_reboot_bootloader(__attribute__((__unused__)) INTN argc,
