@@ -43,7 +43,7 @@
 #include "options.h"
 #include "power.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-00.04"
+#define KERNELFLINGER_VERSION	L"kernelflinger-00.05"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
