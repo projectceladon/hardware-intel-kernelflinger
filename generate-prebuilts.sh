@@ -21,7 +21,7 @@ if [ -z "$ANDROID_BUILD_TOP" ]; then
 fi
 
 if [ ! -e "$ANDROID_BUILD_TOP/out/host/linux-x86/bin/keystore_signer" ]; then
-    echo "[ERROR] keystore_signer not found, run 'mm' in system/extras/verity"
+    echo "[ERROR] keystore_signer not found, run 'm keystore_signer'"
     exit 3
 fi
 
