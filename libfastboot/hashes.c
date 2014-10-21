@@ -204,7 +204,7 @@ close:
 	path = AllocateZeroPool(DIR_BUFFER_SIZE);
 	if (!path)
 		return;
-	StrCat(path, L"/ESP/");
+	StrCat(path, L"/bootloader/");
  }
 
 static void pushdir(CHAR16 *dir)
