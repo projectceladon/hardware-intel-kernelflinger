@@ -205,7 +205,7 @@ static inline void handover_jump(EFI_HANDLE image, struct boot_params *bp,
 
 
 
-static UINT32 pagealign(struct boot_img_hdr *hdr, UINT32 blob_size)
+UINT32 pagealign(struct boot_img_hdr *hdr, UINT32 blob_size)
 {
         UINT32 page_mask = hdr->page_size - 1;
         return (blob_size + page_mask) & (~page_mask);

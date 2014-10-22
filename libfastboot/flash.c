@@ -38,6 +38,7 @@
 #include <keystore.h>
 #include <fastboot.h>
 #include <openssl/rand.h>
+#include <android.h>
 
 #include "fastboot_usb.h"
 #include "uefi_utils.h"
@@ -205,6 +206,84 @@ static EFI_STATUS flash_mbr(VOID *data, UINTN size)
 	return ret;
 }
 
+static EFI_STATUS flash_zimage(VOID *data, UINTN size)
+{
+	struct boot_img_hdr *bootimage, *new_bootimage;
+	VOID *new_cur, *cur;
+	UINTN new_size, partlen;
+	EFI_STATUS ret;
+
+	ret = gpt_get_partition_by_label(L"boot", &gparti);
+	if (EFI_ERROR(ret)) {
+		error(L"Unable to get information on the boot partition");
+		return ret;
+	}
+
+	partlen = (gparti.part.ending_lba + 1 - gparti.part.starting_lba)
+		* gparti.bio->Media->BlockSize;
+	bootimage = AllocatePool(partlen);
+	if (!bootimage) {
+		error(L"Unable to allocate bootimage buffer");
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
+				gparti.bio->Media->MediaId,
+				gparti.part.starting_lba * gparti.bio->Media->BlockSize,
+				partlen, bootimage);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to load the current bootimage");
+		goto out;
+	}
+
+	if (strncmpa((CHAR8 *)BOOT_MAGIC, bootimage->magic, BOOT_MAGIC_SIZE)) {
+		error(L"boot partition does not contain a valid bootimage");
+		ret = EFI_UNSUPPORTED;
+		goto out;
+	}
+
+	new_size = bootimage_size(bootimage) - bootimage->kernel_size
+		+ pagealign(bootimage, size);
+	if (new_size > partlen) {
+		error(L"Kernel image is too large to fit in the boot partition");
+		ret = EFI_INVALID_PARAMETER;
+		goto out;
+	}
+
+	new_bootimage = AllocateZeroPool(new_size);
+	if (!new_bootimage) {
+		ret = EFI_OUT_OF_RESOURCES;
+		goto out;
+	}
+
+	/* Create the new bootimage. */
+	memcpy((VOID *)new_bootimage, bootimage, bootimage->page_size);
+
+	new_bootimage->kernel_size = size;
+	new_bootimage->kernel_addr = bootimage->kernel_addr;
+	new_cur = (VOID *)new_bootimage + bootimage->page_size;
+	memcpy(new_cur, data, size);
+
+	new_cur += pagealign(new_bootimage, size);
+	cur = (VOID *)bootimage + bootimage->page_size
+		+ pagealign(bootimage, bootimage->kernel_size);
+	memcpy(new_cur, cur, bootimage->ramdisk_size);
+
+	new_cur += pagealign(new_bootimage, new_bootimage->ramdisk_size);
+	cur += pagealign(bootimage, bootimage->ramdisk_size);
+	memcpy(new_cur, cur, bootimage->second_size);
+
+	/* Flash new the bootimage. */
+	cur_offset = gparti.part.starting_lba * gparti.bio->Media->BlockSize;
+	ret = flash_write(new_bootimage, new_size);
+
+	FreePool(new_bootimage);
+
+ out:
+	FreePool(bootimage);
+	return ret;
+}
+
 static struct label_exception {
 	CHAR16 *name;
 	EFI_STATUS (*flash_func)(VOID *data, UINTN size);
@@ -215,7 +294,8 @@ static struct label_exception {
 	{ L"sfu", flash_sfu },
 	{ L"ifwi", flash_ifwi },
 	{ L"mbr", flash_mbr },
-	{ L"oemvars", flash_oemvars }
+	{ L"oemvars", flash_oemvars },
+	{ L"zimage", flash_zimage }
 };
 
 EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)

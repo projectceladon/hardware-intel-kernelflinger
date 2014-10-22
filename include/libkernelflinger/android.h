@@ -143,6 +143,9 @@ struct boot_img_hdr *get_bootimage_header(VOID *bootimage_blob);
  * block */
 UINTN bootimage_size(struct boot_img_hdr *aosp_header);
 
+/* Return the blob_size aligned on hdr->page_size.  */
+UINT32 pagealign(struct boot_img_hdr *hdr, UINT32 blob_size);
+
 #endif
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab
