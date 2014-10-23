@@ -35,7 +35,7 @@
 
 #include <efi.h>
 
-char *INFO_UNDEFINED;
+extern char *INFO_UNDEFINED;
 
 char *info_bootloader_version(void);
 char *info_variant(void);

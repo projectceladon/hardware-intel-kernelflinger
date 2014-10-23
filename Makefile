@@ -1,7 +1,9 @@
 ifeq ($(ARCH),x86_64)
 ARCH_DIR := linux-x86_64
+LIBGCC := $(shell $(CC) -print-libgcc-file-name)
 else
 ARCH_DIR := linux-x86
+LIBGCC := $(shell $(CC) -m32 -print-libgcc-file-name)
 endif
 
 GNU_EFI_TOP := $(ANDROID_BUILD_TOP)/hardware/intel/efi_prebuilts/gnu-efi/$(ARCH_DIR)/
@@ -11,7 +13,7 @@ GNU_EFI_LIB :=  $(GNU_EFI_TOP)/lib
 OPENSSL_TOP := $(ANDROID_BUILD_TOP)/hardware/intel/efi_prebuilts/uefi_shim/
 EFI_LIBS := -lefi -lgnuefi --start-group $(OPENSSL_TOP)/$(ARCH_DIR)/libcryptlib.a \
 		$(OPENSSL_TOP)/$(ARCH_DIR)/libopenssl.a --end-group \
-		$(shell $(CC) -print-libgcc-file-name)
+		$(LIBGCC)
 
 # The key to sign kernelflinger with
 DB_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/DB
@@ -45,7 +47,8 @@ CFLAGS += -m32
 endif
 
 LDFLAGS	:= -nostdlib -znocombreloc -T $(GNU_EFI_LIB)/elf_$(ARCH)_efi.lds \
-	-shared -Bsymbolic -L$(GNU_EFI_LIB) \
+	-shared -Bsymbolic --warn-common --no-undefined --fatal-warnings \
+	-L$(GNU_EFI_LIB) \
 	-L$(OPENSSL_TOP)/$(ARCH_DIR) $(GNU_EFI_LIB)/crt0-efi-$(ARCH).o
 
 LIB_OBJS := libkernelflinger/android.o \
