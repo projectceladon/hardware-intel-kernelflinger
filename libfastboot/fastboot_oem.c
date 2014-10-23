@@ -43,134 +43,13 @@
 
 #include "fastboot_oem.h"
 
-const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
-				 {0x9a, 0x99, 0xde, 0xbe, 0xb4, 0x31, 0xfc, 0xc1} };
-
-#define OEM_LOCK_VAR		L"OEMLock"
-
-#define OFF_MODE_CHARGE_VAR	L"off-mode-charge"
 #define OFF_MODE_CHARGE		"off-mode-charge"
-
-static enum device_state current_state = UNKNOWN_STATE;
-
-static struct state_display {
-	char *string;
-	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color;
-} STATE_DISPLAY[] = {
-	{ "unknown", &COLOR_RED },
-	{ "unlocked", &COLOR_RED },
-	{ "verified", &COLOR_WHITE },
-	{ "locked", &COLOR_WHITE }
-};
-
-static BOOLEAN provisioning_mode = FALSE;
-
-static CHAR8 current_off_mode_charge[2];
-
-BOOLEAN get_current_off_mode_charge(void)
-{
-	UINTN size;
-	CHAR8 *data;
-
-	if (current_off_mode_charge[0] == '\0') {
-		get_efi_variable((EFI_GUID *)&fastboot_guid, OFF_MODE_CHARGE_VAR,
-				 &size, (VOID **)&data, NULL);
-		if (!data)
-			return FALSE;
-
-		if (size != sizeof(current_off_mode_charge)
-		    || (strcmp(data, (CHAR8 *)"0") && strcmp(data, (CHAR8 *)"1"))) {
-			FreePool(data);
-			return FALSE;
-		}
-
-		memcpy(current_off_mode_charge, data, sizeof(current_off_mode_charge));
-		FreePool(data);
-	}
-
-	return !strcmp(current_off_mode_charge, (CHAR8 *)"0");
-}
 
 static void fastboot_oem_publish(void)
 {
 	fastboot_publish("secure", device_is_locked() ? "yes" : "no");
 	fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
 	fastboot_publish(OFF_MODE_CHARGE, get_current_off_mode_charge() ? "1" : "0");
-}
-
-static enum device_state get_current_state()
-{
-	UINT32 *stored_state;
-	UINTN dsize;
-	EFI_STATUS ret;
-	UINT32 flags;
-
-	if (current_state == UNKNOWN_STATE) {
-		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK_VAR,
-				       &dsize, (void **)&stored_state, &flags);
-		/* If the variable does not exist, assume unlocked. */
-		if (ret == EFI_NOT_FOUND) {
-			provisioning_mode = TRUE;
-			current_state = UNLOCKED;
-			goto exit;
-		}
-
-		/* If we can't read the state, be safe and assume locked. */
-		if (EFI_ERROR(ret) || !dsize) {
-			error(L"Couldn't read %s, assuming locked", OEM_LOCK_VAR);
-			current_state = LOCKED;
-		} else if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
-			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK_VAR);
-			current_state = LOCKED;
-		} else
-			current_state = *stored_state;
-	}
-
-exit:
-	return current_state;
-}
-
-char *get_current_state_string()
-{
-	return STATE_DISPLAY[get_current_state() + 1].string;
-}
-
-EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color()
-{
-	return STATE_DISPLAY[get_current_state() + 1].color;
-}
-
-static EFI_STATUS set_current_state(enum device_state state)
-{
-	UINT32 stored_state = state;
-	EFI_STATUS ret = set_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
-					  sizeof(stored_state), &stored_state,
-					  TRUE, FALSE);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to set %a variable", OEM_LOCK_VAR);
-		return ret;
-	}
-
-	current_state = state;
-	fastboot_oem_publish();
-	fastboot_ui_refresh();
-
-	return EFI_SUCCESS;
-}
-
-BOOLEAN device_is_unlocked()
-{
-	return get_current_state() == UNLOCKED;
-}
-
-BOOLEAN device_is_locked()
-{
-	return get_current_state() == LOCKED;
-}
-
-BOOLEAN device_is_verified()
-{
-	return get_current_state() == VERIFIED;
 }
 
 static void change_device_state(enum device_state new_state)
@@ -183,7 +62,7 @@ static void change_device_state(enum device_state new_state)
 		return;
 	}
 
-	if (!provisioning_mode && !fastboot_ui_confirm_for_state(new_state))
+	if (!device_is_provisioning() && !fastboot_ui_confirm_for_state(new_state))
 		goto exit;
 
 	ui_print(L"Erasing userdata...");
@@ -204,7 +83,9 @@ static void change_device_state(enum device_state new_state)
 		return;
 	}
 
-	provisioning_mode = FALSE;
+	fastboot_oem_publish();
+	fastboot_ui_refresh();
+        clear_provisioning_mode();
 
 exit:
 	fastboot_okay("");
@@ -244,15 +125,12 @@ static void cmd_oem_off_mode_charge(__attribute__((__unused__)) INTN argc,
 		return;
 	}
 
-	ret = set_efi_variable(&fastboot_guid, OFF_MODE_CHARGE_VAR,
-			       strlen(argv[1]) + 1, argv[1], TRUE, FALSE);
+        ret = set_off_mode_charge(!strcmp(argv[1], (CHAR8* )"1"));
 	if (EFI_ERROR(ret)) {
-		error(L"Failed to set %a variable", OFF_MODE_CHARGE_VAR);
 		fastboot_fail("Failed to set %a", OFF_MODE_CHARGE);
 		return;
 	}
 
-	memcpy(current_off_mode_charge, argv[1], ARRAY_SIZE(current_off_mode_charge));
 	fastboot_oem_publish();
 	fastboot_okay("");
 }

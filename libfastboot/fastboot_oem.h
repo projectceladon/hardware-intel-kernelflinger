@@ -35,17 +35,6 @@
 #ifndef _FASTBOOT_OEM_H_
 #define _FASTBOOT_OEM_H_
 
-const EFI_GUID fastboot_guid;
-
-enum device_state {
-	UNKNOWN_STATE = -1,
-	UNLOCKED,
-	LOCKED,
-	VERIFIED
-};
-char *get_current_state_string(void);
-EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color();
-
 void fastboot_oem_init(void);
 
 #endif	/* _FASTBOOT_OEM_H_ */

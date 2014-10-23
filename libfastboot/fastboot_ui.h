@@ -33,6 +33,8 @@
 #ifndef _FASTBOOT_UI_H_
 #define _FASTBOOT_UI_H_
 
+#include <vars.h>
+
 #include "fastboot_oem.h"
 
 EFI_STATUS fastboot_ui_init(void);

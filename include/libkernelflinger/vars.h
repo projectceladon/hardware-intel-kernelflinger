@@ -32,20 +32,23 @@
 
 #ifndef _VARS_H_
 #define _VARS_H_
+#include <efi.h>
+#include <efiapi.h>
 
 /* Gummiboot's loader GUID, for compatibility we honor some of the
  * same variables */
 extern const EFI_GUID loader_guid;
+
+extern const EFI_GUID fastboot_guid;
+
+/* TODO get rid of the rest of these _VAR definitions here and write
+ * accessor functions for them */
 
 #define LOADER_ENTRY_ONESHOT    L"LoaderEntryOneShot"
 /* Report bootloader version */
 #define LOADER_VERSION_VAR      L"LoaderVersion"
 
 #define SERIAL_PORT_VAR         L"SerialPort"
-
-/* UEFI Setup */
-#define SETUP_MODE_VAR	        L"SetupMode"
-#define SECURE_BOOT_VAR         L"SecureBoot"
 
 /* Boot state that we report before exiting boot services, per
  * Google's verified boot spec */
@@ -66,6 +69,26 @@ extern const EFI_GUID misc_ptn_guid;
 /* EFI variable which stores the max timeout for checking whether the
  * magic key was pressed at startup */
 #define MAGIC_KEY_TIMEOUT_VAR   L"MagicKeyTimeout"
+
+BOOLEAN device_is_unlocked(void);
+BOOLEAN device_is_locked(void);
+BOOLEAN device_is_verified(void);
+BOOLEAN get_current_off_mode_charge(void);
+EFI_STATUS set_off_mode_charge(BOOLEAN enabled);
+
+enum device_state {
+	UNKNOWN_STATE = -1,
+	UNLOCKED,
+	LOCKED,
+	VERIFIED
+};
+char *get_current_state_string(void);
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color();
+EFI_STATUS set_current_state(enum device_state state);
+enum device_state get_current_state();
+
+BOOLEAN device_is_provisioning(void);
+VOID clear_provisioning_mode(void);
 
 #endif /* _VARS_H_ */
 
