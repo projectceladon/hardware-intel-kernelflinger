@@ -19,7 +19,7 @@ VENDOR_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/vendor
 
 CPPFLAGS := -DKERNELFLINGER -I$(GNU_EFI_INCLUDE) \
 	-I$(GNU_EFI_INCLUDE)/$(ARCH) -I$(OPENSSL_TOP)/include -I$(OPENSSL_TOP)/include/Include \
-	-Iinclude/libkernelflinger -Iinclude/libfastboot -Iinclude/libui
+	-Iinclude/libkernelflinger -Iinclude/libfastboot
 
 CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
 	 -fshort-wchar -Wall -Wextra -Werror -mno-red-zone -maccumulate-outgoing-args \
@@ -55,13 +55,11 @@ LIB_OBJS := libkernelflinger/android.o \
 	    libkernelflinger/options.o \
 	    libkernelflinger/security.o \
 	    libkernelflinger/asn1.o \
-	    libkernelflinger/keystore.o
-
-LIBUI_OBJS := \
-	    libui/ui.o \
-	    libui/ui_font.o \
-	    libui/ui_textarea.o \
-	    libui/ui_image.o
+	    libkernelflinger/keystore.o \
+	    libkernelflinger/ui.o \
+	    libkernelflinger/ui_font.o \
+	    libkernelflinger/ui_textarea.o \
+	    libkernelflinger/ui_image.o
 
 LIBFASTBOOT_OBJS := \
 	    libfastboot/fastboot.o \
@@ -138,25 +136,22 @@ kernelflinger.vendor.key: $(VENDOR_KEY_PAIR).pk8
 		-j .debug_line -j .debug_str -j .debug_ranges \
 		--target=efi-app-$(ARCH) $^ $@
 
+libkernelflinger/res/font_res.h:
+	./libkernelflinger/tools/gen_fonts.sh ./libkernelflinger/res/fonts/ $@
+
+libkernelflinger/res/img_res.h:
+	./libkernelflinger/tools/gen_images.sh ./libkernelflinger/res/images/ $@
+
+$(LIB_OBJS): libkernelflinger/res/font_res.h libkernelflinger/res/img_res.h
+
 libkernelflinger.a: $(LIB_OBJS)
 	ar rcs $@ $^
 
 libfastboot.a: $(LIBFASTBOOT_OBJS)
 	ar rcs $@ $^
 
-libui/res/font_res.h:
-	./libui/tools/gen_fonts.sh ./libui/res/fonts/ $@
-
-libui/res/img_res.h:
-	./libui/tools/gen_images.sh ./libui/res/images/ $@
-
-$(LIBUI_OBJS): libui/res/font_res.h libui/res/img_res.h
-
-libui.a: $(LIBUI_OBJS)
-	ar rcs $@ $^
-
-kernelflinger.so: $(OBJS) libkernelflinger.a libfastboot.a libui.a
+kernelflinger.so: $(OBJS) libkernelflinger.a libfastboot.a
 	$(LD) $(LDFLAGS) $^ -o $@ -lefi $(EFI_LIBS)
 
 clean:
-	rm -f $(OBJS) $(LIB_OBJS) $(LIBFASTBOOT_OBJS) $(LIBUI_OBJS) *.a *.cer *.key *.bin *.so *.efi libui/res/font_res.h libui/res/img_res.h
+	rm -f $(OBJS) $(LIB_OBJS) $(LIBFASTBOOT_OBJS) *.a *.cer *.key *.bin *.so *.efi libkernelflinger/res/font_res.h libkernelflinger/res/img_res.h
