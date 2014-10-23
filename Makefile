@@ -56,6 +56,7 @@ LIB_OBJS := libkernelflinger/android.o \
 	    libkernelflinger/security.o \
 	    libkernelflinger/asn1.o \
 	    libkernelflinger/keystore.o \
+	    libkernelflinger/vars.o \
 	    libkernelflinger/ui.o \
 	    libkernelflinger/ui_font.o \
 	    libkernelflinger/ui_textarea.o \

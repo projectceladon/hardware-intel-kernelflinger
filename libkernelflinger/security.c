@@ -46,6 +46,9 @@
 #include "lib.h"
 #include "vars.h"
 
+#define SETUP_MODE_VAR	        L"SetupMode"
+#define SECURE_BOOT_VAR         L"SecureBoot"
+
 static VOID pr_error_openssl(void)
 {
 	unsigned long code;
