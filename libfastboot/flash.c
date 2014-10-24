@@ -35,7 +35,6 @@
 #include <efi.h>
 #include <efilib.h>
 #include <lib.h>
-#include <keystore.h>
 #include <fastboot.h>
 #include <openssl/rand.h>
 #include <android.h>
@@ -49,8 +48,7 @@
 #include "Mmc.h"
 #include "sparse.h"
 #include "oemvars.h"
-
-#define KEYSTORE_VAR L"KeyStore"
+#include "vars.h"
 
 static struct gpt_partition_interface gparti;
 static UINT64 cur_offset;
@@ -149,19 +147,7 @@ static EFI_STATUS flash_keystore(VOID *data, UINTN size)
 {
 	EFI_STATUS ret;
 
-	if (size) {
-		struct keystore *ks = get_keystore(data, size);
-
-		if (!ks) {
-			error(L"keystore data is invalid");
-			return EFI_INVALID_PARAMETER;
-		}
-
-		free_keystore(ks);
-	}
-
-	ret = set_efi_variable(&fastboot_guid, KEYSTORE_VAR,
-			       size, data, TRUE, FALSE);
+	ret = set_user_keystore(data, size);
 	if (ret)
 		efi_perror(ret, "Coudn't modify KeyStore");
 

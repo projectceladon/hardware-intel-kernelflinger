@@ -50,6 +50,10 @@ extern const EFI_GUID fastboot_guid;
 
 #define SERIAL_PORT_VAR         L"SerialPort"
 
+/* EFI variable which stores the max timeout for checking whether the
+ * magic key was pressed at startup */
+#define MAGIC_KEY_TIMEOUT_VAR   L"MagicKeyTimeout"
+
 /* Boot state that we report before exiting boot services, per
  * Google's verified boot spec */
 #define BOOT_STATE_VAR		L"BootState"
@@ -58,17 +62,10 @@ extern const EFI_GUID fastboot_guid;
 #define BOOT_STATE_ORANGE	2
 #define BOOT_STATE_RED		3
 
-/* EFI Variable to store user-supplied key store binary data */
-#define KEYSTORE_VAR		L"KeyStore"
-
 /* Various interesting partition GUIDs */
 extern const EFI_GUID boot_ptn_guid;
 extern const EFI_GUID recovery_ptn_guid;
 extern const EFI_GUID misc_ptn_guid;
-
-/* EFI variable which stores the max timeout for checking whether the
- * magic key was pressed at startup */
-#define MAGIC_KEY_TIMEOUT_VAR   L"MagicKeyTimeout"
 
 BOOLEAN device_is_unlocked(void);
 BOOLEAN device_is_locked(void);
@@ -86,7 +83,8 @@ char *get_current_state_string(void);
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color();
 EFI_STATUS set_current_state(enum device_state state);
 enum device_state get_current_state();
-
+EFI_STATUS set_user_keystore(VOID *keystore, UINTN size);
+EFI_STATUS get_user_keystore(VOID **keystorep, UINTN *sizep);
 BOOLEAN device_is_provisioning(void);
 VOID clear_provisioning_mode(void);
 

@@ -34,7 +34,10 @@
 #include <efi.h>
 #include <efiapi.h>
 #include <efilib.h>
+
+#ifndef USERFASTBOOT
 #include <fastboot.h>
+#endif
 
 #include "vars.h"
 #include "lib.h"
@@ -67,7 +70,7 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 #define FASTBOOT_HOLD_DELAY         (4 * 1000 * 1000)
 
 /* If we find this in the root of the EFI system partition, unconditionally
- * load the Fastboot image */
+ * enter Fastboot mode */
 #define FASTBOOT_SENTINEL         L"\\force_fastboot"
 
 /* Path to Fastboot image */
@@ -132,16 +135,17 @@ static CHAR16 *boot_state_to_string(UINT8 boot_state)
 }
 #endif
 
-#ifndef INSECURE
+#ifdef USERDEBUG
 /* If a user-provided keystore is present it must be selected for later.
  * If no user-provided keystore is present then the original factory
  * keystore must be selected instead. Selection of a keystore is
  * independent of validation of that keystore. */
 static VOID select_keystore(VOID **keystore, UINTN *size)
 {
-        if (EFI_ERROR(get_efi_variable(&fastboot_guid, KEYSTORE_VAR,
-                                       size, keystore, NULL)) ||
-                        *size == 0) {
+        EFI_STATUS ret;
+
+        ret = get_user_keystore(keystore, size);
+        if (EFI_ERROR(ret)) {
                 debug(L"selected OEM keystore");
                 *keystore = oem_keystore;
                 *size = oem_keystore_size;
@@ -150,6 +154,7 @@ static VOID select_keystore(VOID **keystore, UINTN *size)
         }
 }
 #endif
+
 
 static enum boot_target check_fastboot_sentinel(VOID)
 {
@@ -176,7 +181,7 @@ static enum boot_target check_magic_key(VOID)
         /* Some systems require a short stall before we can be sure there
          * wasn't a keypress at boot. Read the EFI variable which determines
          * that time for this platform */
-        if (EFI_ERROR(get_efi_variable(&fastboot_guid, MAGIC_KEY_TIMEOUT_VAR,
+        if (EFI_ERROR(get_efi_variable(&loader_guid, MAGIC_KEY_TIMEOUT_VAR,
                                        &dsize, (void **)&data, NULL)) || !dsize) {
                 debug(L"Couldn't read timeout variable; assuming default");
         } else {
@@ -391,6 +396,13 @@ static enum boot_target check_command_line(VOID **address)
         for (pos = 0; pos < argc; pos++) {
                 debug(L"Argument %d: %s", pos, argv[pos]);
 
+#ifndef USERFASTBOOT
+                if (!StrCmp(argv[pos], L"-f")) {
+                        bt = FASTBOOT;
+                        continue;
+                }
+#endif
+
                 if (!StrCmp(argv[pos], L"-a")) {
                         pos++;
                         if (pos >= argc) {
@@ -398,8 +410,14 @@ static enum boot_target check_command_line(VOID **address)
                                 goto out;
                         }
 
+#ifdef USERFASTBOOT
                         *address = (VOID *)strtoul16(argv[pos], NULL, 0);
                         bt = MEMORY;
+#else
+                        /* For compatibility...just ignore the supplied address
+                         * and enter Fastboot mode */
+                        bt = FASTBOOT;
+#endif
                         continue;
                 }
 
@@ -509,6 +527,7 @@ static EFI_STATUS validate_bootimage(
 {
         CHAR16 target[BOOT_TARGET_SIZE];
         CHAR16 *expected;
+        CHAR16 *expected2 = NULL;
         EFI_STATUS ret;
 
         ret = verify_android_boot_image(bootimage, keystore,
@@ -528,13 +547,19 @@ static EFI_STATUS validate_bootimage(
                 expected = L"/recovery";
                 break;
         case ESP_BOOTIMAGE:
-                expected = L"/fastboot";
+                /* "live" bootable image */
+                expected = L"/boot";
+#ifdef USERFASTBOOT
+                /* Bootable Fastboot image */
+                expected2 = L"/fastboot";
+#endif
                 break;
         default:
                 expected = NULL;
         }
 
-        if (!expected || StrCmp(expected, target)) {
+        if ((!expected || StrCmp(expected, target)) &&
+                        (!expected2 || StrCmp(expected2, target))) {
                 debug(L"boot image has unexpected target name");
                 return EFI_ACCESS_DENIED;
         }
@@ -633,16 +658,18 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
         return ret;
 }
 
-static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state)
+
+static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state, BOOLEAN charger)
 {
         EFI_STATUS ret;
 
         /* per bootloaderequirements.pdf */
         if (boot_state != BOOT_STATE_GREEN)
                 android_clear_memory();
-
+        debug(L"chainloading boot image, boot state is %s",
+                        boot_state_to_string(boot_state));
         ret = android_image_start_buffer(g_parent_image, bootimage,
-                                         FALSE, NULL);
+                                         charger, NULL);
         if (EFI_ERROR(ret))
                 efi_perror(ret, "Couldn't load Boot image");
 
@@ -652,6 +679,66 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state)
 static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
                                 UINTN keystore_size, VOID *bootimage)
         __attribute__ ((noreturn));
+
+
+#ifdef USERFASTBOOT
+
+/* Enter Fastboot mode. If bootimage is NULL, load it from the file on the
+ * EFI system partition */
+static VOID enter_fastboot_mode(UINT8 boot_state, __attribute__((__unused__)) VOID *keystore,
+                                __attribute__((__unused__)) UINTN keystore_size, VOID *bootimage)
+{
+        /* Fastboot is conceptually part of the bootloader itself. That it
+         * happens to currently be an Android Boot Image, and not part of the
+         * kernelflinger EFI binary, is an implementation detail. Fastboot boot
+         * image is not independently replaceable by end user without also
+         * replacing the bootloader.  On an ARM device the bootloader/fastboot
+         * are a single binary.
+         *
+         * Entering Fastboot is ALWAYS verified by the OEM Keystore, regardless
+         * of the device's current boot state/selected keystore/etc. If it
+         * doesn't verify we unconditionally halt the system. */
+        EFI_STATUS ret;
+
+        set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
+                        &boot_state, FALSE, TRUE);
+
+        if (!bootimage) {
+                ret = android_image_load_file(g_disk_device, FASTBOOT_PATH,
+                                FALSE, &bootimage);
+                if (EFI_ERROR(ret)) {
+                        Print(L"Couldn't load Fastboot image\n");
+                        goto die;
+                }
+        }
+
+#ifdef USERDEBUG
+        debug(L"verify Fastboot boot image");
+        CHAR16 target[BOOT_TARGET_SIZE];
+        ret = verify_android_boot_image(bootimage, oem_keystore,
+                        oem_keystore_size, target);
+        if (EFI_ERROR(ret)) {
+                Print(L"Fastboot image not verified\n");
+                goto die;
+        }
+
+        if (StrCmp(target, L"/fastboot")) {
+                Print(L"This does not appear to be a Fastboot image\n");
+                goto die;
+        }
+#endif
+        debug(L"chainloading fastboot, boot state is %s",
+                        boot_state_to_string(boot_state));
+        load_image(bootimage, boot_state, FALSE);
+        Print(L"Couldn't chainload Fastboot image\n");
+die:
+        /* Allow plenty of time for the error to be visible before the
+         * screen goes blank */
+        pause(30);
+        halt_system();
+}
+
+#else
 
 
 /* Enter Fastboot mode. If fastboot_start() returns a valid pointer,
@@ -668,28 +755,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
 
-        /* No bootimage, try the ESP fastboot file.  */
-        if (!bootimage) {
-                ret = android_image_load_file(g_disk_device, FASTBOOT_PATH,
-                                              FALSE, &bootimage);
-
-                if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND)
-                        goto exit;
-        }
-
-        /* If we have a bootimage, validate it against the selected
-           keystore and load it.  */
-        if (bootimage) {
-                if (keystore
-                    && EFI_ERROR(validate_bootimage(ESP_BOOTIMAGE, bootimage,
-                                                    keystore, keystore_size)))
-                        goto exit;
-
-                load_image(bootimage, boot_state);
-        }
-
-        /* Otherwise, start the internal fastboot protocol
-           implementation.  */
         for (;;) {
                 efiimage = NULL;
                 bootimage = NULL;
@@ -746,7 +811,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
                 }
 
         start_image:
-                load_image(bootimage, boot_state);
+                load_image(bootimage, boot_state, FALSE);
         }
 
 exit:
@@ -755,6 +820,7 @@ exit:
         pause(30);
         halt_system();
 }
+#endif
 
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
@@ -805,7 +871,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
         debug(L"selected '%s'",  boot_target_to_string(boot_target));
 
-#ifndef INSECURE
+#ifdef USERDEBUG
         debug(L"checking device state");
 
         if (!is_efi_secure_boot_enabled()) {
@@ -920,14 +986,7 @@ fallback:
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                         &boot_state, FALSE, TRUE);
 
-        /* per bootloaderequirements.pdf */
-        if (boot_state != BOOT_STATE_GREEN)
-                android_clear_memory();
-
-        debug(L"chainloading boot image, boot state is %s",
-                        boot_state_to_string(boot_state));
-        return android_image_start_buffer(g_parent_image, bootimage,
-                        boot_target == CHARGER, NULL);
+        return load_image(bootimage, boot_state, boot_target == CHARGER);
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab
