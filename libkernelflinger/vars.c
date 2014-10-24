@@ -33,12 +33,14 @@
 #include <efi.h>
 #include <efiapi.h>
 
+#include "keystore.h"
 #include "vars.h"
 #include "ui.h"
 #include "lib.h"
 
 #define OFF_MODE_CHARGE_VAR	L"off-mode-charge"
 #define OEM_LOCK_VAR		L"OEMLock"
+#define KEYSTORE_VAR		L"KeyStore"
 
 #define OEM_LOCK_UNLOCKED	(1 << 0)
 #define OEM_LOCK_VERIFIED	(1 << 1)
@@ -118,9 +120,12 @@ enum device_state get_current_state()
 		if (EFI_ERROR(ret) || !dsize) {
 			error(L"Couldn't read %s, assuming locked", OEM_LOCK_VAR);
 			current_state = LOCKED;
+			goto exit;
+#ifndef USERFASTBOOT
 		} else if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
 			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK_VAR);
 			current_state = LOCKED;
+#endif
 		} else {
 			if (stored_state[0] & OEM_LOCK_UNLOCKED)
 				current_state = UNLOCKED;
@@ -131,6 +136,7 @@ enum device_state get_current_state()
 
 			debug(L"device state %d", current_state);
 		}
+		FreePool(stored_state);
 	}
 
 exit:
@@ -180,6 +186,47 @@ EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
 
 	memcpy(current_off_mode_charge, val, 2);
 	return EFI_SUCCESS;
+}
+
+EFI_STATUS get_user_keystore(VOID **keystorep, UINTN *sizep)
+{
+	UINT32 flags;
+	VOID *keystore;
+	UINTN size;
+	EFI_STATUS ret;
+
+	ret = get_efi_variable(&fastboot_guid, KEYSTORE_VAR,
+			       &size, &keystore, &flags);
+
+	if (EFI_ERROR(ret) || size == 0)
+		return EFI_NOT_FOUND;
+
+#ifndef USERFASTBOOT
+	if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
+		FreePool(keystore);
+		return EFI_NOT_FOUND;
+	}
+#endif
+	*sizep = size;
+	*keystorep = keystore;
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS set_user_keystore(VOID *data, UINTN size)
+{
+	if (size) {
+		struct keystore *ks = get_keystore(data, size);
+
+		if (!ks) {
+			error(L"keystore data is invalid");
+			return EFI_INVALID_PARAMETER;
+		}
+
+		free_keystore(ks);
+	}
+
+	return set_efi_variable(&fastboot_guid, KEYSTORE_VAR,
+			       size, data, TRUE, FALSE);
 }
 
 char *get_current_state_string()

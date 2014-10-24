@@ -33,6 +33,7 @@
 #include "fastboot.h"
 #include "fastboot_oem.h"
 #include "oemvars.h"
+#include "vars.h"
 
 enum vartype {
 	VAR_TYPE_UNKNOWN,
@@ -242,7 +243,7 @@ EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 	char *buf, *line, *eol, *var, *val, *p;
 	CHAR16 *varname;
 	UINTN vallen;
-	EFI_GUID curr_guid = fastboot_guid;
+	EFI_GUID curr_guid = loader_guid;
 	int lineno = 0;
 
 	debug(L"Parsing and setting values from oemvars file");
@@ -277,6 +278,10 @@ EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 
 		/* GUID line syntax */
 		if (parse_oemvar_guid_line(line, &curr_guid)) {
+			if (!memcmp(&curr_guid, &fastboot_guid, sizeof(curr_guid))) {
+				error(L"fastboot GUID is reserved for Kernelflinger use");
+				goto out;
+			}
 			debug(L"current guid set to %g", &curr_guid);
 			continue;
 		}

@@ -62,20 +62,33 @@ static void change_device_state(enum device_state new_state)
 		return;
 	}
 
-	if (!device_is_provisioning() && !fastboot_ui_confirm_for_state(new_state))
-		goto exit;
+	/* "Eng" builds skip all these security policies */
+#ifdef USERDEBUG
+	/* Data wipes and UI prompts are skipped if the device is in
+	 * provisioning mode to avoid unnecessary steps and user interaction
+	 * during provisioning */
+	if (!device_is_provisioning()) {
+		/* 'eng' or 'userdebug' bootloaders skip the prompts
+		 * to make CI automation easier */
+#ifdef USER
+		if (!fastboot_ui_confirm_for_state(new_state)) {
+			fastboot_fail("Refusing to change device state");
+			return;
+		}
+#endif
+		ui_print(L"Erasing userdata...");
+		ret = erase_by_label(L"data");
+		if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
+			fastboot_fail("Failed to wipe data.\n");
+			return;
+		}
 
-	ui_print(L"Erasing userdata...");
-	ret = erase_by_label(L"data");
-	if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
-		fastboot_fail("Failed to wipe data.\n");
-		return;
+		if (ret == EFI_NOT_FOUND)
+			ui_print(L"Not userdata partition to erase.");
+		else
+			ui_print(L"Erase done.");
 	}
-
-	if (ret == EFI_NOT_FOUND)
-		ui_print(L"Not userdata partition to erase.");
-	else
-		ui_print(L"Erase done.");
+#endif
 
 	ret = set_current_state(new_state);
 	if (EFI_ERROR(ret)) {
@@ -85,9 +98,7 @@ static void change_device_state(enum device_state new_state)
 
 	fastboot_oem_publish();
 	fastboot_ui_refresh();
-        clear_provisioning_mode();
-
-exit:
+	clear_provisioning_mode();
 	fastboot_okay("");
 }
 
@@ -150,7 +161,7 @@ static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
 	if (argc == 3)
 		value = argv[2];
 
-	ret = set_efi_variable(&fastboot_guid, varname,
+	ret = set_efi_variable(&loader_guid, varname,
 			       value ? strlen(value) + 1 : 0, value,
 			       TRUE, FALSE);
 	if (EFI_ERROR(ret))

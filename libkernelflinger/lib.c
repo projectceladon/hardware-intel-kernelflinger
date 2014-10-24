@@ -185,6 +185,7 @@ EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte)
 EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 UINTN size, VOID *data, BOOLEAN nonvol, BOOLEAN runtime)
 {
+        EFI_STATUS ret;
         UINT32 flags = EFI_VARIABLE_BOOTSERVICE_ACCESS;
 
         if (nonvol)
@@ -192,8 +193,22 @@ EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
         if (runtime)
                 flags |= EFI_VARIABLE_RUNTIME_ACCESS;
 
-        return uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, flags,
+        /* Storage attributes are only applied to a variable when creating the
+         * variable. If a preexisting variable is rewritten with different
+         * attributes, the result is indeterminate and may vary between
+         * implementations. The correct method of changing the attributes of a
+         * variable is to delete the variable and recreate it with different
+         * attributes. */
+        ret = uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, 0, 0, 0);
+        if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
+                efi_perror(ret, L"Couldn't clear EFI variable");
+                return ret;
+        }
+
+        if (size && data)
+                return uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, flags,
                         size, data);
+        return EFI_SUCCESS;
 }
 
 
