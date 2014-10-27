@@ -593,10 +593,10 @@ static EFI_STATUS load_boot_image(
 
         debug(L"boot image loaded");
         if (keystore)
-                ret = validate_bootimage(boot_target, bootimage, keystore, keystore_size);
+                ret = validate_bootimage(boot_target, *bootimage, keystore, keystore_size);
 
         if (EFI_ERROR(ret))
-                FreePool(bootimage);
+                FreePool(*bootimage);
 
         return ret;
 }
