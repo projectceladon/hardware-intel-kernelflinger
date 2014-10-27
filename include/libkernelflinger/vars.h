@@ -78,9 +78,9 @@ EFI_STATUS set_off_mode_charge(BOOLEAN enabled);
 
 enum device_state {
 	UNKNOWN_STATE = -1,
-	UNLOCKED,
-	LOCKED,
-	VERIFIED
+	LOCKED = 0,
+	VERIFIED = 1,
+	UNLOCKED = 2
 };
 char *get_current_state_string(void);
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color();

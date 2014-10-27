@@ -40,6 +40,9 @@
 #define OFF_MODE_CHARGE_VAR	L"off-mode-charge"
 #define OEM_LOCK_VAR		L"OEMLock"
 
+#define OEM_LOCK_UNLOCKED	(1 << 0)
+#define OEM_LOCK_VERIFIED	(1 << 1)
+
 const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
 	{0x9a, 0x99, 0xde, 0xbe, 0xb4, 0x31, 0xfc, 0xc1} };
 /* Gummiboot's GUID, we use some of the same variables */
@@ -95,7 +98,7 @@ BOOLEAN get_current_off_mode_charge(void)
 
 enum device_state get_current_state()
 {
-	UINT32 *stored_state;
+	UINT8 *stored_state;
 	UINTN dsize;
 	EFI_STATUS ret;
 	UINT32 flags;
@@ -105,6 +108,7 @@ enum device_state get_current_state()
 				       &dsize, (void **)&stored_state, &flags);
 		/* If the variable does not exist, assume unlocked. */
 		if (ret == EFI_NOT_FOUND) {
+			debug(L"OEMLock not set, device is in provisioning mode");
 			provisioning_mode = TRUE;
 			current_state = UNLOCKED;
 			goto exit;
@@ -117,8 +121,16 @@ enum device_state get_current_state()
 		} else if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
 			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK_VAR);
 			current_state = LOCKED;
-		} else
-			current_state = *stored_state;
+		} else {
+			if (stored_state[0] & OEM_LOCK_UNLOCKED)
+				current_state = UNLOCKED;
+			else if (stored_state[0] & OEM_LOCK_VERIFIED)
+				current_state = VERIFIED;
+			else
+				current_state = LOCKED;
+
+			debug(L"device state %d", current_state);
+		}
 	}
 
 exit:
@@ -127,7 +139,22 @@ exit:
 
 EFI_STATUS set_current_state(enum device_state state)
 {
-	UINT32 stored_state = state;
+	UINT8 stored_state;
+
+	switch (state) {
+	case LOCKED:
+		stored_state = 0;
+		break;
+	case VERIFIED:
+		stored_state = OEM_LOCK_VERIFIED;
+		break;
+	case UNLOCKED:
+		stored_state = OEM_LOCK_UNLOCKED;
+		break;
+	default:
+		return EFI_INVALID_PARAMETER;
+	}
+
 	EFI_STATUS ret = set_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
 					  sizeof(stored_state), &stored_state,
 					  TRUE, FALSE);
@@ -136,6 +163,7 @@ EFI_STATUS set_current_state(enum device_state state)
 		return ret;
 	}
 
+	debug(L"device state is now %d", state);
 	current_state = state;
 	return EFI_SUCCESS;
 }
