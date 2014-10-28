@@ -5,6 +5,7 @@
  * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
  *          Jeremy Compostella <jeremy.compostella@intel.com>
  *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ *          Andrew Boie <andrew.p.boie@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,6 +41,7 @@
 #include "hashes.h"
 #include "fastboot.h"
 #include "fastboot_ui.h"
+#include "gpt.h"
 
 #include "fastboot_oem.h"
 
@@ -111,7 +113,43 @@ static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
 static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
 			   __attribute__((__unused__)) CHAR8 **argv)
 {
-	change_device_state(UNLOCKED);
+	struct gpt_partition_interface gparti;
+	EFI_STATUS ret;
+	UINT64 offset;
+	UINT8 unlock_allowed;
+
+	/* Enforce if we're not in provisioning mode and the persistent
+	 * partition exists */
+	if (!device_is_provisioning() &&
+	    !EFI_ERROR(gpt_get_partition_by_label(L"persistent", &gparti))) {
+
+		/* We need to check the last byte of the partition. The gparti
+		 * .dio object is a handle to the beginning of the disk */
+		offset = ((gparti.part.ending_lba + 1)
+			  * gparti.bio->Media->BlockSize) - 1;
+		ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
+					gparti.bio->Media->MediaId, offset, 1,
+					&unlock_allowed);
+		if (EFI_ERROR(ret)) {
+			/* Pathological if this fails, GPT screwed up? */
+			efi_perror(ret, "Couldn't read persistent partition");
+			unlock_allowed = 0;
+		}
+	} else {
+		unlock_allowed = 1;
+	}
+
+	if (unlock_allowed == 0) {
+#ifdef USER
+		fastboot_fail("Unlocking device not allowed");
+#else
+		fastboot_info("Unlock protection is set");
+		fastboot_info("Unlocking anyway since this is not a User build");
+		change_device_state(UNLOCKED);
+#endif
+	} else {
+		change_device_state(UNLOCKED);
+	}
 }
 
 static void cmd_oem_verified(__attribute__((__unused__)) INTN argc,
