@@ -395,6 +395,41 @@ static BOOLEAN is_reset_watchdog(void)
 }
 
 
+static CHAR16 *get_reboot_reason(void)
+{
+        CHAR16 *bootreason, *pos;
+
+        if (is_reset_watchdog()) {
+                bootreason = StrDuplicate(L"watchdog");
+                goto done;
+        }
+
+        bootreason = get_efi_variable_str(&loader_guid,
+                                          L"LoaderEntryRebootReason");
+        if (!bootreason) {
+                bootreason = StrDuplicate(L"unknown");
+                goto done;
+        }
+
+        pos = bootreason;
+        while (*pos) {
+                /* Only allow alphanumeric characters */
+                if (!((*pos >= L'0' && *pos <= L'9') ||
+                            (*pos >= L'a' && *pos <= L'z') ||
+                            (*pos >= L'A' && *pos <= L'Z'))) {
+                        FreePool(bootreason);
+                        bootreason = StrDuplicate(L"unknown");
+                        break;
+                }
+                pos++;
+        }
+done:
+        set_efi_variable(&loader_guid, L"LoaderEntryRebootReason", 0, NULL,
+                         TRUE, TRUE);
+        return bootreason;
+}
+
+
 static EFI_STATUS prepend_command_line(CHAR16 **cmdline, CHAR16 *fmt, ...)
 {
         CHAR16 *old;
@@ -476,15 +511,7 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 
-        if (is_reset_watchdog()) {
-                bootreason = StrDuplicate(L"watchdog");
-        } else {
-                bootreason = get_efi_variable_str(&loader_guid, L"LoaderEntryRebootReason");
-                if (!bootreason)
-                        bootreason = StrDuplicate(L"unknown");
-        }
-        set_efi_variable(&loader_guid, L"LoaderEntryRebootReason", 0, NULL, TRUE, TRUE);
-
+        bootreason = get_reboot_reason();
         if (!bootreason) {
                 ret = EFI_OUT_OF_RESOURCES;
                 goto out;
