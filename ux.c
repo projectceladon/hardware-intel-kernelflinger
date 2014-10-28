@@ -55,17 +55,19 @@ static const ui_textline_t red_state[] = {
 };
 
 static const ui_textline_t bad_recovery[] = {
-	{ &COLOR_YELLOW,	"FASTBOOT",					TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",				FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_LIGHTRED,	"POWER OFF",					TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",			FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_LIGHTGRAY,	"Your device is unable to start",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"because the Recovery Console image has",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"failed to verify or is corrupted.",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"",						FALSE },
-	{ &COLOR_LIGHTGRAY,	"You may repair your device with Fastboot.",	FALSE },
+	{ &COLOR_YELLOW,	"FASTBOOT",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
+	{ &COLOR_WHITE,		"",					FALSE },
+	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },
+	{ &COLOR_WHITE,		"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"Your device is unable to start",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"because the Recovery Console",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"image has failed to verify or is",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"corrupted.",				FALSE },
+	{ &COLOR_LIGHTGRAY, 	"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"You may repair your device with",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"Fastboot.",				FALSE },
 	{ NULL, NULL, FALSE }
 };
 
