@@ -790,7 +790,7 @@ EFI_STATUS android_image_load_file(
         ret = uefi_call_wrapper(BS->HandleProtocol, 3, device,
                         &SimpleFileSystemProtocol, (void **)&drive);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "HandleProtocol");
+                efi_perror(ret, "HandleProtocol (SimpleFileSystemProtocol)");
                 return ret;
         }
         ret = uefi_call_wrapper(drive->OpenVolume, 2, drive, &root);
