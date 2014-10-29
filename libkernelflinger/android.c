@@ -394,7 +394,7 @@ static CHAR16 *get_reboot_reason(void)
                 /* Only allow alphanumeric characters */
                 if (!((*pos >= L'0' && *pos <= L'9') ||
                             (*pos >= L'a' && *pos <= L'z') ||
-                            (*pos >= L'A' && *pos <= L'Z'))) {
+                            *pos == L'_')) {
                         FreePool(bootreason);
                         bootreason = StrDuplicate(L"unknown");
                         break;
