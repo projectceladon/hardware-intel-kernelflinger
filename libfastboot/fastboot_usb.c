@@ -79,8 +79,8 @@ typedef enum {
 
 /* String descriptor Table */
 #define LANG_EN_US		0x0409
-#define STR_MANUFACTURER	L"Intel(R)Corporation"
-#define STR_PRODUCT		L"Intel Fastboot Interface"
+#define STR_MANUFACTURER	L"Intel Corporation"
+#define STR_PRODUCT		L"Intel Product"
 #define STR_SERIAL		L"INT123456"
 #define STR_CONFIGURATION	L"USB-Update"
 #define STR_INTERFACE		L"Fastboot"
@@ -236,35 +236,65 @@ EFIAPI EFI_STATUS data_handler(EFI_USB_DEVICE_XFER_INFO *XferInfo)
 	return EFI_SUCCESS;
 }
 
+static void fbSetStringTableLine(UINTN line, char *string)
+{
+	UINTN length;
+	CHAR16 *str;
+
+	str = stra_to_str((CHAR8 *)string);
+	length = StrLen(str);
+
+	if (length >= sizeof(string_table[line].LangID)) {
+		error(L"String number from SMBIOS table is too long.");
+		goto exit;
+	}
+
+	memcpy(string_table[line].LangID, str, length * sizeof(CHAR16));
+
+	string_table[line].LangID[length] = 0;
+	string_table[line].Length = (length + 1) * sizeof(CHAR16);
+
+ exit:
+	FreePool(str);
+}
+
+static void fbSetManufacturer(void)
+{
+	char *manufacturer;
+
+	manufacturer = SMBIOS_GET_STRING(2, Manufacturer);
+	if (manufacturer == SMBIOS_UNDEFINED)
+		return;
+
+	fbSetStringTableLine(1, manufacturer);
+}
+
+static void fbSetProduct(void)
+{
+	char *product;
+
+	product = SMBIOS_GET_STRING(2, ProductName);
+	if (product == SMBIOS_UNDEFINED)
+		return;
+
+	fbSetStringTableLine(2, product);
+}
+
 static void fbSetSerialNumber(void)
 {
-	CHAR16 *str;
-	UINTN length;
 	char *serial;
 
 	serial = SMBIOS_GET_STRING(1, SerialNumber);
 	if (serial == SMBIOS_UNDEFINED)
 		return;
 
-	str = stra_to_str((CHAR8 *)serial);
-	length = StrLen(str);
-
-	if (length >= sizeof(string_table[3].LangID)) {
-		error(L"Serial number from SMBIOS table is too long.");
-		goto exit;
-	}
-
-	memcpy(string_table[3].LangID, str, length * sizeof(CHAR16));
-
-	string_table[3].LangID[length] = 0;
-	string_table[3].Length = (length + 1) * sizeof(CHAR16);
-
- exit:
-	FreePool(str);
+	fbSetStringTableLine(3, serial);
 }
 
 static void fbInitDriverObjs(void)
 {
+	fbSetManufacturer();
+	fbSetProduct();
 	fbSetSerialNumber();
 
 	/* Device driver objects */
