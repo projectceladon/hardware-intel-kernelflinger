@@ -77,12 +77,11 @@ static CHAR8 current_off_mode_charge[2];
 BOOLEAN get_current_off_mode_charge(void)
 {
 	UINTN size;
-	CHAR8 *data = NULL;
+	CHAR8 *data;
 
 	if (current_off_mode_charge[0] == '\0') {
-		get_efi_variable((EFI_GUID *)&fastboot_guid, OFF_MODE_CHARGE_VAR,
-				 &size, (VOID **)&data, NULL);
-		if (!data)
+		if (EFI_ERROR(get_efi_variable(&fastboot_guid, OFF_MODE_CHARGE_VAR,
+					       &size, (VOID **)&data, NULL)))
 			return FALSE;
 
 		if (size != sizeof(current_off_mode_charge)
