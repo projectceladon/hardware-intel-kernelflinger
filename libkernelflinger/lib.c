@@ -34,6 +34,8 @@
 #include <efilib.h>
 
 #include "lib.h"
+#include "vars.h"
+
 
 CHAR16 *stra_to_str(CHAR8 *stra)
 {
@@ -408,15 +410,27 @@ VOID pause(UINTN seconds)
 VOID halt_system(VOID)
 {
         uefi_call_wrapper(RT->ResetSystem, 4, EfiResetShutdown, EFI_SUCCESS,
-                        0, NULL);
+                          0, NULL);
         while (1) { }
 }
 
 
-VOID reboot(VOID)
+VOID reboot(CHAR16 *target)
 {
+        EFI_STATUS ret;
+
+        if (target) {
+                ret = set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
+                                           TRUE, TRUE, target);
+                if (EFI_ERROR(ret)) {
+                        error(L"Unable to set LoaderEntryOneShot");
+                        pause(30);
+                        halt_system();
+                }
+        }
+
         uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS,
-                        0, NULL);
+                          0, NULL);
         while (1) { }
 }
 
