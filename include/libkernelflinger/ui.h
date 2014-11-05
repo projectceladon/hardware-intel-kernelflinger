@@ -121,7 +121,10 @@ EFI_STATUS ui_draw_blt(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt, UINTN x, UINTN y,
 void ui_print(CHAR16 *fmt, ...);
 void ui_error(CHAR16 *fmt, ...);
 void ui_print_clear(void);
+
 ui_events_t ui_read_input(void);
+BOOLEAN ui_enforce_key_held(UINT32 microseconds);
+void ui_wait_for_key_release(void);
 ui_events_t ui_wait_for_input(UINTN timeout_secs);
 BOOLEAN ui_input_to_bool(UINTN timeout_secs);
 

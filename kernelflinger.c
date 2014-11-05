@@ -61,11 +61,6 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 /* Interval in ms to check on startup for initial press of magic key */
 #define DETECT_KEY_STALL_TIME_MS    1
 
-/* Time between calls to ReadKeyStroke to check if it is being actively held
- * Smaller stall values seem to result in false reporting of no key pressed
- * on several devices */
-#define HOLD_KEY_STALL_TIME         (500 * 1000)
-
 /* How long magic key should be held to force Fastboot mode */
 #define FASTBOOT_HOLD_DELAY         (4 * 1000 * 1000)
 
@@ -170,7 +165,9 @@ static enum boot_target check_magic_key(VOID)
         int i;
         EFI_STATUS ret = EFI_NOT_READY;
         EFI_INPUT_KEY key;
+#ifdef USERFASTBOOT
         enum boot_target bt;
+#endif
         UINT8 *data;
         UINTN dsize;
         int wait_ms = EFI_RESET_WAIT_MS;
@@ -212,56 +209,24 @@ static enum boot_target check_magic_key(VOID)
         if (EFI_ERROR(ret))
                 return NORMAL_BOOT;
 
+#ifdef USERFASTBOOT
         debug(L"ReadKeyStroke: (%d tries) %d %d", i, key.ScanCode, key.UnicodeChar);
 
         Print(L"Continue holding key for %d seconds to force Fastboot mode.\n",
                         FASTBOOT_HOLD_DELAY / 1000000);
-        Print(L"Release key now to load Recovery Console.");
+        Print(L"Release key now to load Recovery Console...");
 
-        for (i = 0; i < (FASTBOOT_HOLD_DELAY / HOLD_KEY_STALL_TIME); i++) {
-                uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
-
-                ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
-                                ST->ConIn, &key);
-                if (ret != EFI_SUCCESS) {
-                        debug(L"err=%r", ret);
-                        break;
-                }
-                Print(L".");
-
-                /* flush any stacked up key events in the queue before
-                 * we sleep again */
-                while (uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
-                                ST->ConIn, &key) == EFI_SUCCESS) {
-                }
-        }
-
-        if (ret == EFI_SUCCESS) {
+        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY)) {
                 bt = FASTBOOT;
                 Print(L"FASTBOOT\n");
         } else {
                 bt = RECOVERY;
                 Print(L"RECOVERY\n");
         }
-
-        /* In case we need to prompt the user about something, don't continue
-         * until the key is released */
-        while (1) {
-                uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
-
-                ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
-                                ST->ConIn, &key);
-                if (ret != EFI_SUCCESS) {
-                        debug(L"err=%r", ret);
-                        break;
-                }
-
-                /* flush */
-                while (uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
-                                ST->ConIn, &key) == EFI_SUCCESS) {
-                }
-        }
         return bt;
+#else
+        return FASTBOOT;
+#endif
 }
 
 
