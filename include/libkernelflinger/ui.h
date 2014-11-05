@@ -110,10 +110,10 @@ typedef enum ui_events {
 	EV_DOWN
 } ui_events_t;
 
-EFI_STATUS ui_init(UINTN *width, UINTN *height, BOOLEAN display_splash);
+EFI_STATUS ui_init(UINTN *width, UINTN *height);
 BOOLEAN ui_is_ready();
 void ui_free(void);
-EFI_STATUS ui_default_screen(void);
+EFI_STATUS ui_display_vendor_splash(VOID);
 EFI_STATUS ui_clear_area(UINTN x, UINTN y, UINTN width, UINTN height);
 EFI_STATUS ui_clear_screen();
 EFI_STATUS ui_draw_blt(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt, UINTN x, UINTN y,
