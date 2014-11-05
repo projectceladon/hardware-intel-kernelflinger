@@ -214,7 +214,6 @@ static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
 static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
 {
 	CHAR16 *target;
-	EFI_STATUS ret;
 
 	if (argc != 2) {
 		fastboot_fail("Invalid parameter");
@@ -227,19 +226,9 @@ static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
 		return;
 	}
 
-	ret = set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
-				   TRUE, TRUE, target);
-	if (EFI_ERROR(ret)) {
-		fastboot_fail("unable to set %a reboot target",
-			      target);
-		FreePool(target);
-		return;
-	}
-
 	ui_print(L"Rebooting to %s ...", target);
-	FreePool(target);
 	fastboot_okay("");
-	reboot();
+	reboot(target);
 }
 
 static void cmd_oem_garbage_disk(__attribute__((__unused__)) INTN argc,

@@ -142,8 +142,6 @@ VOID halt_system(VOID) __attribute__ ((noreturn));
 
 VOID pause(UINTN seconds);
 
-VOID reboot(VOID) __attribute__ ((noreturn));
-
-
+VOID reboot(CHAR16 *target) __attribute__ ((noreturn));
 
 #endif

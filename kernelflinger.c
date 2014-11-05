@@ -791,22 +791,22 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 
                 switch (target) {
                 case FASTBOOT:
-                        set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
-                                             TRUE, TRUE, L"bootloader");
+                        reboot(L"bootloader");
                         break;
                 case RECOVERY:
-                        set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
-                                             TRUE, TRUE, L"recovery");
+                        reboot(L"recovery");
                         break;
                 case NORMAL_BOOT:
+                        /* fall through */
                 case REBOOT:
+                        reboot(NULL);
                         break;
                 case POWER_OFF:
                         halt_system();
+                        break;
                 default:
                         continue;
                 }
-                reboot();
         }
 
         /* Allow plenty of time for the error to be visible before the
@@ -908,7 +908,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         pause(3);
                 }
                 FreePool(target_path);
-                reboot();
+                reboot(NULL);
         }
 
         /* Fastboot is always validated by the OEM keystore baked into
