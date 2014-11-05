@@ -215,9 +215,22 @@ static EFI_STATUS clear_text() {
 			     swidth, sheight - (sheight / 3) - margin);
 }
 
+static BOOLEAN ux_display_splash() {
+	UINT8 value;
+	EFI_STATUS ret;
+
+	ret = get_efi_variable_byte(&loader_guid, L"UIDisplaySplash", &value);
+	if (EFI_ERROR(ret) || value != 1)
+		return FALSE;
+
+	return TRUE;
+}
+
 BOOLEAN ux_prompt_user(const ui_textline_t *text1,
 		       const ui_textline_t *text2) {
 	BOOLEAN answer;
+
+	ui_init(&swidth, &sheight);
 
 	display_text(text1, text2);
 	answer = ui_input_to_bool(TIMEOUT_SECS);
@@ -255,22 +268,15 @@ BOOLEAN ux_prompt_user_device_unlocked(VOID) {
 	return ux_prompt_user(device_altered_unlocked, NULL);
 }
 
-BOOLEAN ux_display_splash() {
-	UINT8 value;
-	EFI_STATUS ret;
-
-	ret = get_efi_variable_byte(&loader_guid, L"UIDisplaySplash", &value);
-	if (EFI_ERROR(ret) || value != 1)
-		return FALSE;
-
-	return TRUE;
-}
-
-EFI_STATUS ux_init(VOID) {
+VOID ux_init(VOID) {
 	uefi_call_wrapper(ST->ConOut->Reset, 2, ST->ConOut, FALSE);
         uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
 			  EFI_WHITE | EFI_BACKGROUND_BLACK);
 	uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, FALSE);
 
-	return ui_init(&swidth, &sheight, ux_display_splash());
+	if (ux_display_splash()) {
+		ui_init(&swidth, &sheight);
+		ui_display_vendor_splash();
+	}
 }
+

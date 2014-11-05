@@ -66,23 +66,22 @@ static UINTN default_textarea_x;
 static UINTN default_textarea_y;
 
 static const char *VENDOR_IMG_NAME = "splash_intel";
-static BOOLEAN ui_display_splash = FALSE;
 
-EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p, BOOLEAN display_splash)
+EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 {
 	UINT32 mode;
 	UINTN info_size;
 	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info;
 	EFI_STATUS ret;
 	BOOLEAN last_succeed = FALSE;
+	UINTN x, y, margin;
+	ui_font_t *font;
 
 	if (initialized) {
 		*width_p = graphic.width;
 		*height_p = graphic.height;
 		return EFI_SUCCESS;
 	}
-
-	ui_display_splash = display_splash;
 
 	ret = LibLocateProtocol(&GraphicsOutputProtocol, (VOID **)&graphic.output);
 	if (EFI_ERROR(ret)) {
@@ -114,28 +113,7 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p, BOOLEAN display_splash)
 		graphic.mode = mode;
 	}
 
-	if (!last_succeed)
-		return EFI_UNSUPPORTED;
-
-	ret = ui_default_screen();
-	if (EFI_ERROR(ret))
-		return ret;
-
-	*width_p = graphic.width;
-	*height_p = graphic.height;
-
-	initialized = TRUE;
-
-	return EFI_SUCCESS;
-}
-
-EFI_STATUS ui_default_screen(void)
-{
-	UINTN width, height, x, y, margin;
-	ui_image_t *vendor;
-	ui_font_t *font;
-
-	if (!graphic.output)
+	if (!last_succeed || !graphic.output)
 		return EFI_UNSUPPORTED;
 
 	/* Initialize log area */
@@ -157,8 +135,18 @@ EFI_STATUS ui_default_screen(void)
 		default_textarea_y = graphic.height - margin;
 	}
 
-	if (!ui_display_splash)
-		return EFI_SUCCESS;
+	*width_p = graphic.width;
+	*height_p = graphic.height;
+
+	initialized = TRUE;
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS ui_display_vendor_splash(VOID)
+{
+	UINTN width, height, x, y, margin;
+	ui_image_t *vendor;
 
 	ui_clear_screen();
 
