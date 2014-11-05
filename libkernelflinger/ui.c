@@ -39,6 +39,11 @@
 
 #define NOT_READY_USECS	(100 * 1000)
 
+/* Time between calls to ReadKeyStroke to check if it is being actively held
+ * Smaller stall values seem to result in false reporting of no key pressed
+ * on several devices */
+#define HOLD_KEY_STALL_TIME         (500 * 1000)
+
 extern EFI_GUID GraphicsOutputProtocol;
 
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_BLACK	= { 0, 0, 0, 0 };
@@ -330,15 +335,56 @@ ui_events_t ui_read_input(void)
 	return EV_NONE;
 }
 
+static EFI_STATUS test_key(VOID)
+{
+	EFI_INPUT_KEY key;
+	EFI_STATUS ret = EFI_SUCCESS;
+
+	uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
+
+	ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
+					ST->ConIn, &key);
+	if (ret != EFI_SUCCESS) {
+		debug(L"err=%r", ret);
+		return ret;
+	}
+
+	/* flush any stacked up key events in the queue before
+	 * we sleep again */
+	while (uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
+				 ST->ConIn, &key) == EFI_SUCCESS) {
+		/* spin */
+	}
+
+	return ret;
+}
+
+BOOLEAN ui_enforce_key_held(UINT32 microseconds)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	UINT32 i;
+
+	for (i = 0; i < (microseconds / HOLD_KEY_STALL_TIME); i++) {
+		ret = test_key();
+		if (ret != EFI_SUCCESS) {
+			break;
+		}
+	}
+	return ret == EFI_SUCCESS;
+}
+
+void ui_wait_for_key_release(void)
+{
+	while (test_key() == EFI_SUCCESS) { }
+}
+
 ui_events_t ui_wait_for_input(UINTN timeout_secs)
 {
 	UINT64 timeout_left;
 
 	timeout_left = timeout_secs * 1000000;
 
-	uefi_call_wrapper(BS->Stall, 1, 500 * 1000);
-	uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
-
+	ui_wait_for_key_release();
 	do {
 		ui_events_t event = ui_read_input();
 		if (event != EV_NONE)
