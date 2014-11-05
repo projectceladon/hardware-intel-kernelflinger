@@ -243,7 +243,7 @@ static void cmd_oem_garbage_disk(__attribute__((__unused__)) INTN argc,
 }
 
 static void cmd_oem_gethashes(__attribute__((__unused__)) INTN argc,
-			__attribute__((__unused__)) CHAR8 **argv)
+			      __attribute__((__unused__)) CHAR8 **argv)
 {
 	get_boot_image_hash(L"boot");
 	get_boot_image_hash(L"recovery");
@@ -251,6 +251,19 @@ static void cmd_oem_gethashes(__attribute__((__unused__)) INTN argc,
 	get_ext4_hash(L"system");
 	fastboot_okay("");
 }
+
+#ifndef USER
+static void cmd_oem_reprovision(__attribute__((__unused__)) INTN argc,
+			        __attribute__((__unused__)) CHAR8 **argv)
+{
+	if (EFI_ERROR(reprovision_state_vars())) {
+		fastboot_fail("Unable to clear provisioning variables");
+		return;
+	}
+	fastboot_okay("");
+	reboot(L"dnx");
+}
+#endif
 
 void fastboot_oem_init(void)
 {
@@ -268,4 +281,7 @@ void fastboot_oem_init(void)
 	fastboot_oem_register("garbage-disk", cmd_oem_garbage_disk, TRUE);
 	fastboot_oem_register("reboot", cmd_oem_reboot, FALSE);
 	fastboot_oem_register("get-hashes", cmd_oem_gethashes, FALSE);
+#ifndef USER
+	fastboot_oem_register("reprovision", cmd_oem_reprovision, FALSE);
+#endif
 }

@@ -173,6 +173,14 @@ EFI_STATUS set_current_state(enum device_state state)
 	return EFI_SUCCESS;
 }
 
+#ifndef USER
+EFI_STATUS reprovision_state_vars(VOID)
+{
+	return set_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
+				0, 0, TRUE, FALSE);
+}
+#endif
+
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
 {
 	CHAR8 *val = (CHAR8 *)(enabled ? "1" : "0");
