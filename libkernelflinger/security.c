@@ -44,6 +44,10 @@
 #include "android.h"
 #include "keystore.h"
 #include "lib.h"
+#include "vars.h"
+
+#define SETUP_MODE_VAR	        L"SetupMode"
+#define SECURE_BOOT_VAR         L"SecureBoot"
 
 static VOID pr_error_openssl(void)
 {
@@ -54,7 +58,7 @@ static VOID pr_error_openssl(void)
 		 * all the BIO snprintf() functions are stubbed out due to the
 		 * lack of most 8-bit string functions in gnu-efi. Look up the
 		 * codes using 'openssl errstr' in a shell */
-		debug("openssl error code %08X", code);
+		debug(L"openssl error code %08X", code);
 }
 
 
@@ -254,7 +258,7 @@ static EFI_STATUS check_bootimage(CHAR8 *bootimage, UINTN imgsize,
                 int rsa_ret;
 
                 if (sig->id.nid != kb->info.id.nid) {
-                        debug("algorithm mismatch (signature %d, keystore %d)",
+                        debug(L"algorithm mismatch (signature %d, keystore %d)",
                                         sig->id.nid, kb->info.id.nid);
                         kb = kb->next;
                         continue;
@@ -318,33 +322,33 @@ EFI_STATUS verify_android_boot_image(IN VOID *bootimage, IN VOID *keystore,
                 goto out;
         }
 
-        debug("decoding keystore data");
+        debug(L"decoding keystore data");
         ks = get_keystore(keystore, keystore_size);
         if (!ks) {
-                debug("bad keystore");
+                debug(L"bad keystore");
                 ret = EFI_INVALID_PARAMETER;
                 goto out;
         }
 
-        debug("get boot image header");
+        debug(L"get boot image header");
         hdr = get_bootimage_header(bootimage);
         if (!hdr) {
-                debug("bad boot image data");
+                debug(L"bad boot image data");
                 ret = EFI_INVALID_PARAMETER;
                 goto out;
         }
 
-        debug("decoding boot image signature");
+        debug(L"decoding boot image signature");
         imgsize = bootimage_size(hdr);
         signature_data = (UINT8*)bootimage + imgsize;
         sig = get_boot_signature(signature_data, BOOT_SIGNATURE_MAX_SIZE);
         if (!sig) {
-                debug("boot image signature invalid or missing");
+                debug(L"boot image signature invalid or missing");
                 ret = EFI_ACCESS_DENIED;
                 goto out;
         }
 
-        debug("verifying boot image");
+        debug(L"verifying boot image");
         ret = check_bootimage(bootimage, imgsize, sig, ks);
 
         target_tmp = stra_to_str((CHAR8*)sig->attributes.target);
@@ -369,27 +373,53 @@ EFI_STATUS verify_android_keystore(IN VOID *keystore, IN UINTN keystore_size,
                 goto out;
 
         memset(keystore_hash, 0xFF, KEYSTORE_HASH_SIZE);
-        debug("decoding keystore data");
+        debug(L"decoding keystore data");
         ks = get_keystore(keystore, keystore_size);
         if (!ks)
                 goto out;
 
-        debug("hashing keystore data");
+        debug(L"hashing keystore data");
         ret = hash_keystore(ks, (VOID **)&hash, &hash_sz);
         if (EFI_ERROR(ret))
                 goto out;
 
-        debug("keystore hash is %02x%02x-%02x%02x-%02x%02x",
+        debug(L"keystore hash is %02x%02x-%02x%02x-%02x%02x",
                         hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
 
         memcpy(keystore_hash, hash, KEYSTORE_HASH_SIZE);
 
-        debug("verifying keystore data");
+        debug(L"verifying keystore data");
         ret = check_keystore(hash, hash_sz, ks, key, key_size);
 out:
         free(hash);
         free_keystore(ks);
         return ret;
+}
+
+/* UEFI specification 2.4. Section 3.3
+   The platform firmware is operating in secure boot mode if the value
+   of the SetupMode variable is 0 and the SecureBoot variable is set
+   to 1. A platform cannot operate in secure boot mode if the
+   SetupMode variable is set to 1. The SecureBoot variable should be
+   treated as read- only. */
+BOOLEAN is_efi_secure_boot_enabled(VOID)
+{
+        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+        EFI_STATUS ret;
+        UINT8 value;
+
+        ret = get_efi_variable_byte(&global_guid, SETUP_MODE_VAR, &value);
+        if (EFI_ERROR(ret))
+                return FALSE;
+
+        if (value != 0)
+                return FALSE;
+
+        ret = get_efi_variable_byte(&global_guid, SECURE_BOOT_VAR, &value);
+        if (EFI_ERROR(ret))
+                return FALSE;
+
+        return value != 0;
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

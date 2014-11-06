@@ -96,6 +96,7 @@ struct boot_signature {
 	struct auth_attributes attributes;
 	void *signature;
 	long signature_len;
+	long total_size;
 };
 
 struct keystore {

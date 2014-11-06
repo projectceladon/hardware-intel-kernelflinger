@@ -185,6 +185,7 @@ static int decode_boot_signature(const unsigned char **datap, long *sizep,
 		return -1;
 	}
 
+	bs->total_size = (*datap - orig);
 	*sizep = *sizep - (*datap - orig);
 	return 0;
 }

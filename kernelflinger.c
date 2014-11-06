@@ -35,6 +35,10 @@
 #include <efiapi.h>
 #include <efilib.h>
 
+#ifndef USERFASTBOOT
+#include <fastboot.h>
+#endif
+
 #include "vars.h"
 #include "lib.h"
 #include "security.h"
@@ -43,30 +47,16 @@
 #include "options.h"
 #include "power.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-00.06"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.00"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
-
-/* For reading EFI globals */
-static const EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
-#define SECURE_BOOT_VAR         L"SecureBoot"
-
-enum boot_target {
-        NORMAL_BOOT,
-        RECOVERY,
-        FASTBOOT,
-        ESP_BOOTIMAGE,
-        ESP_EFI_BINARY,
-        MEMORY,
-        CHARGER
-};
 
 /* Default max wait time for console reset in units of milliseconds if no EFI
  * variable is set for this platform.
  * You want this value as small as possible as this is added to
  * the boot time for EVERY boot */
-#define EFI_RESET_WAIT_MS           50
+#define EFI_RESET_WAIT_MS           200
 
 /* Interval in ms to check on startup for initial press of magic key */
 #define DETECT_KEY_STALL_TIME_MS    1
@@ -80,7 +70,7 @@ enum boot_target {
 #define FASTBOOT_HOLD_DELAY         (4 * 1000 * 1000)
 
 /* If we find this in the root of the EFI system partition, unconditionally
- * load the Fastboot image */
+ * enter Fastboot mode */
 #define FASTBOOT_SENTINEL         L"\\force_fastboot"
 
 /* Path to Fastboot image */
@@ -145,77 +135,30 @@ static CHAR16 *boot_state_to_string(UINT8 boot_state)
 }
 #endif
 
-#ifndef INSECURE
-static BOOLEAN is_efi_secure_boot_enabled(VOID)
-{
-        UINT8 sb;
-
-        if (EFI_ERROR(get_efi_variable_byte(&global_guid, SECURE_BOOT_VAR,
-                                        &sb)))
-                return FALSE;
-        return sb != 0;
-}
-
-
-static BOOLEAN is_device_locked_or_verified(VOID)
-{
-        UINT8 *data = NULL;
-        UINTN dsize;
-        BOOLEAN result;
-
-        /* If we can't read the state, be safe and assume locked */
-        if (EFI_ERROR(get_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
-                                        &dsize, (void **)&data)) || !dsize) {
-                debug("Couldn't read OEMLock, assuming locked");
-                result = TRUE;
-                goto out;
-        }
-
-        /* Legacy OEMLock format, used to have string "0" or "1"
-         * for unlocked/locked */
-        if (dsize == 2 && data[1] == '\0') {
-                if (data[0] == '0') {
-                        result = FALSE;
-                        goto out;
-                }
-                if (data[0] == '1') {
-                        result = TRUE;
-                        goto out;
-                }
-        }
-
-        if (data[0] & OEM_LOCK_VERIFIED)
-                result = TRUE;
-        else if (data[0] & OEM_LOCK_UNLOCKED)
-                result = FALSE;
-        else
-                result = TRUE;
-out:
-        FreePool(data);
-        return result;
-}
-
+#ifdef USERDEBUG
 /* If a user-provided keystore is present it must be selected for later.
  * If no user-provided keystore is present then the original factory
  * keystore must be selected instead. Selection of a keystore is
  * independent of validation of that keystore. */
 static VOID select_keystore(VOID **keystore, UINTN *size)
 {
-        if (EFI_ERROR(get_efi_variable(&fastboot_guid, KEYSTORE_VAR,
-                                        size, keystore)) ||
-                        *size == 0) {
-                debug("selected OEM keystore");
+        EFI_STATUS ret;
+
+        ret = get_user_keystore(keystore, size);
+        if (EFI_ERROR(ret)) {
+                debug(L"selected OEM keystore");
                 *keystore = oem_keystore;
                 *size = oem_keystore_size;
         } else {
-                debug("selected User-supplied keystore");
+                debug(L"selected User-supplied keystore");
         }
 }
 #endif
 
+
 static enum boot_target check_fastboot_sentinel(VOID)
 {
-        debug("checking ESP for %s", FASTBOOT_SENTINEL);
+        debug(L"checking ESP for %s", FASTBOOT_SENTINEL);
         if (file_exists(g_disk_device, FASTBOOT_SENTINEL))
                 return FASTBOOT;
         return NORMAL_BOOT;
@@ -232,29 +175,29 @@ static enum boot_target check_magic_key(VOID)
         UINTN dsize;
         int wait_ms = EFI_RESET_WAIT_MS;
 
-        debug("checking for magic key");
+        debug(L"checking for magic key");
         uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
 
         /* Some systems require a short stall before we can be sure there
          * wasn't a keypress at boot. Read the EFI variable which determines
          * that time for this platform */
-        if (EFI_ERROR(get_efi_variable(&fastboot_guid, MAGIC_KEY_TIMEOUT_VAR,
-                                        &dsize, (void **)&data)) || !dsize) {
-                debug("Couldn't read timeout variable; assuming default");
+        if (EFI_ERROR(get_efi_variable(&loader_guid, MAGIC_KEY_TIMEOUT_VAR,
+                                       &dsize, (void **)&data, NULL)) || !dsize) {
+                debug(L"Couldn't read timeout variable; assuming default");
         } else {
                 if (data[dsize - 1] != '\0') {
-                        debug("bad data for magic key timeout");
+                        debug(L"bad data for magic key timeout");
                         wait_ms = EFI_RESET_WAIT_MS;
                 } else {
                         wait_ms = strtoul((char *)data, NULL, 10);
                         if (wait_ms < 0 || wait_ms > 1000) {
-                                debug("pathological magic key timeout, use default");
+                                debug(L"pathological magic key timeout, use default");
                                 wait_ms = EFI_RESET_WAIT_MS;
                         }
                 }
         }
 
-        debug("Reset wait time: %d", wait_ms);
+        debug(L"Reset wait time: %d", wait_ms);
 
         /* Check for 'magic' key. Some BIOSes are flaky about this
          * so wait for the ConIn to be ready after reset */
@@ -269,7 +212,7 @@ static enum boot_target check_magic_key(VOID)
         if (EFI_ERROR(ret))
                 return NORMAL_BOOT;
 
-        debug("ReadKeyStroke: (%d tries) %d %d", i, key.ScanCode, key.UnicodeChar);
+        debug(L"ReadKeyStroke: (%d tries) %d %d", i, key.ScanCode, key.UnicodeChar);
 
         Print(L"Continue holding key for %d seconds to force Fastboot mode.\n",
                         FASTBOOT_HOLD_DELAY / 1000000);
@@ -281,7 +224,7 @@ static enum boot_target check_magic_key(VOID)
                 ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
                                 ST->ConIn, &key);
                 if (ret != EFI_SUCCESS) {
-                        debug("err=%r", ret);
+                        debug(L"err=%r", ret);
                         break;
                 }
                 Print(L".");
@@ -309,7 +252,7 @@ static enum boot_target check_magic_key(VOID)
                 ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
                                 ST->ConIn, &key);
                 if (ret != EFI_SUCCESS) {
-                        debug("err=%r", ret);
+                        debug(L"err=%r", ret);
                         break;
                 }
 
@@ -329,13 +272,13 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
         CHAR16 *target = NULL;
         enum boot_target t;
 
-        debug("checking bootloader control block");
+        debug(L"checking bootloader control block");
         *oneshot = FALSE;
         *target_path = NULL;
 
         ret = read_bcb(&misc_ptn_guid, &bcb);
         if (EFI_ERROR(ret)) {
-                Print(L"Unable to read BCB\n");
+                error(L"Unable to read BCB");
                 t = NORMAL_BOOT;
                 goto out;
         }
@@ -345,17 +288,17 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
 
         if (!strncmpa(bcb.command, (CHAR8 *)"boot-", 5)) {
                 target = stra_to_str(bcb.command + 5);
-                debug("BCB boot target: '%s'", target);
+                debug(L"BCB boot target: '%s'", target);
         } else if (!strncmpa(bcb.command, (CHAR8 *)"bootonce-", 9)) {
                 target = stra_to_str(bcb.command + 9);
                 bcb.command[0] = '\0';
-                debug("BCB oneshot boot target: '%s'", target);
+                debug(L"BCB oneshot boot target: '%s'", target);
                 *oneshot = TRUE;
         }
 
         ret = write_bcb(&misc_ptn_guid, &bcb);
         if (EFI_ERROR(ret))
-                Print(L"Unable to update BCB contents!\n");
+                error(L"Unable to update BCB contents!");
 
         if (!target) {
                 t = NORMAL_BOOT;
@@ -366,7 +309,7 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
                 UINTN len;
 
                 if (!file_exists(g_disk_device, target)) {
-                        Print(L"Specified BCB file '%s' doesn't exist\n",
+                        error(L"Specified BCB file '%s' doesn't exist",
                                         target);
                         t = NORMAL_BOOT;
                         goto out;
@@ -383,7 +326,7 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
                         }
                         goto out;
                 }
-                Print(L"BCB file '%s' appears to be malformed\n", target);
+                error(L"BCB file '%s' appears to be malformed", target);
                 t = NORMAL_BOOT;
                 goto out;
         }
@@ -398,7 +341,7 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
                 goto out;
         }
 
-        Print(L"Unknown boot target in BCB: '%s'\n", target);
+        error(L"Unknown boot target in BCB: '%s'", target);
         t = NORMAL_BOOT;
 
 out:
@@ -412,7 +355,7 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         CHAR16 *target;
         enum boot_target ret;
 
-        debug("checking %s", LOADER_ENTRY_ONESHOT);
+        debug(L"checking %s", LOADER_ENTRY_ONESHOT);
         target = get_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT);
 
         set_efi_variable(&loader_guid, LOADER_ENTRY_ONESHOT, 0, NULL,
@@ -427,7 +370,7 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         } else if (!StrCmp(target, L"charging")) {
                 ret = CHARGER;
         } else {
-                Print(L"Unknown oneshot boot target: '%s'\n", target);
+                error(L"Unknown oneshot boot target: '%s'", target);
                 ret = NORMAL_BOOT;
         }
 
@@ -445,23 +388,36 @@ static enum boot_target check_command_line(VOID **address)
         *address = NULL;
         bt = NORMAL_BOOT;
 
-        debug("checking loader command line");
+        debug(L"checking loader command line");
 
         if (EFI_ERROR(get_argv(g_loaded_image, &argc, &argv)))
                 return NORMAL_BOOT;
 
         for (pos = 0; pos < argc; pos++) {
-                debug("Argument %d: %s", pos, argv[pos]);
+                debug(L"Argument %d: %s", pos, argv[pos]);
+
+#ifndef USERFASTBOOT
+                if (!StrCmp(argv[pos], L"-f")) {
+                        bt = FASTBOOT;
+                        continue;
+                }
+#endif
 
                 if (!StrCmp(argv[pos], L"-a")) {
                         pos++;
                         if (pos >= argc) {
-                                Print(L"-a requires a memory address\n");
+                                error(L"-a requires a memory address");
                                 goto out;
                         }
 
+#ifdef USERFASTBOOT
                         *address = (VOID *)strtoul16(argv[pos], NULL, 0);
                         bt = MEMORY;
+#else
+                        /* For compatibility...just ignore the supplied address
+                         * and enter Fastboot mode */
+                        bt = FASTBOOT;
+#endif
                         continue;
                 }
 
@@ -471,7 +427,7 @@ static enum boot_target check_command_line(VOID **address)
                          * name as argv[0] when called from a shell. Do nothing. */
                         continue;
                 } else {
-                        Print(L"unexpected argument %s\n", argv[pos]);
+                        error(L"unexpected argument %s", argv[pos]);
                         goto out;
                 }
         }
@@ -485,16 +441,9 @@ out:
 static enum boot_target check_charge_mode()
 {
         enum wake_sources wake_source;
-        CHAR16 *offmode;
 
-        offmode = get_efi_variable_str8(&fastboot_guid, OFF_MODE_CHARGE);
-        if (offmode) {
-                BOOLEAN charger_off = !StrCmp(offmode, L"0");
-                FreePool(offmode);
-                if (charger_off) {
-                        return NORMAL_BOOT;
-                }
-        }
+        if (get_current_off_mode_charge())
+                return NORMAL_BOOT;
 
         wake_source = rsci_get_wake_source();
         if ((wake_source == WAKE_USB_CHARGER_INSERTED) ||
@@ -559,6 +508,64 @@ static enum boot_target choose_boot_target(VOID **target_address,
         return check_charge_mode();
 }
 
+/* Validate an image against a keystore.
+ *
+ * boot_target - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
+ *               and ESP_BOOTIMAGE (for 'fastboot boot')
+ * bootimage   - bootimage to validate against the keystore.
+ * keystore    - Keystore to validate image with.
+ * keystore_size - Size of keystore in bytes
+ *
+ * Return values:
+ * EFI_ACCESS_DENIED - Validation failed against supplied keystore
+ */
+static EFI_STATUS validate_bootimage(
+                IN enum boot_target boot_target,
+                IN VOID *bootimage,
+                IN VOID *keystore,
+                IN UINTN keystore_size)
+{
+        CHAR16 target[BOOT_TARGET_SIZE];
+        CHAR16 *expected;
+        CHAR16 *expected2 = NULL;
+        EFI_STATUS ret;
+
+        ret = verify_android_boot_image(bootimage, keystore,
+                                        keystore_size, target);
+
+        if (EFI_ERROR(ret)) {
+                debug(L"boot image doesn't verify");
+                return EFI_ACCESS_DENIED;
+        }
+
+        switch (boot_target) {
+        case NORMAL_BOOT:
+        case CHARGER:
+                expected = L"/boot";
+                break;
+        case RECOVERY:
+                expected = L"/recovery";
+                break;
+        case ESP_BOOTIMAGE:
+                /* "live" bootable image */
+                expected = L"/boot";
+#ifdef USERFASTBOOT
+                /* Bootable Fastboot image */
+                expected2 = L"/fastboot";
+#endif
+                break;
+        default:
+                expected = NULL;
+        }
+
+        if ((!expected || StrCmp(expected, target)) &&
+                        (!expected2 || StrCmp(expected2, target))) {
+                debug(L"boot image has unexpected target name");
+                return EFI_ACCESS_DENIED;
+        }
+
+        return EFI_SUCCESS;
+}
 
 /* Load a boot image into RAM. If a keystore is supplied, validate the image
  * against it.
@@ -587,7 +594,6 @@ static EFI_STATUS load_boot_image(
                 OUT VOID **bootimage,
                 IN BOOLEAN oneshot)
 {
-        CHAR16 target[BOOT_TARGET_SIZE];
         EFI_STATUS ret;
 
         switch (boot_target) {
@@ -610,39 +616,12 @@ static EFI_STATUS load_boot_image(
         if (EFI_ERROR(ret))
                 return ret;
 
-        debug("boot image loaded");
-        if (keystore) {
-                CHAR16 *expected;
+        debug(L"boot image loaded");
+        if (keystore)
+                ret = validate_bootimage(boot_target, *bootimage, keystore, keystore_size);
 
-                ret = verify_android_boot_image(*bootimage, keystore,
-                        keystore_size, target);
-
-                if (EFI_ERROR(ret)) {
-                        debug("boot image doesn't verify");
-                        goto out;
-                }
-
-                switch (boot_target) {
-                case NORMAL_BOOT:
-                case CHARGER:
-                        expected = L"/boot";
-                        break;
-                case RECOVERY:
-                        expected = L"/recovery";
-                        break;
-                default:
-                        expected = NULL;
-                }
-
-                if (!expected || StrCmp(expected, target)) {
-                        debug("boot image has unexpected target name");
-                        ret = EFI_ACCESS_DENIED;
-                }
-        }
-
-out:
         if (EFI_ERROR(ret))
-                FreePool(bootimage);
+                FreePool(*bootimage);
 
         return ret;
 }
@@ -658,7 +637,7 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
 
         edp = FileDevicePath(g_disk_device, path);
         if (!edp) {
-                Print(L"Couldn't generate a path\n");
+                error(L"Couldn't generate a path");
                 return EFI_INVALID_PARAMETER;
         }
 
@@ -680,13 +659,34 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
 }
 
 
-static VOID enter_fastboot_mode(UINT8 boot_state, VOID *target_address)
+static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state, BOOLEAN charger)
+{
+        EFI_STATUS ret;
+
+        /* per bootloaderequirements.pdf */
+        if (boot_state != BOOT_STATE_GREEN)
+                android_clear_memory();
+        debug(L"chainloading boot image, boot state is %s",
+                        boot_state_to_string(boot_state));
+        ret = android_image_start_buffer(g_parent_image, bootimage,
+                                         charger, NULL);
+        if (EFI_ERROR(ret))
+                efi_perror(ret, "Couldn't load Boot image");
+
+        return ret;
+}
+
+static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
+                                UINTN keystore_size, VOID *bootimage)
         __attribute__ ((noreturn));
 
 
+#ifdef USERFASTBOOT
+
 /* Enter Fastboot mode. If bootimage is NULL, load it from the file on the
  * EFI system partition */
-static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
+static VOID enter_fastboot_mode(UINT8 boot_state, __attribute__((__unused__)) VOID *keystore,
+                                __attribute__((__unused__)) UINTN keystore_size, VOID *bootimage)
 {
         /* Fastboot is conceptually part of the bootloader itself. That it
          * happens to currently be an Android Boot Image, and not part of the
@@ -712,7 +712,8 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                 }
         }
 
-#ifndef INSECURE
+#ifdef USERDEBUG
+        debug(L"verify Fastboot boot image");
         CHAR16 target[BOOT_TARGET_SIZE];
         ret = verify_android_boot_image(bootimage, oem_keystore,
                         oem_keystore_size, target);
@@ -726,9 +727,9 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                 goto die;
         }
 #endif
-        debug("chainloading fastboot, boot state is %s",
+        debug(L"chainloading fastboot, boot state is %s",
                         boot_state_to_string(boot_state));
-        android_image_start_buffer(g_parent_image, bootimage, FALSE, NULL);
+        load_image(bootimage, boot_state, FALSE);
         Print(L"Couldn't chainload Fastboot image\n");
 die:
         /* Allow plenty of time for the error to be visible before the
@@ -736,6 +737,89 @@ die:
         pause(30);
         halt_system();
 }
+
+#else
+
+
+/* Enter Fastboot mode. If fastboot_start() returns a valid pointer,
+ * try to start the bootimage pointed to. */
+static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
+                                UINTN keystore_size, VOID *bootimage)
+{
+        EFI_STATUS ret = EFI_SUCCESS;
+        enum boot_target target;
+        EFI_HANDLE image;
+        void *efiimage;
+        UINTN imagesize;
+
+        set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
+                         &boot_state, FALSE, TRUE);
+
+        for (;;) {
+                efiimage = NULL;
+                bootimage = NULL;
+                target = UNKNOWN_TARGET;
+
+                ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, "Fastboot mode failed");
+                        break;
+                }
+
+                if (bootimage)
+                        goto start_image;
+
+                if (efiimage) {
+                        ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
+                                                NULL, efiimage, imagesize, &image);
+                        if (EFI_ERROR(ret)) {
+                                efi_perror(ret, L"Unable to load the received EFI image");
+                                continue;
+                        }
+                        ret = uefi_call_wrapper(BS->StartImage, 3, image, NULL, NULL);
+                        if (EFI_ERROR(ret))
+                                efi_perror(ret, L"Unable to start the received EFI image");
+
+                        uefi_call_wrapper(BS->UnloadImage, 1, image);
+                        continue;
+                }
+
+                if (target == UNKNOWN_TARGET)
+                        continue;
+
+                switch (target) {
+                case FASTBOOT:
+                        set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
+                                             TRUE, TRUE, L"bootloader");
+                case REBOOT:
+                        reboot();
+                case POWER_OFF:
+                        halt_system();
+                case NORMAL_BOOT:
+                case RECOVERY:
+                        break;
+                default:
+                        continue;
+                }
+
+                ret = load_boot_image(target, keystore, keystore_size,
+                                      NULL, &bootimage, FALSE);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, "Couldn't load bootimage");
+                        target = UNKNOWN_TARGET;
+                        continue;
+                }
+
+        start_image:
+                load_image(bootimage, boot_state, FALSE);
+        }
+
+        /* Allow plenty of time for the error to be visible before the
+         * screen goes blank */
+        pause(30);
+        halt_system();
+}
+#endif
 
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
@@ -757,7 +841,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         InitializeLib(image, sys_table);
         ux_init();
 
-        debug("%s", loader_version);
+        debug(L"%s", loader_version);
         set_efi_variable_str(&loader_guid, LOADER_VERSION_VAR,
                         FALSE, TRUE, loader_version);
 
@@ -777,21 +861,20 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         oem_key = (UINT8 *)&oem_keystore_table +
                         oem_keystore_table.oem_key_offset;
         oem_key_size = oem_keystore_table.oem_key_size;
-        debug("oem key size %d keystore size %d", oem_key_size,
+        debug(L"oem key size %d keystore size %d", oem_key_size,
                         oem_keystore_size);
 
-        debug("choosing a boot target");
+        debug(L"choosing a boot target");
         /* No UX prompts before this point, do not want to interfere
          * with magic key detection */
-        boot_target = choose_boot_target(&target_address, &target_path,
-                        &oneshot);
-        debug("selected '%s'",  boot_target_to_string(boot_target));
+        boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
+        debug(L"selected '%s'",  boot_target_to_string(boot_target));
 
-#ifndef INSECURE
-        debug("checking device state");
+#ifdef USERDEBUG
+        debug(L"checking device state");
 
         if (!is_efi_secure_boot_enabled()) {
-                debug("uefi secure boot is disabled");
+                debug(L"uefi secure boot is disabled");
                 boot_state = BOOT_STATE_ORANGE;
                 lock_prompted = TRUE;
 
@@ -800,30 +883,30 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                  * we don't ask again later */
                 if (!ux_prompt_user_secure_boot_off())
                         halt_system();
-        } else  if (!is_device_locked_or_verified()) {
+        } else  if (device_is_unlocked()) {
                 boot_state = BOOT_STATE_ORANGE;
-                debug("Device is unlocked");
+                debug(L"Device is unlocked");
         } else {
-                debug("examining keystore");
+                debug(L"examining keystore");
 
                 select_keystore(&selected_keystore, &selected_keystore_size);
                 if (EFI_ERROR(verify_android_keystore(selected_keystore,
                                         selected_keystore_size,
                                         oem_key, oem_key_size, hash))) {
-                        debug("keystore not validated");
+                        debug(L"keystore not validated");
                         boot_state = BOOT_STATE_YELLOW;
                 }
         }
 #else
         /* Make sure it's abundantly clear! */
-        Print(L"INSECURE BOOTLOADER - SYSTEM SECURITY IN RED STATE\n");
+        error(L"INSECURE BOOTLOADER - SYSTEM SECURITY IN RED STATE");
         pause(1);
         boot_state = BOOT_STATE_RED;
 #endif
 
         /* EFI binaries are validated by the BIOS */
         if (boot_target == ESP_EFI_BINARY) {
-                debug("entering EFI binary");
+                debug(L"entering EFI binary");
                 ret = enter_efi_binary(target_path, oneshot);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"EFI Application exited abnormally");
@@ -836,8 +919,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         /* Fastboot is always validated by the OEM keystore baked into
          * the kernelflinger binary */
         if (boot_target == FASTBOOT || boot_target == MEMORY) {
-                debug("entering Fastboot mode");
-                enter_fastboot_mode(boot_state, target_address);
+                debug(L"entering Fastboot mode");
+                enter_fastboot_mode(boot_state, selected_keystore,
+                                    selected_keystore_size, target_address);
         }
 
         /* Past this point is where we start to care if the keystore isn't
@@ -848,7 +932,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
          * fastboot */
         if (boot_state == BOOT_STATE_YELLOW &&
                         !ux_prompt_user_keystore_unverified(hash)) {
-                enter_fastboot_mode(BOOT_STATE_RED, NULL);
+                enter_fastboot_mode(BOOT_STATE_RED, selected_keystore,
+                                    selected_keystore_size, NULL);
         }
 
         /* If the device is unlocked the only way to re-lock it is
@@ -856,11 +941,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
          * about EFI secure boot being turned off */
         if (boot_state == BOOT_STATE_ORANGE && !lock_prompted &&
                         !ux_prompt_user_device_unlocked()) {
-                enter_fastboot_mode(BOOT_STATE_RED, NULL);
+                enter_fastboot_mode(BOOT_STATE_RED, selected_keystore,
+                                    selected_keystore_size, NULL);
         }
 
 fallback:
-        debug("loading boot image");
+        debug(L"loading boot image");
         ret = load_boot_image(boot_target, selected_keystore,
                         selected_keystore_size, target_path,
                         &bootimage, oneshot);
@@ -868,16 +954,19 @@ fallback:
         target_path = NULL;
 
         if (EFI_ERROR(ret)) {
-                debug("couldn't load boot image: %r", ret);
+                debug(L"couldn't load boot image: %r", ret);
                 if (ret == EFI_ACCESS_DENIED)
                         boot_state = BOOT_STATE_RED;
 
                 /* Recovery itself is unverified. Only way to
                  * un-hose this device is through Fastboot */
                 if (boot_target == RECOVERY) {
-                        debug("recovery image is bad");
+                        debug(L"recovery image is bad");
                         if (ux_warn_user_unverified_recovery())
-                                enter_fastboot_mode(BOOT_STATE_RED, NULL);
+                                enter_fastboot_mode(BOOT_STATE_RED,
+                                                    selected_keystore,
+                                                    selected_keystore_size,
+                                                    NULL);
                         else
                                 halt_system();
                 }
@@ -887,7 +976,7 @@ fallback:
 
                 /* Fall back to loading Recovery Console so they
                  * can sideload an OTA to fix their device */
-                debug("fall back to recovery console");
+                debug(L"fall back to recovery console");
                 boot_target = RECOVERY;
                 FreePool(bootimage);
                 goto fallback;
@@ -896,16 +985,8 @@ fallback:
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                         &boot_state, FALSE, TRUE);
 
-        /* per bootloaderequirements.pdf */
-        if (boot_state != BOOT_STATE_GREEN)
-                android_clear_memory();
-
-        debug("chainloading boot image, boot state is %s",
-                        boot_state_to_string(boot_state));
-        return android_image_start_buffer(g_parent_image, bootimage,
-                        boot_target == CHARGER, NULL);
+        return load_image(bootimage, boot_state, boot_target == CHARGER);
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
-
