@@ -67,9 +67,9 @@ static struct state_display {
 	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color;
 } STATE_DISPLAY[] = {
 	{ "unknown", &COLOR_RED },
-	{ "unlocked", &COLOR_RED },
+	{ "locked", &COLOR_RED },
 	{ "verified", &COLOR_WHITE },
-	{ "locked", &COLOR_WHITE }
+	{ "unlocked", &COLOR_WHITE }
 };
 
 static CHAR8 current_off_mode_charge[2];
