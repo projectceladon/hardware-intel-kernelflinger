@@ -56,7 +56,7 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
  * variable is set for this platform.
  * You want this value as small as possible as this is added to
  * the boot time for EVERY boot */
-#define EFI_RESET_WAIT_MS           50
+#define EFI_RESET_WAIT_MS           200
 
 /* Interval in ms to check on startup for initial press of magic key */
 #define DETECT_KEY_STALL_TIME_MS    1
