@@ -36,6 +36,7 @@
 #include <efi.h>
 #include <efiapi.h>
 #include <efilib.h>
+#include <ui.h>
 
 /* pulls in memcpy, memset, bunch of other posix functions */
 #include "OpenSslSupport.h"
@@ -53,7 +54,7 @@
 
 #if DEBUG_MESSAGES
 #define debug(fmt, ...) do { \
-    Print(L##fmt L"\n", ##__VA_ARGS__); \
+    Print(fmt "\n", ##__VA_ARGS__); \
 } while(0)
 
 #define debug_pause(x) pause(x)
@@ -62,14 +63,37 @@
 #define debug_pause(x) (void)(x)
 #endif
 
-#define efi_perror(ret, x, ...) Print(x L": %r", ##__VA_ARGS__, ret)
+#define error(x, ...) do { \
+  if (ui_is_ready()) { \
+    if (DEBUG_MESSAGES) \
+      Print(x L"\n", ##__VA_ARGS__); \
+    ui_error(x, ##__VA_ARGS__); \
+  } else \
+    Print(x L"\n", ##__VA_ARGS__); \
+} while(0)
 
+#define efi_perror(ret, x, ...) do { \
+  error(x L": %r", ##__VA_ARGS__, ret); \
+} while (0)
+
+enum boot_target {
+        UNKNOWN_TARGET = -1,
+        NORMAL_BOOT,
+        RECOVERY,
+        FASTBOOT,
+        ESP_BOOTIMAGE,
+        ESP_EFI_BINARY,
+        MEMORY,
+        CHARGER,
+        REBOOT,
+        POWER_OFF
+};
 
 /*
  * EFI Variables
  */
 EFI_STATUS get_efi_variable(const EFI_GUID *guid, CHAR16 *key,
-                UINTN *size_p, VOID **data_p);
+                UINTN *size_p, VOID **data_p,  UINT32 *flags_p);
 
 CHAR16 *get_efi_variable_str(const EFI_GUID *guid, CHAR16 *key);
 CHAR16 *get_efi_variable_str8(const EFI_GUID *guid, CHAR16 *key);
@@ -96,6 +120,10 @@ BOOLEAN file_exists(IN EFI_HANDLE disk, IN const CHAR16 *path);
 CHAR16 *stra_to_str(CHAR8 *stra);
 
 EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN len);
+
+EFI_STATUS vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap);
+
+EFI_STATUS snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...);
 
 VOID StrNCpy(OUT CHAR16 *dest, IN const CHAR16 *src, UINT32 n);
 

@@ -92,4 +92,7 @@ EFI_STATUS verify_android_keystore(
         IN UINTN key_size,
         OUT VOID *keystore_hash);
 
+/* Determines if UEFI Secure Boot is enabled or not. */
+BOOLEAN is_efi_secure_boot_enabled(VOID);
+
 #endif

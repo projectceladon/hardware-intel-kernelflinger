@@ -52,11 +52,50 @@ CHAR16 *stra_to_str(CHAR8 *stra)
 }
 
 
+EFI_STATUS vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
+{
+        UINTN len;
+        EFI_STATUS ret = EFI_OUT_OF_RESOURCES;
+        CHAR16 *format16 = stra_to_str((CHAR8 *)format);
+        if (!format16)
+                return ret;
+
+        CHAR16 *dst16 = AllocatePool(size * sizeof(CHAR16));
+        if (!dst16)
+                goto free_format16;
+
+        len = VSPrint(dst16, size * sizeof(CHAR16), format16, ap);
+
+        if (str_to_stra((CHAR8 *)dst, dst16, len + 1) == EFI_SUCCESS) {
+                ret = EFI_SUCCESS;
+                dst[len] = '\0';
+        }
+
+        FreePool(dst16);
+free_format16:
+        FreePool(format16);
+        return ret;
+}
+
+
+EFI_STATUS snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...)
+{
+        va_list args;
+        int ret;
+
+        va_start(args, format);
+        ret = vsnprintf(str, size, format, args);
+        va_end(args);
+        return ret;
+}
+
+
 EFI_STATUS get_efi_variable(const EFI_GUID *guid, CHAR16 *key,
-                UINTN *size_p, VOID **data_p)
+                UINTN *size_p, VOID **data_p, UINT32 *flags_p)
 {
         VOID *data;
         UINTN size;
+        UINT32 flags;
         EFI_STATUS ret;
 
         size = EFI_MAXIMUM_VARIABLE_SIZE;
@@ -65,7 +104,7 @@ EFI_STATUS get_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 return EFI_OUT_OF_RESOURCES;
 
         ret = uefi_call_wrapper(RT->GetVariable, 5, key, (EFI_GUID *)guid,
-                        NULL, &size, data);
+                        &flags, &size, data);
 
         if (EFI_ERROR(ret)) {
                 FreePool(data);
@@ -74,6 +113,8 @@ EFI_STATUS get_efi_variable(const EFI_GUID *guid, CHAR16 *key,
 
         if (size_p)
                 *size_p = size;
+        if (flags_p)
+                *flags_p = flags;
         *data_p = data;
 
         return EFI_SUCCESS;
@@ -86,7 +127,7 @@ CHAR16 *get_efi_variable_str(const EFI_GUID *guid, CHAR16 *key)
         EFI_STATUS ret;
         UINTN size;
 
-        ret = get_efi_variable(guid, key, &size, (VOID **)&data);
+        ret = get_efi_variable(guid, key, &size, (VOID **)&data, NULL);
         if (EFI_ERROR(ret))
                 return NULL;
 
@@ -106,7 +147,7 @@ CHAR16 *get_efi_variable_str8(const EFI_GUID *guid, CHAR16 *key)
         EFI_STATUS ret;
         UINTN size;
 
-        ret = get_efi_variable(guid, key, &size, (VOID **)&data);
+        ret = get_efi_variable(guid, key, &size, (VOID **)&data, NULL);
         if (EFI_ERROR(ret) || !data || !size)
                 return NULL;
 
@@ -127,7 +168,7 @@ EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte)
         EFI_STATUS ret;
         UINTN size;
 
-        ret = get_efi_variable(guid, key, &size, (VOID **)&data);
+        ret = get_efi_variable(guid, key, &size, (VOID **)&data, NULL);
         if (EFI_ERROR(ret))
                 return ret;
 
@@ -144,6 +185,7 @@ EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte)
 EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 UINTN size, VOID *data, BOOLEAN nonvol, BOOLEAN runtime)
 {
+        EFI_STATUS ret;
         UINT32 flags = EFI_VARIABLE_BOOTSERVICE_ACCESS;
 
         if (nonvol)
@@ -151,8 +193,22 @@ EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
         if (runtime)
                 flags |= EFI_VARIABLE_RUNTIME_ACCESS;
 
-        return uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, flags,
+        /* Storage attributes are only applied to a variable when creating the
+         * variable. If a preexisting variable is rewritten with different
+         * attributes, the result is indeterminate and may vary between
+         * implementations. The correct method of changing the attributes of a
+         * variable is to delete the variable and recreate it with different
+         * attributes. */
+        ret = uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, 0, 0, 0);
+        if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
+                efi_perror(ret, L"Couldn't clear EFI variable");
+                return ret;
+        }
+
+        if (size && data)
+                return uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, flags,
                         size, data);
+        return EFI_SUCCESS;
 }
 
 

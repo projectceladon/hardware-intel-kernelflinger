@@ -1,5 +1,6 @@
 #include <efi.h>
 #include <efilib.h>
+#include <lib.h>
 #include "efilinux.h"
 
 /**
@@ -35,7 +36,7 @@ get_map:
         err = allocate_pool(EfiLoaderData, *map_size,
                             (void **)map_buf);
         if (err != EFI_SUCCESS) {
-                Print(L"Failed to allocate pool for memory map");
+                error(L"Failed to allocate pool for memory map");
                 goto failed;
         }
 
@@ -51,7 +52,7 @@ get_map:
                         goto get_map;
                 }
 
-                Print(L"Failed to get memory map");
+                error(L"Failed to get memory map");
                 goto failed;
         }
 

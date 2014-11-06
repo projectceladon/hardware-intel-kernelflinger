@@ -117,7 +117,7 @@ EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table)
 	for (i = 0 ; i < nb_acpi_tables; i++) {
 		struct ACPI_DESC_HEADER *header = (VOID *)(UINTN)rsdt->entry[i];
 		if (!strncmpa(header->signature, signature, strlena(signature))) {
-			debug("Found %c%c%c%c table\n", signature[0], signature[1], signature[2], signature[3]);
+			debug(L"Found %c%c%c%c table", signature[0], signature[1], signature[2], signature[3]);
 			*table = header;
 			ret = EFI_SUCCESS;
 			break;
@@ -129,7 +129,7 @@ out:
 
 enum wake_sources rsci_get_wake_source(void)
 {
-        return get_acpi_field(RSCI, wake_source);
+	return get_acpi_field(RSCI, wake_source);
 }
 
 enum reset_sources rsci_get_reset_source(void)
