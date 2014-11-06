@@ -149,9 +149,10 @@ static UINTN sheight;
 static EFI_STATUS display_text(UINT32 error_code,
 			       const ui_textline_t *text1,
 			       const ui_textline_t *text2) {
-	UINTN width, height, margin, x, y;
+	UINTN width, height, margin, x, y, lines, cols, i, linesarea, colsarea;
 	ui_image_t *vendor;
 	ui_font_t *font;
+	char *fontsize;
 	EFI_STATUS ret;
 	char buf[26];
 
@@ -174,28 +175,57 @@ static EFI_STATUS display_text(UINT32 error_code,
 		return EFI_UNSUPPORTED;
 	}
 
-	font = ui_font_get("18x32");
-	if (!font) {
-		efi_perror(EFI_UNSUPPORTED, "Unable to find 18x32 font");
-		return EFI_UNSUPPORTED;
-	}
-
 	if (swidth > sheight) {	/* Landscape orientation. */
+		/* Display splash scaled on the left half of the screen,
+		 * text area on the right */
 		width = (swidth / 2) - (2 * margin);
 		height = vendor->height * width / vendor->width;
-		x = margin;
 		y = (sheight / 2) - (height / 2);
-		ui_image_draw_scale(vendor, x, y , width, height);
+		ui_image_draw_scale(vendor, margin, y , width, height);
+		colsarea = width;
+		linesarea = sheight - (2 * margin);
 
 		x = swidth / 2 + margin;
 	} else {		/* Portrait orientation. */
+		/* Display splash on the top third of the screen,
+		 * text area below it */
 		height = sheight / 3;
 		width = vendor->width * height / vendor->height;
 		x = (swidth / 2) - (width / 2);
 		y = margin;
+		colsarea = swidth - (margin * 2);
+		linesarea = sheight - height - (margin * 2);
 		ui_image_draw_scale(vendor, x, y , width, height);
 
 		y += height + margin;
+	}
+
+	lines = 2; // error code message
+	cols = strlena((CHAR8 *)code_text[0].str);
+	for (i = 0; text1[i].str; i++) {
+		cols = max(cols, strlena((CHAR8 *)text1[i].str));
+		lines++;
+	}
+	if (text2) {
+		for (i = 0; text2[i].str; i++) {
+			cols = max(cols, strlena((CHAR8 *)text2[i].str));
+			lines++;
+		}
+	}
+
+	if ((colsarea >= cols * 18) && (linesarea >= lines * 32)) {
+		fontsize = "18x32";
+	} else if ((colsarea >= cols * 12) && (linesarea >= lines * 22)) {
+		fontsize = "12x22";
+	} else {
+		error(L"Text too big for display, even with 12x22 font");
+		return EFI_UNSUPPORTED;
+	}
+
+	font = ui_font_get(fontsize);
+	if (!font) {
+		efi_perror(EFI_UNSUPPORTED, "Unable to load font");
+		return EFI_UNSUPPORTED;
 	}
 
 	ret = ui_textarea_display_text(code_text, font, x, &y);
