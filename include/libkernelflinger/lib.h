@@ -119,6 +119,9 @@ EFI_STATUS file_delete(IN EFI_HANDLE disk, IN const CHAR16 *name);
 
 BOOLEAN file_exists(IN EFI_HANDLE disk, IN const CHAR16 *path);
 
+EFI_STATUS file_read(IN EFI_FILE_HANDLE dir, IN const CHAR16 *name,
+                OUT CHAR8 **content, OUT UINTN *len);
+
 /*
  * String manipulation
  */
