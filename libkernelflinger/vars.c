@@ -67,9 +67,9 @@ static struct state_display {
 	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color;
 } STATE_DISPLAY[] = {
 	{ "unknown", &COLOR_RED },
-	{ "locked", &COLOR_RED },
+	{ "locked", &COLOR_WHITE },
 	{ "verified", &COLOR_WHITE },
-	{ "unlocked", &COLOR_WHITE }
+	{ "unlocked", &COLOR_RED }
 };
 
 static CHAR8 current_off_mode_charge[2];
@@ -172,6 +172,14 @@ EFI_STATUS set_current_state(enum device_state state)
 	current_state = state;
 	return EFI_SUCCESS;
 }
+
+#ifndef USER
+EFI_STATUS reprovision_state_vars(VOID)
+{
+	return set_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
+				0, 0, TRUE, FALSE);
+}
+#endif
 
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
 {

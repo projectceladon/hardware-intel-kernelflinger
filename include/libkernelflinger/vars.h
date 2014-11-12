@@ -87,6 +87,8 @@ EFI_STATUS set_user_keystore(VOID *keystore, UINTN size);
 EFI_STATUS get_user_keystore(VOID **keystorep, UINTN *sizep);
 BOOLEAN device_is_provisioning(void);
 VOID clear_provisioning_mode(void);
-
+#ifndef USER
+EFI_STATUS reprovision_state_vars(VOID);
+#endif
 #endif /* _VARS_H_ */
 

@@ -48,6 +48,11 @@
 #define offsetof(TYPE, MEMBER) ((UINTN) &((TYPE *)0)->MEMBER)
 #endif
 
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
 /* debug stuff */
 
 #define DEBUG_MESSAGES 0
@@ -142,8 +147,6 @@ VOID halt_system(VOID) __attribute__ ((noreturn));
 
 VOID pause(UINTN seconds);
 
-VOID reboot(VOID) __attribute__ ((noreturn));
-
-
+VOID reboot(CHAR16 *target) __attribute__ ((noreturn));
 
 #endif

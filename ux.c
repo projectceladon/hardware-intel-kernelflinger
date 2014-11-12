@@ -38,6 +38,7 @@
 
 #define TIMEOUT_SECS	60
 
+#define RED_STATE_CODE		1
 static const ui_textline_t red_state[] = {
 	{ &COLOR_YELLOW,	"RECOVER",				TRUE },
 	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
@@ -54,6 +55,7 @@ static const ui_textline_t red_state[] = {
 	{ NULL, NULL, FALSE}
 };
 
+#define BAD_RECOVERY_CODE	2
 static const ui_textline_t bad_recovery[] = {
 	{ &COLOR_YELLOW,	"FASTBOOT",				TRUE },
 	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
@@ -71,6 +73,7 @@ static const ui_textline_t bad_recovery[] = {
 	{ NULL, NULL, FALSE }
 };
 
+#define DEVICE_UNLOCKED_CODE	3
 static const ui_textline_t device_altered_unlocked[] = {
 	{ &COLOR_YELLOW, 	"START",				TRUE },
 	{ &COLOR_WHITE, 	"Press Volume UP key",			FALSE },
@@ -92,6 +95,7 @@ static const ui_textline_t device_altered_unlocked[] = {
 	{ NULL, NULL, FALSE }
 };
 
+#define SECURE_BOOT_CODE	4
 static const ui_textline_t secure_boot_off[] = {
 	{ &COLOR_YELLOW,	"START",				TRUE },
 	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
@@ -114,6 +118,7 @@ static const ui_textline_t secure_boot_off[] = {
 	{ NULL, NULL, FALSE }
 };
 
+#define KEYSTORE_ALTERED_CODE	5
 static const ui_textline_t device_altered_keystore[] = {
 	{ &COLOR_YELLOW,	"START",				TRUE },
 	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
@@ -141,12 +146,23 @@ static const char *VENDOR_IMG_NAME = "splash_intel";
 static UINTN swidth;
 static UINTN sheight;
 
-static EFI_STATUS display_text(const ui_textline_t *text1,
+static EFI_STATUS display_text(UINT32 error_code,
+			       const ui_textline_t *text1,
 			       const ui_textline_t *text2) {
-	UINTN width, height, margin, x, y;
+	UINTN width, height, margin, x, y, lines, cols, i, linesarea, colsarea;
 	ui_image_t *vendor;
 	ui_font_t *font;
+	char *fontsize;
 	EFI_STATUS ret;
+	char buf[26];
+
+	snprintf((CHAR8 *)buf, sizeof(buf),
+		 (CHAR8 *)"BOOTLOADER ERROR CODE %02x", error_code);
+	const ui_textline_t code_text[] = {
+		{ &COLOR_GREEN, buf, TRUE },
+		{ &COLOR_WHITE, "", FALSE },
+		{ NULL, NULL, FALSE }
+	};
 
 	ui_clear_screen();
 
@@ -159,37 +175,69 @@ static EFI_STATUS display_text(const ui_textline_t *text1,
 		return EFI_UNSUPPORTED;
 	}
 
-	font = ui_font_get("18x32");
-	if (!font) {
-		efi_perror(EFI_UNSUPPORTED, "Unable to find 18x32 font");
-		return EFI_UNSUPPORTED;
-	}
-
 	if (swidth > sheight) {	/* Landscape orientation. */
+		/* Display splash scaled on the left half of the screen,
+		 * text area on the right */
 		width = (swidth / 2) - (2 * margin);
 		height = vendor->height * width / vendor->width;
-		x = margin;
 		y = (sheight / 2) - (height / 2);
-		ui_image_draw_scale(vendor, x, y , width, height);
+		ui_image_draw_scale(vendor, margin, y , width, height);
+		colsarea = width;
+		linesarea = sheight - (2 * margin);
 
-		ret = ui_textarea_display_text(text1, font, swidth / 2 + margin, &y);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, "Unable to display text.");
-			return ret;
-		}
+		x = swidth / 2 + margin;
 	} else {		/* Portrait orientation. */
+		/* Display splash on the top third of the screen,
+		 * text area below it */
 		height = sheight / 3;
 		width = vendor->width * height / vendor->height;
 		x = (swidth / 2) - (width / 2);
 		y = margin;
+		colsarea = swidth - (margin * 2);
+		linesarea = sheight - height - (margin * 2);
 		ui_image_draw_scale(vendor, x, y , width, height);
 
 		y += height + margin;
-		ret = ui_textarea_display_text(text1, font, x, &y);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, "Unable to display text.");
-			return ret;
+	}
+
+	lines = 2; // error code message
+	cols = strlena((CHAR8 *)code_text[0].str);
+	for (i = 0; text1[i].str; i++) {
+		cols = max(cols, strlena((CHAR8 *)text1[i].str));
+		lines++;
+	}
+	if (text2) {
+		for (i = 0; text2[i].str; i++) {
+			cols = max(cols, strlena((CHAR8 *)text2[i].str));
+			lines++;
 		}
+	}
+
+	if ((colsarea >= cols * 18) && (linesarea >= lines * 32)) {
+		fontsize = "18x32";
+	} else if ((colsarea >= cols * 12) && (linesarea >= lines * 22)) {
+		fontsize = "12x22";
+	} else {
+		error(L"Text too big for display, even with 12x22 font");
+		return EFI_UNSUPPORTED;
+	}
+
+	font = ui_font_get(fontsize);
+	if (!font) {
+		efi_perror(EFI_UNSUPPORTED, "Unable to load font");
+		return EFI_UNSUPPORTED;
+	}
+
+	ret = ui_textarea_display_text(code_text, font, x, &y);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Unable to display text.");
+		return ret;
+	}
+
+	ret = ui_textarea_display_text(text1, font, x, &y);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, "Unable to display text.");
+		return ret;
 	}
 
 	if (text2) {
@@ -215,11 +263,24 @@ static EFI_STATUS clear_text() {
 			     swidth, sheight - (sheight / 3) - margin);
 }
 
-BOOLEAN ux_prompt_user(const ui_textline_t *text1,
-		       const ui_textline_t *text2) {
+static BOOLEAN ux_display_splash() {
+	UINT8 value;
+	EFI_STATUS ret;
+
+	ret = get_efi_variable_byte(&loader_guid, L"UIDisplaySplash", &value);
+	if (EFI_ERROR(ret) || value != 1)
+		return FALSE;
+
+	return TRUE;
+}
+
+static BOOLEAN ux_prompt_user(UINT32 code, const ui_textline_t *text1,
+			      const ui_textline_t *text2) {
 	BOOLEAN answer;
 
-	display_text(text1, text2);
+	ui_init(&swidth, &sheight);
+
+	display_text(code, text1, text2);
 	answer = ui_input_to_bool(TIMEOUT_SECS);
 	clear_text();
 	return answer;
@@ -236,41 +297,36 @@ BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash) {
 		 (CHAR8 *)"%02x%02x-%02x%02x-%02x%02x",
 		 hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
 
-	return ux_prompt_user(device_altered_keystore, hash_text);
+	return ux_prompt_user(KEYSTORE_ALTERED_CODE, device_altered_keystore,
+			      hash_text);
 }
 
 BOOLEAN ux_warn_user_unverified_recovery(VOID) {
-	return ux_prompt_user(bad_recovery, NULL);
+	return ux_prompt_user(BAD_RECOVERY_CODE, bad_recovery, NULL);
 }
 
 BOOLEAN ux_prompt_user_bootimage_unverified(VOID) {
-	return ux_prompt_user(red_state, NULL);
+	return ux_prompt_user(RED_STATE_CODE, red_state, NULL);
 }
 
 BOOLEAN ux_prompt_user_secure_boot_off(VOID) {
-	return ux_prompt_user(secure_boot_off, NULL);
+	return ux_prompt_user(SECURE_BOOT_CODE, secure_boot_off, NULL);
 }
 
 BOOLEAN ux_prompt_user_device_unlocked(VOID) {
-	return ux_prompt_user(device_altered_unlocked, NULL);
+	return ux_prompt_user(DEVICE_UNLOCKED_CODE, device_altered_unlocked,
+			      NULL);
 }
 
-BOOLEAN ux_display_splash() {
-	UINT8 value;
-	EFI_STATUS ret;
-
-	ret = get_efi_variable_byte(&loader_guid, L"UIDisplaySplash", &value);
-	if (EFI_ERROR(ret) || value != 1)
-		return FALSE;
-
-	return TRUE;
-}
-
-EFI_STATUS ux_init(VOID) {
+VOID ux_init(VOID) {
 	uefi_call_wrapper(ST->ConOut->Reset, 2, ST->ConOut, FALSE);
         uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
 			  EFI_WHITE | EFI_BACKGROUND_BLACK);
 	uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, FALSE);
 
-	return ui_init(&swidth, &sheight, ux_display_splash());
+	if (ux_display_splash()) {
+		ui_init(&swidth, &sheight);
+		ui_display_vendor_splash();
+	}
 }
+

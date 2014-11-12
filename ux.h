@@ -56,6 +56,6 @@ BOOLEAN ux_prompt_user_device_unlocked(VOID);
  * FALSE: power off */
 BOOLEAN ux_prompt_user_secure_boot_off(VOID);
 
-EFI_STATUS ux_init(VOID);
+VOID ux_init(VOID);
 
 #endif

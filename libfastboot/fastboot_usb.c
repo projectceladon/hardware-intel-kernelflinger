@@ -401,6 +401,10 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 	fastboot_target = UNKNOWN_TARGET;
 	*target = UNKNOWN_TARGET;
 
+	/* In case user still holding it from answering a UX prompt
+	 * or magic key */
+	ui_wait_for_key_release();
+
 	for (;;) {
 		*target = fastboot_ui_event_handler();
 		if (*target != UNKNOWN_TARGET)
