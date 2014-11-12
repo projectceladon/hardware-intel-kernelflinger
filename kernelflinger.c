@@ -47,7 +47,7 @@
 #include "options.h"
 #include "power.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.00"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.01"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -60,11 +60,6 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 
 /* Interval in ms to check on startup for initial press of magic key */
 #define DETECT_KEY_STALL_TIME_MS    1
-
-/* Time between calls to ReadKeyStroke to check if it is being actively held
- * Smaller stall values seem to result in false reporting of no key pressed
- * on several devices */
-#define HOLD_KEY_STALL_TIME         (500 * 1000)
 
 /* How long magic key should be held to force Fastboot mode */
 #define FASTBOOT_HOLD_DELAY         (4 * 1000 * 1000)
@@ -170,7 +165,9 @@ static enum boot_target check_magic_key(VOID)
         int i;
         EFI_STATUS ret = EFI_NOT_READY;
         EFI_INPUT_KEY key;
+#ifdef USERFASTBOOT
         enum boot_target bt;
+#endif
         UINT8 *data;
         UINTN dsize;
         int wait_ms = EFI_RESET_WAIT_MS;
@@ -212,56 +209,24 @@ static enum boot_target check_magic_key(VOID)
         if (EFI_ERROR(ret))
                 return NORMAL_BOOT;
 
+#ifdef USERFASTBOOT
         debug(L"ReadKeyStroke: (%d tries) %d %d", i, key.ScanCode, key.UnicodeChar);
 
         Print(L"Continue holding key for %d seconds to force Fastboot mode.\n",
                         FASTBOOT_HOLD_DELAY / 1000000);
-        Print(L"Release key now to load Recovery Console.");
+        Print(L"Release key now to load Recovery Console...");
 
-        for (i = 0; i < (FASTBOOT_HOLD_DELAY / HOLD_KEY_STALL_TIME); i++) {
-                uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
-
-                ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
-                                ST->ConIn, &key);
-                if (ret != EFI_SUCCESS) {
-                        debug(L"err=%r", ret);
-                        break;
-                }
-                Print(L".");
-
-                /* flush any stacked up key events in the queue before
-                 * we sleep again */
-                while (uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
-                                ST->ConIn, &key) == EFI_SUCCESS) {
-                }
-        }
-
-        if (ret == EFI_SUCCESS) {
+        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY)) {
                 bt = FASTBOOT;
                 Print(L"FASTBOOT\n");
         } else {
                 bt = RECOVERY;
                 Print(L"RECOVERY\n");
         }
-
-        /* In case we need to prompt the user about something, don't continue
-         * until the key is released */
-        while (1) {
-                uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
-
-                ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
-                                ST->ConIn, &key);
-                if (ret != EFI_SUCCESS) {
-                        debug(L"err=%r", ret);
-                        break;
-                }
-
-                /* flush */
-                while (uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
-                                ST->ConIn, &key) == EFI_SUCCESS) {
-                }
-        }
         return bt;
+#else
+        return FASTBOOT;
+#endif
 }
 
 
@@ -676,8 +641,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state, BOOLEAN charger)
         return ret;
 }
 
-static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
-                                UINTN keystore_size, VOID *bootimage)
+static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         __attribute__ ((noreturn));
 
 
@@ -685,8 +649,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
 
 /* Enter Fastboot mode. If bootimage is NULL, load it from the file on the
  * EFI system partition */
-static VOID enter_fastboot_mode(UINT8 boot_state, __attribute__((__unused__)) VOID *keystore,
-                                __attribute__((__unused__)) UINTN keystore_size, VOID *bootimage)
+static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 {
         /* Fastboot is conceptually part of the bootloader itself. That it
          * happens to currently be an Android Boot Image, and not part of the
@@ -743,8 +706,7 @@ die:
 
 /* Enter Fastboot mode. If fastboot_start() returns a valid pointer,
  * try to start the bootimage pointed to. */
-static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
-                                UINTN keystore_size, VOID *bootimage)
+static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 {
         EFI_STATUS ret = EFI_SUCCESS;
         enum boot_target target;
@@ -766,8 +728,13 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
                         break;
                 }
 
-                if (bootimage)
-                        goto start_image;
+                if (bootimage) {
+                        /* 'fastboot boot' case, only allowed on unlocked devices.
+                         * check just to make sure */
+                        if (device_is_unlocked())
+                                load_image(bootimage, BOOT_STATE_ORANGE, FALSE);
+                        continue;
+                }
 
                 if (efiimage) {
                         ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
@@ -789,29 +756,22 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
 
                 switch (target) {
                 case FASTBOOT:
-                        set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
-                                             TRUE, TRUE, L"bootloader");
+                        reboot(L"bootloader");
+                        break;
+                case RECOVERY:
+                        reboot(L"recovery");
+                        break;
+                case NORMAL_BOOT:
+                        /* fall through */
                 case REBOOT:
-                        reboot();
+                        reboot(NULL);
+                        break;
                 case POWER_OFF:
                         halt_system();
-                case NORMAL_BOOT:
-                case RECOVERY:
                         break;
                 default:
                         continue;
                 }
-
-                ret = load_boot_image(target, keystore, keystore_size,
-                                      NULL, &bootimage, FALSE);
-                if (EFI_ERROR(ret)) {
-                        efi_perror(ret, "Couldn't load bootimage");
-                        target = UNKNOWN_TARGET;
-                        continue;
-                }
-
-        start_image:
-                load_image(bootimage, boot_state, FALSE);
         }
 
         /* Allow plenty of time for the error to be visible before the
@@ -913,15 +873,14 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         pause(3);
                 }
                 FreePool(target_path);
-                reboot();
+                reboot(NULL);
         }
 
         /* Fastboot is always validated by the OEM keystore baked into
          * the kernelflinger binary */
         if (boot_target == FASTBOOT || boot_target == MEMORY) {
                 debug(L"entering Fastboot mode");
-                enter_fastboot_mode(boot_state, selected_keystore,
-                                    selected_keystore_size, target_address);
+                enter_fastboot_mode(boot_state, target_address);
         }
 
         /* Past this point is where we start to care if the keystore isn't
@@ -932,8 +891,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
          * fastboot */
         if (boot_state == BOOT_STATE_YELLOW &&
                         !ux_prompt_user_keystore_unverified(hash)) {
-                enter_fastboot_mode(BOOT_STATE_RED, selected_keystore,
-                                    selected_keystore_size, NULL);
+                enter_fastboot_mode(BOOT_STATE_RED, NULL);
         }
 
         /* If the device is unlocked the only way to re-lock it is
@@ -941,8 +899,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
          * about EFI secure boot being turned off */
         if (boot_state == BOOT_STATE_ORANGE && !lock_prompted &&
                         !ux_prompt_user_device_unlocked()) {
-                enter_fastboot_mode(BOOT_STATE_RED, selected_keystore,
-                                    selected_keystore_size, NULL);
+                enter_fastboot_mode(BOOT_STATE_RED, NULL);
         }
 
 fallback:
@@ -963,10 +920,7 @@ fallback:
                 if (boot_target == RECOVERY) {
                         debug(L"recovery image is bad");
                         if (ux_warn_user_unverified_recovery())
-                                enter_fastboot_mode(BOOT_STATE_RED,
-                                                    selected_keystore,
-                                                    selected_keystore_size,
-                                                    NULL);
+                                enter_fastboot_mode(BOOT_STATE_RED, NULL);
                         else
                                 halt_system();
                 }

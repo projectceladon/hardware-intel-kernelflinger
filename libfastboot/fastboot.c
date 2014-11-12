@@ -453,16 +453,9 @@ static void cmd_reboot(__attribute__((__unused__)) INTN argc,
 static void cmd_reboot_bootloader(__attribute__((__unused__)) INTN argc,
 				  __attribute__((__unused__)) CHAR8 **argv)
 {
-        EFI_STATUS ret = set_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT,
-                                              TRUE, TRUE, L"bootloader");
-	if (EFI_ERROR(ret)) {
-		fastboot_fail("unable to set bootloader reboot target");
-		return;
-	}
-
 	ui_print(L"Rebooting to bootloader ...");
 	fastboot_okay("");
-	reboot();
+	reboot(L"bootloader");
 }
 
 static struct fastboot_cmd *get_cmd(struct fastboot_cmd *list, const CHAR8 *name)
