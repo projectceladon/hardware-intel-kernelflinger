@@ -462,11 +462,8 @@ static struct fastboot_cmd *get_cmd(struct fastboot_cmd *list, const CHAR8 *name
 {
 	struct fastboot_cmd *cmd;
 	for (cmd = list; cmd; cmd = cmd->next)
-		if (!memcmp(name, cmd->prefix, cmd->prefix_len)) {
-			if (cmd->restricted && device_is_locked())
-				return NULL;
+		if (!memcmp(name, cmd->prefix, cmd->prefix_len))
 			return cmd;
-		}
 
 	return NULL;
 }
@@ -483,6 +480,10 @@ static void cmd_oem(INTN argc, CHAR8 **argv)
 	cmd = get_cmd(oem_cmdlist, argv[1]);
 	if (!cmd) {
 		fastboot_fail("unknown command 'oem %a'", argv[1]);
+		return;
+	}
+	if (cmd->restricted && device_is_locked()) {
+		fastboot_fail("'oem %s' not allowed on locked devices", argv[1]);
 		return;
 	}
 
@@ -627,6 +628,10 @@ static void fastboot_process_rx(void *buf, unsigned len)
 
 		cmd = get_cmd(cmdlist, buf);
 		if (cmd) {
+			if (cmd->restricted && device_is_locked()) {
+				fastboot_fail("command not allowed on locked devices");
+				return;
+			}
 			split_args(buf, &argc, argv);
 			cmd->handle(argc, argv);
 			received_len = 0;
