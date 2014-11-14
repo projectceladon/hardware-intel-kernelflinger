@@ -386,6 +386,11 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 	rx_callback = rx_cb;
 	tx_callback = tx_cb;
 
+
+	/* In case user still holding it from answering a UX prompt
+	 * or magic key */
+	ui_wait_for_key_release();
+
 	ret = fastboot_usb_init();
 	if (EFI_ERROR(ret))
 		goto error;
@@ -400,10 +405,6 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 	fastboot_efiimage = NULL;
 	fastboot_target = UNKNOWN_TARGET;
 	*target = UNKNOWN_TARGET;
-
-	/* In case user still holding it from answering a UX prompt
-	 * or magic key */
-	ui_wait_for_key_release();
 
 	for (;;) {
 		*target = fastboot_ui_event_handler();
