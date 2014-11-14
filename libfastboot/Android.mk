@@ -3,7 +3,8 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE := libfastboot-$(TARGET_BUILD_VARIANT)
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/../include/libfastboot
-LOCAL_CFLAGS := -DKERNELFLINGER -Wall -Wextra -Werror
+LOCAL_CFLAGS := -DKERNELFLINGER -Wall -Wextra -Werror \
+	-DTARGET_BOOTLOADER_BOARD_NAME=\"$(TARGET_BOOTLOADER_BOARD_NAME)\"
 LOCAL_STATIC_LIBRARIES := libefi libgnuefi libopenssl-efi libcryptlib \
 	libkernelflinger-$(TARGET_BUILD_VARIANT)
 

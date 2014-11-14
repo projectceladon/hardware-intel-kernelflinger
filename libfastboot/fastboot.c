@@ -666,8 +666,7 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 		/* Might as well continue even though this failed ... */
 	}
 
-	if (info_product() != INFO_UNDEFINED)
-		fastboot_publish("product", info_product());
+	fastboot_publish("product", info_product());
 	fastboot_publish("version-bootloader", info_bootloader_version());
 	publish_intel_variables();
 
