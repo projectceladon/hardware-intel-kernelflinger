@@ -660,6 +660,12 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 	EFI_STATUS ret;
 	char download_max_str[30];
 
+	ret = uefi_call_wrapper(BS->SetWatchdogTimer, 4, 0, 0, 0, NULL);
+	if (EFI_ERROR(ret) && ret != EFI_UNSUPPORTED) {
+		efi_perror(ret, L"Couldn't disable watchdog timer");
+		/* Might as well continue even though this failed ... */
+	}
+
 	if (info_product() != INFO_UNDEFINED)
 		fastboot_publish("product", info_product());
 	fastboot_publish("version-bootloader", info_bootloader_version());
