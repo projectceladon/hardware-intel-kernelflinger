@@ -796,11 +796,11 @@ static EFI_STATUS push_capsule(
         CHAR8 *content = NULL;
         EFI_STATUS ret;
 
-        debug("Trying to load capsule: %s", name);
+        debug(L"Trying to load capsule: %s", name);
         ret = file_read(root_dir, name, &content, &len);
         if (EFI_SUCCESS == ret) {
                 if (len <= 0) {
-                        debug("Couldn't load capsule data from disk");
+                        debug(L"Couldn't load capsule data from disk");
                         FreePool(content);
                         return EFI_LOAD_ERROR;
                 }
@@ -814,7 +814,7 @@ static EFI_STATUS push_capsule(
                 }
         }
         else {
-                debug("Error in reading file");
+                debug(L"Error in reading file");
                 return ret;
         }
 
@@ -826,7 +826,7 @@ static EFI_STATUS push_capsule(
         }
         capHeaderArray[0] = capHeader;
         capHeaderArray[1] = NULL;
-        debug("Querying capsule capabilities");
+        debug(L"Querying capsule capabilities");
         ret = uefi_call_wrapper(RT->QueryCapsuleCapabilities, 4,
                         capHeaderArray, 1,  &max, resetType);
         if (EFI_SUCCESS == ret) {
@@ -846,7 +846,7 @@ static EFI_STATUS push_capsule(
                 scatterList->Length = len;
                 scatterList->Union.DataBlock = (EFI_PHYSICAL_ADDRESS) (UINTN) capHeader;
 
-                debug("Calling RT->UpdateCapsule");
+                debug(L"Calling RT->UpdateCapsule");
                 ret = uefi_call_wrapper(RT->UpdateCapsule, 3, capHeaderArray, 1,
                         (EFI_PHYSICAL_ADDRESS) (UINTN) scatterList);
                 if (ret != EFI_SUCCESS) {
@@ -907,7 +907,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 name = FWUPDATE_FILE;
                 push_capsule(g_disk_device, name, &resetType);
 
-                debug("I am about to reset the system");
+                debug(L"I am about to reset the system");
 
                 uefi_call_wrapper(RT->ResetSystem, 4, resetType, EFI_SUCCESS, 0,
                                 NULL);
