@@ -43,7 +43,6 @@
 
 char *INFO_UNDEFINED = "N/A";
 static char bootloader_version[MAX_INFO_LENGTH];
-static char device_name[MAX_INFO_LENGTH];
 static char variant[MAX_INFO_LENGTH];
 
 char *info_bootloader_version(void)
@@ -100,7 +99,7 @@ char *info_variant(void)
 
 char *info_product(void)
 {
-	return info_get_from_variable(&fastboot_guid, L"Product", device_name);
+	return TARGET_BOOTLOADER_BOARD_NAME;
 }
 
 BOOLEAN info_is_production_signing(void)
