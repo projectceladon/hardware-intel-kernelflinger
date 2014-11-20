@@ -273,6 +273,54 @@ BOOLEAN file_exists(IN EFI_HANDLE disk, IN const CHAR16 *path)
         return exists;
 }
 
+EFI_STATUS file_read(IN EFI_FILE_HANDLE dir, IN const CHAR16 *name,
+                     OUT CHAR8 **content, OUT UINTN *len)
+{
+        EFI_FILE_HANDLE handle;
+        EFI_FILE_INFO *info;
+        CHAR8 *buf;
+        UINTN buflen;
+        EFI_STATUS err;
+        EFI_FILE *root_dir;
+
+        root_dir = LibOpenRoot(dir);
+        if (!root_dir)
+                return EFI_LOAD_ERROR;
+
+        err = uefi_call_wrapper(root_dir->Open, 5, root_dir, &handle,
+                        (CHAR16 *)name, EFI_FILE_MODE_READ, 0);
+
+        if (EFI_ERROR(err))
+                goto out;
+
+        info = LibFileInfo(handle);
+        if (!info) {
+                err = EFI_UNSUPPORTED;
+                goto out;
+        }
+
+        buflen = info->FileSize + 1;
+        buf = AllocatePool(buflen);
+        if (!buf) {
+                err = EFI_OUT_OF_RESOURCES;
+                goto out;
+        }
+
+        err = uefi_call_wrapper(handle->Read, 3, handle, &buflen, buf);
+        if (EFI_ERROR(err) == EFI_SUCCESS) {
+                buf[buflen] = '\0';
+                *content = buf;
+                *len = buflen;
+        } else
+                FreePool(buf);
+
+        FreePool(info);
+        uefi_call_wrapper(handle->Close, 1, handle);
+
+out:
+        uefi_call_wrapper(root_dir->Close, 1, root_dir);
+        return err;
+}
 
 VOID StrNCpy(OUT CHAR16 *dest, IN const CHAR16 *src, UINT32 n)
 {

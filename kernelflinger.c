@@ -47,7 +47,7 @@
 #include "options.h"
 #include "power.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.02"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.03"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -71,6 +71,8 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 /* Path to Fastboot image */
 #define FASTBOOT_PATH             L"\\fastboot.img"
 
+/*BIOS Capsule update file*/
+#define FWUPDATE_FILE             L"\\BIOSUPDATE.fv"
 
 static EFI_HANDLE g_parent_image;
 static EFI_HANDLE g_disk_device;
@@ -781,6 +783,81 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 }
 #endif
 
+static EFI_STATUS push_capsule(
+                IN EFI_FILE *root_dir,
+                IN CHAR16 *name,
+                OUT EFI_RESET_TYPE *resetType)
+{
+        UINTN len = 0;
+        UINT64 max = 0;
+        EFI_CAPSULE_HEADER *capHeader = NULL;
+        EFI_CAPSULE_HEADER **capHeaderArray;
+        EFI_CAPSULE_BLOCK_DESCRIPTOR *scatterList;
+        CHAR8 *content = NULL;
+        EFI_STATUS ret;
+
+        debug(L"Trying to load capsule: %s", name);
+        ret = file_read(root_dir, name, &content, &len);
+        if (EFI_SUCCESS == ret) {
+                if (len <= 0) {
+                        debug(L"Couldn't load capsule data from disk");
+                        FreePool(content);
+                        return EFI_LOAD_ERROR;
+                }
+                /* Some capsules might invoke reset during UpdateCapsule
+                so delete the file now */
+                ret = file_delete(g_disk_device, name);
+                if (ret != EFI_SUCCESS) {
+                        efi_perror(ret, "Couldn't delete %s", name);
+                        FreePool(content);
+                        return ret;
+                }
+        }
+        else {
+                debug(L"Error in reading file");
+                return ret;
+        }
+
+        capHeader = (EFI_CAPSULE_HEADER *) content;
+        capHeaderArray = AllocatePool(2*sizeof(EFI_CAPSULE_HEADER*));
+        if (!capHeaderArray) {
+                FreePool(content);
+                return EFI_OUT_OF_RESOURCES;
+        }
+        capHeaderArray[0] = capHeader;
+        capHeaderArray[1] = NULL;
+        debug(L"Querying capsule capabilities");
+        ret = uefi_call_wrapper(RT->QueryCapsuleCapabilities, 4,
+                        capHeaderArray, 1,  &max, resetType);
+        if (EFI_SUCCESS == ret) {
+                if (len > max) {
+                        FreePool(content);
+                        FreePool(capHeaderArray);
+                        return EFI_BAD_BUFFER_SIZE;
+                }
+                scatterList = AllocatePool(2*sizeof(EFI_CAPSULE_BLOCK_DESCRIPTOR));
+                if (!scatterList) {
+                        FreePool(content);
+                        FreePool(capHeaderArray);
+                        return EFI_OUT_OF_RESOURCES;
+                }
+                memset((CHAR8*)scatterList, 0x0,
+                        2*sizeof(EFI_CAPSULE_BLOCK_DESCRIPTOR));
+                scatterList->Length = len;
+                scatterList->Union.DataBlock = (EFI_PHYSICAL_ADDRESS) (UINTN) capHeader;
+
+                debug(L"Calling RT->UpdateCapsule");
+                ret = uefi_call_wrapper(RT->UpdateCapsule, 3, capHeaderArray, 1,
+                        (EFI_PHYSICAL_ADDRESS) (UINTN) scatterList);
+                if (ret != EFI_SUCCESS) {
+                        FreePool(content);
+                        FreePool(capHeaderArray);
+                        FreePool(scatterList);
+                        return ret;
+                }
+        }
+        return ret;
+}
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
@@ -796,6 +873,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         UINT8 boot_state = BOOT_STATE_GREEN;
         CHAR16 *loader_version = KERNELFLINGER_VERSION;
         UINT8 hash[KEYSTORE_HASH_SIZE];
+        CHAR16 *name = NULL;
+        EFI_RESET_TYPE resetType;
 
         /* gnu-efi initialization */
         InitializeLib(image, sys_table);
@@ -823,6 +902,16 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         oem_key_size = oem_keystore_table.oem_key_size;
         debug(L"oem key size %d keystore size %d", oem_key_size,
                         oem_keystore_size);
+
+        if (file_exists(g_disk_device, FWUPDATE_FILE)) {
+                name = FWUPDATE_FILE;
+                push_capsule(g_disk_device, name, &resetType);
+
+                debug(L"I am about to reset the system");
+
+                uefi_call_wrapper(RT->ResetSystem, 4, resetType, EFI_SUCCESS, 0,
+                                NULL);
+        }
 
         debug(L"choosing a boot target");
         /* No UX prompts before this point, do not want to interfere
