@@ -44,6 +44,7 @@
 #include "gpt.h"
 
 #include "fastboot_oem.h"
+#include "intel_variables.h"
 
 #define OFF_MODE_CHARGE		"off-mode-charge"
 
@@ -52,6 +53,7 @@ static void fastboot_oem_publish(void)
 	fastboot_publish("secure", device_is_locked() ? "yes" : "no");
 	fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
 	fastboot_publish(OFF_MODE_CHARGE, get_current_off_mode_charge() ? "1" : "0");
+	publish_intel_variables();
 }
 
 static void change_device_state(enum device_state new_state)
