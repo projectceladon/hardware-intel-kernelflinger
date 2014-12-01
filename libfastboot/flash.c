@@ -533,6 +533,9 @@ EFI_STATUS erase_by_label(CHAR16 *label)
 {
 	EFI_STATUS ret;
 
+	if (!StrCmp(L"keystore", label))
+		return set_user_keystore(NULL, 0);
+
 	ret = gpt_get_partition_by_label(label, &gparti);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, "Failed to get partition %s", label);
