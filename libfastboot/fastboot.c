@@ -306,7 +306,7 @@ static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
 	do {
 		if (!strcmp(key, (CHAR8 *)*white_list))
 			return TRUE;
-	} while (white_list++);
+	} while (*++white_list);
 
 	return FALSE;
 }

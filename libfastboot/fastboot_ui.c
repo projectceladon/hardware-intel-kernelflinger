@@ -242,7 +242,7 @@ struct info_text_fun {
 
 static UINTN fastboot_ui_info_draw(UINTN x, UINTN y)
 {
-	static const UINTN LINE_LEN = 40;
+	static const UINTN LINE_LEN = 42;
 	UINTN i;
 	ui_textarea_t *textarea;
 	ui_font_t *font;
