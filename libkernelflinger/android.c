@@ -495,7 +495,7 @@ static EFI_STATUS setup_command_line(
                 goto out;
         }
 
-        ret = prepend_command_line(&cmdline16, L"bootreason=%s", bootreason);
+        ret = prepend_command_line(&cmdline16, L"androidboot.bootreason=%s", bootreason);
         if (EFI_ERROR(ret))
                 goto out;
 
