@@ -74,6 +74,48 @@ struct RSCI_TABLE {
 	UINT32 indicators;		/* Bitmap with additional info */
 };
 
+enum {
+	OEM1_USE_IA_APPS_CAP,
+	OEM1_USE_IA_APPS_RUN
+};
+
+struct OEM1_TABLE {
+	struct ACPI_DESC_HEADER header;	/* System Description Table Header */
+	UINT8 fixedoptions0;		/* Fixed Platform Options 0 */
+	UINT8 fixedoptions1;		/* Fixed Platform Options 1*/
+	UINT8 dbiingpio;		/* DBIIN GPIO number */
+	UINT8 dbioutgpio;		/* DBIOUT GPIO number */
+	UINT8 batchptyp;       		/* Identification / Authentication chip
+					 * inside the battery */
+	UINT16 ia_apps_run;		/* Minimum battery voltage required to
+					 * boot the platform if FG has been
+					 * reset */
+	UINT8 batiddbibase;		/* Resistance in KOhms for BSI used to
+					 * indicate a digital battery */
+	UINT8 batidanlgbase;		/* Resistance in KOhms for BSI beyond
+					 * which the battery is an analog
+					 * battery */
+	UINT8 ia_apps_cap; 		/* Minimum capacity at which to boot to Main
+					 * OS */
+	UINT16 vbattfreqlmt;		/* Battery Voltage up to which the CPU
+					 * frequency should be limited */
+	UINT8 capfreqidx;   		/* Index into the Frequency table at which
+					 * the CPU Frequency should be capped. */
+	UINT8 rsvd1;			/* Reserved */
+	UINT8 battidx; 			/* Battery Index: Charging profile to use in
+					 * case of fixed battery */
+	UINT8 ia_apps_to_use;		/* Whether to use the IA_APPS_RUN (value
+					 * = 1) or IA_APPS_CAP (value = 0) to
+					 * while booting */
+	UINT8 turbochrg;		/* Maximum Turbo charge supported (in
+					 * multiples of 100mA). Zero means no Turbo
+					 * charge */
+	UINT8 rsvd2[11];		/* Reserved */
+} __attribute__ ((packed));
+
 EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table);
+UINT16 oem1_get_ia_apps_run(void);
+UINT8 oem1_get_ia_apps_cap(void);
+UINT8 oem1_get_ia_apps_to_use(void);
 
 #endif /* __ACPI_H__ */
