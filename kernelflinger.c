@@ -507,6 +507,10 @@ static EFI_STATUS validate_bootimage(
 
         switch (boot_target) {
         case NORMAL_BOOT:
+                expected = L"/boot";
+                /* in case of multistage ota */
+                expected2 = L"/recovery";
+                break;
         case CHARGER:
                 expected = L"/boot";
                 break;
