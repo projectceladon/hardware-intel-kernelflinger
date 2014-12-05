@@ -38,6 +38,7 @@
 #include <vars.h>
 #include <string.h>
 #include <ui.h>
+#include <em.h>
 
 #include "uefi_utils.h"
 #include "gpt.h"
@@ -59,6 +60,7 @@ struct fastboot_var {
 	struct fastboot_var *next;
 	char name[MAX_VARIABLE_LENGTH];
 	char value[MAX_VARIABLE_LENGTH];
+	char *(*get_value)(void);
 };
 
 struct fastboot_tx_buffer {
@@ -180,6 +182,32 @@ struct fastboot_var *fastboot_getvar(const char *name)
 	return NULL;
 }
 
+static struct fastboot_var *fastboot_getvar_or_create(const char *name)
+{
+	struct fastboot_var *var;
+	UINTN size;
+
+	size = strlena((CHAR8 *) name) + 1;
+	if (size > sizeof(var->name)) {
+		error(L"Name too long for variable '%a'", name);
+		return NULL;
+	}
+
+	var = fastboot_getvar(name);
+	if (!var) {
+		var = AllocateZeroPool(sizeof(*var));
+		if (!var) {
+			error(L"Failed to allocate variable '%a'", name);
+			return NULL;
+		}
+		var->next = varlist;
+		varlist = var;
+		CopyMem(var->name, name, size);
+	}
+
+	return var;
+}
+
 /*
  * remove all fastboot variable which starts with partition-
  */
@@ -216,28 +244,39 @@ static void fastboot_unpublish_all()
 	varlist = NULL;
 }
 
+EFI_STATUS fastboot_publish_dynamic(const char *name, char *(get_value)(void))
+{
+	struct fastboot_var *var;
+
+	if (!name || !get_value)
+		return EFI_INVALID_PARAMETER;
+
+	var = fastboot_getvar_or_create(name);
+	if (!var)
+		return EFI_INVALID_PARAMETER;
+
+	var->get_value = get_value;
+
+	return EFI_SUCCESS;
+}
+
 EFI_STATUS fastboot_publish(const char *name, const char *value)
 {
 	struct fastboot_var *var;
-	UINTN namelen = strlena((CHAR8 *) name) + 1;
-	UINTN valuelen = strlena((CHAR8 *) value) + 1;
+	UINTN valuelen;
 
-	if (namelen > sizeof(var->name) ||
-	    valuelen > sizeof(var->value)) {
-		error(L"name or value too long for variable %a", name);
+	if (!name || !value)
+		return EFI_INVALID_PARAMETER;
+
+	valuelen = strlena((CHAR8 *) value) + 1;
+	if (valuelen > sizeof(var->value)) {
+		error(L"name or value too long for variable '%a'", name);
 		return EFI_BUFFER_TOO_SMALL;
 	}
-	var = fastboot_getvar(name);
-	if (!var) {
-		var = AllocateZeroPool(sizeof(*var));
-		if (!var) {
-			error(L"Failed to allocate variable %a", name);
-			return EFI_OUT_OF_RESOURCES;
-		}
-		var->next = varlist;
-		varlist = var;
-	}
-	CopyMem(var->name, name, namelen);
+	var = fastboot_getvar_or_create(name);
+	if (!var)
+		return EFI_INVALID_PARAMETER;
+
 	CopyMem(var->value, value, valuelen);
 
 	return EFI_SUCCESS;
@@ -321,6 +360,26 @@ static EFI_STATUS publish_partsize(void)
 	FreePool(gparti);
 
 	return EFI_SUCCESS;
+}
+
+static char *get_battery_voltage_var()
+{
+	EFI_STATUS ret;
+	static char battery_voltage[30]; /* Enough space for %dmV format */
+	UINTN voltage;
+
+	ret = get_battery_voltage(&voltage);
+	if (EFI_ERROR(ret))
+		return NULL;
+
+	ret = snprintf((CHAR8 *)battery_voltage, sizeof(battery_voltage),
+		       (CHAR8 *)"%dmV", voltage);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to format voltage string");
+		return NULL;
+	}
+
+	return battery_voltage;
 }
 
 static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char *fmt, va_list ap)
@@ -543,6 +602,25 @@ static void cmd_boot(__attribute__((__unused__)) INTN argc,
 	fastboot_okay("");
 }
 
+static char *fastboot_var_value(struct fastboot_var *var)
+{
+	char *value;
+
+	if (!var->get_value)
+		return var->value;
+
+	value = var->get_value();
+	if (!value)
+		return "";
+
+	if (strlena((CHAR8 *)value) + 1 > sizeof(var->value)) {
+		error(L"value too long for '%a' variable");
+		return "";
+	}
+
+	return value;
+}
+
 static void cmd_getvar(INTN argc, CHAR8 **argv)
 {
 	struct fastboot_var *var;
@@ -553,13 +631,13 @@ static void cmd_getvar(INTN argc, CHAR8 **argv)
 
 	if (!strcmp(argv[1], (CHAR8 *)"all")) {
 		for (var = varlist; var; var = var->next)
-			fastboot_info("%a: %a", var->name, var->value);
+			fastboot_info("%a: %a", var->name, fastboot_var_value(var));
 		fastboot_okay("");
 		return;
 	}
 
 	var = fastboot_getvar((char *)argv[1]);
-	fastboot_okay("%a", var ? var->value : "");
+	fastboot_okay("%a", var ? fastboot_var_value(var) : "");
 }
 
 static void cmd_continue(__attribute__((__unused__)) INTN argc,
@@ -840,6 +918,10 @@ static EFI_STATUS fastboot_init()
 		goto error;
 
 	ret = fastboot_publish("version-bootloader", info_bootloader_version());
+	if (EFI_ERROR(ret))
+		goto error;
+
+	ret = fastboot_publish_dynamic("battery-voltage", get_battery_voltage_var);
 	if (EFI_ERROR(ret))
 		goto error;
 

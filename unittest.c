@@ -180,6 +180,7 @@ static VOID test_ux(VOID)
         ux_prompt_user_secure_boot_off();
         ux_prompt_user_keystore_unverified(fake_hash);
         ux_crash_event_prompt_user_for_boot_target();
+        ux_display_low_battery(3);
 }
 
 static struct test_suite {
