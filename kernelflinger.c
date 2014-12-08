@@ -409,7 +409,7 @@ static enum boot_target check_charge_mode()
 {
         enum wake_sources wake_source;
 
-        if (get_current_off_mode_charge())
+        if (!get_current_off_mode_charge())
                 return NORMAL_BOOT;
 
         wake_source = rsci_get_wake_source();
