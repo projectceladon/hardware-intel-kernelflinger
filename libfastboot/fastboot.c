@@ -482,7 +482,7 @@ static void cmd_oem(INTN argc, CHAR8 **argv)
 		return;
 	}
 	if (cmd->restricted && device_is_locked()) {
-		fastboot_fail("'oem %s' not allowed on locked devices", argv[1]);
+		fastboot_fail("'oem %a' not allowed on locked devices", argv[1]);
 		return;
 	}
 
