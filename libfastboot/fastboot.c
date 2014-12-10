@@ -57,7 +57,7 @@ struct fastboot_cmd {
 	struct fastboot_cmd *next;
 	const CHAR8 *prefix;
 	unsigned prefix_len;
-	BOOLEAN restricted;
+	enum device_state min_state;
 	fastboot_handle handle;
 };
 
@@ -118,7 +118,7 @@ static const char *erase_verified_whitelist[] = {
 };
 
 static void cmd_register(struct fastboot_cmd **list, const char *prefix,
-			 fastboot_handle handle, BOOLEAN restricted)
+			 fastboot_handle handle, enum device_state min_state)
 {
 	struct fastboot_cmd *cmd;
 	cmd = AllocatePool(sizeof(*cmd));
@@ -128,7 +128,7 @@ static void cmd_register(struct fastboot_cmd **list, const char *prefix,
 	}
 	cmd->prefix = (CHAR8 *)prefix;
 	cmd->prefix_len = strlen((const CHAR8 *)prefix);
-	cmd->restricted = restricted;
+	cmd->min_state = min_state;
 	cmd->handle = handle;
 	cmd->next = *list;
 	*list = cmd;
@@ -136,16 +136,16 @@ static void cmd_register(struct fastboot_cmd **list, const char *prefix,
 
 void fastboot_register(const char *prefix,
 		       fastboot_handle handle,
-		       BOOLEAN restricted)
+		       enum device_state min_state)
 {
-	cmd_register(&cmdlist, prefix, handle, restricted);
+	cmd_register(&cmdlist, prefix, handle, min_state);
 }
 
 void fastboot_oem_register(const char *prefix,
 			   fastboot_handle handle,
-			   BOOLEAN restricted)
+			   enum device_state min_state)
 {
-	cmd_register(&oem_cmdlist, prefix, handle, restricted);
+	cmd_register(&oem_cmdlist, prefix, handle, min_state);
 }
 
 struct fastboot_var *fastboot_getvar(const char *name)
@@ -481,8 +481,9 @@ static void cmd_oem(INTN argc, CHAR8 **argv)
 		fastboot_fail("unknown command 'oem %a'", argv[1]);
 		return;
 	}
-	if (cmd->restricted && device_is_locked()) {
-		fastboot_fail("'oem %a' not allowed on locked devices", argv[1]);
+	if (cmd->min_state > get_current_state()) {
+		fastboot_fail("'oem %a' not allowed in %a state",
+			      argv[1], get_current_state_string());
 		return;
 	}
 
@@ -627,8 +628,9 @@ static void fastboot_process_rx(void *buf, unsigned len)
 
 		cmd = get_cmd(cmdlist, buf);
 		if (cmd) {
-			if (cmd->restricted && device_is_locked()) {
-				fastboot_fail("command not allowed on locked devices");
+			if (cmd->min_state > get_current_state()) {
+				fastboot_fail("command not allowed in %a state",
+					      get_current_state_string());
 				return;
 			}
 			split_args(buf, &argc, argv);
@@ -674,18 +676,18 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 	else
 		fastboot_publish("max-download-size", download_max_str);
 
-	fastboot_register("download:", cmd_download, TRUE);
-	fastboot_register("flash:", cmd_flash, TRUE);
-	fastboot_register("erase:", cmd_erase, TRUE);
-	fastboot_register("getvar:", cmd_getvar, FALSE);
-	fastboot_register("boot", cmd_boot, TRUE);
-	fastboot_register("continue", cmd_continue, FALSE);
-	fastboot_register("reboot", cmd_reboot, FALSE);
-	fastboot_register("reboot-bootloader", cmd_reboot_bootloader, FALSE);
+	fastboot_register("download:", cmd_download, VERIFIED);
+	fastboot_register("flash:", cmd_flash, VERIFIED);
+	fastboot_register("erase:", cmd_erase, VERIFIED);
+	fastboot_register("getvar:", cmd_getvar, LOCKED);
+	fastboot_register("boot", cmd_boot, UNLOCKED);
+	fastboot_register("continue", cmd_continue, LOCKED);
+	fastboot_register("reboot", cmd_reboot, LOCKED);
+	fastboot_register("reboot-bootloader", cmd_reboot_bootloader, LOCKED);
 
 	publish_partsize();
 
-	fastboot_register("oem", cmd_oem, FALSE);
+	fastboot_register("oem", cmd_oem, LOCKED);
 	fastboot_oem_init();
 	ret = fastboot_ui_init();
 	if (EFI_ERROR(ret))
