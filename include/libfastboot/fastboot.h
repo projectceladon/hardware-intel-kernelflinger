@@ -37,6 +37,7 @@
 
 #include <efidef.h>
 #include <lib.h>
+#include <vars.h>
 
 /* GUID for variables used to communicate with Fastboot */
 extern const EFI_GUID fastboot_guid;
@@ -48,9 +49,9 @@ void fastboot_okay(const char *fmt, ...);
 void fastboot_fail(const char *fmt, ...);
 void fastboot_info(const char *fmt, ...);
 void fastboot_register(const char *prefix, fastboot_handle handle,
-		       BOOLEAN restricted);
+		       enum device_state min_state);
 void fastboot_oem_register(const char *prefix, fastboot_handle handle,
-			   BOOLEAN restricted);
+			   enum device_state min_state);
 
 EFI_STATUS fastboot_start(void **bootimage, void **efiimage,
 			  UINTN *imagesize, enum boot_target *target);
