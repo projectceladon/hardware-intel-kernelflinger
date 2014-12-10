@@ -315,6 +315,20 @@ error:
 	return -1;
 }
 
+/* Giving a number, returns the integer log base 2 of it
+ * This is the same as the position of the highest bit set */
+static int int_log_2(unsigned int number)
+{
+	int r = 0;
+
+	while (number >>= 1)
+		r++;
+
+	return r;
+}
+
+#define DER_TAG 0x30
+#define LONG_FORM_INITIAL_LENGTH_OCTET 0x80
 
 static int decode_keystore(const unsigned char **datap, long *sizep,
 		struct keystore *ks)
@@ -322,6 +336,9 @@ static int decode_keystore(const unsigned char **datap, long *sizep,
 	long seq_size = *sizep;
 	const unsigned char *orig = *datap;
 	int new_seq_size;
+	unsigned char length_octet;
+	const unsigned char *p;
+	long int nb_octet;
 
 	if (consume_sequence(datap, &seq_size) < 0)
 		return -1;
@@ -340,21 +357,36 @@ static int decode_keystore(const unsigned char **datap, long *sizep,
 		return -1;
 	}
 
-	/* size of the so-called 'inner keystore' before signature
-	 * was appended, needed for verification */
-	ks->inner_sz = *datap - orig;
-	ks->inner_data = malloc(ks->inner_sz);
+	/* Need to re-encode the inner data for verification */
+	p = orig + 4; // skip the sequence header;
+	ks->inner_sz = *datap - p;
+	new_seq_size = ks->inner_sz + 2; // add 1 for DER_TAG and 1 for length octet
+	nb_octet = int_log_2(ks->inner_sz) / 8 + 1; // number of octet to encode the length of inner data
+	if (nb_octet > 2) {
+		pr_error("inner keystore is too long\n");
+		free_keybag(ks->bag);
+		return -1;
+	}
+
+	length_octet = LONG_FORM_INITIAL_LENGTH_OCTET | nb_octet;
+	new_seq_size += nb_octet;
+	ks->inner_data = malloc(new_seq_size);
 	if (!ks->inner_data) {
 		pr_error("out of memory\n");
 		free_keybag(ks->bag);
 		return -1;
 	}
-	memcpy(ks->inner_data, orig, ks->inner_sz);
-	/* Now fix the size data in the sequence struct since the
-	 * 'inner keybag' sequence does not contain a signature block */
-	new_seq_size = ks->inner_sz - 4; // size of the sequence header
-	ks->inner_data[2] = (new_seq_size >> 8) & 0xFF;
-	ks->inner_data[3] = new_seq_size & 0xff;
+	ks->inner_data[0] = DER_TAG;
+	ks->inner_data[1] = length_octet;
+
+	if (nb_octet == 1)
+		ks->inner_data[2] = ks->inner_sz;
+	else {
+		ks->inner_data[2] = ks->inner_sz >> 8;
+		ks->inner_data[3] = ks->inner_sz;
+	}
+	memcpy(ks->inner_data + 2 + nb_octet, p, ks->inner_sz);
+	ks->inner_sz = new_seq_size;
 
 	if (decode_boot_signature(datap, &seq_size, &ks->sig)) {
 		free_keybag(ks->bag);
