@@ -110,6 +110,13 @@ static void publish_board(void)
 	fastboot_publish("board", board_str);
 }
 
+/* "serialno": The device serial number. */
+static void publish_serialno(void)
+{
+	fastboot_publish("serialno",
+			 SMBIOS_GET_STRING(1, SerialNumber));
+}
+
 void publish_intel_variables(void)
 {
 	publish_secureboot();
@@ -118,4 +125,5 @@ void publish_intel_variables(void)
 	publish_boot_state();
 	publish_device_state();
 	publish_board();
+	publish_serialno();
 }

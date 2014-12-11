@@ -270,20 +270,20 @@ static void cmd_oem_reprovision(__attribute__((__unused__)) INTN argc,
 void fastboot_oem_init(void)
 {
 	fastboot_oem_publish();
-	fastboot_oem_register("lock", cmd_oem_lock, FALSE);
-	fastboot_oem_register("unlock", cmd_oem_unlock, FALSE);
-	fastboot_oem_register("verified", cmd_oem_verified, FALSE);
-	fastboot_oem_register(OFF_MODE_CHARGE, cmd_oem_off_mode_charge, FALSE);
+	fastboot_oem_register("lock", cmd_oem_lock, LOCKED);
+	fastboot_oem_register("unlock", cmd_oem_unlock, LOCKED);
+	fastboot_oem_register("verified", cmd_oem_verified, LOCKED);
+	fastboot_oem_register(OFF_MODE_CHARGE, cmd_oem_off_mode_charge, LOCKED);
 
 	/* The following commands are not part of the Google
 	 * requirements.  They are provided for engineering and
 	 * provisioning purpose only and those which modify the
 	 * device are restricted to the unlocked state.  */
-	fastboot_oem_register("setvar", cmd_oem_setvar, TRUE);
-	fastboot_oem_register("garbage-disk", cmd_oem_garbage_disk, TRUE);
-	fastboot_oem_register("reboot", cmd_oem_reboot, FALSE);
-	fastboot_oem_register("get-hashes", cmd_oem_gethashes, FALSE);
+	fastboot_oem_register("setvar", cmd_oem_setvar, UNLOCKED);
+	fastboot_oem_register("garbage-disk", cmd_oem_garbage_disk, UNLOCKED);
+	fastboot_oem_register("reboot", cmd_oem_reboot, LOCKED);
+	fastboot_oem_register("get-hashes", cmd_oem_gethashes, LOCKED);
 #ifndef USER
-	fastboot_oem_register("reprovision", cmd_oem_reprovision, FALSE);
+	fastboot_oem_register("reprovision", cmd_oem_reprovision, LOCKED);
 #endif
 }
