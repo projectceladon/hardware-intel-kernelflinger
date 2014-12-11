@@ -31,5 +31,7 @@ int decode_printable_string(const unsigned char **datap, long *sizep,
 
 int consume_sequence(const unsigned char **datap, long *sizep);
 
+int skip_sequence(const unsigned char **datap, long *sizep);
+
 #endif
 
