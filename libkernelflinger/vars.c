@@ -82,19 +82,19 @@ BOOLEAN get_current_off_mode_charge(void)
 	if (current_off_mode_charge[0] == '\0') {
 		if (EFI_ERROR(get_efi_variable(&fastboot_guid, OFF_MODE_CHARGE_VAR,
 					       &size, (VOID **)&data, NULL)))
-			return FALSE;
+			return TRUE;
 
 		if (size != sizeof(current_off_mode_charge)
 		    || (strcmp(data, (CHAR8 *)"0") && strcmp(data, (CHAR8 *)"1"))) {
 			FreePool(data);
-			return FALSE;
+			return TRUE;
 		}
 
 		memcpy(current_off_mode_charge, data, sizeof(current_off_mode_charge));
 		FreePool(data);
 	}
 
-	return !strcmp(current_off_mode_charge, (CHAR8 *)"0");
+	return !strcmp(current_off_mode_charge, (CHAR8 *)"1");
 }
 
 enum device_state get_current_state()
