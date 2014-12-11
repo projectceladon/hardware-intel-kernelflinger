@@ -180,6 +180,7 @@ EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte)
         }
 
         *byte = data[0];
+        FreePool(data);
         return EFI_SUCCESS;
 }
 
