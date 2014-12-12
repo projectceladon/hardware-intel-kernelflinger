@@ -24,8 +24,9 @@
 #ifndef KERNELFLINGER
 #include "userfastboot_ui.h"
 #else
-#define pr_error(x...) do { } while(0)
-#define pr_debug(x...) do { } while(0)
+#include "lib.h"
+#define pr_error(x, ...) error(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
+#define pr_debug(x, ...) debug(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
 #endif
 
 /* Decode an integer from an ASN.1 message
@@ -160,6 +161,25 @@ int decode_printable_string(const unsigned char **datap, long *sizep,
 	buf[len - 1] = '\0';
 	M_ASN1_PRINTABLESTRING_free(s);
 	*sizep = *sizep - (*datap - orig);
+	return 0;
+}
+
+
+/* Consume a sequence type in the ASN.1 message and all items within, discarding
+ * the data.
+ * datap - Pointer to data conatining the sequence. Will be updated to the first byte
+ * after the end of the sequence.
+ * sizep - Maximum size of the sequence data. Subtracts the actual size from this value
+ * on return
+ * Returns 0 on success, or -1 on some error */
+int skip_sequence(const unsigned char **datap, long *sizep)
+{
+	long seq_size = *sizep;
+	if (consume_sequence(datap, &seq_size) < 0)
+		return -1;
+
+	*datap += seq_size;
+	*sizep -= seq_size;
 	return 0;
 }
 

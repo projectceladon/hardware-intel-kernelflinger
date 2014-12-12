@@ -25,8 +25,9 @@
 #ifndef KERNELFLINGER
 #include "userfastboot_ui.h"
 #else
-#define pr_error(x...) do { } while(0)
-#define pr_debug(x...) do { } while(0)
+#include "lib.h"
+#define pr_error(x, ...) error(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
+#define pr_debug(x, ...) debug(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
 #endif
 
 static void free_keybag(struct keybag *kb)
@@ -166,6 +167,23 @@ static int decode_boot_signature(const unsigned char **datap, long *sizep,
 	if (decode_integer(datap, &seq_size, 0, &bs->format_version,
 				NULL, NULL))
 		return -1;
+
+	pr_debug("BootSignature format version %ld\n", bs->format_version);
+	switch (bs->format_version) {
+	case 0:
+		break;
+	case 1:
+		/* Skip over the "certificate" field introduced in version 1,
+		 * we don't need it at all since we must verify against the
+		 * selected keystore */
+		if (skip_sequence(datap, &seq_size))
+			return -1;
+		break;
+	default:
+		pr_error("unsupported boot signature format %ld\n",
+			 bs->format_version);
+		return -1;
+	}
 
 	if (decode_algorithm_identifier(datap, &seq_size, &bs->id)) {
 		pr_error("bad algorithm identifier\n");
@@ -311,6 +329,11 @@ static int decode_keystore(const unsigned char **datap, long *sizep,
 	if (decode_integer(datap, &seq_size, 0, &ks->format_version,
 			NULL, NULL))
 		return -1;
+
+	if (ks->format_version != 0) {
+		pr_error("unsupported keystore format version %ld\n", ks->format_version);
+		return -1;
+	}
 
 	if (decode_keybag(datap, &seq_size, &ks->bag)) {
 		pr_error("bad keybag data\n");
