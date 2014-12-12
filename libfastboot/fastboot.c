@@ -93,6 +93,7 @@ static const char *flash_verified_whitelist[] = {
 	"boot",
 	"system",
 	"oem", /* alternate name for vendor */
+	"oemvars", /* allow configuration data flashing */
 	"vendor",
 	"recovery",
 	/* Following three needed even though not specifically listed
