@@ -81,6 +81,9 @@
   error(x L": %r", ##__VA_ARGS__, ret); \
 } while (0)
 
+#define _CONVERT_TO_WIDE(x) L ## x
+#define CONVERT_TO_WIDE(x) _CONVERT_TO_WIDE(x)
+
 enum boot_target {
         UNKNOWN_TARGET = -1,
         NORMAL_BOOT,
