@@ -84,19 +84,6 @@
 #define _CONVERT_TO_WIDE(x) L ## x
 #define CONVERT_TO_WIDE(x) _CONVERT_TO_WIDE(x)
 
-enum boot_target {
-        UNKNOWN_TARGET = -1,
-        NORMAL_BOOT,
-        RECOVERY,
-        FASTBOOT,
-        ESP_BOOTIMAGE,
-        ESP_EFI_BINARY,
-        MEMORY,
-        CHARGER,
-        REBOOT,
-        POWER_OFF
-};
-
 /*
  * EFI Variables
  */

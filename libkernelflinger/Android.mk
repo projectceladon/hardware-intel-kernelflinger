@@ -64,7 +64,8 @@ LOCAL_SRC_FILES := \
 	ui.c \
 	ui_font.c \
 	ui_textarea.c \
-	ui_image.c
+	ui_image.c \
+	ui_boot_menu.c
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(res_intermediates)
