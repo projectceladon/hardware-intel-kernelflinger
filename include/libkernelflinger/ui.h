@@ -34,6 +34,7 @@
 #define _UI_H_
 
 #include <efi.h>
+#include <targets.h>
 
 /* Colors */
 extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_BLACK;
@@ -102,14 +103,38 @@ void ui_textarea_newline(ui_textarea_t *textarea, char *str,
 			 EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold);
 EFI_STATUS ui_textarea_draw(ui_textarea_t *textarea, UINTN x, UINTN y);
 
-
-/* Screen */
+/* Events */
 typedef enum ui_events {
 	EV_NONE,
 	EV_UP,
 	EV_DOWN
 } ui_events_t;
+ui_events_t ui_read_input(void);
+BOOLEAN ui_enforce_key_held(UINT32 microseconds);
+void ui_wait_for_key_release(void);
+ui_events_t ui_wait_for_input(UINTN timeout_secs);
+BOOLEAN ui_input_to_bool(UINTN timeout_secs);
 
+/* Boot menu */
+typedef struct ui_boot_action {
+	const char *img_name;
+	ui_image_t *image;
+	enum boot_target target;
+} ui_boot_action_t;
+typedef struct ui_boot_menu {
+	ui_boot_action_t *actions;
+	ui_font_t *font;
+	UINTN action_nb;
+	UINTN cur;
+	UINTN x;
+	UINTN y;
+} ui_boot_menu_t;
+ui_boot_menu_t *ui_boot_menu_create(ui_boot_action_t *actions, ui_font_t *font);
+UINTN ui_boot_menu_draw(ui_boot_menu_t *menu, UINTN x, UINTN *y);
+enum boot_target ui_boot_menu_event_handler(ui_boot_menu_t *menu, ui_events_t event);
+void ui_boot_menu_free(ui_boot_menu_t *menu);
+
+/* Screen */
 EFI_STATUS ui_init(UINTN *width, UINTN *height);
 BOOLEAN ui_is_ready();
 void ui_free(void);
@@ -121,11 +146,5 @@ EFI_STATUS ui_draw_blt(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt, UINTN x, UINTN y,
 void ui_print(CHAR16 *fmt, ...);
 void ui_error(CHAR16 *fmt, ...);
 void ui_print_clear(void);
-
-ui_events_t ui_read_input(void);
-BOOLEAN ui_enforce_key_held(UINT32 microseconds);
-void ui_wait_for_key_release(void);
-ui_events_t ui_wait_for_input(UINTN timeout_secs);
-BOOLEAN ui_input_to_bool(UINTN timeout_secs);
 
 #endif  /* _UI_H_ */

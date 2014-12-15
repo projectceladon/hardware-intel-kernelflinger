@@ -120,52 +120,25 @@ static struct msg_for_state {
 
 static const char *DROID_IMG_NAME = "droid_operation";
 static const UINTN SPACE = 20;
+static char *FASTBOOT_FONT_NAME = "18x32";
 
-/* Image menu. */
-static struct res_action {
-	const char *img_name;
-	ui_image_t *image;
-	enum boot_target target;
-} menu_actions[] = {
+/* Boot menu. */
+static ui_boot_action_t BOOT_ACTIONS[] = {
 	{ "start",		NULL,	NORMAL_BOOT },
 	{ "restartbootloader",	NULL,	FASTBOOT },
 	{ "recoverymode",	NULL,	RECOVERY },
 	{ "reboot",		NULL,	REBOOT },
-	{ "power_off",		NULL,	POWER_OFF }
+	{ "power_off",		NULL,	POWER_OFF },
+	{ NULL,			NULL,	UNKNOWN_TARGET }
 };
 
+static BOOLEAN fastboot_ui_initialized = FALSE;
 static UINTN margin;
 static UINTN swidth, sheight;
-static UINTN menu_current;
 static UINTN area_x;
 static UINTN area_y;
-
-static UINTN fastboot_ui_menu_draw(UINTN x, UINTN y)
-{
-	ui_textline_t lines[] = {
-		{ &COLOR_LIGHTGRAY, "Volume DOWN button to choose boot option", TRUE },
-		{ &COLOR_LIGHTGRAY, "Volume UP button to select boot option", TRUE },
-		{ NULL, NULL, TRUE }
-	};
-	ui_font_t *font;
-	ui_image_t *image = menu_actions[menu_current].image;
-
-	if (!image)
-		return y;
-
-	ui_image_draw(image, x, y);
-	y += image->height + SPACE;
-
-	font = ui_font_get("18x32");
-	if (!font) {
-		efi_perror(EFI_UNSUPPORTED, "Unable to find 18x32 font");
-		return y;
-	}
-
-	ui_textarea_display_text(lines, font, x, &y);
-
-	return y;
-}
+static ui_boot_menu_t *boot_menu;
+static ui_font_t *fastboot_font;
 
 static EFI_STATUS fastboot_ui_clear_dynamic_part(void)
 {
@@ -245,16 +218,9 @@ static UINTN fastboot_ui_info_draw(UINTN x, UINTN y)
 	static const UINTN LINE_LEN = 42;
 	UINTN i;
 	ui_textarea_t *textarea;
-	ui_font_t *font;
 	char *dst;
 
-	font = ui_font_get("18x32");
-	if (!font) {
-		efi_perror(EFI_UNSUPPORTED, "Unable to find 18x32 font");
-		return y;
-	}
-
-	textarea = ui_textarea_create(ARRAY_SIZE(INFOS) + 2, LINE_LEN, font, NULL);
+	textarea = ui_textarea_create(ARRAY_SIZE(INFOS) + 2, LINE_LEN, fastboot_font, NULL);
 	dst = AllocatePool(LINE_LEN);
 	if (!dst)
 		return y;
@@ -287,20 +253,17 @@ BOOLEAN fastboot_ui_confirm_for_state(enum device_state target)
 {
 	UINTN i;
 	BOOLEAN result = FALSE;
-	ui_font_t *font;
 	UINTN y = area_y;
 
-	font = ui_font_get("18x32");
-	if (!font) {
-		efi_perror(EFI_UNSUPPORTED, "Unable to find 18x32 font");
-		return result;
-	}
+	/* No way to ask for user confirmation, assume yes. */
+	if (!fastboot_ui_initialized)
+		return TRUE;
 
 	for (i = 0; i < ARRAY_SIZE(FASTBOOT_UI_CONFIRM); i++)
 		if (target == FASTBOOT_UI_CONFIRM[i].state) {
 			fastboot_ui_clear_dynamic_part();
 			ui_textarea_display_text(FASTBOOT_UI_CONFIRM[i].msg,
-						 font, area_x, &y);
+						 fastboot_font, area_x, &y);
 			result = ui_input_to_bool(60);
 			fastboot_ui_refresh();
 		}
@@ -308,31 +271,21 @@ BOOLEAN fastboot_ui_confirm_for_state(enum device_state target)
 	return result;
 }
 
-static EFI_STATUS fastboot_ui_menu_load(void)
-{
-	UINTN i;
-
-	for (i = 0; i < ARRAY_SIZE(menu_actions) ; i++) {
-		menu_actions[i].image = ui_image_get(menu_actions[i].img_name);
-		if (!menu_actions[i].image)
-			return EFI_OUT_OF_RESOURCES;
-	}
-
-	return EFI_SUCCESS;
-}
-
 void fastboot_ui_refresh(void)
 {
 	UINTN y = area_y;
 
+	if (!fastboot_ui_initialized)
+		return;
+
 	fastboot_ui_clear_dynamic_part();
-	y = fastboot_ui_menu_draw(area_x, y);
+	ui_boot_menu_draw(boot_menu, area_x, &y);
 	fastboot_ui_info_draw(area_x, y + 20);
 }
 
 EFI_STATUS fastboot_ui_init(void)
 {
-	static ui_image_t *droid;
+	ui_image_t *droid;
 	UINTN width, height, x, y;
 	EFI_STATUS ret = EFI_SUCCESS;
 
@@ -379,11 +332,20 @@ EFI_STATUS fastboot_ui_init(void)
 		area_y = sheight / 2;
 	}
 
-	ret = fastboot_ui_menu_load();
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to build menu");
-		return ret;
+	fastboot_font = ui_font_get(FASTBOOT_FONT_NAME);
+	if (!fastboot_font) {
+		efi_perror(EFI_UNSUPPORTED, "Unable to find '%a' font",
+			   FASTBOOT_FONT_NAME);
+		return EFI_UNSUPPORTED;
 	}
+
+	boot_menu = ui_boot_menu_create(BOOT_ACTIONS, fastboot_font);
+	if (!boot_menu) {
+		error(L"Failed to build boot menu");
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	fastboot_ui_initialized = TRUE;
 
 	fastboot_ui_refresh();
 
@@ -394,21 +356,13 @@ EFI_STATUS fastboot_ui_init(void)
 
 enum boot_target fastboot_ui_event_handler()
 {
-	switch (ui_read_input()) {
-	case EV_UP:
-		return menu_actions[menu_current].target;
-	case EV_DOWN:
-		menu_current = (menu_current + 1) % ARRAY_SIZE(menu_actions);
-		fastboot_ui_menu_draw(area_x, area_y);
-	default:
-		break;
-	}
-
-	return UNKNOWN_TARGET;
+	return ui_boot_menu_event_handler(boot_menu, ui_read_input());
 }
 
 void fastboot_ui_destroy(void)
 {
+	ui_boot_menu_free(boot_menu);
 	ui_print_clear();
 	ui_display_vendor_splash();
+	fastboot_ui_initialized = FALSE;
 }
