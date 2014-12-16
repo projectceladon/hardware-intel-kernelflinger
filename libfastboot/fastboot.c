@@ -215,7 +215,8 @@ static void publish_partsize(void)
 	UINTN part_count;
 	UINTN i;
 
-	gpt_list_partition(&gparti, &part_count);
+	if (EFI_ERROR(gpt_list_partition(&gparti, &part_count)))
+		return;
 
 	for (i = 0; i < part_count; i++) {
 		char fastboot_var[MAX_VARIABLE_LENGTH];
