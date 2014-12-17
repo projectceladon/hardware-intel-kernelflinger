@@ -71,6 +71,8 @@ typedef struct ui_font {
 EFI_STATUS ui_font_init(void);
 ui_font_t *ui_font_get_default(void);
 ui_font_t *ui_font_get(char *name);
+extern ui_font_t ui_fonts[];
+extern UINTN ui_fonts_nb;
 
 /* Textarea */
 typedef struct textline {
