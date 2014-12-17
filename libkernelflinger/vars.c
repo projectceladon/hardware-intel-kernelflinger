@@ -41,6 +41,9 @@
 #define OFF_MODE_CHARGE_VAR	L"off-mode-charge"
 #define OEM_LOCK_VAR		L"OEMLock"
 #define KEYSTORE_VAR		L"KeyStore"
+#define CRASH_EVENT_MENU_VAR	L"CrashEventMenu"
+#define WDT_COUNTER_VAR		L"WatchdogCounter"
+#define WDT_TIME_REF_VAR	L"WatchdogTimeReference"
 
 #define OEM_LOCK_UNLOCKED	(1 << 0)
 #define OEM_LOCK_VERIFIED	(1 << 1)
@@ -73,28 +76,63 @@ static struct state_display {
 };
 
 static CHAR8 current_off_mode_charge[2];
+static CHAR8 current_crash_event_menu[2];
 
-BOOLEAN get_current_off_mode_charge(void)
+BOOLEAN get_current_boolean_var(CHAR16 *varname, CHAR8 cache[2])
 {
 	UINTN size;
 	CHAR8 *data;
 
-	if (current_off_mode_charge[0] == '\0') {
-		if (EFI_ERROR(get_efi_variable(&fastboot_guid, OFF_MODE_CHARGE_VAR,
+	if (cache[0] == '\0') {
+		if (EFI_ERROR(get_efi_variable(&fastboot_guid, varname,
 					       &size, (VOID **)&data, NULL)))
 			return TRUE;
 
-		if (size != sizeof(current_off_mode_charge)
+		if (size != 2
 		    || (strcmp(data, (CHAR8 *)"0") && strcmp(data, (CHAR8 *)"1"))) {
 			FreePool(data);
 			return TRUE;
 		}
 
-		memcpy(current_off_mode_charge, data, sizeof(current_off_mode_charge));
+		memcpy(cache, data, sizeof(cache));
 		FreePool(data);
 	}
 
-	return !strcmp(current_off_mode_charge, (CHAR8 *)"1");
+	return !strcmp(cache, (CHAR8 *)"1");
+}
+
+EFI_STATUS set_boolean_var(CHAR16 *varname, CHAR8 cache[2], BOOLEAN enabled)
+{
+	CHAR8 *val = (CHAR8 *)(enabled ? "1" : "0");
+	EFI_STATUS ret = set_efi_variable(&fastboot_guid, varname,
+					  2, val, TRUE, FALSE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to set %s variable", varname);
+		return ret;
+	}
+
+	memcpy(cache, val, 2);
+	return EFI_SUCCESS;
+}
+
+BOOLEAN get_current_off_mode_charge(void)
+{
+	return get_current_boolean_var(OFF_MODE_CHARGE_VAR, current_off_mode_charge);
+}
+
+EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
+{
+	return set_boolean_var(OFF_MODE_CHARGE_VAR, current_off_mode_charge, enabled);
+}
+
+BOOLEAN get_current_crash_event_menu(void)
+{
+	return get_current_boolean_var(CRASH_EVENT_MENU_VAR, current_crash_event_menu);
+}
+
+EFI_STATUS set_crash_event_menu(BOOLEAN enabled)
+{
+	return set_boolean_var(CRASH_EVENT_MENU_VAR, current_crash_event_menu, enabled);
 }
 
 enum device_state get_current_state()
@@ -181,20 +219,6 @@ EFI_STATUS reprovision_state_vars(VOID)
 }
 #endif
 
-EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
-{
-	CHAR8 *val = (CHAR8 *)(enabled ? "1" : "0");
-	EFI_STATUS ret = set_efi_variable(&fastboot_guid, OFF_MODE_CHARGE_VAR,
-					  2, val, TRUE, FALSE);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to set %a variable", OFF_MODE_CHARGE_VAR);
-		return ret;
-	}
-
-	memcpy(current_off_mode_charge, val, 2);
-	return EFI_SUCCESS;
-}
-
 EFI_STATUS get_user_keystore(VOID **keystorep, UINTN *sizep)
 {
 	UINT32 flags;
@@ -269,8 +293,61 @@ BOOLEAN device_is_provisioning(void)
 	return provisioning_mode;
 }
 
+EFI_STATUS get_watchdog_status(UINT8 *counter, EFI_TIME *time)
+{
+	EFI_STATUS ret;
+	EFI_TIME *tmp;
+	UINTN size;
+	UINT32 flags;
+
+	ret = get_efi_variable_byte(&fastboot_guid, WDT_COUNTER_VAR,
+				    counter);
+	if (ret == EFI_NOT_FOUND) {
+		*counter = 0;
+		return EFI_SUCCESS;
+	}
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = get_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR, &size,
+			       (VOID **)&tmp, &flags);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	if (size != sizeof(*time))
+		return EFI_COMPROMISED_DATA;
+
+	memcpy(time, tmp, size);
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS reset_watchdog_status(VOID)
+{
+	EFI_STATUS ret;
+
+	ret = set_watchdog_counter(0);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	return set_watchdog_time_reference(NULL);
+}
+
+EFI_STATUS set_watchdog_counter(UINT8 counter)
+{
+	return set_efi_variable(&fastboot_guid, WDT_COUNTER_VAR,
+				counter == 0 ? 0 : sizeof(counter),
+				&counter, TRUE, FALSE);
+}
+
+EFI_STATUS set_watchdog_time_reference(EFI_TIME *time)
+{
+	return set_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR,
+				time == NULL ? 0 : sizeof(*time),
+				time, TRUE, FALSE);
+}
+
 VOID clear_provisioning_mode(void)
 {
 	provisioning_mode = FALSE;
 }
-

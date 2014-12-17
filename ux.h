@@ -56,6 +56,10 @@ BOOLEAN ux_prompt_user_device_unlocked(VOID);
  * FALSE: power off */
 BOOLEAN ux_prompt_user_secure_boot_off(VOID);
 
+/* Inform the user about the multiple crash events and let him choose
+ * a boot target */
+enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID);
+
 VOID ux_init(VOID);
 
 #endif
