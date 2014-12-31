@@ -60,10 +60,20 @@ struct gpt_partition_interface {
 	EFI_DISK_IO *dio;
 };
 
-EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart);
-EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count);
-EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp);
+typedef enum {
+	EMMC_USER_PART = 0x00,
+	EMMC_BOOT_PART1,
+	EMMC_BOOT_PART2,
+	EMMC_GPP_PART1 = 0x04,
+	EMMC_GPP_PART2,
+	EMMC_GPP_PART3,
+	EMMC_GPP_PART4
+} EMMC_PARTITION_CTRL;
+
+EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl);
+EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, EMMC_PARTITION_CTRL ctrl);
+EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, EMMC_PARTITION_CTRL ctrl);
 EFI_STATUS gpt_refresh(void);
-EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart);
+EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl);
 
 #endif	/* _GPT_H_ */

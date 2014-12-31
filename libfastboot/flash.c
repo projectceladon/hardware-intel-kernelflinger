@@ -136,7 +136,7 @@ static EFI_STATUS flash_gpt(VOID *data, UINTN size)
 	if (size != sizeof(*gb_hdr) + gb_hdr->npart * sizeof(*gb_part))
 		return EFI_INVALID_PARAMETER;
 
-	ret = gpt_create(gb_hdr->start_lba, gb_hdr->npart, gb_part);
+	ret = gpt_create(gb_hdr->start_lba, gb_hdr->npart, gb_part, EMMC_USER_PART);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -178,7 +178,7 @@ static EFI_STATUS flash_mbr(VOID *data, UINTN size)
 	if (size > MBR_CODE_SIZE)
 		return EFI_INVALID_PARAMETER;
 
-	ret = gpt_get_root_disk(&gparti);
+	ret = gpt_get_root_disk(&gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, "Failed to get disk information");
 		return ret;
@@ -199,7 +199,7 @@ static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 	UINTN new_size, partlen;
 	EFI_STATUS ret;
 
-	ret = gpt_get_partition_by_label(L"boot", &gparti);
+	ret = gpt_get_partition_by_label(L"boot", &gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
 		error(L"Unable to get information on the boot partition");
 		return ret;
@@ -299,7 +299,7 @@ EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 		if (!StrCmp(LABEL_EXCEPTIONS[i].name, label))
 			return LABEL_EXCEPTIONS[i].flash_func(data, size);
 
-	ret = gpt_get_partition_by_label(label, &gparti);
+	ret = gpt_get_partition_by_label(label, &gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, "Failed to get partition %s", label);
 		return ret;
@@ -536,7 +536,7 @@ EFI_STATUS erase_by_label(CHAR16 *label)
 	if (!StrCmp(L"keystore", label))
 		return set_user_keystore(NULL, 0);
 
-	ret = gpt_get_partition_by_label(label, &gparti);
+	ret = gpt_get_partition_by_label(label, &gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, "Failed to get partition %s", label);
 		return ret;
@@ -592,7 +592,7 @@ EFI_STATUS garbage_disk(void)
 	VOID *chunk;
 	UINTN size;
 
-	ret = gpt_get_root_disk(&gparti);
+	ret = gpt_get_root_disk(&gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, "Failed to get disk information");
 		return ret;

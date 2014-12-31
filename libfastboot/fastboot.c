@@ -246,7 +246,7 @@ static void publish_partsize(void)
 	UINTN part_count;
 	UINTN i;
 
-	if (EFI_ERROR(gpt_list_partition(&gparti, &part_count)))
+	if (EFI_ERROR(gpt_list_partition(&gparti, &part_count, EMMC_USER_PART)))
 		return;
 
 	for (i = 0; i < part_count; i++) {
