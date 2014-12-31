@@ -121,7 +121,7 @@ static EFI_STATUS flash_into_esp(VOID *data, UINTN size, CHAR16 *label)
 	return uefi_write_file_with_dir(io, label, data, size);
 }
 
-static EFI_STATUS flash_gpt(VOID *data, UINTN size)
+static EFI_STATUS _flash_gpt(VOID *data, UINTN size, EMMC_PARTITION_CTRL ctrl)
 {
 	struct gpt_bin_header *gb_hdr;
 	struct gpt_bin_part *gb_part;
@@ -136,11 +136,21 @@ static EFI_STATUS flash_gpt(VOID *data, UINTN size)
 	if (size != sizeof(*gb_hdr) + gb_hdr->npart * sizeof(*gb_part))
 		return EFI_INVALID_PARAMETER;
 
-	ret = gpt_create(gb_hdr->start_lba, gb_hdr->npart, gb_part, EMMC_USER_PART);
+	ret = gpt_create(gb_hdr->start_lba, gb_hdr->npart, gb_part, ctrl);
 	if (EFI_ERROR(ret))
 		return ret;
 
 	return (EFI_SUCCESS | REFRESH_PARTITION_VAR);
+}
+
+static EFI_STATUS flash_gpt(VOID *data, UINTN size)
+{
+	return _flash_gpt(data, size, EMMC_USER_PART);
+}
+
+static EFI_STATUS flash_gpt_gpp1(VOID *data, UINTN size)
+{
+	return _flash_gpt(data, size, EMMC_GPP_PART1);
 }
 
 static EFI_STATUS flash_keystore(VOID *data, UINTN size)
@@ -275,6 +285,7 @@ static struct label_exception {
 	EFI_STATUS (*flash_func)(VOID *data, UINTN size);
 } LABEL_EXCEPTIONS[] = {
 	{ L"gpt", flash_gpt },
+	{ L"gpt-gpp1", flash_gpt_gpp1 },
 	{ L"keystore", flash_keystore },
 	{ L"efirun", flash_efirun },
 	{ L"sfu", flash_sfu },
