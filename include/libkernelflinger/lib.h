@@ -37,6 +37,7 @@
 #include <efiapi.h>
 #include <efilib.h>
 #include <ui.h>
+#include <log.h>
 
 /* pulls in memcpy, memset, bunch of other posix functions */
 #include "OpenSslSupport.h"
@@ -52,34 +53,6 @@
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
-
-/* debug stuff */
-
-#define DEBUG_MESSAGES 0
-
-#if DEBUG_MESSAGES
-#define debug(fmt, ...) do { \
-    Print(fmt "\n", ##__VA_ARGS__); \
-} while(0)
-
-#define debug_pause(x) pause(x)
-#else
-#define debug(fmt, ...) (void)0
-#define debug_pause(x) (void)(x)
-#endif
-
-#define error(x, ...) do { \
-  if (ui_is_ready()) { \
-    if (DEBUG_MESSAGES) \
-      Print(x L"\n", ##__VA_ARGS__); \
-    ui_error(x, ##__VA_ARGS__); \
-  } else \
-    Print(x L"\n", ##__VA_ARGS__); \
-} while(0)
-
-#define efi_perror(ret, x, ...) do { \
-  error(x L": %r", ##__VA_ARGS__, ret); \
-} while (0)
 
 #define _CONVERT_TO_WIDE(x) L ## x
 #define CONVERT_TO_WIDE(x) _CONVERT_TO_WIDE(x)
