@@ -64,6 +64,8 @@ endif
 
 ifeq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_CFLAGS += -DUSER -DUSERDEBUG
+else
+    LOCAL_SRC_FILES += unittest.c
 endif
 
 ifeq ($(TARGET_BUILD_VARIANT),userdebug)
