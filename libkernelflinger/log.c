@@ -35,6 +35,7 @@
 
 #include "log.h"
 #include "lib.h"
+#include "vars.h"
 
 static SERIAL_IO_INTERFACE *serial;
 
@@ -48,6 +49,27 @@ static SERIAL_IO_INTERFACE *serial;
 #define BUFFER_SIZE 128
 static CHAR16 buf16[BUFFER_SIZE];
 static CHAR8 buf8[BUFFER_SIZE];
+
+#ifndef USER
+#define LOG_BUF_SIZE 1024
+static CHAR8 log_buf[LOG_BUF_SIZE];
+static UINTN pos;
+
+EFI_STATUS log_flush_to_var()
+{
+	return set_efi_variable(&loader_guid, L"KernelflingerLogs",
+				sizeof(log_buf), log_buf, FALSE, TRUE);
+}
+
+static void log_append_to_buffer(CHAR8 *msg, UINTN length)
+{
+	if (pos + length >= LOG_BUF_SIZE)
+		pos = 0;
+
+	memcpy(log_buf + pos, msg, length);
+	pos += length;
+}
+#endif
 
 static EFI_STATUS serial_init()
 {
@@ -90,6 +112,9 @@ void log(const CHAR16 *fmt, ...)
 	if (EFI_ERROR(uefi_call_wrapper(serial->Write, 3, serial, &length, buf8)))
 		goto exit;
 
+#ifndef USER
+	log_append_to_buffer(buf8, length);
+#endif
 exit:
 	va_end(args);
 }
