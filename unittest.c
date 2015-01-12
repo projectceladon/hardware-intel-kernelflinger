@@ -30,38 +30,26 @@
  *
  */
 
-#ifndef _UX_H_
-#define _UX_H_
 
 #include <efi.h>
+#include <efiapi.h>
 #include <efilib.h>
 
-#include "targets.h"
+#include "ux.h"
+#include "unittest.h"
 
-/* TRUE: OK, use keystore anyway
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash);
+UINT8 fake_hash[] = {0x12, 0x34, 0x56, 0x78, 0x90, 0xAB};
 
-/* TRUE: Fastboot
- * FALSE: halt system */
-BOOLEAN ux_warn_user_unverified_recovery(VOID);
+VOID unittest_main(VOID)
+{
+	/* TODO: some method of programmatically verifying that these work */
+	ux_prompt_user_bootimage_unverified();
+	ux_warn_user_unverified_recovery();
+	ux_prompt_user_device_unlocked();
+	ux_prompt_user_secure_boot_off();
+	ux_prompt_user_keystore_unverified(fake_hash);
+	ux_crash_event_prompt_user_for_boot_target();
 
-/* TRUE: Recovery
- * FALSE: Halt system */
-BOOLEAN ux_prompt_user_bootimage_unverified(VOID);
+	Print(L"Unit tests complete.\n");
+}
 
-/* TRUE: OK to boot
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_device_unlocked(VOID);
-
-/* TRUE: OK to boot
- * FALSE: power off */
-BOOLEAN ux_prompt_user_secure_boot_off(VOID);
-
-/* Inform the user about the multiple crash events and let him choose
- * a boot target */
-enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID);
-
-VOID ux_init(VOID);
-
-#endif
