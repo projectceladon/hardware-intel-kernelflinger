@@ -190,8 +190,8 @@ static ui_font_t *autoselect_font(const ui_textline_t **texts,
 	}
 
 	for (i = 0; i < ui_fonts_nb; i++)
-		if ((colsarea >= cols * ui_fonts[i].cheight)
-		    && (linesarea >= lines * ui_fonts[i].cwidth)
+		if ((colsarea >= cols * ui_fonts[i].cwidth)
+		    && (linesarea >= lines * ui_fonts[i].cheight)
 		    && (selected == NULL || selected->cheight < ui_fonts[i].cheight))
 			selected = &ui_fonts[i];
 
