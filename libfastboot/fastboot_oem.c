@@ -47,6 +47,7 @@
 #include "intel_variables.h"
 
 #define OFF_MODE_CHARGE		"off-mode-charge"
+#define CRASH_EVENT_MENU	"crash-event-menu"
 
 static void fastboot_oem_publish(void)
 {
@@ -186,6 +187,32 @@ static void cmd_oem_off_mode_charge(__attribute__((__unused__)) INTN argc,
 	fastboot_okay("");
 }
 
+static void cmd_oem_crash_event_menu(__attribute__((__unused__)) INTN argc,
+				    CHAR8 **argv)
+{
+	EFI_STATUS ret;
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	if (strcmp(argv[1], (CHAR8* )"1") && strcmp(argv[1], (CHAR8 *)"0")) {
+		fastboot_fail("Invalid value");
+		error(L"Please specify 1 or 0 to enable/disable crash event menu");
+		return;
+	}
+
+        ret = set_crash_event_menu(!strcmp(argv[1], (CHAR8* )"1"));
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to set %a", CRASH_EVENT_MENU);
+		return;
+	}
+
+	fastboot_oem_publish();
+	fastboot_okay("");
+}
+
 static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
@@ -279,6 +306,7 @@ void fastboot_oem_init(void)
 	 * requirements.  They are provided for engineering and
 	 * provisioning purpose only and those which modify the
 	 * device are restricted to the unlocked state.  */
+	fastboot_oem_register(CRASH_EVENT_MENU, cmd_oem_crash_event_menu, LOCKED);
 	fastboot_oem_register("setvar", cmd_oem_setvar, VERIFIED);
 	fastboot_oem_register("garbage-disk", cmd_oem_garbage_disk, UNLOCKED);
 	fastboot_oem_register("reboot", cmd_oem_reboot, LOCKED);
