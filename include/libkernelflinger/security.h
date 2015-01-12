@@ -38,7 +38,7 @@
 #define _SECURITY_H_
 
 #define BOOT_TARGET_SIZE         32
-#define BOOT_SIGNATURE_MAX_SIZE  2048
+#define BOOT_SIGNATURE_MAX_SIZE  4096
 
 /* Given an Android boot image, test if it is signed with the provided
  * keystore

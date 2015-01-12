@@ -46,8 +46,9 @@
 #include "ux.h"
 #include "options.h"
 #include "power.h"
+#include "targets.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.07"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.08"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -71,8 +72,17 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 /* Path to Fastboot image */
 #define FASTBOOT_PATH             L"\\fastboot.img"
 
-/*BIOS Capsule update file*/
+/* BIOS Capsule update file */
 #define FWUPDATE_FILE             L"\\BIOSUPDATE.fv"
+
+/* Crash event menu settings:
+ * - Maximum number of watchdog resets in a row before the crash event
+ *   menu is displayed. */
+#define WATCHDOG_COUNTER_MAX 2
+/* - Maximum time between the first and the last watchdog reset.  If
+ *   the current difference exceeds this constant, the watchdog
+ *   counter is reset to zero. */
+#define WATCHDOG_DELAY       (10 * 60)
 
 static EFI_HANDLE g_parent_image;
 static EFI_HANDLE g_disk_device;
@@ -345,6 +355,102 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         return ret;
 }
 
+static BOOLEAN is_a_leap_year(INTN year)
+{
+        return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+}
+
+static INTN efi_time_to_ctime(EFI_TIME *time)
+{
+        UINT8 DAY_OF_MONTH[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+        UINTN i;
+        INTN days = 0;
+
+        for (i = 1970; i < time->Year; i++)
+                days += is_a_leap_year(i) ? 365 : 366;
+
+        if (is_a_leap_year(time->Year))
+                DAY_OF_MONTH[1] = 29;
+
+        for (i = 0; i + 1 < time->Month; i++)
+                days += DAY_OF_MONTH[i];
+
+        return (days * 24 * 3600) + (time->Hour * 3600)
+                + (time->Minute * 60) + time->Second;
+}
+
+/* If more than WATCHDOG_COUNTER_MAX watchdog resets in a row happened
+ * in less than WATCHDOG_DELAY seconds, the crash event menu is
+ * displayed.  This menu informs the user of the situation and let him
+ * choose which boot target he wants. */
+static enum boot_target check_watchdog(VOID)
+{
+        EFI_STATUS ret;
+        enum reset_sources reset_source;
+        UINT8 counter;
+        EFI_TIME time_ref, now;
+        INTN time_diff;
+
+        if (!get_current_crash_event_menu())
+                return NORMAL_BOOT;
+
+        ret = get_watchdog_status(&counter, &time_ref);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, "Failed to get the watchdog status");
+                return NORMAL_BOOT;
+        }
+
+        reset_source = rsci_get_reset_source();
+        if (reset_source != RESET_KERNEL_WATCHDOG
+            && reset_source != RESET_SECURITY_WATCHDOG) {
+                if (counter != 0) {
+                        ret = reset_watchdog_status();
+                        if (EFI_ERROR(ret)) {
+                                efi_perror(ret, "Failed to reset the watchdog status");
+                                goto error;
+                        }
+                }
+                return NORMAL_BOOT;
+        }
+
+        ret = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, "Failed to get the current time");
+                goto error;
+        }
+
+        if (counter > 0) {
+                time_diff = efi_time_to_ctime(&now) - efi_time_to_ctime(&time_ref);
+                if (time_diff < 0 || time_diff > WATCHDOG_DELAY)
+                        counter = 0;
+        }
+
+        if (counter == 0) {
+                time_ref = now;
+                ret = set_watchdog_time_reference(&now);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, "Failed to set the watchdog time reference");
+                        goto error;
+                }
+        }
+
+        counter++;
+        if (counter <= WATCHDOG_COUNTER_MAX) {
+                        ret = set_watchdog_counter(counter);
+                        if (EFI_ERROR(ret))
+                                efi_perror(ret, "Failed to set the watchdog counter");
+                        goto error;
+        }
+
+        ret = reset_watchdog_status();
+        if (EFI_ERROR(ret))
+                efi_perror(ret, "Failed to reset the watchdog status");
+
+        return ux_crash_event_prompt_user_for_boot_target();
+
+error:
+        return NORMAL_BOOT;
+}
 
 static enum boot_target check_command_line(VOID **address)
 {
@@ -422,18 +528,20 @@ static enum boot_target check_charge_mode()
 
 
 /* Policy:
- * 1. Check if the "-a xxxxxxxxx" command line was passed in, if so load an
+ * 1. Check if we had multiple watchdog reported in a short period of
+ *    time.  If so, let the user choose the boot target.
+ * 2. Check if the "-a xxxxxxxxx" command line was passed in, if so load an
  *    android boot image from RAM at that location.
- * 2. Check if the fastboot sentinel file \force_fastboot is present, and if
+ * 3. Check if the fastboot sentinel file \force_fastboot is present, and if
  *    so, force fastboot mode. Use in bootable media.
- * 3. Check for "magic key" being held. Short press loads Recovery. Long press
+ * 4. Check for "magic key" being held. Short press loads Recovery. Long press
  *    loads Fastboot.
- * 4. Check bootloader control block for a boot target, which could be
+ * 5. Check bootloader control block for a boot target, which could be
  *    the name of a boot image that we know how to read from a partition,
  *    or a boot image file in the ESP. BCB can specify oneshot or persistent
  *    targets.
- * 5. Check LoaderEntryOneShot for a boot target
- * 6. Check if we should go into charge mode or normal boot
+ * 6. Check LoaderEntryOneShot for a boot target
+ * 7. Check if we should go into charge mode or normal boot
  *
  * target_address - If MEMORY returned, physical address to load data
  * target_path - If ESP_EFI_BINARY or ESP_BOOTIMAGE returned, path to the
@@ -450,6 +558,10 @@ static enum boot_target choose_boot_target(VOID **target_address,
         *target_path = NULL;
         *target_address = NULL;
         *oneshot = TRUE;
+
+        ret = check_watchdog();
+        if (ret != NORMAL_BOOT)
+                return ret;
 
         ret = check_command_line(target_address);
         if (ret != NORMAL_BOOT)
@@ -922,6 +1034,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
          * with magic key detection */
         boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
         debug(L"selected '%s'",  boot_target_to_string(boot_target));
+
+        if (boot_target == POWER_OFF)
+                halt_system();
 
 #ifdef USERDEBUG
         debug(L"checking device state");

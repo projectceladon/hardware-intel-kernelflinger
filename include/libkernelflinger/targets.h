@@ -2,7 +2,8 @@
  * Copyright (c) 2014, Intel Corporation
  * All rights reserved.
  *
- * Author: Andrew Boie <andrew.p.boie@intel.com>
+ * Authors: Andrew Boie <andrew.p.boie@intel.com>
+ *          Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,36 +31,20 @@
  *
  */
 
-#ifndef _UX_H_
-#define _UX_H_
+#ifndef _TARGETS_H_
+#define _TARGETS_H_
 
-#include <efi.h>
-#include <efilib.h>
+enum boot_target {
+        UNKNOWN_TARGET = -1,
+        NORMAL_BOOT,
+        RECOVERY,
+        FASTBOOT,
+        ESP_BOOTIMAGE,
+        ESP_EFI_BINARY,
+        MEMORY,
+        CHARGER,
+        REBOOT,
+        POWER_OFF
+};
 
-/* TRUE: OK, use keystore anyway
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash);
-
-/* TRUE: Fastboot
- * FALSE: halt system */
-BOOLEAN ux_warn_user_unverified_recovery(VOID);
-
-/* TRUE: Recovery
- * FALSE: Halt system */
-BOOLEAN ux_prompt_user_bootimage_unverified(VOID);
-
-/* TRUE: OK to boot
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_device_unlocked(VOID);
-
-/* TRUE: OK to boot
- * FALSE: power off */
-BOOLEAN ux_prompt_user_secure_boot_off(VOID);
-
-/* Inform the user about the multiple crash events and let him choose
- * a boot target */
-enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID);
-
-VOID ux_init(VOID);
-
-#endif
+#endif	/* _TARGETS_H_ */

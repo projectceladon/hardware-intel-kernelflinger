@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Author: Andrew Boie <andrew.p.boie@intel.com>
+ * Author: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,36 +30,66 @@
  *
  */
 
-#ifndef _UX_H_
-#define _UX_H_
-
 #include <efi.h>
 #include <efilib.h>
 
-/* TRUE: OK, use keystore anyway
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash);
+#include "log.h"
+#include "lib.h"
 
-/* TRUE: Fastboot
- * FALSE: halt system */
-BOOLEAN ux_warn_user_unverified_recovery(VOID);
+static SERIAL_IO_INTERFACE *serial;
 
-/* TRUE: Recovery
- * FALSE: Halt system */
-BOOLEAN ux_prompt_user_bootimage_unverified(VOID);
+#define SERIAL_BAUD_RATE	115200
+#define SERIAL_FIFO_DEPTH	1
+#define SERIAL_TIMEOUT		1
+#define SERIAL_PARITY		1
+#define SERIAL_DATA_BITS	8
+#define SERIAL_STOP_BITS	1
 
-/* TRUE: OK to boot
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_device_unlocked(VOID);
+#define BUFFER_SIZE 128
+static CHAR16 buf16[BUFFER_SIZE];
+static CHAR8 buf8[BUFFER_SIZE];
 
-/* TRUE: OK to boot
- * FALSE: power off */
-BOOLEAN ux_prompt_user_secure_boot_off(VOID);
+static EFI_STATUS serial_init()
+{
+	EFI_STATUS ret;
+	EFI_GUID guid = SERIAL_IO_PROTOCOL;
 
-/* Inform the user about the multiple crash events and let him choose
- * a boot target */
-enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID);
+	ret = LibLocateProtocol(&guid, (void **)&serial);
+	if (EFI_ERROR(ret))
+		return ret;
 
-VOID ux_init(VOID);
+	ret = uefi_call_wrapper(serial->SetAttributes, 7, serial,
+				SERIAL_BAUD_RATE, SERIAL_FIFO_DEPTH,
+				SERIAL_TIMEOUT, SERIAL_PARITY,
+				SERIAL_DATA_BITS, SERIAL_STOP_BITS);
+	if (EFI_ERROR(ret))
+		return ret;
 
-#endif
+	ret = uefi_call_wrapper(serial->Reset, 1, serial);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	return EFI_SUCCESS;
+}
+
+void log(const CHAR16 *fmt, ...)
+{
+	va_list args;
+	UINTN length;
+
+	if (!serial && !EFI_ERROR(serial_init()))
+		return;
+
+	va_start(args, fmt);
+
+	length = VSPrint(buf16, BUFFER_SIZE, (CHAR16 *)fmt, args) + 1;
+
+	if (EFI_ERROR(str_to_stra(buf8, buf16, length)))
+		goto exit;
+
+	if (EFI_ERROR(uefi_call_wrapper(serial->Write, 3, serial, &length, buf8)))
+		goto exit;
+
+exit:
+	va_end(args);
+}

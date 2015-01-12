@@ -209,41 +209,59 @@ void fastboot_publish(const char *name, const char *value)
 	CopyMem(var->value, value, valuelen);
 }
 
+static char *get_ptype_str(EFI_GUID *guid)
+{
+	if (!CompareGuid(guid, &guid_linux_data))
+		return "ext4";
+
+	if (!CompareGuid(guid, &EfiPartTypeSystemPartitionGuid))
+		return "vfat";
+
+	return "none";
+}
+
+static void publish_part(UINT64 size, CHAR16 *name, EFI_GUID *guid)
+{
+	char fastboot_var[MAX_VARIABLE_LENGTH];
+	char partsize[MAX_VARIABLE_LENGTH];
+
+	if (EFI_ERROR(snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
+			       (CHAR8 *)"partition-size:%s", name)))
+		return;
+	if (EFI_ERROR(snprintf((CHAR8 *)partsize, sizeof(partsize),
+			       (CHAR8 *)"0x%lX", size)))
+		return;
+	fastboot_publish(fastboot_var, partsize);
+
+	if (EFI_ERROR(snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
+			       (CHAR8 *)"partition-type:%s", name)))
+		return;
+
+	fastboot_publish(fastboot_var, get_ptype_str(guid));
+}
+
 static void publish_partsize(void)
 {
 	struct gpt_partition_interface *gparti;
 	UINTN part_count;
 	UINTN i;
 
-	gpt_list_partition(&gparti, &part_count);
+	if (EFI_ERROR(gpt_list_partition(&gparti, &part_count)))
+		return;
 
 	for (i = 0; i < part_count; i++) {
-		char fastboot_var[MAX_VARIABLE_LENGTH];
-		char partsize[MAX_VARIABLE_LENGTH];
 		UINT64 size;
 
 		size = gparti[i].bio->Media->BlockSize
 			* (gparti[i].part.ending_lba + 1 - gparti[i].part.starting_lba);
 
-		if (EFI_ERROR(snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
-				       (CHAR8 *)"partition-size:%s", gparti[i].part.name)))
-			continue;
-		if (EFI_ERROR(snprintf((CHAR8 *)partsize, sizeof(partsize),
-				       (CHAR8 *)"0x%lX", size)))
-			continue;
+		publish_part(size, gparti[i].part.name, &gparti[i].part.type);
 
-		fastboot_publish(fastboot_var, partsize);
-
-		if (EFI_ERROR(snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
-				       (CHAR8 *)"partition-type:%s", gparti[i].part.name)))
-			continue;
-
-		if (!CompareGuid(&gparti[i].part.type, &guid_linux_data))
-			fastboot_publish(fastboot_var, "ext4");
-		else if (!CompareGuid(&gparti[i].part.type, &EfiPartTypeSystemPartitionGuid))
-			fastboot_publish(fastboot_var, "vfat");
-		else
-			fastboot_publish(fastboot_var, "none");
+		/* stay compatible with userdata/data naming */
+		if (!StrCmp(gparti[i].part.name, L"data"))
+			publish_part(size, L"userdata", &gparti[i].part.type);
+		else if (!StrCmp(gparti[i].part.name, L"userdata"))
+			publish_part(size, L"data", &gparti[i].part.type);
 	}
 }
 

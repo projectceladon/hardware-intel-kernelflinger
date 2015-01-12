@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Author: Andrew Boie <andrew.p.boie@intel.com>
+ * Author: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,36 +30,41 @@
  *
  */
 
-#ifndef _UX_H_
-#define _UX_H_
+#ifndef _LOG_H_
+#define _LOG_H_
 
 #include <efi.h>
-#include <efilib.h>
+#include <ui.h>
 
-/* TRUE: OK, use keystore anyway
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash);
+void log(const CHAR16 *fmt, ...);
 
-/* TRUE: Fastboot
- * FALSE: halt system */
-BOOLEAN ux_warn_user_unverified_recovery(VOID);
-
-/* TRUE: Recovery
- * FALSE: Halt system */
-BOOLEAN ux_prompt_user_bootimage_unverified(VOID);
-
-/* TRUE: OK to boot
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_device_unlocked(VOID);
-
-/* TRUE: OK to boot
- * FALSE: power off */
-BOOLEAN ux_prompt_user_secure_boot_off(VOID);
-
-/* Inform the user about the multiple crash events and let him choose
- * a boot target */
-enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID);
-
-VOID ux_init(VOID);
-
+#ifdef USER
+#define DEBUG_MESSAGES 0
+#else
+#define DEBUG_MESSAGES 1
 #endif
+
+#if DEBUG_MESSAGES
+#define debug(fmt, ...) do { \
+    log(fmt "\n", ##__VA_ARGS__); \
+} while(0)
+
+#define debug_pause(x) pause(x)
+#else
+#define debug(fmt, ...) (void)0
+#define debug_pause(x) (void)(x)
+#endif
+
+#define error(x, ...) do { \
+  if (ui_is_ready()) { \
+    log(x "\n", ##__VA_ARGS__); \
+    ui_error(x, ##__VA_ARGS__); \
+  } else \
+    Print(x "\n", ##__VA_ARGS__); \
+} while(0)
+
+#define efi_perror(ret, x, ...) do { \
+  error(x L": %r", ##__VA_ARGS__, ret); \
+} while (0)
+
+#endif	/* _LOG_H_ */

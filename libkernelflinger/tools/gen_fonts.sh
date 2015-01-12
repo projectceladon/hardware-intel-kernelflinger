@@ -14,6 +14,7 @@ done
 
 echo -en "\nui_font_t ui_fonts[] = {" >> $output
 prefix=""
+fonts_nb=0
 for file in ${images[*]}
 do
     name=$(basename ${file%_font.png})
@@ -28,5 +29,7 @@ do
     width=$(file $file | cut -d ' ' -f 5)
     height=$(file $file | cut -d ' ' -f 7 | sed 's/,//')
     echo -en "$prefix\n\t{ \"$name\", $width, $height, $cwidth, $cheight, __"$name"_dat }" >> $output
+    fonts_nb=$((fonts_nb+1))
 done
 echo -e "\n};" >> $output
+echo -e "UINTN ui_fonts_nb = $fonts_nb;" >> $output

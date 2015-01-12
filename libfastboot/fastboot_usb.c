@@ -441,8 +441,6 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 		goto error;
 	}
 
-	FreePool(usb_device);
-
 	*bootimage = fastboot_bootimage;
 	*efiimage = fastboot_efiimage;
 	*imagesize = fastboot_imagesize;
