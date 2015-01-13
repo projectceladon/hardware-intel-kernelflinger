@@ -183,11 +183,9 @@ static ui_font_t *autoselect_font(const ui_textline_t **texts,
 	ui_font_t *selected = NULL;
 	UINTN lines = 0, cols = 0;
 
-	for (i = 0; texts[i]; i++) {
-		cols = strlena((CHAR8 *)texts[i][0].str);
+	for (i = 0; texts[i]; i++)
 		for (j = 0; texts[i][j].str; j++, lines++)
 			cols = max(cols, strlena((CHAR8 *)texts[i][j].str));
-	}
 
 	for (i = 0; i < ui_fonts_nb; i++)
 		if ((colsarea >= cols * ui_fonts[i].cwidth)
