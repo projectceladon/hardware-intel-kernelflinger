@@ -62,6 +62,8 @@ extern const EFI_GUID fastboot_guid;
 #define BOOT_STATE_ORANGE	2
 #define BOOT_STATE_RED		3
 
+#define OEM_KEY_VAR		L"OEMKey"
+
 /* Various interesting partition GUIDs */
 extern const EFI_GUID boot_ptn_guid;
 extern const EFI_GUID recovery_ptn_guid;
