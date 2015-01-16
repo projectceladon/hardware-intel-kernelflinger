@@ -104,7 +104,7 @@ void log(const CHAR16 *fmt, ...)
 
 	va_start(args, fmt);
 
-	length = VSPrint(buf16, BUFFER_SIZE, (CHAR16 *)fmt, args) + 1;
+	length = VSPrint(buf16, sizeof(buf16), (CHAR16 *)fmt, args) + 1;
 
 	if (EFI_ERROR(str_to_stra(buf8, buf16, length)))
 		goto exit;
