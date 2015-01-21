@@ -357,30 +357,45 @@ error:
         return StrDuplicate(L"tty0");
 }
 
-
-static BOOLEAN is_reset_watchdog(void)
+static CHAR16 *get_reason_from_rsci(void)
 {
         enum reset_sources reset_source;
+        CHAR16 *reason;
 
         reset_source = rsci_get_reset_source();
-        if ((reset_source == RESET_KERNEL_WATCHDOG) ||
-            (reset_source == RESET_PMC_WATCHDOG) ||
-            (reset_source == RESET_EC_WATCHDOG) ||
-            (reset_source == RESET_PLATFORM_WATCHDOG))
-                return TRUE;
+        switch (reset_source) {
+        case RESET_KERNEL_WATCHDOG:
+                reason = StrDuplicate(L"watchdog");
+                break;
+        case RESET_SECURITY_WATCHDOG:
+                reason = StrDuplicate(L"security_watchdog");
+                break;
+        case RESET_PMC_WATCHDOG:
+                reason = StrDuplicate(L"pmc_watchdog");
+                break;
+        case RESET_EC_WATCHDOG:
+                reason = StrDuplicate(L"ec_watchdog");
+                break;
+        case RESET_PLATFORM_WATCHDOG:
+                reason = StrDuplicate(L"platform_watchdog");
+                break;
+        case RESET_SECURITY_INITIATED:
+                reason = StrDuplicate(L"security_initiated");
+                break;
+        default:
+                reason = NULL;
+        }
 
-        return FALSE;
+        return reason;
 }
-
 
 static CHAR16 *get_reboot_reason(void)
 {
         CHAR16 *bootreason, *pos;
 
-        if (is_reset_watchdog()) {
-                bootreason = StrDuplicate(L"watchdog");
+        bootreason = get_reason_from_rsci();
+        if (bootreason)
                 goto done;
-        }
 
         bootreason = get_efi_variable_str(&loader_guid,
                                           L"LoaderEntryRebootReason");
