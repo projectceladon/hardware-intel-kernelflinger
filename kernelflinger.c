@@ -47,8 +47,9 @@
 #include "options.h"
 #include "power.h"
 #include "targets.h"
+#include "unittest.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.08"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.09"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -345,7 +346,11 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         } else if (!StrCmp(target, L"recovery")) {
                 ret = RECOVERY;
         } else if (!StrCmp(target, L"charging")) {
-                ret = CHARGER;
+                if (get_current_off_mode_charge()) {
+                        ret = CHARGER;
+                } else {
+                        ret = POWER_OFF;
+                }
         } else {
                 error(L"Unknown oneshot boot target: '%s'", target);
                 ret = NORMAL_BOOT;
@@ -475,7 +480,12 @@ static enum boot_target check_command_line(VOID **address)
                         continue;
                 }
 #endif
-
+#ifndef USER
+                if (!StrCmp(argv[pos], L"-U")) {
+                        unittest_main();
+                        return EXIT_SHELL;
+                }
+#endif
                 if (!StrCmp(argv[pos], L"-a")) {
                         pos++;
                         if (pos >= argc) {
@@ -1033,6 +1043,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         /* No UX prompts before this point, do not want to interfere
          * with magic key detection */
         boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
+        if (boot_target == EXIT_SHELL)
+                return EFI_SUCCESS;
+
         debug(L"selected '%s'",  boot_target_to_string(boot_target));
 
         if (boot_target == POWER_OFF)

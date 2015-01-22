@@ -36,6 +36,8 @@
 #include <efi.h>
 #include <efilib.h>
 
+#include "targets.h"
+
 /* TRUE: OK, use keystore anyway
  * FALSE: Fastboot */
 BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash);

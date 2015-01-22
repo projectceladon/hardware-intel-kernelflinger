@@ -99,12 +99,13 @@ struct gpt_disk {
 	EFI_BLOCK_IO *bio;
 	EFI_DISK_IO *dio;
 	EFI_HANDLE handle;
+	EMMC_PARTITION_CTRL ctrl;
 	struct gpt_header gpt_hd;
 	struct gpt_partition *partitions;
 };
 
-/* Allow to scan and flash only the system disk
- * ie: only 1 disk should be non-removable */
+/* Allow to scan and flash only one disk at a time
+ * this disk could be emmc user area or emmc gpp */
 static struct gpt_disk sdisk;
 
 static EFI_STATUS calculate_crc32(void *data, UINTN size, UINT32 *crc)
@@ -240,20 +241,32 @@ static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
 	return EFI_SUCCESS;
 }
 
-/*
- * try to find the system disk
- * even if there is no gpt table present.
- */
-static EFI_STATUS gpt_cache_partition(void)
+static EFI_STATUS check_controller_dp(EFI_DEVICE_PATH *p, EMMC_PARTITION_CTRL ctrl)
+{
+	while (p->Type != END_DEVICE_PATH_TYPE) {
+		if (p->Type == HARDWARE_DEVICE_PATH && p->SubType == HW_CONTROLLER_DP
+		    && ((CONTROLLER_DEVICE_PATH *)p)->Controller == ctrl)
+			return EFI_SUCCESS;
+		/* get the next device path node */
+		p = (EFI_DEVICE_PATH *)((void *)p + ((UINT16)p->Length[0] | (UINT16)p->Length[1] << 8));
+	}
+
+	return EFI_NOT_FOUND;
+}
+
+/* Given the controller of the emmc part, find the disk and caches
+ * information into the global sdisk variable */
+static EFI_STATUS gpt_cache_partition(EMMC_PARTITION_CTRL ctrl)
 {
 	EFI_STATUS ret;
 	EFI_HANDLE *handles;
 	UINTN nb_handle = 0;
 	UINTN i;
 	BOOLEAN found = FALSE;
+	EFI_DEVICE_PATH *device_path;
 
 	/* if  already cached, return */
-	if (sdisk.bio)
+	if (sdisk.dio && sdisk.ctrl == ctrl)
 		return EFI_SUCCESS;
 
 	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol, &BlockIoProtocol, NULL, &nb_handle, &handles);
@@ -264,20 +277,31 @@ static EFI_STATUS gpt_cache_partition(void)
 	debug(L"Found %d block io protocols", nb_handle);
 
 	for (i = 0; i < nb_handle && !found; i++) {
+		/* Check if the controller match the requested one */
+		device_path = DevicePathFromHandle(handles[i]);
+		ret = check_controller_dp(device_path, ctrl);
+		if (EFI_ERROR(ret))
+			continue;
+
 		ZeroMem(&sdisk, sizeof(sdisk));
 		ret = gpt_prepare_disk(handles[i], &sdisk);
 		if (EFI_ERROR(ret))
 			continue;
+		debug(L"Found disk as block io %d using controller %d", i, ctrl);
 
-		debug(L"Found System disk as block io %d", i);
 		sdisk.handle = handles[i];
+		sdisk.ctrl = ctrl;
 		found = TRUE;
 	}
 	if (!found) {
-		error(L"No System disk found");
+		error(L"No disk found using controller %x", ctrl);
 		ret = EFI_NOT_FOUND;
 		goto free_handles;
 	}
+
+	/* only system's gpt partitions will be flashed through fastboot */
+	if (ctrl != EMMC_USER_PART)
+		return EFI_SUCCESS;
 
 	ret = gpt_list_partition_on_disk(&sdisk);
 	/* ignore if there are no gpt partition on the system disk */
@@ -318,11 +342,11 @@ EFI_STATUS gpt_refresh(void)
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart)
+EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl)
 {
 	EFI_STATUS ret;
 
-	ret = gpt_cache_partition();
+	ret = gpt_cache_partition(ctrl);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -334,12 +358,12 @@ EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart)
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart)
+EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl)
 {
 	EFI_STATUS ret;
 	UINTN p;
 
-	ret = gpt_cache_partition();
+	ret = gpt_cache_partition(ctrl);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -358,17 +382,17 @@ EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interf
 	}
 
 	if (!StrCmp(label, L"userdata"))
-		return gpt_get_partition_by_label(L"data", gpart);
+		return gpt_get_partition_by_label(L"data", gpart, ctrl);
 
 	return EFI_NOT_FOUND;
 }
 
-EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count)
+EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, EMMC_PARTITION_CTRL ctrl)
 {
 	EFI_STATUS ret;
 	UINTN p;
 
-	ret = gpt_cache_partition();
+	ret = gpt_cache_partition(ctrl);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -601,11 +625,11 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	return gpt_refresh();
 }
 
-EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp)
+EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, EMMC_PARTITION_CTRL ctrl)
 {
 	EFI_STATUS ret;
 
-	ret = gpt_cache_partition();
+	ret = gpt_cache_partition(ctrl);
 	if (EFI_ERROR(ret))
 		return ret;
 
