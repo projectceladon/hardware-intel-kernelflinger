@@ -76,11 +76,13 @@ static void write_to_c_source(const char *name, png_bytep buffer,
 	unsigned int i, col;
 	const unsigned int item_len = strlen("0x00, ");
 	FILE *f;
+	bool free_f = false;
 
 	if (!strcmp(path, "-"))
 		f = stdout;
 	else {
 		f = fopen(path, "w");
+		free_f = true;
 		if (!f)
 			error("Failed to create output file.");
 	}
@@ -94,6 +96,8 @@ static void write_to_c_source(const char *name, png_bytep buffer,
 	}
 	fprintf(f, "\n};\n");
 	fprintf(f, "unsigned int %s_dat_len = %d;\n", name, size);
+	if (free_f)
+		fclose(f);
 }
 
 static png_uint_32 get_format_from_string(const char *str)
@@ -131,7 +135,7 @@ int main(int argc, char **argv)
 	png_bytep buffer;
 	unsigned int size;
 	bool format_initialized = false;
-	png_uint_32 format;
+	png_uint_32 format = 0;
 	const char *ipath = NULL;
 	const char *opath = NULL;
 	const char *prefix = NULL;
