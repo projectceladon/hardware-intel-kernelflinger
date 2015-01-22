@@ -117,7 +117,7 @@ EFI_STATUS get_boot_image_hash(CHAR16 *label)
 	CHAR8 hash[SHA_DIGEST_LENGTH];
 	EFI_STATUS ret;
 
-	ret = gpt_get_partition_by_label(label, &gparti);
+	ret = gpt_get_partition_by_label(label, &gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, "Failed to get partition %s", label);
 		return ret;
@@ -464,7 +464,7 @@ EFI_STATUS get_ext4_hash(CHAR16 *label)
 	EFI_STATUS ret;
 	UINT64 ext4_len;
 
-	ret = gpt_get_partition_by_label(label, &gparti);
+	ret = gpt_get_partition_by_label(label, &gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, "Failed to get partition %s", label);
 		return ret;

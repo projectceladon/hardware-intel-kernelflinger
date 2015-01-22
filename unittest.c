@@ -2,9 +2,7 @@
  * Copyright (c) 2014, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Author: Andrew Boie <andrew.p.boie@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,48 +30,26 @@
  *
  */
 
-#ifndef _GPT_H_
-#define _GPT_H_
 
 #include <efi.h>
-#include "gpt_bin.h"
+#include <efiapi.h>
+#include <efilib.h>
 
-struct gpt_partition {
-	EFI_GUID type;
-	EFI_GUID unique;
-	UINT64 starting_lba;
-	UINT64 ending_lba;
-	union {
-		struct {
-			UINT16 reserved[3];
-			UINT16 gpt_att;
-		} __attribute__((packed)) fields;
-		UINT64 whole;
-	} attrs;
-	UINT16 name[36];                    /* UTF-16 encoded partition name */
-	/* Remainder of entry is reserved and should be 0 */
-} __attribute__((packed));
+#include "ux.h"
+#include "unittest.h"
 
-struct gpt_partition_interface {
-	struct gpt_partition part;
-	EFI_BLOCK_IO *bio;
-	EFI_DISK_IO *dio;
-};
+UINT8 fake_hash[] = {0x12, 0x34, 0x56, 0x78, 0x90, 0xAB};
 
-typedef enum {
-	EMMC_USER_PART = 0x00,
-	EMMC_BOOT_PART1,
-	EMMC_BOOT_PART2,
-	EMMC_GPP_PART1 = 0x04,
-	EMMC_GPP_PART2,
-	EMMC_GPP_PART3,
-	EMMC_GPP_PART4
-} EMMC_PARTITION_CTRL;
+VOID unittest_main(VOID)
+{
+	/* TODO: some method of programmatically verifying that these work */
+	ux_prompt_user_bootimage_unverified();
+	ux_warn_user_unverified_recovery();
+	ux_prompt_user_device_unlocked();
+	ux_prompt_user_secure_boot_off();
+	ux_prompt_user_keystore_unverified(fake_hash);
+	ux_crash_event_prompt_user_for_boot_target();
 
-EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl);
-EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, EMMC_PARTITION_CTRL ctrl);
-EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, EMMC_PARTITION_CTRL ctrl);
-EFI_STATUS gpt_refresh(void);
-EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl);
+	Print(L"Unit tests complete.\n");
+}
 
-#endif	/* _GPT_H_ */

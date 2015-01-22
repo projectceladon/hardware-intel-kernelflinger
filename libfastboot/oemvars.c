@@ -317,7 +317,7 @@ EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 				error(L"Failed to convert varname string.");
 				goto out;
 			}
-			fastboot_info("Setting oemvar: %a", var);
+			debug(L"Setting oemvar: %a", var);
 			ret = uefi_call_wrapper(RT->SetVariable, 5, varname,
 						&curr_guid, attributes,
 						vallen, val);

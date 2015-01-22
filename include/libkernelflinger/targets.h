@@ -44,7 +44,8 @@ enum boot_target {
         MEMORY,
         CHARGER,
         REBOOT,
-        POWER_OFF
+        POWER_OFF,
+        EXIT_SHELL
 };
 
 #endif	/* _TARGETS_H_ */

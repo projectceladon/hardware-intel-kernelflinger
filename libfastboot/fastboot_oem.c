@@ -124,7 +124,7 @@ static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
 	/* Enforce if we're not in provisioning mode and the persistent
 	 * partition exists */
 	if (!device_is_provisioning() &&
-	    !EFI_ERROR(gpt_get_partition_by_label(L"persistent", &gparti))) {
+	    !EFI_ERROR(gpt_get_partition_by_label(L"persistent", &gparti, EMMC_USER_PART))) {
 
 		/* We need to check the last byte of the partition. The gparti
 		 * .dio object is a handle to the beginning of the disk */

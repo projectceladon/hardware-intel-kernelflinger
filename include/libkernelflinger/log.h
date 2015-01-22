@@ -36,6 +36,10 @@
 #include <efi.h>
 #include <ui.h>
 
+#ifndef USER
+EFI_STATUS log_flush_to_var();
+#endif
+
 void log(const CHAR16 *fmt, ...);
 
 #ifdef USER
