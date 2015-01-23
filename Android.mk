@@ -2,6 +2,18 @@ KERNELFLINGER_LOCAL_PATH := $(call my-dir)
 include $(call all-subdir-makefiles)
 LOCAL_PATH := $(KERNELFLINGER_LOCAL_PATH)
 
+SHARED_CFLAGS := -Wall -Wextra -Werror
+SHARED_STATIC_LIBRARIES := libkernelflinger-$(TARGET_BUILD_VARIANT) libcryptlib \
+	libopenssl-efi libgnuefi libefi
+
+ifeq ($(TARGET_BUILD_VARIANT),user)
+    SHARED_CFLAGS += -DUSER -DUSERDEBUG
+endif
+
+ifeq ($(TARGET_BUILD_VARIANT),userdebug)
+    SHARED_CFLAGS += -DUSERDEBUG
+endif
+
 include $(CLEAR_VARS)
 
 kf_intermediates := $(call intermediates-dir-for,EFI,kernelflinger)
@@ -44,12 +56,11 @@ $(PADDED_KEYSTORE): $(KEYSTORE)
 $(LOCAL_PATH)/oemkeystore.S: $(PADDED_KEYSTORE) $(PADDED_OEM_CERT)
 
 LOCAL_MODULE := kernelflinger-$(TARGET_BUILD_VARIANT)
-LOCAL_CFLAGS := -DKERNELFLINGER  -Wall -Wextra -Werror
+LOCAL_CFLAGS := -DKERNELFLINGER $(SHARED_CFLAGS)
 LOCAL_OBJCOPY_FLAGS := -j .oemkeys
 LOCAL_ASFLAGS := -DOEM_KEYSTORE_FILE=\"$(PADDED_KEYSTORE)\" \
 	-DOEM_KEY_FILE=\"$(PADDED_OEM_CERT)\"
-LOCAL_STATIC_LIBRARIES := libkernelflinger-$(TARGET_BUILD_VARIANT) libcryptlib \
-	libopenssl-efi libgnuefi libefi
+LOCAL_STATIC_LIBRARIES := $(SHARED_STATIC_LIBRARIES)
 LOCAL_MODULE_STEM := kernelflinger
 LOCAL_SRC_FILES := \
 	kernelflinger.c \
@@ -62,15 +73,18 @@ else
     LOCAL_STATIC_LIBRARIES += libfastboot-$(TARGET_BUILD_VARIANT)
 endif
 
-ifeq ($(TARGET_BUILD_VARIANT),user)
-    LOCAL_CFLAGS += -DUSER -DUSERDEBUG
-else
+ifneq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_SRC_FILES += unittest.c
 endif
 
-ifeq ($(TARGET_BUILD_VARIANT),userdebug)
-    LOCAL_CFLAGS += -DUSERDEBUG
-endif
+include $(BUILD_EFI_EXECUTABLE)
 
+include $(CLEAR_VARS)
+LOCAL_MODULE := installer-$(TARGET_BUILD_VARIANT)
+LOCAL_STATIC_LIBRARIES := $(SHARED_STATIC_LIBRARIES) libfastboot-for-installer-$(TARGET_BUILD_VARIANT)
+LOCAL_CFLAGS := $(SHARED_CFLAGS)
+LOCAL_SRC_FILES := installer.c
+LOCAL_MODULE_STEM := installer
+LOCAL_C_INCLUDES := $(addprefix $(LOCAL_PATH)/,libfastboot)
 include $(BUILD_EFI_EXECUTABLE)
 
