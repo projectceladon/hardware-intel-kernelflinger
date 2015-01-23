@@ -50,16 +50,7 @@
 #include "info.h"
 
 #define MAGIC_LENGTH 64
-#define MAX_DOWNLOAD_SIZE 512*1024*1024
 #define MAX_VARIABLE_LENGTH 128
-
-struct fastboot_cmd {
-	struct fastboot_cmd *next;
-	const CHAR8 *prefix;
-	unsigned prefix_len;
-	enum device_state min_state;
-	fastboot_handle handle;
-};
 
 struct fastboot_var {
 	struct fastboot_var *next;
@@ -118,35 +109,40 @@ static const char *erase_verified_whitelist[] = {
 	NULL
 };
 
-static void cmd_register(struct fastboot_cmd **list, const char *prefix,
+void fastboot_set_dlbuffer(void *buffer, unsigned size)
+{
+	dlbuffer = buffer;
+	dlsize = size;
+}
+
+static void cmd_register(struct fastboot_cmd **list, const char *name,
 			 fastboot_handle handle, enum device_state min_state)
 {
 	struct fastboot_cmd *cmd;
 	cmd = AllocatePool(sizeof(*cmd));
 	if (!cmd) {
-		error(L"Failed to allocate fastboot command %a", prefix);
+		error(L"Failed to allocate fastboot command %a", name);
 		return;
 	}
-	cmd->prefix = (CHAR8 *)prefix;
-	cmd->prefix_len = strlen((const CHAR8 *)prefix);
+	cmd->name = (CHAR8 *)name;
 	cmd->min_state = min_state;
 	cmd->handle = handle;
 	cmd->next = *list;
 	*list = cmd;
 }
 
-void fastboot_register(const char *prefix,
+void fastboot_register(const char *name,
 		       fastboot_handle handle,
 		       enum device_state min_state)
 {
-	cmd_register(&cmdlist, prefix, handle, min_state);
+	cmd_register(&cmdlist, name, handle, min_state);
 }
 
-void fastboot_oem_register(const char *prefix,
+void fastboot_oem_register(const char *name,
 			   fastboot_handle handle,
 			   enum device_state min_state)
 {
-	cmd_register(&oem_cmdlist, prefix, handle, min_state);
+	cmd_register(&oem_cmdlist, name, handle, min_state);
 }
 
 struct fastboot_var *fastboot_getvar(const char *name)
@@ -425,8 +421,9 @@ static void worker_getvar_all(struct fastboot_var *start)
 		var = start;
 
 	if (var) {
-		fastboot_info("%a: %a", var->name, var->value);
+		struct fastboot_var *cur = var;
 		var = var->next;
+		fastboot_info("%a: %a", cur->name, cur->value);
 	} else
 		fastboot_okay("");
 }
@@ -480,10 +477,15 @@ static struct fastboot_cmd *get_cmd(struct fastboot_cmd *list, const CHAR8 *name
 {
 	struct fastboot_cmd *cmd;
 	for (cmd = list; cmd; cmd = cmd->next)
-		if (!memcmp(name, cmd->prefix, cmd->prefix_len))
+		if (!strcmp(name, cmd->name))
 			return cmd;
 
 	return NULL;
+}
+
+struct fastboot_cmd *get_root_cmd(const CHAR8 *name)
+{
+	return get_cmd(cmdlist, name);
 }
 
 static void cmd_oem(INTN argc, CHAR8 **argv)
@@ -515,8 +517,7 @@ static void fastboot_read_command(void)
 }
 #define BLK_DOWNLOAD (8*1024*1024)
 
-static void cmd_download(INTN argc,
-			 CHAR8 **argv)
+static void cmd_download(INTN argc, CHAR8 **argv)
 {
 	char response[MAGIC_LENGTH];
 	UINTN newdlsize;
@@ -645,14 +646,14 @@ static void fastboot_process_rx(void *buf, unsigned len)
 
 		fastboot_state = STATE_COMMAND;
 
-		cmd = get_cmd(cmdlist, buf);
+		split_args(buf, &argc, argv);
+		cmd = get_root_cmd(argv[0]);
 		if (cmd) {
 			if (cmd->min_state > get_current_state()) {
 				fastboot_fail("command not allowed in %a state",
 					      get_current_state_string());
 				return;
 			}
-			split_args(buf, &argc, argv);
 			cmd->handle(argc, argv);
 			received_len = 0;
 
@@ -695,10 +696,10 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 	else
 		fastboot_publish("max-download-size", download_max_str);
 
-	fastboot_register("download:", cmd_download, VERIFIED);
-	fastboot_register("flash:", cmd_flash, VERIFIED);
-	fastboot_register("erase:", cmd_erase, VERIFIED);
-	fastboot_register("getvar:", cmd_getvar, LOCKED);
+	fastboot_register("download", cmd_download, VERIFIED);
+	fastboot_register("flash", cmd_flash, VERIFIED);
+	fastboot_register("erase", cmd_erase, VERIFIED);
+	fastboot_register("getvar", cmd_getvar, LOCKED);
 	fastboot_register("boot", cmd_boot, UNLOCKED);
 	fastboot_register("continue", cmd_continue, LOCKED);
 	fastboot_register("reboot", cmd_reboot, LOCKED);
