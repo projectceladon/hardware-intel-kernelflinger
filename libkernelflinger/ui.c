@@ -277,6 +277,7 @@ void ui_print(CHAR16 *fmt, ...)
 
 	va_start(args, fmt);
 	str = build_str(fmt, args);
+	va_end(args);
 	if (!str)
 		return;
 
@@ -293,6 +294,7 @@ void ui_error(CHAR16 *fmt, ...)
 
 	va_start(args, fmt);
 	str = build_str(fmt, args);
+	va_end(args);
 	if (!str)
 		return;
 
