@@ -40,6 +40,17 @@ static struct RSCI_TABLE *RSCI_table = NULL;
 #define RSDT_SIG "RSDT"
 #define RSDP_SIG "RSD PTR "
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
+
+#ifndef ALLOW_UNSUPPORTED_ACPI_TABLE
+static const struct ACPI_DESC_HEADER SUPPORTED_TABLES[] = {
+	{ .signature = "RSCI",
+	  .oem_id = "INTEL ",
+	  .oem_table_id = "BOOTSRC ",
+	  .revision = 1 }
+};
+#endif
+
 /* This macro is defined to get a specified field from an acpi table
  * which will be loader if necessary.
  * <table> parameter is the name of the requested table passed as-is.
@@ -101,6 +112,31 @@ out:
 	return ret;
 }
 
+static EFI_STATUS acpi_table_is_supported(struct ACPI_DESC_HEADER *t)
+{
+#ifdef ALLOW_UNSUPPORTED_ACPI_TABLE
+	debug(L"WARNING: skipping validation check on ACPI table %c%c%c%c",
+	      t->signature[0], t->signature[1], t->signature[2], t->signature[3]);
+	return EFI_SUCCESS;
+#else
+	const struct ACPI_DESC_HEADER *id = NULL;
+	UINTN i;
+
+	for (i = 0; i < ARRAY_SIZE(SUPPORTED_TABLES); i++)
+		if (!memcmp(SUPPORTED_TABLES[i].signature, t->signature, sizeof(t->signature))) {
+			id = &SUPPORTED_TABLES[i];
+			break;
+		}
+
+	if (id && !memcmp(id->oem_id, t->oem_id, sizeof(t->oem_id))
+	    && !memcmp(id->oem_table_id, t->oem_table_id, sizeof(t->oem_table_id))
+	    && id->revision == t->revision)
+		return EFI_SUCCESS;
+
+	return EFI_UNSUPPORTED;
+#endif
+}
+
 static UINTN acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
 {
 	UINT32 i;
@@ -135,6 +171,13 @@ EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table)
 				      signature[1], signature[2], signature[3]);
 				break;
 			}
+
+			ret = acpi_table_is_supported(header);
+			if (EFI_ERROR(ret)) {
+				error(L"Failed to match a supported ACPI table entry");
+				break;
+			}
+
 			*table = header;
 			ret = EFI_SUCCESS;
 			break;
