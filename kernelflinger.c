@@ -49,7 +49,7 @@
 #include "targets.h"
 #include "unittest.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.09"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.0A"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
