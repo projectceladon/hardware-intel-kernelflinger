@@ -282,7 +282,7 @@ static CHAR16 *get_format_image_filename(CHAR8 *label)
 static void installer_format(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
-	void *data;
+	void *data = NULL;
 	UINTN size;
 	CHAR16 *filename;
 	struct fastboot_cmd *cmd;
@@ -292,7 +292,10 @@ static void installer_format(INTN argc, CHAR8 **argv)
 		return;
 
 	ret = uefi_read_file(file_io_interface, filename, &data, &size);
-	if (EFI_ERROR(ret)) {
+	if (ret == EFI_NOT_FOUND && !StrCmp(L"userdata.img", filename)) {
+		fastboot_info("userdata.img is missing, cannot format %a", argv[1]);
+		fastboot_info("Android fs_mgr will manage this");
+	} else if (EFI_ERROR(ret)) {
 		inst_perror(ret, "Unable to read file %s", filename);
 		goto free_filename;
 	}
@@ -307,7 +310,8 @@ static void installer_format(INTN argc, CHAR8 **argv)
 	if (!last_cmd_succeeded)
 		goto free_data;
 
-	installer_flash_buffer(data, size, argc, argv);
+	if (data)
+		installer_flash_buffer(data, size, argc, argv);
 
 free_data:
 	FreePool(data);
