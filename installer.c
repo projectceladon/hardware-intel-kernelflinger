@@ -496,7 +496,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	}
 	str_to_stra(options, loaded_img->LoadOptions, size);
 	/* Snip control and space characters. */
-	for (i = size - 1; isspace(options[i]); i--)
+	for (i = size - 1; options[i] <= ' '; i--)
 		options[i] = '\0';
 	/* Drop the first parameter.  */
 	options = strchr(options, ' ');
