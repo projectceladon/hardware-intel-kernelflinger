@@ -51,16 +51,37 @@ static EFI_FILE_IO_INTERFACE *file_io_interface;
 static data_callback_t fastboot_rx_cb, fastboot_tx_cb;
 static CHAR16 *installer_batch_filename;
 static CHAR8 DEFAULT_OPTIONS[] = "--batch installer.cmd";
+static BOOLEAN need_tx_cb;
 
 #define inst_perror(ret, x, ...) do { \
 	fastboot_fail(x ": %r", ##__VA_ARGS__, ret); \
 } while (0);
 
+static void flush_tx_buffer(void)
+{
+	while (need_tx_cb) {
+		need_tx_cb = FALSE;
+		fastboot_tx_cb(NULL, 0);
+	}
+}
+
+static void run_command(void *line, INTN size)
+{
+	fastboot_rx_cb(line, size);
+	flush_tx_buffer();
+}
+
+static void run_fastboot_handle(fastboot_handle handle, INTN argc, CHAR8 **argv)
+{
+	handle(argc, argv);
+	flush_tx_buffer();
+}
+
 static void installer_flash_buffer(void *data, unsigned size,
 				   INTN argc, CHAR8 **argv)
 {
 	fastboot_set_dlbuffer(data, size);
-	fastboot_flash_cmd(argc, argv);
+	run_fastboot_handle(fastboot_flash_cmd, argc, argv);
 	fastboot_set_dlbuffer(NULL, 0);
 }
 
@@ -306,7 +327,7 @@ static void installer_format(INTN argc, CHAR8 **argv)
 		goto free_data;
 	}
 
-	cmd->handle(argc, argv);
+	run_fastboot_handle(cmd->handle, argc, argv);
 	if (!last_cmd_succeeded)
 		goto free_data;
 
@@ -452,7 +473,7 @@ static void run_batch()
 			continue;
 
 		Print(L"Starting command: '%a'\n", line);
-		fastboot_rx_cb(line, strlen((CHAR8 *)line));
+		run_command(line, strlen((CHAR8 *)line));
 		if (!last_cmd_succeeded) {
 			error(L"Failed at line %d", lineno);
 			break;
@@ -511,7 +532,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	}
 
 	/* Process options. */
-	fastboot_rx_cb(*options != '\0' ? options : DEFAULT_OPTIONS,
+	run_command(*options != '\0' ? options : DEFAULT_OPTIONS,
 		       *options != '\0' ? strlen(options) + 1 : sizeof(DEFAULT_OPTIONS));
 	if (installer_batch_filename)
 		run_batch();
@@ -563,7 +584,7 @@ int usb_write(void *pBuf, uint32_t size)
 
 	if (!memcmp((CHAR8 *)"INFO", pBuf, PREFIX_LEN)) {
 		Print(L"(bootloader) %a\n", pBuf + PREFIX_LEN);
-		fastboot_tx_cb(NULL, 0);
+		need_tx_cb = TRUE;
 	} if (!memcmp((CHAR8 *)"OKAY", pBuf, PREFIX_LEN)) {
 		if (((char *)pBuf)[PREFIX_LEN] != '\0')
 			Print(L"%a\n", pBuf + PREFIX_LEN);
