@@ -101,6 +101,17 @@ out:
 	return ret;
 }
 
+static UINTN acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
+{
+	UINT32 i;
+	CHAR8 sum = 0, *data = (CHAR8 *)table;
+
+	for (i = 0; i < table->length; i++)
+		sum += data[i];
+
+	return sum == 0 ? EFI_SUCCESS : EFI_CRC_ERROR;
+}
+
 EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table)
 {
 	struct RSDT_TABLE *rsdt;
@@ -118,6 +129,12 @@ EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table)
 		struct ACPI_DESC_HEADER *header = (VOID *)(UINTN)rsdt->entry[i];
 		if (!strncmpa(header->signature, signature, strlena(signature))) {
 			debug(L"Found %c%c%c%c table", signature[0], signature[1], signature[2], signature[3]);
+			ret = acpi_verify_checksum(header);
+			if (EFI_ERROR(ret)) {
+				error(L"Invalid checksum for %c%c%c%c table", signature[0],
+				      signature[1], signature[2], signature[3]);
+				break;
+			}
 			*table = header;
 			ret = EFI_SUCCESS;
 			break;
