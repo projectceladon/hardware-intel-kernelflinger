@@ -40,6 +40,5 @@ extern char *INFO_UNDEFINED;
 char *info_bootloader_version(void);
 char *info_variant(void);
 char *info_product(void);
-BOOLEAN info_is_production_signing(void);
 
 #endif	/* __INFO_H__ */

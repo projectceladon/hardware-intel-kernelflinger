@@ -261,8 +261,20 @@ static char *build_str(CHAR16 *fmt, va_list args)
 	return str;
 }
 
-static void ui_print_string(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, char *str)
+static void ui_internal_print(CHAR16 *fmt, va_list args, EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color)
 {
+	char *str;
+
+	if (!ui_is_ready()) {
+		VPrint(fmt, args);
+		Print(L"\n");
+		return;
+	}
+
+	str = build_str(fmt, args);
+	if (!str)
+		return;
+
 	ui_textarea_newline(default_textarea, str, color, FALSE);
 	ui_textarea_draw(default_textarea, default_textarea_x, default_textarea_y);
 }
@@ -270,33 +282,19 @@ static void ui_print_string(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, char *str)
 void ui_print(CHAR16 *fmt, ...)
 {
 	va_list args;
-	char *str;
-
-	if (!ui_is_ready())
-		return;
 
 	va_start(args, fmt);
-	str = build_str(fmt, args);
-	if (!str)
-		return;
-
-	ui_print_string(NULL, str);
+	ui_internal_print(fmt, args, NULL);
+	va_end(args);
 }
 
 void ui_error(CHAR16 *fmt, ...)
 {
 	va_list args;
-	char *str;
-
-	if (!ui_is_ready())
-		return;
 
 	va_start(args, fmt);
-	str = build_str(fmt, args);
-	if (!str)
-		return;
-
-	ui_print_string(&COLOR_RED, (char *)str);
+	ui_internal_print(fmt, args, &COLOR_RED);
+	va_end(args);
 }
 
 void ui_print_clear(void)

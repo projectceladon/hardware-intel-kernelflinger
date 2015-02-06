@@ -97,6 +97,58 @@ EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs)
 	return ret;
 }
 
+EFI_STATUS uefi_open_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, EFI_FILE **file)
+{
+	EFI_STATUS ret;
+
+	ret = uefi_call_wrapper(io->OpenVolume, 2, io, file);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = uefi_call_wrapper((*file)->Open, 5, *file, file, filename, EFI_FILE_MODE_READ, 0);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	return EFI_SUCCESS;
+}
+
+#define FILENAME_MAX_LENGTH 200
+
+EFI_STATUS uefi_get_file_size(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, UINTN *size)
+{
+	EFI_STATUS ret;
+	EFI_FILE_INFO *info;
+	UINTN info_size;
+	EFI_FILE *file;
+
+	ret = uefi_open_file(io, filename, &file);
+	if (EFI_ERROR(ret))
+		goto out;
+
+	info_size = SIZE_OF_EFI_FILE_INFO + FILENAME_MAX_LENGTH;
+
+	info = AllocatePool(info_size);
+	if (!info) {
+		ret = EFI_OUT_OF_RESOURCES;
+		goto close;
+	}
+
+	ret = uefi_call_wrapper(file->GetInfo, 4, file, &GenericFileInfo, &info_size, info);
+	if (EFI_ERROR(ret))
+		goto free_info;
+
+	*size = info->FileSize;
+
+free_info:
+	FreePool(info);
+close:
+	uefi_call_wrapper(file->Close, 1, file);
+out:
+	if (EFI_ERROR(ret))
+		error(L"Failed to read file %s:%r", filename, ret);
+	return ret;
+}
+
 EFI_STATUS uefi_read_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, void **data, UINTN *size)
 {
 	EFI_STATUS ret;
@@ -104,19 +156,17 @@ EFI_STATUS uefi_read_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, void **da
 	UINTN info_size;
 	EFI_FILE *file;
 
-	ret = uefi_call_wrapper(io->OpenVolume, 2, io, &file);
+	ret = uefi_open_file(io, filename, &file);
 	if (EFI_ERROR(ret))
 		goto out;
 
-	ret = uefi_call_wrapper(file->Open, 5, file, &file, filename, EFI_FILE_MODE_READ, 0);
-	if (EFI_ERROR(ret))
-		goto out;
-
-	info_size = SIZE_OF_EFI_FILE_INFO + 200;
+	info_size = SIZE_OF_EFI_FILE_INFO + FILENAME_MAX_LENGTH;
 
 	info = AllocatePool(info_size);
-	if (!info)
+	if (!info) {
+		ret = EFI_OUT_OF_RESOURCES;
 		goto close;
+	}
 
 	ret = uefi_call_wrapper(file->GetInfo, 4, file, &GenericFileInfo, &info_size, info);
 	if (EFI_ERROR(ret))

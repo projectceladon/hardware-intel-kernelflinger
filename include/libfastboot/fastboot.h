@@ -39,18 +39,30 @@
 #include <lib.h>
 #include <vars.h>
 
+#define MAX_DOWNLOAD_SIZE (512 * 1024 * 1024)
+
 /* GUID for variables used to communicate with Fastboot */
 extern const EFI_GUID fastboot_guid;
 
 typedef void (*fastboot_handle) (INTN argc, CHAR8 **argv);
 
+struct fastboot_cmd {
+	struct fastboot_cmd *next;
+	const CHAR8 *name;
+	enum device_state min_state;
+	fastboot_handle handle;
+};
+
+struct fastboot_cmd *get_root_cmd(const CHAR8 *name);
+void fastboot_set_dlbuffer(void *buffer, unsigned size);
+
 void fastboot_publish(const char *name, const char *value);
 void fastboot_okay(const char *fmt, ...);
 void fastboot_fail(const char *fmt, ...);
 void fastboot_info(const char *fmt, ...);
-void fastboot_register(const char *prefix, fastboot_handle handle,
+void fastboot_register(const char *name, fastboot_handle handle,
 		       enum device_state min_state);
-void fastboot_oem_register(const char *prefix, fastboot_handle handle,
+void fastboot_oem_register(const char *name, fastboot_handle handle,
 			   enum device_state min_state);
 
 EFI_STATUS fastboot_start(void **bootimage, void **efiimage,

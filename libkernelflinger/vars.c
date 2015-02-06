@@ -94,7 +94,7 @@ BOOLEAN get_current_boolean_var(CHAR16 *varname, CHAR8 cache[2])
 			return TRUE;
 		}
 
-		memcpy(cache, data, sizeof(cache));
+		memcpy(cache, data, 2);
 		FreePool(data);
 	}
 

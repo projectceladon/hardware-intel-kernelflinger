@@ -307,7 +307,7 @@ void fastboot_oem_init(void)
 	 * provisioning purpose only and those which modify the
 	 * device are restricted to the unlocked state.  */
 	fastboot_oem_register(CRASH_EVENT_MENU, cmd_oem_crash_event_menu, LOCKED);
-	fastboot_oem_register("setvar", cmd_oem_setvar, VERIFIED);
+	fastboot_oem_register("setvar", cmd_oem_setvar, UNLOCKED);
 	fastboot_oem_register("garbage-disk", cmd_oem_garbage_disk, UNLOCKED);
 	fastboot_oem_register("reboot", cmd_oem_reboot, LOCKED);
 	fastboot_oem_register("get-hashes", cmd_oem_gethashes, LOCKED);

@@ -49,7 +49,7 @@
 #include "targets.h"
 #include "unittest.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.09"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.0A"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -793,6 +793,11 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                         &boot_state, FALSE, TRUE);
+
+        /* Publish the OEM key in a volatile EFI variable so that
+         * Userfastboot can use it to validate flashed bootloader images */
+        set_efi_variable(&fastboot_guid, OEM_KEY_VAR,
+                         oem_key_size, oem_key, FALSE, TRUE);
 
         if (!bootimage) {
                 ret = android_image_load_file(g_disk_device, FASTBOOT_PATH,

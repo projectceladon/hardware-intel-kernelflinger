@@ -113,8 +113,8 @@ static const ui_textline_t secure_boot_off[] = {
 	{ &COLOR_LIGHTGRAY,	"If you were not responsible for",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"these changes, the security of",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"your device may be at risk.",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"Enter BIOS setup to re-enable",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"UEFI Secure Boot.",			FALSE },
+	{ &COLOR_LIGHTGRAY,	"Please contact customer support",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"from your device's manufacturer.",	FALSE },
 	{ NULL, NULL, FALSE }
 };
 

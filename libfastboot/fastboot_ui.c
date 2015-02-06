@@ -177,13 +177,6 @@ static void fastboot_ui_info_serial_number(ui_textline_t *line)
 	line->str = SMBIOS_GET_STRING(1, SerialNumber);
 }
 
-static void fastboot_ui_info_signing(ui_textline_t *line)
-{
-	BOOLEAN state = info_is_production_signing();
-
-	line->str = state ? "PRODUCTION" : "DEVELOPMENT";
-}
-
 static void fastboot_ui_info_secure_boot(ui_textline_t *line)
 {
 	BOOLEAN state = is_efi_secure_boot_enabled();
@@ -208,7 +201,6 @@ struct info_text_fun {
 	{ "BOOTLOADER VERSION", fastboot_ui_info_bootloader_version },
 	{ "IFWI VERSION", fastboot_ui_info_ifwi_version },
 	{ "SERIAL NUMBER", fastboot_ui_info_serial_number },
-	{ "SIGNING", fastboot_ui_info_signing },
 	{ "SECURE BOOT", fastboot_ui_info_secure_boot },
 	{ "LOCK STATE", fastboot_ui_info_lock_state }
 };

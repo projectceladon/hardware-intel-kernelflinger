@@ -102,7 +102,3 @@ char *info_product(void)
 	return TARGET_BOOTLOADER_BOARD_NAME;
 }
 
-BOOLEAN info_is_production_signing(void)
-{
-	return FALSE;
-}
