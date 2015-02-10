@@ -315,7 +315,7 @@ free_handles:
 	return ret;
 }
 
-static void gpt_free_cache(void)
+void gpt_free_cache(void)
 {
 	if (sdisk.partitions)
 		FreePool(sdisk.partitions);
