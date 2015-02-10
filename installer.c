@@ -321,7 +321,7 @@ static void installer_format(INTN argc, CHAR8 **argv)
 		goto free_filename;
 	}
 
-	cmd = get_root_cmd((CHAR8 *)"erase");
+	cmd = get_root_cmd("erase");
 	if (!cmd) {
 		fastboot_fail("Unknown 'erase' command");
 		goto free_data;
@@ -378,46 +378,48 @@ static void unsupported_cmd(__attribute__((__unused__)) INTN argc,
 }
 
 static struct replacements {
-	CHAR8 *name;
-	fastboot_handle new_handle;
+	struct fastboot_cmd cmd;
 	fastboot_handle *save_handle;
-	enum device_state min_state;
 } REPLACEMENTS[] = {
 	/* Fastboot changes. */
-	{ (CHAR8 *)"flash",	installer_flash_cmd,	&fastboot_flash_cmd,	UNKNOWN_STATE},
-	{ (CHAR8 *)"format",	installer_format,	NULL, 			VERIFIED },
+	{ { "flash",	UNKNOWN_STATE,	installer_flash_cmd },	&fastboot_flash_cmd },
+	{ { "format",	VERIFIED,	installer_format    },	NULL },
 	/* Unsupported commands. */
-	{ (CHAR8 *)"update",	unsupported_cmd,	NULL,			UNKNOWN_STATE },
-	{ (CHAR8 *)"flashall",	unsupported_cmd,	NULL,			UNKNOWN_STATE },
-	{ (CHAR8 *)"boot",	unsupported_cmd,	NULL,			UNKNOWN_STATE },
-	{ (CHAR8 *)"devices",	unsupported_cmd,	NULL,			UNKNOWN_STATE },
-	{ (CHAR8 *)"download",	unsupported_cmd,	NULL,			UNKNOWN_STATE },
+	{ { "update",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
+	{ { "flashall",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
+	{ { "boot",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
+	{ { "devices",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
+	{ { "download",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
 	/* Installer specific commands. */
-	{ (CHAR8 *)"--help",	usage,			NULL,			LOCKED },
-	{ (CHAR8 *)"-h",	usage,			NULL,			LOCKED },
-	{ (CHAR8 *)"--batch",	batch,			NULL,			LOCKED },
-	{ (CHAR8 *)"-b",	batch,			NULL,			LOCKED },
+	{ { "--help",	LOCKED,	usage			    },	NULL },
+	{ { "-h",	LOCKED,	usage			    },	NULL },
+	{ { "--batch",	LOCKED,	batch			    },	NULL },
+	{ { "-b",	LOCKED,	batch			    },	NULL }
 };
 
-static void installer_replace_functions()
+static EFI_STATUS installer_replace_functions()
 {
+	EFI_STATUS ret;
 	struct fastboot_cmd *cmd;
 	UINTN i;
 
 	for (i = 0; i < ARRAY_SIZE(REPLACEMENTS); i++) {
-		cmd = get_root_cmd(REPLACEMENTS[i].name);
+		cmd = get_root_cmd(REPLACEMENTS[i].cmd.name);
 
 		if (cmd && REPLACEMENTS[i].save_handle)
 			*(REPLACEMENTS[i].save_handle) = cmd->handle;
 
-		if (cmd && REPLACEMENTS[i].new_handle)
-			cmd->handle = REPLACEMENTS[i].new_handle;
+		if (cmd && REPLACEMENTS[i].cmd.handle)
+			cmd->handle = REPLACEMENTS[i].cmd.handle;
 
-		if (!cmd && REPLACEMENTS[i].new_handle)
-			fastboot_register((char *)REPLACEMENTS[i].name,
-					  REPLACEMENTS[i].new_handle,
-					  REPLACEMENTS[i].min_state);
+		if (!cmd && REPLACEMENTS[i].cmd.handle) {
+			ret = fastboot_register(&REPLACEMENTS[i].cmd);
+			if (EFI_ERROR(ret))
+				return ret;
+		}
 	}
+
+	return EFI_SUCCESS;
 }
 
 static void skip_whitespace(char **line)
@@ -524,8 +526,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	skip_whitespace((char **)&options);
 
 	/* Initialize the fastboot library. */
-	fastboot_start(NULL, NULL, NULL, NULL);
-	installer_replace_functions();
+	ret = fastboot_start(NULL, NULL, NULL, NULL, TRUE);
+	if (EFI_ERROR(ret))
+		goto exit;
+	ret = installer_replace_functions();
+	if (EFI_ERROR(ret))
+		goto exit;
 	if (!fastboot_flash_cmd) {
 		fastboot_fail("Failed to get the flash handle");
 		goto exit;
@@ -536,9 +542,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 		       *options != '\0' ? strlen(options) + 1 : sizeof(DEFAULT_OPTIONS));
 	if (installer_batch_filename)
 		run_batch();
+	fastboot_free();
 
 exit:
 	FreePool(buf);
+	if (EFI_ERROR(ret))
+		return ret;
 	return last_cmd_succeeded ? EFI_SUCCESS : EFI_INVALID_PARAMETER;
 }
 

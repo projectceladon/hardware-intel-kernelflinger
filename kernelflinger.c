@@ -844,18 +844,16 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         EFI_STATUS ret = EFI_SUCCESS;
         enum boot_target target;
         EFI_HANDLE image;
-        void *efiimage;
+        void *efiimage = NULL;
         UINTN imagesize;
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
 
         for (;;) {
-                efiimage = NULL;
-                bootimage = NULL;
                 target = UNKNOWN_TARGET;
 
-                ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target);
+                ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target, FALSE);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, "Fastboot mode failed");
                         break;
@@ -866,12 +864,16 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                          * check just to make sure */
                         if (device_is_unlocked())
                                 load_image(bootimage, BOOT_STATE_ORANGE, FALSE);
+                        FreePool(bootimage);
+                        bootimage = NULL;
                         continue;
                 }
 
                 if (efiimage) {
                         ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
                                                 NULL, efiimage, imagesize, &image);
+                        FreePool(efiimage);
+                        efiimage = NULL;
                         if (EFI_ERROR(ret)) {
                                 efi_perror(ret, L"Unable to load the received EFI image");
                                 continue;

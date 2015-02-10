@@ -359,11 +359,22 @@ EFI_STATUS fastboot_usb_stop(void *bootimage, void *efiimage, UINTN imagesize,
 			     enum boot_target target)
 {
 	EFI_STATUS ret;
+	VOID *imgbuffer = NULL;
 
-	fastboot_bootimage = bootimage;
-	fastboot_efiimage = efiimage;
 	fastboot_imagesize = imagesize;
 	fastboot_target = target;
+
+	if (imagesize && (bootimage || efiimage)) {
+		imgbuffer = AllocatePool(imagesize);
+		if (!imgbuffer) {
+			error(L"Failed to allocate image buffer");
+			return EFI_OUT_OF_RESOURCES;
+		}
+		memcpy(imgbuffer, bootimage ? bootimage : efiimage, imagesize);
+	}
+
+	fastboot_bootimage = bootimage ? imgbuffer : NULL;
+	fastboot_efiimage = efiimage ? imgbuffer : NULL;
 
 	ret = uefi_call_wrapper(usb_device->Stop, 1, usb_device);
 	if (EFI_ERROR(ret))
