@@ -63,6 +63,7 @@ char *info_bootloader_version(void)
 	}
 
 	str_to_stra((CHAR8 *)bootloader_version, version, StrLen(version) + 1);
+	FreePool(version);
 
 	return bootloader_version;
 }
