@@ -64,7 +64,7 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 #define DETECT_KEY_STALL_TIME_MS    1
 
 /* How long magic key should be held to force Fastboot mode */
-#define FASTBOOT_HOLD_DELAY         (4 * 1000 * 1000)
+#define FASTBOOT_HOLD_DELAY         (2 * 1000 * 1000)
 
 /* If we find this in the root of the EFI system partition, unconditionally
  * enter Fastboot mode */
@@ -222,24 +222,32 @@ static enum boot_target check_magic_key(VOID)
         if (EFI_ERROR(ret))
                 return NORMAL_BOOT;
 
-#ifdef USERFASTBOOT
         debug(L"ReadKeyStroke: (%d tries) %d %d", i, key.ScanCode, key.UnicodeChar);
-
-        Print(L"Continue holding key for %d seconds to force Fastboot mode.\n",
-                        FASTBOOT_HOLD_DELAY / 1000000);
-        Print(L"Release key now to load Recovery Console...");
-
-        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY)) {
-                bt = FASTBOOT;
-                Print(L"FASTBOOT\n");
-        } else {
-                bt = RECOVERY;
-                Print(L"RECOVERY\n");
-        }
-        return bt;
+        switch (key.ScanCode) {
+                case SCAN_DOWN:
+                case SCAN_PAGE_DOWN:
+                case SCAN_END:
+                case SCAN_LEFT:
+#ifdef USERFASTBOOT
+                        Print(L"Continue holding key for %d second(s) to enter Fastboot mode.\n",
+                              FASTBOOT_HOLD_DELAY / 1000000);
+                        Print(L"Release key now to load Recovery Console... \n");
+                        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, key.ScanCode)) {
+                                bt = FASTBOOT;
+                                Print(L"FASTBOOT\n");
+                        } else {
+                                bt = RECOVERY;
+                                Print(L"RECOVERY\n");
+                        }
+                        return bt;
 #else
-        return FASTBOOT;
+                        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, key.ScanCode))
+                                return FASTBOOT;
 #endif
+                default:
+                        /* fall through */
+                        return NORMAL_BOOT;
+        }
 }
 
 
