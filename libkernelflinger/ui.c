@@ -338,10 +338,11 @@ ui_events_t ui_read_input(void)
 	return EV_NONE;
 }
 
-static EFI_STATUS test_key(VOID)
+static BOOLEAN test_key(BOOLEAN check_code, UINT16 ScanCode)
 {
 	EFI_INPUT_KEY key;
 	EFI_STATUS ret = EFI_SUCCESS;
+	BOOLEAN result = TRUE;
 
 	uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
 
@@ -349,8 +350,11 @@ static EFI_STATUS test_key(VOID)
 					ST->ConIn, &key);
 	if (ret != EFI_SUCCESS) {
 		debug(L"err=%r", ret);
-		return ret;
+		return FALSE;
 	}
+
+	if (check_code)
+		result = (key.ScanCode == ScanCode);
 
 	/* flush any stacked up key events in the queue before
 	 * we sleep again */
@@ -359,26 +363,26 @@ static EFI_STATUS test_key(VOID)
 		/* spin */
 	}
 
-	return ret;
+	return result;
 }
 
-BOOLEAN ui_enforce_key_held(UINT32 microseconds)
+BOOLEAN ui_enforce_key_held(UINT32 microseconds, UINT16 ScanCode)
 {
-	EFI_STATUS ret = EFI_SUCCESS;
+	BOOLEAN ret = TRUE;
 	UINT32 i;
 
 	for (i = 0; i < (microseconds / HOLD_KEY_STALL_TIME); i++) {
-		ret = test_key();
-		if (ret != EFI_SUCCESS) {
+		ret = test_key(TRUE, ScanCode);
+		if (!ret) {
 			break;
 		}
 	}
-	return ret == EFI_SUCCESS;
+	return ret;
 }
 
 void ui_wait_for_key_release(void)
 {
-	while (test_key() == EFI_SUCCESS) { }
+	while (test_key(FALSE, 0)) { }
 }
 
 ui_events_t ui_wait_for_input(UINTN timeout_secs)
