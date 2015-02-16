@@ -120,7 +120,6 @@ static struct msg_for_state {
 
 static const char *DROID_IMG_NAME = "droid_operation";
 static const UINTN SPACE = 20;
-static char *FASTBOOT_FONT_NAME = "18x32";
 
 /* Boot menu. */
 static ui_boot_action_t BOOT_ACTIONS[] = {
@@ -138,7 +137,6 @@ static UINTN swidth, sheight;
 static UINTN area_x;
 static UINTN area_y;
 static ui_boot_menu_t *boot_menu;
-static ui_font_t *fastboot_font;
 
 static EFI_STATUS fastboot_ui_clear_dynamic_part(void)
 {
@@ -205,14 +203,15 @@ struct info_text_fun {
 	{ "LOCK STATE", fastboot_ui_info_lock_state }
 };
 
-static UINTN fastboot_ui_info_draw(UINTN x, UINTN y)
+static UINTN fastboot_ui_info_draw(UINTN x, UINTN y, UINTN width, UINTN height)
 {
 	static const UINTN LINE_LEN = 42;
 	UINTN i;
 	ui_textarea_t *textarea;
 	char *dst;
 
-	textarea = ui_textarea_create(ARRAY_SIZE(INFOS) + 2, LINE_LEN, fastboot_font, NULL);
+	textarea = ui_textarea_create(ARRAY_SIZE(INFOS) + 2, LINE_LEN,
+				      ui_font_get_default(), NULL);
 	dst = AllocatePool(LINE_LEN);
 	if (!dst)
 		return y;
@@ -235,10 +234,10 @@ static UINTN fastboot_ui_info_draw(UINTN x, UINTN y)
 		ui_textarea_set_line(textarea, i, dst, line.color, line.bold);
 	}
 
-	ui_textarea_draw(textarea, x, y);
+	ui_textarea_draw_scale(textarea, x, &y, width, height);
 	ui_textarea_free(textarea);
 
-	return y + textarea->height;
+	return y;
 }
 
 BOOLEAN fastboot_ui_confirm_for_state(enum device_state target)
@@ -255,7 +254,9 @@ BOOLEAN fastboot_ui_confirm_for_state(enum device_state target)
 		if (target == FASTBOOT_UI_CONFIRM[i].state) {
 			fastboot_ui_clear_dynamic_part();
 			ui_textarea_display_text(FASTBOOT_UI_CONFIRM[i].msg,
-						 fastboot_font, area_x, &y);
+						 ui_font_get_default(), area_x, &y,
+						 swidth - area_x - margin,
+						 sheight - area_y - margin);
 			result = ui_input_to_bool(60);
 			fastboot_ui_refresh();
 		}
@@ -271,8 +272,10 @@ void fastboot_ui_refresh(void)
 		return;
 
 	fastboot_ui_clear_dynamic_part();
-	ui_boot_menu_draw(boot_menu, area_x, &y);
-	fastboot_ui_info_draw(area_x, y + 20);
+	ui_boot_menu_draw(boot_menu, area_x, &y, swidth - area_x - margin);
+	y += 20;
+	fastboot_ui_info_draw(area_x, y, swidth - area_x - margin,
+			      sheight - y - margin);
 }
 
 EFI_STATUS fastboot_ui_init(void)
@@ -289,7 +292,9 @@ EFI_STATUS fastboot_ui_init(void)
 
 	ui_clear_screen();
 
-	margin = swidth * 10 / 100;
+	/* Use large enough margin to not overlap ui_print/ui_error
+	 * area. */
+	margin = swidth * 12 / 100;
 	ret = EFI_UNSUPPORTED;
 
 	droid = ui_image_get(DROID_IMG_NAME);
@@ -320,18 +325,11 @@ EFI_STATUS fastboot_ui_init(void)
 		area_x = swidth / 2 + margin;
 		area_y = y;
 	} else {		/* Portrait orientation. */
-		area_x = x;
+		area_x = margin;
 		area_y = sheight / 2;
 	}
 
-	fastboot_font = ui_font_get(FASTBOOT_FONT_NAME);
-	if (!fastboot_font) {
-		efi_perror(EFI_UNSUPPORTED, L"Unable to find '%a' font",
-			   FASTBOOT_FONT_NAME);
-		return EFI_UNSUPPORTED;
-	}
-
-	boot_menu = ui_boot_menu_create(BOOT_ACTIONS, fastboot_font);
+	boot_menu = ui_boot_menu_create(BOOT_ACTIONS);
 	if (!boot_menu) {
 		error(L"Failed to build boot menu");
 		return EFI_OUT_OF_RESOURCES;

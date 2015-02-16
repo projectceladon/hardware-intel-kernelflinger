@@ -96,13 +96,15 @@ typedef struct ui_textarea {
 ui_textarea_t *ui_textarea_create(UINTN line_nb, UINTN row_nb, ui_font_t *font,
 				  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color);
 EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
-				    UINTN x, UINTN *y);
+				    UINTN x, UINTN *y, UINTN width, UINTN height);
 void ui_textarea_free(ui_textarea_t *textarea);
 void ui_textarea_clear(ui_textarea_t *textarea);
 void ui_textarea_set_line(ui_textarea_t *textarea, UINTN line_nb, char *str,
 			  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold);
 void ui_textarea_newline(ui_textarea_t *textarea, char *str,
 			 EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold);
+EFI_STATUS ui_textarea_draw_scale(ui_textarea_t *textarea, UINTN x, UINTN *y,
+				  UINTN width, UINTN height);
 EFI_STATUS ui_textarea_draw(ui_textarea_t *textarea, UINTN x, UINTN y);
 
 /* Events */
@@ -125,18 +127,18 @@ typedef struct ui_boot_action {
 } ui_boot_action_t;
 typedef struct ui_boot_menu {
 	ui_boot_action_t *actions;
-	ui_font_t *font;
 	UINTN action_nb;
 	UINTN cur;
 	UINTN x;
 	UINTN y;
+	UINTN max_width;
 } ui_boot_menu_t;
-ui_boot_menu_t *ui_boot_menu_create(ui_boot_action_t *actions, ui_font_t *font);
-UINTN ui_boot_menu_draw(ui_boot_menu_t *menu, UINTN x, UINTN *y);
+ui_boot_menu_t *ui_boot_menu_create(ui_boot_action_t *actions);
+UINTN ui_boot_menu_draw(ui_boot_menu_t *menu, UINTN x, UINTN *y, UINTN max_width);
 enum boot_target ui_boot_menu_event_handler(ui_boot_menu_t *menu, ui_events_t event);
 void ui_boot_menu_free(ui_boot_menu_t *menu);
 
-/* Screen */
+/* Screen / shared */
 EFI_STATUS ui_init(UINTN *width, UINTN *height);
 BOOLEAN ui_is_ready();
 void ui_free(void);
@@ -148,5 +150,12 @@ EFI_STATUS ui_draw_blt(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt, UINTN x, UINTN y,
 void ui_print(CHAR16 *fmt, ...);
 void ui_error(CHAR16 *fmt, ...);
 void ui_print_clear(void);
+void ui_get_scaled_dimension(UINTN orig_width, UINTN orig_heigth,
+			     UINTN max_width, UINTN max_height,
+			     UINTN *width, UINTN *height);
+UINT64 ui_get_blt_size(UINTN width, UINTN height);
+void ui_bilinear_scale(unsigned char *s, unsigned char *d,
+		       int sx, int sy, int dx, int dy,
+		       int depth);
 
 #endif  /* _UI_H_ */
