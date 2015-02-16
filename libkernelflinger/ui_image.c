@@ -41,49 +41,6 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
 
-static UINT64 get_blt_size(UINTN width, UINTN height)
-{
-	UINTN size = MultU64x32 ((UINT64) width, height);
-
-	if (size > DivU64x32((UINTN) ~0, sizeof (EFI_GRAPHICS_OUTPUT_BLT_PIXEL), NULL))
-		return 0;
-
-	return MultU64x32(size, sizeof(EFI_GRAPHICS_OUTPUT_BLT_PIXEL));
-}
-
-/*
- * Bilinear interpolation:
- * f(x,y) = (1/(x2-x1)(y2-y1)) * (f(Q11)(x2-x)(y2-y) +
- *				f(Q21)(x-x1)(y2-y) +
- *				f(Q12)(x2-x)(y-y1) +
- *				f(Q22)(x-x1)(y-y1))
- */
-static void bilinear_scale(unsigned char *s, unsigned char *d,
-			   int sx, int sy, int dx, int dy,
-			   int depth)
-{
-	double ratio_x = (double)(sx - 1) / dx;
-	double ratio_y = (double)(sy - 1) / dy;
-	int i, j, k;
-	sx *= depth;
-	for (i = 0; i < dy; i++ )
-		for (j = 0; j < dx; j++) {
-			double x = j * ratio_x;
-			double y = i * ratio_y;
-			int x1 = x;
-			int x2 = x1 + 1;
-			int y1 = y;
-			int y2 = y1 + 1;
-			for (k = 0; k < depth; k++) {
-				d[j * depth + i * dx * depth + k] = (1 / ((x2 - x1) * (y2 - y1))) *
-					(s[x1 * depth + y1 * sx + k] * (x2 - x) * (y2 - y) +
-					 s[x2 * depth + y1 * sx + k] * (x - x1) * (y2 - y) +
-					 s[x1 * depth + y2 * sx + k] * (x2 - x) * (y - y1) +
-					 s[x2 * depth + y2 * sx + k] * (x - x1) * (y - y1));
-			}
-		}
-}
-
 ui_image_t *ui_image_get(const char *name)
 {
 	unsigned int i;
@@ -110,29 +67,28 @@ EFI_STATUS ui_image_draw_scale(ui_image_t *image, UINTN x, UINTN y, UINTN width,
 {
 	EFI_STATUS ret = EFI_SUCCESS;
 	ui_image_t to_draw;
+	UINTN new_width, new_height;
 
 	memcpy(&to_draw, image, sizeof(to_draw));
 
-	if (width == 0)
-		width = to_draw.width * height / to_draw.height;
-	if (height == 0)
-		height = to_draw.height * width / to_draw.width;
+	ui_get_scaled_dimension(to_draw.width, to_draw.height,
+				width, height, &new_width, &new_height);
 
-	to_draw.blt = AllocatePool(get_blt_size(width, height));
+	to_draw.blt = AllocatePool(ui_get_blt_size(new_width, new_height));
 	if (!to_draw.blt) {
 		ret = EFI_OUT_OF_RESOURCES;
 		efi_perror(ret, L"Failed to allocate buffer");
 		goto out;
 	}
 
-	to_draw.width = width;
-	to_draw.height = height;
+	to_draw.width = new_width;
+	to_draw.height = new_height;
 
-	bilinear_scale((unsigned char *)image->blt,
-		       (unsigned char *)to_draw.blt,
-		       image->width, image->height,
-		       to_draw.width, to_draw.height,
-		       sizeof(EFI_GRAPHICS_OUTPUT_BLT_PIXEL));
+	ui_bilinear_scale((unsigned char *)image->blt,
+			  (unsigned char *)to_draw.blt,
+			  image->width, image->height,
+			  to_draw.width, to_draw.height,
+			  sizeof(EFI_GRAPHICS_OUTPUT_BLT_PIXEL));
 
 	ret = ui_image_draw(&to_draw, x, y);
 
