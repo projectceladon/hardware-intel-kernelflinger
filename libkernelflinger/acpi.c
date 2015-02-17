@@ -115,6 +115,7 @@ out:
 static EFI_STATUS acpi_table_is_supported(struct ACPI_DESC_HEADER *t)
 {
 #ifdef ALLOW_UNSUPPORTED_ACPI_TABLE
+	(void)t; /* eliminate compiler warning */
 	debug(L"WARNING: skipping validation check on ACPI table %c%c%c%c",
 	      t->signature[0], t->signature[1], t->signature[2], t->signature[3]);
 	return EFI_SUCCESS;
