@@ -119,7 +119,7 @@ EFI_STATUS get_boot_image_hash(CHAR16 *label)
 
 	ret = gpt_get_partition_by_label(label, &gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to get partition %s", label);
+		efi_perror(ret, L"Failed to get partition %s", label);
 		return ret;
 	}
 
@@ -137,7 +137,7 @@ EFI_STATUS get_boot_image_hash(CHAR16 *label)
 
 	ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio, gparti.bio->Media->MediaId, offset, len, data);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to read partition");
+		efi_perror(ret, L"Failed to read partition");
 		FreePool(data);
 		return ret;
 	}
@@ -246,7 +246,7 @@ EFI_STATUS get_esp_hash(void)
 
 	ret = get_esp_fs(&io);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to get partition ESP");
+		efi_perror(ret, L"Failed to get partition ESP");
 		return ret;
 	}
 
@@ -261,7 +261,7 @@ EFI_STATUS get_esp_hash(void)
 		size = sizeof(buf);
 		ret = uefi_call_wrapper(dirs[subdir]->Read, 3, dirs[subdir], &size, fi);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, "Cannot read directory entry");
+			efi_perror(ret, L"Cannot read directory entry");
 			/* continue to walk the ESP partition */
 			size = 0;
 		}
@@ -287,7 +287,7 @@ EFI_STATUS get_esp_hash(void)
 			subdir++;
 			ret = uefi_call_wrapper(parent->Open, 5, parent, &dirs[subdir], fi->FileName, EFI_FILE_MODE_READ, 0);
 			if (EFI_ERROR(ret)) {
-				efi_perror(ret, "Cannot open directory %s", fi->FileName);
+				efi_perror(ret, L"Cannot open directory %s", fi->FileName);
 				/* continue to walk the ESP partition */
 				popdir();
 				subdir--;
@@ -466,7 +466,7 @@ EFI_STATUS get_ext4_hash(CHAR16 *label)
 
 	ret = gpt_get_partition_by_label(label, &gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to get partition %s", label);
+		efi_perror(ret, L"Failed to get partition %s", label);
 		return ret;
 	}
 

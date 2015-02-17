@@ -283,7 +283,7 @@ EFI_STATUS fastboot_ui_init(void)
 
 	ret = ui_init(&swidth, &sheight);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Init screen failed");
+		efi_perror(ret, L"Init screen failed");
 		return ret;
 	}
 
@@ -295,7 +295,7 @@ EFI_STATUS fastboot_ui_init(void)
 	droid = ui_image_get(DROID_IMG_NAME);
 	if (!droid) {
 		efi_perror(EFI_OUT_OF_RESOURCES,
-			   "Unable to load '%a' image",
+			   L"Unable to load '%a' image",
 			   DROID_IMG_NAME);
 		return EFI_OUT_OF_RESOURCES;
 	}
@@ -326,7 +326,7 @@ EFI_STATUS fastboot_ui_init(void)
 
 	fastboot_font = ui_font_get(FASTBOOT_FONT_NAME);
 	if (!fastboot_font) {
-		efi_perror(EFI_UNSUPPORTED, "Unable to find '%a' font",
+		efi_perror(EFI_UNSUPPORTED, L"Unable to find '%a' font",
 			   FASTBOOT_FONT_NAME);
 		return EFI_UNSUPPORTED;
 	}
