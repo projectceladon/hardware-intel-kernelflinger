@@ -73,7 +73,6 @@ typedef enum {
 EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl);
 EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, EMMC_PARTITION_CTRL ctrl);
 EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, EMMC_PARTITION_CTRL ctrl);
-void gpt_free_cache(void);
 EFI_STATUS gpt_refresh(void);
 EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl);
 
