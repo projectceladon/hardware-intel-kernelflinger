@@ -196,13 +196,10 @@ EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
 
 void ui_textarea_free(ui_textarea_t *textarea)
 {
-	UINTN i;
-
-	for (i = 0; i < textarea->line_nb; i++)
-		FreePool(textarea->text[i].str);
-
+	ui_textarea_clear(textarea);
 	FreePool(textarea->blt);
 	FreePool(textarea->text);
+	FreePool(textarea);
 }
 
 void ui_textarea_clear(ui_textarea_t *textarea)

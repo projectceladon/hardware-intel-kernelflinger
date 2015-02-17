@@ -49,12 +49,23 @@
 #define OFF_MODE_CHARGE		"off-mode-charge"
 #define CRASH_EVENT_MENU	"crash-event-menu"
 
-static void fastboot_oem_publish(void)
+static EFI_STATUS fastboot_oem_publish(void)
 {
-	fastboot_publish("secure", device_is_locked() ? "yes" : "no");
-	fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
-	fastboot_publish(OFF_MODE_CHARGE, get_current_off_mode_charge() ? "1" : "0");
-	publish_intel_variables();
+	EFI_STATUS ret;
+
+	ret = fastboot_publish("secure", device_is_locked() ? "yes" : "no");
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = fastboot_publish(OFF_MODE_CHARGE, get_current_off_mode_charge() ? "1" : "0");
+	if (EFI_ERROR(ret))
+		return ret;
+
+	return publish_intel_variables();
 }
 
 static void change_device_state(enum device_state new_state)
@@ -101,10 +112,13 @@ static void change_device_state(enum device_state new_state)
 		return;
 	}
 
-	fastboot_oem_publish();
 	fastboot_ui_refresh();
 	clear_provisioning_mode();
-	fastboot_okay("");
+	ret = fastboot_oem_publish();
+	if (EFI_ERROR(ret))
+		fastboot_fail("Failed to publish OEM variables");
+	else
+		fastboot_okay("");
 }
 
 static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
@@ -135,7 +149,7 @@ static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
 					&unlock_allowed);
 		if (EFI_ERROR(ret)) {
 			/* Pathological if this fails, GPT screwed up? */
-			efi_perror(ret, "Couldn't read persistent partition");
+			efi_perror(ret, L"Couldn't read persistent partition");
 			unlock_allowed = 0;
 		}
 	} else {
@@ -183,8 +197,11 @@ static void cmd_oem_off_mode_charge(__attribute__((__unused__)) INTN argc,
 		return;
 	}
 
-	fastboot_oem_publish();
-	fastboot_okay("");
+	ret = fastboot_oem_publish();
+	if (EFI_ERROR(ret))
+		fastboot_fail("Failed to publish OEM variables");
+	else
+		fastboot_okay("");
 }
 
 static void cmd_oem_crash_event_menu(__attribute__((__unused__)) INTN argc,
@@ -209,8 +226,11 @@ static void cmd_oem_crash_event_menu(__attribute__((__unused__)) INTN argc,
 		return;
 	}
 
-	fastboot_oem_publish();
-	fastboot_okay("");
+	ret = fastboot_oem_publish();
+	if (EFI_ERROR(ret))
+		fastboot_fail("Failed to publish OEM variables");
+	else
+		fastboot_okay("");
 }
 
 static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
@@ -294,24 +314,39 @@ static void cmd_oem_reprovision(__attribute__((__unused__)) INTN argc,
 }
 #endif
 
-void fastboot_oem_init(void)
-{
-	fastboot_oem_publish();
-	fastboot_oem_register("lock", cmd_oem_lock, LOCKED);
-	fastboot_oem_register("unlock", cmd_oem_unlock, LOCKED);
-	fastboot_oem_register("verified", cmd_oem_verified, LOCKED);
-	fastboot_oem_register(OFF_MODE_CHARGE, cmd_oem_off_mode_charge, LOCKED);
-
+static struct fastboot_cmd COMMANDS[] = {
+	{ "lock",		LOCKED,		cmd_oem_lock },
+	{ "unlock",		LOCKED,		cmd_oem_unlock  },
+	{ "verified",		LOCKED,		cmd_oem_verified  },
+	{ OFF_MODE_CHARGE,	LOCKED,		cmd_oem_off_mode_charge  },
 	/* The following commands are not part of the Google
 	 * requirements.  They are provided for engineering and
 	 * provisioning purpose only and those which modify the
 	 * device are restricted to the unlocked state.  */
-	fastboot_oem_register(CRASH_EVENT_MENU, cmd_oem_crash_event_menu, LOCKED);
-	fastboot_oem_register("setvar", cmd_oem_setvar, UNLOCKED);
-	fastboot_oem_register("garbage-disk", cmd_oem_garbage_disk, UNLOCKED);
-	fastboot_oem_register("reboot", cmd_oem_reboot, LOCKED);
-	fastboot_oem_register("get-hashes", cmd_oem_gethashes, LOCKED);
+	{ CRASH_EVENT_MENU,	LOCKED,		cmd_oem_crash_event_menu  },
+	{ "setvar",		UNLOCKED,	cmd_oem_setvar  },
+	{ "garbage-disk",	UNLOCKED,	cmd_oem_garbage_disk  },
+	{ "reboot",		LOCKED,		cmd_oem_reboot  },
 #ifndef USER
-	fastboot_oem_register("reprovision", cmd_oem_reprovision, LOCKED);
+	{ "reprovision",	LOCKED,		cmd_oem_reprovision  },
 #endif
+	{ "get-hashes",		LOCKED,		cmd_oem_gethashes  }
+};
+
+EFI_STATUS fastboot_oem_init(void)
+{
+	EFI_STATUS ret;
+	UINTN i;
+
+	ret = fastboot_oem_publish();
+	if (EFI_ERROR(ret))
+		return ret;
+
+	for (i = 0; i < ARRAY_SIZE(COMMANDS); i++) {
+		ret = fastboot_oem_register(&COMMANDS[i]);
+		if (EFI_ERROR(ret))
+			return ret;
+	}
+
+	return EFI_SUCCESS;
 }

@@ -114,7 +114,7 @@ static EFI_STATUS calculate_crc32(void *data, UINTN size, UINT32 *crc)
 
 	ret = uefi_call_wrapper(BS->CalculateCrc32, 3, data, size, crc);
 	if (EFI_ERROR(ret))
-		efi_perror(ret, "CalculateCrc32 failed");
+		efi_perror(ret, L"CalculateCrc32 failed");
 	return ret;
 }
 
@@ -135,7 +135,7 @@ static EFI_STATUS read_gpt_header(struct gpt_disk *disk)
 
 	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio, disk->bio->Media->MediaId, disk->bio->Media->BlockSize, sizeof(disk->gpt_hd), (VOID *)&disk->gpt_hd);
 	if (EFI_ERROR(ret))
-		efi_perror(ret, "Failed to read disk for GPT header");
+		efi_perror(ret, L"Failed to read disk for GPT header");
 
 	return ret;
 }
@@ -162,7 +162,7 @@ static EFI_STATUS read_gpt_partitions(struct gpt_disk *disk)
 
 	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio, disk->bio->Media->MediaId, offset, size, disk->partitions);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to read GPT partitions");
+		efi_perror(ret, L"Failed to read GPT partitions");
 		goto free_partitions;
 	}
 	return ret;
@@ -179,7 +179,7 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &BlockIoProtocol, (VOID *)&disk->bio);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to get block io protocol");
+		efi_perror(ret, L"Failed to get block io protocol");
 		return ret;
 	}
 
@@ -191,13 +191,13 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &DiskIoProtocol, (VOID *)&disk->dio);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to get disk io protocol");
+		efi_perror(ret, L"Failed to get disk io protocol");
 		return ret;
 	}
 
 	ret = read_gpt_header(disk);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to read GPT header");
+		efi_perror(ret, L"Failed to read GPT header");
 		return ret;
 	}
 	return ret;
@@ -233,7 +233,7 @@ static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
 		return EFI_NOT_FOUND;
 	ret = read_gpt_partitions(disk);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to read GPT partitions");
+		efi_perror(ret, L"Failed to read GPT partitions");
 		return ret;
 	}
 	gpt_remove_prefix();
@@ -271,7 +271,7 @@ static EFI_STATUS gpt_cache_partition(EMMC_PARTITION_CTRL ctrl)
 
 	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol, &BlockIoProtocol, NULL, &nb_handle, &handles);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to locate Block IO Protocol");
+		efi_perror(ret, L"Failed to locate Block IO Protocol");
 		return ret;
 	}
 	debug(L"Found %d block io protocols", nb_handle);
@@ -315,7 +315,7 @@ free_handles:
 	return ret;
 }
 
-static void gpt_free_cache(void)
+void gpt_free_cache(void)
 {
 	if (sdisk.partitions)
 		FreePool(sdisk.partitions);
@@ -328,12 +328,12 @@ EFI_STATUS gpt_refresh(void)
 
 	ret = uefi_call_wrapper(sdisk.bio->FlushBlocks, 1, sdisk.bio);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to flush block io interface");
+		efi_perror(ret, L"Failed to flush block io interface");
 		return ret;
 	}
 	ret = uefi_call_wrapper(BS->ReinstallProtocolInterface, 4, sdisk.handle, &BlockIoProtocol, sdisk.bio, sdisk.bio);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to Reinstall block io interface on System disk");
+		efi_perror(ret, L"Failed to Reinstall block io interface on System disk");
 		return ret;
 	}
 	/* invalid gpt cache to force to get new handle next time */
@@ -590,7 +590,7 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	debug(L"Write first GPT Header at %d", gh->my_lba);
 	ret = gpt_write_table_to_disk(gh);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to write primary GPT header");
+		efi_perror(ret, L"Failed to write primary GPT header");
 		return ret;
 	}
 
@@ -614,7 +614,7 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	ret = gpt_write_table_to_disk(gh_backup);
 	FreePool(gh_backup);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to write alternate GPT header");
+		efi_perror(ret, L"Failed to write alternate GPT header");
 		return ret;
 	}
 	debug(L"Write protective MBR");

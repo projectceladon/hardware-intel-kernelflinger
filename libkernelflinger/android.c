@@ -357,30 +357,45 @@ error:
         return StrDuplicate(L"tty0");
 }
 
-
-static BOOLEAN is_reset_watchdog(void)
+static CHAR16 *get_reason_from_rsci(void)
 {
         enum reset_sources reset_source;
+        CHAR16 *reason;
 
         reset_source = rsci_get_reset_source();
-        if ((reset_source == RESET_KERNEL_WATCHDOG) ||
-            (reset_source == RESET_PMC_WATCHDOG) ||
-            (reset_source == RESET_EC_WATCHDOG) ||
-            (reset_source == RESET_PLATFORM_WATCHDOG))
-                return TRUE;
+        switch (reset_source) {
+        case RESET_KERNEL_WATCHDOG:
+                reason = StrDuplicate(L"watchdog");
+                break;
+        case RESET_SECURITY_WATCHDOG:
+                reason = StrDuplicate(L"security_watchdog");
+                break;
+        case RESET_PMC_WATCHDOG:
+                reason = StrDuplicate(L"pmc_watchdog");
+                break;
+        case RESET_EC_WATCHDOG:
+                reason = StrDuplicate(L"ec_watchdog");
+                break;
+        case RESET_PLATFORM_WATCHDOG:
+                reason = StrDuplicate(L"platform_watchdog");
+                break;
+        case RESET_SECURITY_INITIATED:
+                reason = StrDuplicate(L"security_initiated");
+                break;
+        default:
+                reason = NULL;
+        }
 
-        return FALSE;
+        return reason;
 }
-
 
 static CHAR16 *get_reboot_reason(void)
 {
         CHAR16 *bootreason, *pos;
 
-        if (is_reset_watchdog()) {
-                bootreason = StrDuplicate(L"watchdog");
+        bootreason = get_reason_from_rsci();
+        if (bootreason)
                 goto done;
-        }
 
         bootreason = get_efi_variable_str(&loader_guid,
                                           L"LoaderEntryRebootReason");
@@ -675,7 +690,7 @@ static EFI_STATUS open_partition(
                                 &NoHandles,
                                 &HandleBuffer);
                 if (EFI_ERROR(ret)) {
-                        efi_perror(ret, "LibLocateHandle");
+                        efi_perror(ret, L"LibLocateHandle");
                         return ret;
                 }
         }
@@ -697,13 +712,13 @@ static EFI_STATUS open_partition(
                         &BlockIoProtocol,
                         (void **)&BlockIo);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "HandleProtocol (BlockIoProtocol)");
+                efi_perror(ret, L"HandleProtocol (BlockIoProtocol)");
                 goto out;;
         }
         ret = uefi_call_wrapper(BS->HandleProtocol, 3, HandleBuffer[0],
                         &DiskIoProtocol, (void **)&DiskIo);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "HandleProtocol (DiskIoProtocol)");
+                efi_perror(ret, L"HandleProtocol (DiskIoProtocol)");
                 goto out;
         }
         MediaId = BlockIo->Media->MediaId;
@@ -738,7 +753,7 @@ EFI_STATUS android_image_load_partition(
         ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
                         sizeof(aosp_header), &aosp_header);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "ReadDisk (header)");
+                efi_perror(ret, L"ReadDisk (header)");
                 return ret;
         }
         if (strncmpa((CHAR8 *)BOOT_MAGIC, aosp_header.magic, BOOT_MAGIC_SIZE)) {
@@ -755,7 +770,7 @@ EFI_STATUS android_image_load_partition(
         ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
                         img_size, bootimage);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "ReadDisk");
+                efi_perror(ret, L"ReadDisk");
                 FreePool(bootimage);
                 return ret;
         }
@@ -794,12 +809,12 @@ EFI_STATUS android_image_load_file(
         ret = uefi_call_wrapper(BS->HandleProtocol, 3, device,
                         &SimpleFileSystemProtocol, (void **)&drive);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "HandleProtocol (SimpleFileSystemProtocol)");
+                efi_perror(ret, L"HandleProtocol (SimpleFileSystemProtocol)");
                 return ret;
         }
         ret = uefi_call_wrapper(drive->OpenVolume, 2, drive, &root);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "OpenVolume");
+                efi_perror(ret, L"OpenVolume");
                 return ret;
         }
 
@@ -808,7 +823,7 @@ EFI_STATUS android_image_load_file(
         ret = uefi_call_wrapper(root->Open, 5, root, &imagefile, loader,
                         EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "Open");
+                efi_perror(ret, L"Open");
                 return ret;
         }
         fileinfo = AllocatePool(buffersize);
@@ -828,13 +843,13 @@ EFI_STATUS android_image_load_file(
                         &EfiFileInfoId, &buffersize, fileinfo);
         }
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "GetInfo");
+                efi_perror(ret, L"GetInfo");
                 goto out;
         }
         buffersize = fileinfo->FileSize;
 
         /* Add BOOT_SIGNATURE_MAX_SIZE just in case the image is unsigned */
-        bootimage = AllocatePool(buffersize) + BOOT_SIGNATURE_MAX_SIZE;
+        bootimage = AllocatePool(buffersize + BOOT_SIGNATURE_MAX_SIZE);
         if (!bootimage) {
                 ret = EFI_OUT_OF_RESOURCES;
                 goto out;
@@ -859,7 +874,7 @@ EFI_STATUS android_image_load_file(
                         &buffersize, bootimage);
         }
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "Read");
+                efi_perror(ret, L"Read");
                 goto out;
         }
 
@@ -875,13 +890,13 @@ out:
                 //this should close handle and flush FS
                 ret2 = uefi_call_wrapper(imagefile->Delete, 1, imagefile);
                 if (EFI_ERROR(ret2)) {
-                        efi_perror(ret2, "Couldn't delete source file");
+                        efi_perror(ret2, L"Couldn't delete source file");
                         goto out_free;
                 }
         } else {
                 ret2 = uefi_call_wrapper(imagefile->Close, 1, imagefile);
                 if (EFI_ERROR(ret2)) {
-                        efi_perror(ret2, "Couldn't close source file");
+                        efi_perror(ret2, L"Couldn't close source file");
                         goto out_free;
                 }
         }
@@ -953,20 +968,20 @@ EFI_STATUS android_image_start_buffer(
         debug(L"Creating command line");
         ret = setup_command_line(bootimage, enable_charger, swap_guid);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "setup_command_line");
+                efi_perror(ret, L"setup_command_line");
                 return ret;
         }
 
         debug(L"Loading the ramdisk");
         ret = setup_ramdisk(bootimage);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "setup_ramdisk");
+                efi_perror(ret, L"setup_ramdisk");
                 goto out_cmdline;
         }
 
         debug(L"Loading the kernel");
         ret = handover_kernel(bootimage, parent_image);
-        efi_perror(ret, "handover_kernel");
+        efi_perror(ret, L"handover_kernel");
 
         efree(buf->hdr.ramdisk_start, buf->hdr.ramdisk_len);
         buf->hdr.ramdisk_start = 0;
@@ -1014,7 +1029,7 @@ EFI_STATUS read_bcb(
         ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
                         sizeof(*bcb), bcb);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "ReadDisk (bcb)");
+                efi_perror(ret, L"ReadDisk (bcb)");
                 return ret;
         }
         bcb->command[31] = '\0';
@@ -1044,7 +1059,7 @@ EFI_STATUS write_bcb(
         ret = uefi_call_wrapper(DiskIo->WriteDisk, 5, DiskIo, MediaId, 0,
                         sizeof(*bcb), bcb);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "WriteDisk (bcb)");
+                efi_perror(ret, L"WriteDisk (bcb)");
                 return ret;
         }
         dump_bcb(bcb);

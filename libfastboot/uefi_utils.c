@@ -56,7 +56,7 @@ EFI_STATUS get_esp_handle(EFI_HANDLE *esp)
 		&handles);
 
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to found partition");
+		efi_perror(ret, L"Failed to found partition");
 		return ret;
 	}
 

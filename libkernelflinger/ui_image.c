@@ -101,7 +101,7 @@ EFI_STATUS ui_image_draw(ui_image_t *image, UINTN x, UINTN y)
 
 	ret = ui_draw_blt(image->blt, x, y, image->width, image->height);
 	if (EFI_ERROR(ret))
-		efi_perror(ret, "Failed to display image %a", image->name);
+		efi_perror(ret, L"Failed to display image %a", image->name);
 
 	return ret;
 }
@@ -121,7 +121,7 @@ EFI_STATUS ui_image_draw_scale(ui_image_t *image, UINTN x, UINTN y, UINTN width,
 	to_draw.blt = AllocatePool(get_blt_size(width, height));
 	if (!to_draw.blt) {
 		ret = EFI_OUT_OF_RESOURCES;
-		efi_perror(ret, "Failed to allocate buffer");
+		efi_perror(ret, L"Failed to allocate buffer");
 		goto out;
 	}
 

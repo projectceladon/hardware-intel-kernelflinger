@@ -68,7 +68,7 @@ void log(const CHAR16 *fmt, ...);
 } while(0)
 
 #define efi_perror(ret, x, ...) do { \
-  error(x L": %r", ##__VA_ARGS__, ret); \
+  error(x ": %r", ##__VA_ARGS__, ret); \
 } while (0)
 
 #endif	/* _LOG_H_ */
