@@ -202,7 +202,7 @@ EFI_STATUS set_current_state(enum device_state state)
 					  sizeof(stored_state), &stored_state,
 					  TRUE, FALSE);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to set %a variable", OEM_LOCK_VAR);
+		efi_perror(ret, L"Failed to set %a variable", OEM_LOCK_VAR);
 		return ret;
 	}
 

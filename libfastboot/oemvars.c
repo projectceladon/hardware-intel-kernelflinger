@@ -330,7 +330,7 @@ EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 	}
 	ret = EFI_SUCCESS;
 out:
-	free(buf);
+	FreePool(buf);
 	if (EFI_ERROR(ret))
 		error(L"Failed at line %d", lineno);
 	return ret;

@@ -78,15 +78,21 @@ enum fastboot_states {
 
 EFI_GUID guid_linux_data = {0x0fc63daf, 0x8483, 0x4772, {0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4}};
 
-static struct fastboot_cmd *cmdlist;
-static struct fastboot_cmd *oem_cmdlist;
+struct cmd_list {
+	struct cmd_list *next;
+	struct fastboot_cmd *cmd;
+};
+
+static BOOLEAN initialized;
+static struct cmd_list *cmdlist;
+static struct cmd_list *oem_cmdlist;
 static char command_buffer[MAGIC_LENGTH];
 static struct fastboot_var *varlist;
 static struct fastboot_tx_buffer *txbuf_head;
 static enum fastboot_states fastboot_state = STATE_OFFLINE;
 /* Download buffer and size, for download and flash commands */
 static void *dlbuffer;
-static unsigned dlsize;
+static unsigned dlsize, bufsize;
 
 static const char *flash_verified_whitelist[] = {
 	"bootloader",
@@ -123,34 +129,44 @@ void fastboot_set_dlbuffer(void *buffer, unsigned size)
 	dlsize = size;
 }
 
-static void cmd_register(struct fastboot_cmd **list, const char *name,
-			 fastboot_handle handle, enum device_state min_state)
+static EFI_STATUS cmd_register(struct cmd_list **list, struct fastboot_cmd *cmd)
 {
-	struct fastboot_cmd *cmd;
-	cmd = AllocatePool(sizeof(*cmd));
-	if (!cmd) {
-		error(L"Failed to allocate fastboot command %a", name);
-		return;
+	struct cmd_list *node;
+	node = AllocatePool(sizeof(*node));
+	if (!node) {
+		error(L"Failed to allocate fastboot command %a", cmd->name);
+		return EFI_OUT_OF_RESOURCES;
 	}
-	cmd->name = (CHAR8 *)name;
-	cmd->min_state = min_state;
-	cmd->handle = handle;
-	cmd->next = *list;
-	*list = cmd;
+	node->cmd = cmd;
+	node->next = *list;
+	*list = node;
+
+	return EFI_SUCCESS;
 }
 
-void fastboot_register(const char *name,
-		       fastboot_handle handle,
-		       enum device_state min_state)
+EFI_STATUS fastboot_register(struct fastboot_cmd *cmd)
 {
-	cmd_register(&cmdlist, name, handle, min_state);
+	return cmd_register(&cmdlist, cmd);
 }
 
-void fastboot_oem_register(const char *name,
-			   fastboot_handle handle,
-			   enum device_state min_state)
+EFI_STATUS fastboot_oem_register(struct fastboot_cmd *cmd)
 {
-	cmd_register(&oem_cmdlist, name, handle, min_state);
+	return cmd_register(&oem_cmdlist, cmd);
+}
+
+static void fastboot_unregister_all()
+{
+	struct cmd_list **cmdlists[] = { &cmdlist, &oem_cmdlist };
+	struct cmd_list *next, *node;
+	UINTN i;
+
+	for (i = 0; i < ARRAY_SIZE(cmdlists); i++) {
+		for (node = *cmdlists[i]; node; node = next) {
+			next = node->next;
+			FreePool(node);
+		}
+		*cmdlists[i] = NULL;
+	}
 }
 
 struct fastboot_var *fastboot_getvar(const char *name)
@@ -188,7 +204,19 @@ static void clean_partition_var(void)
 	}
 }
 
-void fastboot_publish(const char *name, const char *value)
+static void fastboot_unpublish_all()
+{
+	struct fastboot_var *next, *var;
+
+	for (var = varlist; var; var = next) {
+		next = var->next;
+		FreePool(var);
+	}
+
+	varlist = NULL;
+}
+
+EFI_STATUS fastboot_publish(const char *name, const char *value)
 {
 	struct fastboot_var *var;
 	UINTN namelen = strlena((CHAR8 *) name) + 1;
@@ -196,21 +224,23 @@ void fastboot_publish(const char *name, const char *value)
 
 	if (namelen > sizeof(var->name) ||
 	    valuelen > sizeof(var->value)) {
-		error(L"name or value too long");
-		return;
+		error(L"name or value too long for variable %a", name);
+		return EFI_BUFFER_TOO_SMALL;
 	}
 	var = fastboot_getvar(name);
 	if (!var) {
 		var = AllocateZeroPool(sizeof(*var));
 		if (!var) {
 			error(L"Failed to allocate variable %a", name);
-			return;
+			return EFI_OUT_OF_RESOURCES;
 		}
 		var->next = varlist;
 		varlist = var;
 	}
 	CopyMem(var->name, name, namelen);
 	CopyMem(var->value, value, valuelen);
+
+	return EFI_SUCCESS;
 }
 
 static char *get_ptype_str(EFI_GUID *guid)
@@ -224,34 +254,47 @@ static char *get_ptype_str(EFI_GUID *guid)
 	return "none";
 }
 
-static void publish_part(UINT64 size, CHAR16 *name, EFI_GUID *guid)
+static EFI_STATUS publish_part(UINT64 size, CHAR16 *name, EFI_GUID *guid)
 {
+	EFI_STATUS ret;
 	char fastboot_var[MAX_VARIABLE_LENGTH];
 	char partsize[MAX_VARIABLE_LENGTH];
 
-	if (EFI_ERROR(snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
-			       (CHAR8 *)"partition-size:%s", name)))
-		return;
-	if (EFI_ERROR(snprintf((CHAR8 *)partsize, sizeof(partsize),
-			       (CHAR8 *)"0x%lX", size)))
-		return;
-	fastboot_publish(fastboot_var, partsize);
+	ret = snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
+		       (CHAR8 *)"partition-size:%s", name);
+	if (EFI_ERROR(ret))
+		return ret;
 
-	if (EFI_ERROR(snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
-			       (CHAR8 *)"partition-type:%s", name)))
-		return;
+	ret = snprintf((CHAR8 *)partsize, sizeof(partsize),
+		       (CHAR8 *)"0x%lX", size);
+	if (EFI_ERROR(ret))
+		return ret;
 
-	fastboot_publish(fastboot_var, get_ptype_str(guid));
+	ret = fastboot_publish(fastboot_var, partsize);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
+		       (CHAR8 *)"partition-type:%s", name);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = fastboot_publish(fastboot_var, get_ptype_str(guid));
+	if (EFI_ERROR(ret))
+		return ret;
+
+	return EFI_SUCCESS;
 }
 
-static void publish_partsize(void)
+static EFI_STATUS publish_partsize(void)
 {
+	EFI_STATUS ret;
 	struct gpt_partition_interface *gparti;
 	UINTN part_count;
 	UINTN i;
 
 	if (EFI_ERROR(gpt_list_partition(&gparti, &part_count, EMMC_USER_PART)))
-		return;
+		return EFI_SUCCESS;
 
 	for (i = 0; i < part_count; i++) {
 		UINT64 size;
@@ -259,14 +302,25 @@ static void publish_partsize(void)
 		size = gparti[i].bio->Media->BlockSize
 			* (gparti[i].part.ending_lba + 1 - gparti[i].part.starting_lba);
 
-		publish_part(size, gparti[i].part.name, &gparti[i].part.type);
+		ret = publish_part(size, gparti[i].part.name, &gparti[i].part.type);
+		if (EFI_ERROR(ret))
+			return ret;
 
 		/* stay compatible with userdata/data naming */
-		if (!StrCmp(gparti[i].part.name, L"data"))
-			publish_part(size, L"userdata", &gparti[i].part.type);
-		else if (!StrCmp(gparti[i].part.name, L"userdata"))
-			publish_part(size, L"data", &gparti[i].part.type);
+		if (!StrCmp(gparti[i].part.name, L"data")) {
+			ret = publish_part(size, L"userdata", &gparti[i].part.type);
+			if (EFI_ERROR(ret))
+				return ret;
+		} else if (!StrCmp(gparti[i].part.name, L"userdata")) {
+			ret = publish_part(size, L"data", &gparti[i].part.type);
+			if (EFI_ERROR(ret))
+				return ret;
+		}
 	}
+
+	FreePool(gparti);
+
+	return EFI_SUCCESS;
 }
 
 static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char *fmt, va_list ap)
@@ -279,7 +333,7 @@ static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char
 
 	ret = vsnprintf((CHAR8 *)response, INFO_PAYLOAD, (CHAR8 *)fmt, ap);
 	if (EFI_ERROR(ret))
-		efi_perror(ret, "Failed to build reason string");
+		efi_perror(ret, L"Failed to build reason string");
 	return ret;
 }
 
@@ -415,17 +469,23 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 
 	ret = flash(dlbuffer, dlsize, label);
 	FreePool(label);
-	if (EFI_ERROR(ret))
+	if (EFI_ERROR(ret)) {
 		fastboot_fail("Flash failure: %r", ret);
-	else {
-		ui_print(L"Flash done.");
-		fastboot_okay("");
-		/* update partition variable in case it has changed */
-		if (ret & REFRESH_PARTITION_VAR) {
-			clean_partition_var();
-			publish_partsize();
+		return;
+	}
+
+	/* update partition variable in case it has changed */
+	if (ret & REFRESH_PARTITION_VAR) {
+		clean_partition_var();
+		ret = publish_partsize();
+		if (EFI_ERROR(ret)) {
+			fastboot_fail("Failed to publish partition variables, %r", ret);
+			return;
 		}
 	}
+
+	ui_print(L"Flash done.");
+	fastboot_okay("");
 }
 
 static void cmd_erase(INTN argc, CHAR8 **argv)
@@ -466,13 +526,19 @@ static void cmd_erase(INTN argc, CHAR8 **argv)
 static void cmd_boot(__attribute__((__unused__)) INTN argc,
 		     __attribute__((__unused__)) CHAR8 **argv)
 {
+	EFI_STATUS ret;
+
 	if (device_is_verified()) {
 		error(L"Boot command is prohibited in verified state.");
 		fastboot_fail("Prohibited command in verified state.");
 		return;
 	}
 
-	fastboot_usb_stop(dlbuffer, NULL, 0, UNKNOWN_TARGET);
+	ret = fastboot_usb_stop(dlbuffer, NULL, dlsize, UNKNOWN_TARGET);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to stop USB");
+		return;
+	}
 	ui_print(L"Booting received image ...");
 	fastboot_okay("");
 }
@@ -502,16 +568,24 @@ static void cmd_getvar(INTN argc, CHAR8 **argv)
 static void cmd_continue(__attribute__((__unused__)) INTN argc,
 			 __attribute__((__unused__)) CHAR8 **argv)
 {
+	EFI_STATUS ret = fastboot_usb_stop(NULL, NULL, 0, NORMAL_BOOT);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to stop USB");
+		return;
+	}
 	ui_print(L"Continuing ...");
-	fastboot_usb_stop(NULL, NULL, 0, NORMAL_BOOT);
 	fastboot_okay("");
 }
 
 static void cmd_reboot(__attribute__((__unused__)) INTN argc,
 		       __attribute__((__unused__)) CHAR8 **argv)
 {
+	EFI_STATUS ret = fastboot_usb_stop(NULL, NULL, 0, REBOOT);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to stop USB");
+		return;
+	}
 	ui_print(L"Rebooting ...");
-	fastboot_usb_stop(NULL, NULL, 0, REBOOT);
 	fastboot_okay("");
 }
 
@@ -523,17 +597,17 @@ static void cmd_reboot_bootloader(__attribute__((__unused__)) INTN argc,
 	reboot(L"bootloader");
 }
 
-static struct fastboot_cmd *get_cmd(struct fastboot_cmd *list, const CHAR8 *name)
+static struct fastboot_cmd *get_cmd(struct cmd_list *list, const char *name)
 {
-	struct fastboot_cmd *cmd;
-	for (cmd = list; cmd; cmd = cmd->next)
-		if (!strcmp(name, cmd->name))
-			return cmd;
+	struct cmd_list *node;
+	for (node = list; node; node = node->next)
+		if (!strcmp((CHAR8 *)name, (CHAR8 *)node->cmd->name))
+			return node->cmd;
 
 	return NULL;
 }
 
-struct fastboot_cmd *get_root_cmd(const CHAR8 *name)
+struct fastboot_cmd *get_root_cmd(const char *name)
 {
 	return get_cmd(cmdlist, name);
 }
@@ -547,7 +621,7 @@ static void cmd_oem(INTN argc, CHAR8 **argv)
 		return;
 	}
 
-	cmd = get_cmd(oem_cmdlist, argv[1]);
+	cmd = get_cmd(oem_cmdlist, (char *)argv[1]);
 	if (!cmd) {
 		fastboot_fail("unknown command 'oem %a'", argv[1]);
 		return;
@@ -587,18 +661,19 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 		fastboot_fail("data too large");
 		return;
 	}
-	if (dlbuffer) {
-		if (newdlsize > dlsize) {
+
+	if (newdlsize > bufsize) {
+		if (dlbuffer)
 			FreePool(dlbuffer);
-			dlbuffer = AllocatePool(newdlsize);
-		}
-	} else {
 		dlbuffer = AllocatePool(newdlsize);
-	}
-	if (!dlbuffer) {
-		error(L"Failed to allocate download buffer (0x%x bytes)", dlsize);
-		fastboot_fail("Memory allocation failure");
-		return;
+		if (!dlbuffer) {
+			error(L"Failed to allocate download buffer (0x%x bytes)",
+			      newdlsize);
+			fastboot_fail("Memory allocation failure");
+			dlsize = bufsize = 0;
+			return;
+		}
+		bufsize = newdlsize;
 	}
 	dlsize = newdlsize;
 
@@ -697,7 +772,7 @@ static void fastboot_process_rx(void *buf, unsigned len)
 		fastboot_state = STATE_COMMAND;
 
 		split_args(buf, &argc, argv);
-		cmd = get_root_cmd(argv[0]);
+		cmd = get_root_cmd((char *)argv[0]);
 		if (cmd) {
 			if (cmd->min_state > get_current_state()) {
 				fastboot_fail("command not allowed in %a state",
@@ -727,10 +802,22 @@ static void fastboot_start_callback(void)
 	fastboot_read_command();
 }
 
-EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
-			  enum boot_target *target)
+static struct fastboot_cmd COMMANDS[] = {
+	{ "download",		VERIFIED,	cmd_download },
+	{ "flash",		VERIFIED,	cmd_flash },
+	{ "erase",		VERIFIED,	cmd_erase },
+	{ "getvar",		LOCKED,		cmd_getvar },
+	{ "boot",		UNLOCKED,	cmd_boot },
+	{ "continue",		LOCKED,		cmd_continue },
+	{ "reboot",		LOCKED,		cmd_reboot },
+	{ "reboot-bootloader",	LOCKED,		cmd_reboot_bootloader },
+	{ "oem",		LOCKED,		cmd_oem }
+};
+
+static EFI_STATUS fastboot_init()
 {
 	EFI_STATUS ret;
+	UINTN i;
 	char download_max_str[30];
 
 	ret = uefi_call_wrapper(BS->SetWatchdogTimer, 4, 0, 0, 0, NULL);
@@ -739,36 +826,81 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 		/* Might as well continue even though this failed ... */
 	}
 
-	fastboot_publish("product", info_product());
-	fastboot_publish("version-bootloader", info_bootloader_version());
+	ret = fastboot_publish("product", info_product());
+	if (EFI_ERROR(ret))
+		goto error;
+
+	ret = fastboot_publish("version-bootloader", info_bootloader_version());
+	if (EFI_ERROR(ret))
+		goto error;
 
 	if (EFI_ERROR(snprintf((CHAR8 *)download_max_str, sizeof(download_max_str),
 			       (CHAR8 *)"0x%lX", MAX_DOWNLOAD_SIZE)))
 		debug(L"Failed to set download_max_str string");
-	else
-		fastboot_publish("max-download-size", download_max_str);
+	else {
+		ret = fastboot_publish("max-download-size", download_max_str);
+		if (EFI_ERROR(ret))
+			goto error;
+	}
 
-	fastboot_register("download", cmd_download, VERIFIED);
-	fastboot_register("flash", cmd_flash, VERIFIED);
-	fastboot_register("erase", cmd_erase, VERIFIED);
-	fastboot_register("getvar", cmd_getvar, LOCKED);
-	fastboot_register("boot", cmd_boot, UNLOCKED);
-	fastboot_register("continue", cmd_continue, LOCKED);
-	fastboot_register("reboot", cmd_reboot, LOCKED);
-	fastboot_register("reboot-bootloader", cmd_reboot_bootloader, LOCKED);
+	ret = publish_partsize();
+	if (EFI_ERROR(ret))
+		goto error;
 
-	publish_partsize();
+	/* Register commands */
+	for (i = 0; i < ARRAY_SIZE(COMMANDS); i++) {
+		ret = fastboot_register(&COMMANDS[i]);
+		if (EFI_ERROR(ret))
+			goto error;
+	}
+	ret = fastboot_oem_init();
+	if (EFI_ERROR(ret))
+		goto error;
 
-	fastboot_register("oem", cmd_oem, LOCKED);
-	fastboot_oem_init();
 	ret = fastboot_ui_init();
 	if (EFI_ERROR(ret))
-		efi_perror(ret, "Fastboot UI initialization failed, continue anyway.");
+		efi_perror(ret, L"Fastboot UI initialization failed, continue anyway.");
+
+	initialized = TRUE;
+
+	return EFI_SUCCESS;
+
+error:
+	fastboot_free();
+	error(L"Fastboot library initialization failed");
+	return ret;
+}
+
+EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
+			  enum boot_target *target, BOOLEAN dontfree)
+{
+	EFI_STATUS ret;
+
+	if (!initialized)
+		fastboot_init();
 
 	ret = fastboot_usb_start(fastboot_start_callback, fastboot_process_rx,
 				 fastboot_process_tx, bootimage, efiimage,
 				 imagesize, target);
 
+	if (dontfree)
+		return ret;
+
+	fastboot_free();
+	return EFI_SUCCESS;
+}
+
+void fastboot_free()
+{
+	if (dlbuffer) {
+		FreePool(dlbuffer);
+		dlbuffer = NULL;
+		bufsize = dlsize = 0;
+	}
+	fastboot_unpublish_all();
+	fastboot_unregister_all();
 	fastboot_ui_destroy();
-	return ret;
+	gpt_free_cache();
+
+	initialized = FALSE;
 }

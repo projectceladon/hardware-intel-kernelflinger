@@ -40,6 +40,14 @@
 #include "flash.h"
 #include "sparse_format.h"
 
+/* Hunks buffer size.  */
+static const unsigned int BUFFER_SIZE = 10 * 1024 * 1024;
+/* Hunks that are larger than this threshold won't be buffered.  This
+   threshold MUST be smaller than the buffer size.  */
+static const unsigned int HUNK_SIZE_THRESHOLD = 1024 * 1024;
+static void *buffer;
+static unsigned int cur_size;
+
 BOOLEAN is_sparse_image(void *data, UINT64 size)
 {
 	struct sparse_header *sph;
@@ -67,18 +75,84 @@ BOOLEAN is_sparse_image(void *data, UINT64 size)
 	return TRUE;
 }
 
+static EFI_STATUS init_buffer()
+{
+	buffer = AllocatePool(BUFFER_SIZE);
+	if (!buffer) {
+		error(L"Allocation failed, sparse file buffer is disabled");
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	cur_size = 0;
+	return EFI_SUCCESS;
+}
+
+static void free_buffer()
+{
+	if (!buffer)
+		return;
+
+	FreePool(buffer);
+	buffer = NULL;
+}
+
+static EFI_STATUS flush_buffer()
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+
+	if (buffer && cur_size != 0)
+		ret = flash_write(buffer, cur_size);
+
+	cur_size = 0;
+	return ret;
+}
+
+static EFI_STATUS flash_raw_data(void *data, unsigned size)
+{
+	EFI_STATUS ret;
+
+	if (!buffer)
+		return flash_write(data, size);
+
+	if (size > HUNK_SIZE_THRESHOLD) {
+		ret = flush_buffer();
+		if (EFI_ERROR(ret))
+			return ret;
+		return flash_write(data, size);
+	}
+
+	if (size + cur_size > BUFFER_SIZE) {
+		ret = flush_buffer();
+		if (EFI_ERROR(ret))
+			return ret;
+	}
+
+	memcpy(buffer + cur_size, data, size);
+	cur_size += size;
+
+	return EFI_SUCCESS;
+}
+
 static EFI_STATUS flash_chunk(struct sparse_header *sph, struct chunk_header *ckh, CHAR8 *data, unsigned int size)
 {
+	EFI_STATUS ret;
+
 	switch (ckh->chunk_type) {
 	case CHUNK_TYPE_RAW:
 		if (size % sph->blk_sz || size != ckh->chunk_sz * sph->blk_sz) {
 			error(L"inconsistent raw chunk");
 			return EFI_INVALID_PARAMETER;
 		}
-		return flash_write(data, size);
+		return flash_raw_data(data, size);
 	case CHUNK_TYPE_DONT_CARE:
+		ret = flush_buffer();
+		if (EFI_ERROR(ret))
+			return ret;
 		return flash_skip(ckh->chunk_sz * sph->blk_sz);
 	case CHUNK_TYPE_FILL:
+		ret = flush_buffer();
+		if (EFI_ERROR(ret))
+			return ret;
 		return flash_fill(*((UINT32 *) data), ckh->chunk_sz * sph->blk_sz);
 	case CHUNK_TYPE_CRC32:
 		debug(L"crc chunk not implemented yet %d", size);
@@ -96,12 +170,14 @@ EFI_STATUS flash_sparse(void *data, UINT64 size)
 	CHAR8 *s;
 	UINT64 rlen;
 	unsigned int i;
-	EFI_STATUS ret;
+	EFI_STATUS ret_flush_buffer, ret = EFI_SUCCESS;
 
 	rlen = size;
 	s = data;
 	sph = data;
 	s += sph->file_hdr_sz;
+
+	init_buffer();
 
 	for (i = 0; i < sph->total_chunks; i++) {
 		struct chunk_header *ckh;
@@ -109,18 +185,23 @@ EFI_STATUS flash_sparse(void *data, UINT64 size)
 
 		if (rlen < sph->chunk_hdr_sz || rlen < ckh->total_sz) {
 			error(L"sparse chunk truncated, %ld, %ld", rlen, size);
-			return EFI_INVALID_PARAMETER;
+			ret = EFI_INVALID_PARAMETER;
+			break;
 		}
 		if (ckh->total_sz < sph->chunk_hdr_sz) {
 			error(L"sparse chunk malformated, %d, %d", ckh->total_sz, sph->chunk_hdr_sz);
-			return EFI_INVALID_PARAMETER;
+			ret = EFI_INVALID_PARAMETER;
+			break;
 		}
 		ret = flash_chunk(sph, ckh, s + sph->chunk_hdr_sz, ckh->total_sz - sph->chunk_hdr_sz);
 		if (EFI_ERROR(ret))
-			return ret;
+			break;
 
 		s += ckh->total_sz;
 		rlen -= ckh->total_sz;
 	}
-	return EFI_SUCCESS;
+
+	ret_flush_buffer = flush_buffer();
+	free_buffer();
+	return EFI_ERROR(ret) ? ret : ret_flush_buffer;
 }

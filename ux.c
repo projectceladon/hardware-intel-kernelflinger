@@ -166,7 +166,7 @@ static EFI_STATUS ux_init_screen() {
 
 	ret = ui_init(&swidth, &sheight);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to setup the graphical mode");
+		efi_perror(ret, L"Failed to setup the graphical mode");
 		return ret;
 	}
 
@@ -206,7 +206,7 @@ static EFI_STATUS display_texts(const ui_textline_t **texts,
 	do {
 		ret = ui_textarea_display_text(*texts, font, x, &y);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, "Unable to display text.");
+			efi_perror(ret, L"Unable to display text.");
 			return ret;
 		}
 	} while (*++texts);
@@ -245,7 +245,7 @@ static EFI_STATUS display_text(UINT32 error_code,
 
 	vendor = ui_image_get(VENDOR_IMG_NAME);
 	if (!vendor) {
-		efi_perror(EFI_UNSUPPORTED, "Unable to load '%a' image",
+		efi_perror(EFI_UNSUPPORTED, L"Unable to load '%a' image",
 			   VENDOR_IMG_NAME);
 		return EFI_UNSUPPORTED;
 	}
@@ -385,7 +385,7 @@ enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID) {
 	img = ui_image_get(CRASH_IMG_NAME);
 	if (!img) {
 		efi_perror(EFI_OUT_OF_RESOURCES,
-			   "Unable to load '%a' image",
+			   L"Unable to load '%a' image",
 			   CRASH_IMG_NAME);
 		goto error;
 	}

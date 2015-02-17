@@ -90,7 +90,7 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 
 	ret = LibLocateProtocol(&GraphicsOutputProtocol, (VOID **)&graphic.output);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Unable to locate graphics output protocol, graphic disabled");
+		efi_perror(ret, L"Unable to locate graphics output protocol, graphic disabled");
 		graphic.output = NULL;
 		return ret;
 	}
@@ -132,7 +132,7 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 		y = (graphic.width - (2 * margin)) / font->cwidth;
 		default_textarea = ui_textarea_create(x, y, font, &COLOR_YELLOW);
 		if (!default_textarea) {
-			efi_perror(EFI_OUT_OF_RESOURCES, "Failed to build the textarea");
+			efi_perror(EFI_OUT_OF_RESOURCES, L"Failed to build the textarea");
 			return EFI_OUT_OF_RESOURCES;
 		}
 
@@ -158,7 +158,7 @@ EFI_STATUS ui_display_vendor_splash(VOID)
 	/* Vendor splash */
 	vendor = ui_image_get(VENDOR_IMG_NAME);
 	if (!vendor) {
-		efi_perror(EFI_UNSUPPORTED, "Unable to get '%a' image",
+		efi_perror(EFI_UNSUPPORTED, L"Unable to get '%a' image",
 			   VENDOR_IMG_NAME);
 		return EFI_UNSUPPORTED;
 	}
@@ -232,7 +232,7 @@ EFI_STATUS ui_draw_blt(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt, UINTN x, UINTN y,
 	ret = uefi_call_wrapper(graphic.output->Blt, 10, graphic.output, blt, EfiBltBufferToVideo,
 				0, 0, x, y, width, height, 0);
 	if (EFI_ERROR(ret))
-		efi_perror(ret, "Failed to display blt");
+		efi_perror(ret, L"Failed to display blt");
 
 	return ret;
 }

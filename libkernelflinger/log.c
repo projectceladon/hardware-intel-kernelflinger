@@ -99,7 +99,7 @@ void log(const CHAR16 *fmt, ...)
 	va_list args;
 	UINTN length;
 
-	if (!serial && !EFI_ERROR(serial_init()))
+	if (!serial && EFI_ERROR(serial_init()))
 		return;
 
 	va_start(args, fmt);
