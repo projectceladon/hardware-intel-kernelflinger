@@ -849,7 +849,7 @@ EFI_STATUS android_image_load_file(
         buffersize = fileinfo->FileSize;
 
         /* Add BOOT_SIGNATURE_MAX_SIZE just in case the image is unsigned */
-        bootimage = AllocatePool(buffersize) + BOOT_SIGNATURE_MAX_SIZE;
+        bootimage = AllocatePool(buffersize + BOOT_SIGNATURE_MAX_SIZE);
         if (!bootimage) {
                 ret = EFI_OUT_OF_RESOURCES;
                 goto out;
