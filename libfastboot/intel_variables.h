@@ -33,6 +33,6 @@
 #ifndef __INTEL_VARIABLES_H__
 #define __INTEL_VARIABLES_H__
 
-EFI_STATUS publish_intel_variables(void);
+void publish_intel_variables(void);
 
 #endif	/* __INTEL_VARIABLES_H__ */

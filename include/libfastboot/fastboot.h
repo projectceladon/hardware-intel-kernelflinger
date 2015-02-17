@@ -47,23 +47,25 @@ extern const EFI_GUID fastboot_guid;
 typedef void (*fastboot_handle) (INTN argc, CHAR8 **argv);
 
 struct fastboot_cmd {
-	const char *name;
+	struct fastboot_cmd *next;
+	const CHAR8 *name;
 	enum device_state min_state;
 	fastboot_handle handle;
 };
 
-struct fastboot_cmd *get_root_cmd(const char *name);
+struct fastboot_cmd *get_root_cmd(const CHAR8 *name);
 void fastboot_set_dlbuffer(void *buffer, unsigned size);
 
-EFI_STATUS fastboot_publish(const char *name, const char *value);
+void fastboot_publish(const char *name, const char *value);
 void fastboot_okay(const char *fmt, ...);
 void fastboot_fail(const char *fmt, ...);
 void fastboot_info(const char *fmt, ...);
-EFI_STATUS fastboot_register(struct fastboot_cmd *cmd);
-EFI_STATUS fastboot_oem_register(struct fastboot_cmd *cmd);
+void fastboot_register(const char *name, fastboot_handle handle,
+		       enum device_state min_state);
+void fastboot_oem_register(const char *name, fastboot_handle handle,
+			   enum device_state min_state);
 
 EFI_STATUS fastboot_start(void **bootimage, void **efiimage,
-			  UINTN *imagesize, enum boot_target *target,
-			  BOOLEAN dontfree);
-void fastboot_free();
+			  UINTN *imagesize, enum boot_target *target);
+
 #endif	/* _FASTBOOT_H_ */
