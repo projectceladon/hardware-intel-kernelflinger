@@ -333,7 +333,7 @@ static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char
 
 	ret = vsnprintf((CHAR8 *)response, INFO_PAYLOAD, (CHAR8 *)fmt, ap);
 	if (EFI_ERROR(ret))
-		efi_perror(ret, "Failed to build reason string");
+		efi_perror(ret, L"Failed to build reason string");
 	return ret;
 }
 
@@ -859,7 +859,7 @@ static EFI_STATUS fastboot_init()
 
 	ret = fastboot_ui_init();
 	if (EFI_ERROR(ret))
-		efi_perror(ret, "Fastboot UI initialization failed, continue anyway.");
+		efi_perror(ret, L"Fastboot UI initialization failed, continue anyway.");
 
 	initialized = TRUE;
 

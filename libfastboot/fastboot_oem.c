@@ -149,7 +149,7 @@ static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
 					&unlock_allowed);
 		if (EFI_ERROR(ret)) {
 			/* Pathological if this fails, GPT screwed up? */
-			efi_perror(ret, "Couldn't read persistent partition");
+			efi_perror(ret, L"Couldn't read persistent partition");
 			unlock_allowed = 0;
 		}
 	} else {

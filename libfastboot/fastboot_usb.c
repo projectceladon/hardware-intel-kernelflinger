@@ -334,7 +334,7 @@ static EFI_STATUS fastboot_usb_init(void)
 	}
 	ret = uefi_call_wrapper(usb_device->InitXdci, 1, usb_device);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Init XDCI failed");
+		efi_perror(ret, L"Init XDCI failed");
 		return ret;
 	}
 
@@ -378,7 +378,7 @@ EFI_STATUS fastboot_usb_stop(void *bootimage, void *efiimage, UINTN imagesize,
 
 	ret = uefi_call_wrapper(usb_device->Stop, 1, usb_device);
 	if (EFI_ERROR(ret))
-		efi_perror(ret, "Failed to Stop USB", ret);
+		efi_perror(ret, L"Failed to Stop USB", ret);
 
 	return ret;
 }
@@ -408,7 +408,7 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 
 	ret = uefi_call_wrapper(usb_device->Connect, 1, usb_device);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to connect");
+		efi_perror(ret, L"Failed to connect");
 		goto error;
 	}
 
@@ -427,7 +427,7 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 			continue;
 
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, "Error occurred during run");
+			efi_perror(ret, L"Error occurred during run");
 			goto error;
 		}
 
@@ -442,13 +442,13 @@ EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
 
 	ret = uefi_call_wrapper(usb_device->DisConnect, 1, usb_device);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to disconnect USB");
+		efi_perror(ret, L"Failed to disconnect USB");
 		goto error;
 	}
 
 	ret = uefi_call_wrapper(usb_device->UnBind, 1, usb_device);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to unbind USB");
+		efi_perror(ret, L"Failed to unbind USB");
 		goto error;
 	}
 

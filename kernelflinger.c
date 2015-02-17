@@ -401,7 +401,7 @@ static enum boot_target check_watchdog(VOID)
 
         ret = get_watchdog_status(&counter, &time_ref);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "Failed to get the watchdog status");
+                efi_perror(ret, L"Failed to get the watchdog status");
                 return NORMAL_BOOT;
         }
 
@@ -411,7 +411,7 @@ static enum boot_target check_watchdog(VOID)
                 if (counter != 0) {
                         ret = reset_watchdog_status();
                         if (EFI_ERROR(ret)) {
-                                efi_perror(ret, "Failed to reset the watchdog status");
+                                efi_perror(ret, L"Failed to reset the watchdog status");
                                 goto error;
                         }
                 }
@@ -420,7 +420,7 @@ static enum boot_target check_watchdog(VOID)
 
         ret = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, "Failed to get the current time");
+                efi_perror(ret, L"Failed to get the current time");
                 goto error;
         }
 
@@ -434,7 +434,7 @@ static enum boot_target check_watchdog(VOID)
                 time_ref = now;
                 ret = set_watchdog_time_reference(&now);
                 if (EFI_ERROR(ret)) {
-                        efi_perror(ret, "Failed to set the watchdog time reference");
+                        efi_perror(ret, L"Failed to set the watchdog time reference");
                         goto error;
                 }
         }
@@ -443,13 +443,13 @@ static enum boot_target check_watchdog(VOID)
         if (counter <= WATCHDOG_COUNTER_MAX) {
                         ret = set_watchdog_counter(counter);
                         if (EFI_ERROR(ret))
-                                efi_perror(ret, "Failed to set the watchdog counter");
+                                efi_perror(ret, L"Failed to set the watchdog counter");
                         goto error;
         }
 
         ret = reset_watchdog_status();
         if (EFI_ERROR(ret))
-                efi_perror(ret, "Failed to reset the watchdog status");
+                efi_perror(ret, L"Failed to reset the watchdog status");
 
         return ux_crash_event_prompt_user_for_boot_target();
 
@@ -742,7 +742,7 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
                 if (delete) {
                         ret = file_delete(g_disk_device, path);
                         if (EFI_ERROR(ret))
-                                efi_perror(ret, "Couldn't delete %s", path);
+                                efi_perror(ret, L"Couldn't delete %s", path);
                 }
                 ret = uefi_call_wrapper(BS->StartImage, 3, image, NULL, NULL);
                 uefi_call_wrapper(BS->UnloadImage, 1, image);
@@ -764,7 +764,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state, BOOLEAN charger)
         ret = android_image_start_buffer(g_parent_image, bootimage,
                                          charger, NULL);
         if (EFI_ERROR(ret))
-                efi_perror(ret, "Couldn't load Boot image");
+                efi_perror(ret, L"Couldn't load Boot image");
 
         return ret;
 }
@@ -855,7 +855,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 
                 ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target, FALSE);
                 if (EFI_ERROR(ret)) {
-                        efi_perror(ret, "Fastboot mode failed");
+                        efi_perror(ret, L"Fastboot mode failed");
                         break;
                 }
 
@@ -941,7 +941,7 @@ static EFI_STATUS push_capsule(
                 so delete the file now */
                 ret = file_delete(g_disk_device, name);
                 if (ret != EFI_SUCCESS) {
-                        efi_perror(ret, "Couldn't delete %s", name);
+                        efi_perror(ret, L"Couldn't delete %s", name);
                         FreePool(content);
                         return ret;
                 }
