@@ -44,6 +44,7 @@ extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_LIGHTRED;
 extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_YELLOW;
 extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_RED;
 extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_GREEN;
+extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_HIGHLIGHT;
 
 /* Image */
 typedef struct image {
@@ -86,6 +87,7 @@ typedef struct ui_textarea {
 	UINTN row_nb;
 	ui_textline_t *text;
 	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color;
+	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *bg_color;
 	ui_font_t *font;
 	INTN current;
 	UINTN width;
@@ -94,9 +96,11 @@ typedef struct ui_textarea {
 } ui_textarea_t;
 
 ui_textarea_t *ui_textarea_create(UINTN line_nb, UINTN row_nb, ui_font_t *font,
-				  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color);
+				  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color,
+				  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *bg_color);
 EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
-				    UINTN x, UINTN *y, UINTN width, UINTN height);
+				    UINTN x, UINTN *y, UINTN width, UINTN height,
+				    EFI_GRAPHICS_OUTPUT_BLT_PIXEL *bg_color);
 void ui_textarea_free(ui_textarea_t *textarea);
 void ui_textarea_clear(ui_textarea_t *textarea);
 void ui_textarea_set_line(ui_textarea_t *textarea, UINTN line_nb, char *str,
@@ -107,11 +111,19 @@ EFI_STATUS ui_textarea_draw_scale(ui_textarea_t *textarea, UINTN x, UINTN *y,
 				  UINTN width, UINTN height);
 EFI_STATUS ui_textarea_draw(ui_textarea_t *textarea, UINTN x, UINTN y);
 
+/* EFI Scan codes */
+#ifdef USE_POWER_BUTTON
+#define SCAN_POWER CHAR_CARRIAGE_RETURN
+#endif
+
 /* Events */
 typedef enum ui_events {
 	EV_NONE,
 	EV_UP,
-	EV_DOWN
+	EV_DOWN,
+#ifdef USE_POWER_BUTTON
+	EV_POWER
+#endif
 } ui_events_t;
 ui_events_t ui_keycode_to_event(UINT16 keycode);
 ui_events_t ui_read_input(void);
@@ -139,13 +151,21 @@ UINTN ui_boot_menu_draw(ui_boot_menu_t *menu, UINTN x, UINTN *y, UINTN max_width
 enum boot_target ui_boot_menu_event_handler(ui_boot_menu_t *menu, ui_events_t event);
 void ui_boot_menu_free(ui_boot_menu_t *menu);
 
+/* Confirm UX */
+BOOLEAN ui_confirm(const ui_textline_t *text, UINTN width, UINTN height,
+		   UINTN x, UINTN y);
+
 /* Screen / shared */
 EFI_STATUS ui_init(UINTN *width, UINTN *height);
 BOOLEAN ui_is_ready();
 void ui_free(void);
 EFI_STATUS ui_display_vendor_splash(VOID);
+EFI_STATUS ui_fill_area(UINTN x, UINTN y, UINTN width, UINTN height,
+			EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color);
 EFI_STATUS ui_clear_area(UINTN x, UINTN y, UINTN width, UINTN height);
 EFI_STATUS ui_clear_screen();
+EFI_STATUS ui_display_texts(const ui_textline_t **texts, UINTN x, UINTN y,
+			    UINTN linesarea, UINTN colsarea);
 EFI_STATUS ui_draw_blt(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt, UINTN x, UINTN y,
 		       UINTN width, UINTN height);
 void ui_print(CHAR16 *fmt, ...);

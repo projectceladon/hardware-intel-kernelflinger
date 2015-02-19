@@ -65,8 +65,13 @@ static EFI_STATUS ui_boot_menu_redraw(ui_boot_menu_t *menu, UINTN *y)
 {
 	EFI_STATUS ret;
 	ui_textline_t lines[] = {
-		{ &COLOR_LIGHTGRAY, "Volume DOWN button to choose boot option", TRUE },
+#ifdef USE_POWER_BUTTON
+		{ &COLOR_LIGHTGRAY, "Volume UP/DOWN buttons to move the selection", TRUE },
+		{ &COLOR_LIGHTGRAY, "Power button to select the option", TRUE },
+#else
+		{ &COLOR_LIGHTGRAY, "Volume DOWN button to move the selection", TRUE },
 		{ &COLOR_LIGHTGRAY, "Volume UP button to select boot option", TRUE },
+#endif
 		{ NULL, NULL, TRUE }
 	};
 
@@ -83,7 +88,7 @@ static EFI_STATUS ui_boot_menu_redraw(ui_boot_menu_t *menu, UINTN *y)
 	*y += image->height + MARGIN;
 
 	return ui_textarea_display_text(lines, ui_font_get_default(),
-					menu->x, y, menu->max_width, 0);
+					menu->x, y, menu->max_width, 0, NULL);
 }
 
 EFI_STATUS ui_boot_menu_draw(ui_boot_menu_t *menu, UINTN x, UINTN *y, UINTN max_width)
@@ -100,10 +105,19 @@ enum boot_target ui_boot_menu_event_handler(ui_boot_menu_t *menu, ui_events_t ev
 
 	switch (event) {
 	case EV_UP:
+#ifdef USE_POWER_BUTTON
+		menu->cur = (menu->cur + menu->action_nb - 1) % menu->action_nb;
+		ui_boot_menu_redraw(menu, &y);
+		break;
+	case EV_POWER:
 		return menu->actions[menu->cur].target;
+#else
+		return menu->actions[menu->cur].target;
+#endif
 	case EV_DOWN:
 		menu->cur = (menu->cur + 1) % menu->action_nb;
 		ui_boot_menu_redraw(menu, &y);
+		break;
 	default:
 		break;
 	}

@@ -54,7 +54,8 @@ static EFI_STATUS ui_textarea_allocate_blt(ui_textarea_t *textarea)
 }
 
 ui_textarea_t *ui_textarea_create(UINTN line_nb, UINTN row_nb, ui_font_t *font,
-				  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color)
+				  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color,
+				  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *bg_color)
 {
 	UINTN text_size;
 
@@ -84,6 +85,7 @@ ui_textarea_t *ui_textarea_create(UINTN line_nb, UINTN row_nb, ui_font_t *font,
 
 	textarea->current = -1;
 	textarea->color = color;
+	textarea->bg_color = bg_color;
 
 	return textarea;
 }
@@ -129,6 +131,7 @@ static void ui_textarea_refresh_blt(ui_textarea_t *textarea)
 	UINTN pixel_size = sizeof(*textarea->blt);
 	UINTN row_size = textarea->width * pixel_size;
 	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color;
+	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *bg_color = textarea->bg_color;
 
 	ZeroMem(textarea->blt,
 		textarea->width * textarea->height * sizeof(*textarea->blt));
@@ -139,6 +142,13 @@ static void ui_textarea_refresh_blt(ui_textarea_t *textarea)
 		color = textarea->color;
 		if (textarea->text[cur].color)
 			color = textarea->text[cur].color;
+
+		if (bg_color) {
+			UINTN x1;
+			for (x1 = 0; x1 < textarea->height * textarea->width; x1++)
+				CopyMem(textarea->blt + x1, bg_color,
+					sizeof(bg_color));
+		}
 
 		unsigned char *s = (unsigned char *)textarea->text[cur].str;
 		for (x = 0, j = 0; s && *s && j < textarea->row_nb; s++, x += font->cwidth, j++) {
@@ -161,7 +171,8 @@ static void ui_textarea_refresh_blt(ui_textarea_t *textarea)
 }
 
 EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
-				    UINTN x, UINTN *y, UINTN width, UINTN height)
+				    UINTN x, UINTN *y, UINTN width, UINTN height,
+				    EFI_GRAPHICS_OUTPUT_BLT_PIXEL *bg_color)
 {
 	ui_textarea_t textarea;
 	EFI_STATUS ret;
@@ -176,6 +187,7 @@ EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
 	textarea.row_nb = row_nb;
 	textarea.text = (ui_textline_t *)text;
 	textarea.color = NULL;
+	textarea.bg_color = bg_color;
 	textarea.font = font;
 	textarea.current = -1;
 
