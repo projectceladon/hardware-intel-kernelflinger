@@ -301,7 +301,11 @@ EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 			skip_whitespace(&line);
 			val = line;
 		}
-		if (*var && val && *val) {
+
+		if (!*var)
+			continue;
+
+		if (val) {
 			switch (type) {
 			case VAR_TYPE_BLOB:
 				vallen = unescape_oemvar_val(val) - 1;
@@ -312,20 +316,23 @@ EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 			default:
 				goto out;
 			}
-			varname = stra_to_str((CHAR8 *)var);
-			if (!varname) {
-				error(L"Failed to convert varname string.");
-				goto out;
-			}
-			debug(L"Setting oemvar: %a", var);
-			ret = uefi_call_wrapper(RT->SetVariable, 5, varname,
-						&curr_guid, attributes,
-						vallen, val);
-			FreePool(varname);
-			if (EFI_ERROR(ret)) {
-				error(L"EFI variable setting failed");
-				goto out;
-			}
+		} else {
+			vallen = 0;
+		}
+
+		varname = stra_to_str((CHAR8 *)var);
+		if (!varname) {
+			error(L"Failed to convert varname string.");
+			goto out;
+		}
+		debug(L"Setting oemvar: %a", var);
+		ret = uefi_call_wrapper(RT->SetVariable, 5, varname,
+					&curr_guid, attributes,
+					vallen, val);
+		FreePool(varname);
+		if (EFI_ERROR(ret)) {
+			error(L"EFI variable setting failed");
+			goto out;
 		}
 	}
 	ret = EFI_SUCCESS;
