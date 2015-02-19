@@ -382,34 +382,3 @@ EFI_STATUS uefi_msleep(UINTN mseconds)
 {
 	return uefi_usleep(mseconds * 1000);
 }
-
-int sprintf(char *str, const char *format, ...)
-{
-	va_list args;
-	UINTN len;
-	int ret = -1;
-	CHAR16 *str16;
-	CHAR16 *format16 = stra_to_str((CHAR8 *)format);
-
-	if (!format16)
-		return -1;
-
-	va_start(args, format);
-	str16 = VPoolPrint(format16, args);
-	va_end(args);
-
-	if (!str16)
-		goto free_format16;
-
-	len = StrLen(str16);
-	if (str_to_stra((CHAR8 *)str, str16, len) == EFI_SUCCESS) {
-		ret = 0;
-		str[len] = '\0';
-	}
-
-	FreePool(str16);
-free_format16:
-	FreePool(format16);
-	return ret;
-}
-
