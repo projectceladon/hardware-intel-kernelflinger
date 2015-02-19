@@ -643,8 +643,9 @@ static void fastboot_read_command(void)
 
 static void cmd_download(INTN argc, CHAR8 **argv)
 {
-	char response[MAGIC_LENGTH];
+	CHAR8 response[MAGIC_LENGTH];
 	UINTN newdlsize;
+	EFI_STATUS ret;
 
 	if (argc != 2) {
 		fastboot_fail("Invalid parameter");
@@ -677,7 +678,13 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 	}
 	dlsize = newdlsize;
 
-	sprintf(response, "DATA%08x", dlsize);
+	ret = snprintf(response, sizeof(response), (CHAR8 *)"DATA%08x", dlsize);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to format DATA response");
+		fastboot_fail("Failed to format DATA response");
+		return;
+	}
+
 	if (usb_write(response, strlen((CHAR8 *)response)) < 0) {
 		fastboot_state = STATE_ERROR;
 		return;
