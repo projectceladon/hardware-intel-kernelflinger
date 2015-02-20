@@ -172,7 +172,7 @@ int usb_write(void *pBuf, uint32_t size)
 	/* queue the Tx request */
 	ret = uefi_call_wrapper(usb_device->EpTxData, 2, usb_device, &ioReq);
 	if (EFI_ERROR(ret))
-		error(L"failed to queue Tx request: %r", ret);
+		efi_perror(ret, L"failed to queue Tx request");
 	return EFI_ERROR(ret);
 }
 
@@ -194,7 +194,7 @@ int usb_read(void *buf, unsigned len)
 	/* queue the  receive request */
 	ret = uefi_call_wrapper(usb_device->EpRxData, 2, usb_device, &ioReq);
 	if (EFI_ERROR(ret))
-		error(L"failed to queue Rx request: %r", ret);
+		efi_perror(ret, L"failed to queue Rx request");
 
 	return EFI_ERROR(ret);
 }
