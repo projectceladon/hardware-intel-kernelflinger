@@ -555,14 +555,11 @@ static void cmd_getvar(INTN argc, CHAR8 **argv)
 		for (var = varlist; var; var = var->next)
 			fastboot_info("%a: %a", var->name, var->value);
 		fastboot_okay("");
-	} else {
-		var = fastboot_getvar((char *)argv[1]);
-		if (var && var->value) {
-			fastboot_okay("%a", var->value);
-		} else {
-			fastboot_okay("");
-		}
+		return;
 	}
+
+	var = fastboot_getvar((char *)argv[1]);
+	fastboot_okay("%a", var ? var->value : "");
 }
 
 static void cmd_continue(__attribute__((__unused__)) INTN argc,
