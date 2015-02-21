@@ -297,7 +297,7 @@ static struct label_exception {
 
 EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 {
-	CHAR16 *esp = L"/ESP/";
+	CHAR16 esp[] = L"/ESP/";
 	UINTN i;
 	EFI_STATUS ret;
 
