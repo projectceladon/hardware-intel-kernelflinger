@@ -168,8 +168,6 @@ EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
 	UINTN line_nb, len, row_nb = 0;
 
 	for (line_nb = 0; text[line_nb].str; line_nb++) {
-		if (!text[line_nb].str)
-			continue;
 		len = strlen((CHAR8 *)text[line_nb].str);
 		row_nb = row_nb < len ? len : row_nb;
 	}
