@@ -730,7 +730,7 @@ static void fastboot_process_tx(__attribute__((__unused__)) void *buf,
 static void split_args(CHAR8 *str, INTN *argc, CHAR8 *argv[])
 {
 	argv[0] = str;
-	while (*str != ' ' && *str != ':' && str != '\0')
+	while (*str != ' ' && *str != ':' && *str != '\0')
 		str++;
 
 	*argc = 1;
