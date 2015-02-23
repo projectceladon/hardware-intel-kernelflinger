@@ -78,7 +78,7 @@ typedef enum {
 } strTblIndex;
 
 /* String descriptor Table */
-#define LANG_EN_US		0x0409
+#define LANG_EN_US		0x0409 /* US English */
 #define STR_MANUFACTURER	L"Intel Corporation"
 #define STR_PRODUCT		L"Intel Product"
 #define STR_SERIAL		L"INT123456"
@@ -86,7 +86,7 @@ typedef enum {
 #define STR_INTERFACE		L"Fastboot"
 
 static USB_STRING_DESCRIPTOR string_table[] = {
-	{ 2 + sizeof(LANG_EN_US)	, USB_DESC_TYPE_STRING, {LANG_EN_US} },
+	{     sizeof(LANG_EN_US)	, USB_DESC_TYPE_STRING, {LANG_EN_US} },
 	{ 2 + sizeof(STR_MANUFACTURER)	, USB_DESC_TYPE_STRING, STR_MANUFACTURER },
 	{ 2 + sizeof(STR_PRODUCT)	, USB_DESC_TYPE_STRING, STR_PRODUCT },
 	{ 2 + sizeof(STR_SERIAL)	, USB_DESC_TYPE_STRING, STR_SERIAL },
