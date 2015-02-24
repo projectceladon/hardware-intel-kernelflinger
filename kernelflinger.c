@@ -49,7 +49,7 @@
 #include "targets.h"
 #include "unittest.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.0B"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.0C"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -483,6 +483,7 @@ static enum boot_target check_command_line(VOID **address)
 #ifndef USER
                 if (!StrCmp(argv[pos], L"-U")) {
                         unittest_main();
+                        FreePool(argv);
                         return EXIT_SHELL;
                 }
 #endif
@@ -713,8 +714,10 @@ static EFI_STATUS load_boot_image(
         if (keystore)
                 ret = validate_bootimage(boot_target, *bootimage, keystore, keystore_size);
 
-        if (EFI_ERROR(ret))
+        if (EFI_ERROR(ret)) {
                 FreePool(*bootimage);
+                *bootimage = NULL;
+        }
 
         return ret;
 }
@@ -1160,7 +1163,6 @@ fallback:
                  * can sideload an OTA to fix their device */
                 debug(L"fall back to recovery console");
                 boot_target = RECOVERY;
-                FreePool(bootimage);
                 goto fallback;
         }
 

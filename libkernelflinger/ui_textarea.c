@@ -161,15 +161,13 @@ static void ui_textarea_refresh_blt(ui_textarea_t *textarea)
 }
 
 EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
-				    UINTN x, UINTN *y)
+				    UINTN x, UINTN *y, UINTN width, UINTN height)
 {
 	ui_textarea_t textarea;
 	EFI_STATUS ret;
 	UINTN line_nb, len, row_nb = 0;
 
 	for (line_nb = 0; text[line_nb].str; line_nb++) {
-		if (!text[line_nb].str)
-			continue;
 		len = strlen((CHAR8 *)text[line_nb].str);
 		row_nb = row_nb < len ? len : row_nb;
 	}
@@ -185,9 +183,7 @@ EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
 	if (EFI_ERROR(ret))
 		return ret;
 
-	ui_textarea_draw(&textarea, x, *y);
-
-	*y += textarea.height;
+	ui_textarea_draw_scale(&textarea, x, y, width, height);
 
 	FreePool(textarea.blt);
 
@@ -232,6 +228,33 @@ void ui_textarea_newline(ui_textarea_t *textarea, char *str,
 		FreePool(textarea->text[textarea->current].str);
 
 	ui_textarea_set_line(textarea, textarea->current, str, color, bold);
+}
+
+EFI_STATUS ui_textarea_draw_scale(ui_textarea_t *textarea, UINTN x, UINTN *y,
+				  UINTN width, UINTN height)
+{
+	UINTN new_width, new_height;
+	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *scaled_blt = NULL;
+	EFI_STATUS ret;
+
+	ui_textarea_refresh_blt(textarea);
+
+	ui_get_scaled_dimension(textarea->width, textarea->height,
+				width, height, &new_width, &new_height);
+	scaled_blt = AllocatePool(ui_get_blt_size(new_width, new_height));
+	if (!scaled_blt)
+		return EFI_OUT_OF_RESOURCES;
+
+	ui_bilinear_scale((unsigned char *)textarea->blt,
+			  (unsigned char *)scaled_blt,
+			  textarea->width, textarea->height,
+			  new_width, new_height,
+			  sizeof(EFI_GRAPHICS_OUTPUT_BLT_PIXEL));
+	ret = ui_draw_blt(scaled_blt, x, *y, new_width, new_height);
+	FreePool(scaled_blt);
+	*y += new_height;
+
+	return ret;
 }
 
 EFI_STATUS ui_textarea_draw(ui_textarea_t *textarea, UINTN x, UINTN y)

@@ -78,7 +78,7 @@ typedef enum {
 } strTblIndex;
 
 /* String descriptor Table */
-#define LANG_EN_US		0x0409
+#define LANG_EN_US		0x0409 /* US English */
 #define STR_MANUFACTURER	L"Intel Corporation"
 #define STR_PRODUCT		L"Intel Product"
 #define STR_SERIAL		L"INT123456"
@@ -86,7 +86,7 @@ typedef enum {
 #define STR_INTERFACE		L"Fastboot"
 
 static USB_STRING_DESCRIPTOR string_table[] = {
-	{ 2 + sizeof(LANG_EN_US)	, USB_DESC_TYPE_STRING, {LANG_EN_US} },
+	{     sizeof(LANG_EN_US)	, USB_DESC_TYPE_STRING, {LANG_EN_US} },
 	{ 2 + sizeof(STR_MANUFACTURER)	, USB_DESC_TYPE_STRING, STR_MANUFACTURER },
 	{ 2 + sizeof(STR_PRODUCT)	, USB_DESC_TYPE_STRING, STR_PRODUCT },
 	{ 2 + sizeof(STR_SERIAL)	, USB_DESC_TYPE_STRING, STR_SERIAL },
@@ -172,7 +172,7 @@ int usb_write(void *pBuf, uint32_t size)
 	/* queue the Tx request */
 	ret = uefi_call_wrapper(usb_device->EpTxData, 2, usb_device, &ioReq);
 	if (EFI_ERROR(ret))
-		error(L"failed to queue Tx request: %r", ret);
+		efi_perror(ret, L"failed to queue Tx request");
 	return EFI_ERROR(ret);
 }
 
@@ -194,7 +194,7 @@ int usb_read(void *buf, unsigned len)
 	/* queue the  receive request */
 	ret = uefi_call_wrapper(usb_device->EpRxData, 2, usb_device, &ioReq);
 	if (EFI_ERROR(ret))
-		error(L"failed to queue Rx request: %r", ret);
+		efi_perror(ret, L"failed to queue Rx request");
 
 	return EFI_ERROR(ret);
 }
@@ -238,23 +238,26 @@ EFIAPI EFI_STATUS data_handler(EFI_USB_DEVICE_XFER_INFO *XferInfo)
 
 static void fbSetStringTableLine(UINTN line, char *string)
 {
-	UINTN length;
+	UINTN size;
 	CHAR16 *str;
 
 	str = stra_to_str((CHAR8 *)string);
-	length = StrLen(str);
+	if (!str) {
+		error(L"Failed to convert '%a' to CHAR16 string", string);
+		return;
+	}
 
-	if (length >= sizeof(string_table[line].LangID)) {
+	size = (StrLen(str) + 1) * sizeof(CHAR16);
+
+	if (size > sizeof(string_table[line].LangID)) {
 		error(L"String number from SMBIOS table is too long.");
 		goto exit;
 	}
 
-	memcpy(string_table[line].LangID, str, length * sizeof(CHAR16));
+	memcpy(string_table[line].LangID, str, size);
+	string_table[line].Length = size;
 
-	string_table[line].LangID[length] = 0;
-	string_table[line].Length = (length + 1) * sizeof(CHAR16);
-
- exit:
+exit:
 	FreePool(str);
 }
 
@@ -263,8 +266,10 @@ static void fbSetManufacturer(void)
 	char *manufacturer;
 
 	manufacturer = SMBIOS_GET_STRING(2, Manufacturer);
-	if (manufacturer == SMBIOS_UNDEFINED)
+	if (manufacturer == SMBIOS_UNDEFINED) {
+		error(L"SMBIOS Manufacturer value unavailable");
 		return;
+	}
 
 	fbSetStringTableLine(1, manufacturer);
 }
@@ -274,8 +279,10 @@ static void fbSetProduct(void)
 	char *product;
 
 	product = SMBIOS_GET_STRING(2, ProductName);
-	if (product == SMBIOS_UNDEFINED)
+	if (product == SMBIOS_UNDEFINED) {
+		error(L"SMBIOS ProductName value unavailable");
 		return;
+	}
 
 	fbSetStringTableLine(2, product);
 }
@@ -285,8 +292,10 @@ static void fbSetSerialNumber(void)
 	char *serial;
 
 	serial = SMBIOS_GET_STRING(1, SerialNumber);
-	if (serial == SMBIOS_UNDEFINED)
+	if (serial == SMBIOS_UNDEFINED) {
+		error(L"SMBIOS SerialNumber value unavailable");
 		return;
+	}
 
 	fbSetStringTableLine(3, serial);
 }

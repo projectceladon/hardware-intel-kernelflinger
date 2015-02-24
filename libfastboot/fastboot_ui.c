@@ -120,7 +120,6 @@ static struct msg_for_state {
 
 static const char *DROID_IMG_NAME = "droid_operation";
 static const UINTN SPACE = 20;
-static char *FASTBOOT_FONT_NAME = "18x32";
 
 /* Boot menu. */
 static ui_boot_action_t BOOT_ACTIONS[] = {
@@ -138,7 +137,6 @@ static UINTN swidth, sheight;
 static UINTN area_x;
 static UINTN area_y;
 static ui_boot_menu_t *boot_menu;
-static ui_font_t *fastboot_font;
 
 static EFI_STATUS fastboot_ui_clear_dynamic_part(void)
 {
@@ -147,98 +145,112 @@ static EFI_STATUS fastboot_ui_clear_dynamic_part(void)
 			     sheight - area_y - margin);
 }
 
-static void fastboot_ui_info_product_name(ui_textline_t *line)
+static EFI_GRAPHICS_OUTPUT_BLT_PIXEL *fastboot_ui_default_color(void)
 {
-	line->str = info_product();
+	return &COLOR_WHITE;
 }
 
-static void fastboot_ui_info_variant(ui_textline_t *line)
+static char *fastboot_ui_info_hw_version(void)
 {
-	line->str = info_variant();
+	return SMBIOS_GET_STRING(1, Version);
 }
 
-static void fastboot_ui_info_hw_version(ui_textline_t *line)
+static char *fastboot_ui_info_ifwi_version(void)
 {
-	line->str = SMBIOS_GET_STRING(1, Version);
+	return SMBIOS_GET_STRING(0, BiosVersion);
 }
 
-static void fastboot_ui_info_bootloader_version(ui_textline_t *line)
+static char *fastboot_ui_info_serial_number(void)
 {
-	line->str = info_bootloader_version();
+	return SMBIOS_GET_STRING(1, SerialNumber);
 }
 
-static void fastboot_ui_info_ifwi_version(ui_textline_t *line)
+static char *fastboot_ui_info_secure_boot(void)
 {
-	line->str = SMBIOS_GET_STRING(0, BiosVersion);
+	return is_efi_secure_boot_enabled() ? "ENABLED" : "DISABLED";
 }
 
-static void fastboot_ui_info_serial_number(ui_textline_t *line)
+static EFI_GRAPHICS_OUTPUT_BLT_PIXEL *fastboot_ui_info_secure_boot_color(void)
 {
-	line->str = SMBIOS_GET_STRING(1, SerialNumber);
-}
-
-static void fastboot_ui_info_secure_boot(ui_textline_t *line)
-{
-	BOOLEAN state = is_efi_secure_boot_enabled();
-
-	line->str = state ? "ENABLED" : "DISABLED";
-	line->color = state ? &COLOR_GREEN : &COLOR_RED;
-}
-
-static void fastboot_ui_info_lock_state(ui_textline_t *line)
-{
-	line->str = get_current_state_string();
-	line->color = get_current_state_color();
+	return is_efi_secure_boot_enabled() ? &COLOR_GREEN : &COLOR_RED;
 }
 
 struct info_text_fun {
 	const char *header;
-	void (*get_value)(ui_textline_t *textline);
-} const INFOS[] = {
-	{ "PRODUCT NAME", fastboot_ui_info_product_name },
-	{ "VARIANT", fastboot_ui_info_variant },
-	{ "HW_VERSION", fastboot_ui_info_hw_version },
-	{ "BOOTLOADER VERSION", fastboot_ui_info_bootloader_version },
-	{ "IFWI VERSION", fastboot_ui_info_ifwi_version },
-	{ "SERIAL NUMBER", fastboot_ui_info_serial_number },
-	{ "SECURE BOOT", fastboot_ui_info_secure_boot },
-	{ "LOCK STATE", fastboot_ui_info_lock_state }
+	char *(*get_value)(void);
+	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *(*get_color)(void);
+} const FASTBOOT_INFOS[] = {
+	{ "PRODUCT NAME",	info_product,			fastboot_ui_default_color },
+	{ "VARIANT",		info_variant,			fastboot_ui_default_color },
+	{ "HW_VERSION",		fastboot_ui_info_hw_version,	fastboot_ui_default_color },
+	{ "BOOTLOADER VERSION",	info_bootloader_version,	fastboot_ui_default_color },
+	{ "IFWI VERSION",	fastboot_ui_info_ifwi_version,	fastboot_ui_default_color },
+	{ "SERIAL NUMBER",	fastboot_ui_info_serial_number,	fastboot_ui_default_color },
+	{ "SECURE BOOT",	fastboot_ui_info_secure_boot,	fastboot_ui_info_secure_boot_color },
+	{ "LOCK STATE",		get_current_state_string,	get_current_state_color }
 };
 
-static UINTN fastboot_ui_info_draw(UINTN x, UINTN y)
+static const char *FASTBOOT_TITLE = "FASTBOOT MODE";
+
+static UINTN fastboot_ui_info_draw(UINTN x, UINTN y, UINTN width, UINTN height)
 {
-	static const UINTN LINE_LEN = 42;
-	UINTN i;
-	ui_textarea_t *textarea;
-	char *dst;
+	EFI_STATUS ret;
+	UINTN i, line_nb = ARRAY_SIZE(FASTBOOT_INFOS) + 2;
+	ui_textline_t *lines;
 
-	textarea = ui_textarea_create(ARRAY_SIZE(INFOS) + 2, LINE_LEN, fastboot_font, NULL);
-	dst = AllocatePool(LINE_LEN);
-	if (!dst)
-		return y;
+	lines = AllocateZeroPool(sizeof(*lines) * (line_nb + 1));
+	if (!lines)
+		goto exit;
 
-	memcpy(dst, "FASTBOOT MODE", strlen((CHAR8 *)"FASTBOOT MODE") + 1);
-	ui_textarea_set_line(textarea, 0, dst, &COLOR_RED, TRUE);
-	ui_textarea_set_line(textarea, 1, NULL, NULL, FALSE);
-	for (i = 2; i < textarea->line_nb; i++) {
-		char *dst = AllocatePool(LINE_LEN);
-		if (!dst) {
-			ui_textarea_free(textarea);
-			return y;
+	lines[0].str = (char *)FASTBOOT_TITLE;
+	lines[0].color = &COLOR_RED;
+	lines[0].bold = TRUE;
+
+	lines[1].str = "";
+
+	for (i = 2; i < line_nb; i++) {
+		const struct info_text_fun *info = &FASTBOOT_INFOS[i - 2];
+		ui_textline_t *line = &lines[i];
+		char *value;
+		UINTN len;
+
+		line->color = info->get_color();
+		if (!line->color) {
+			error(L"Failed to get fastboot info line %d color", i);
+			goto exit;
 		}
 
-		ui_textline_t line = { &COLOR_WHITE, NULL, FALSE };
-		INFOS[i - 2].get_value(&line);
+		value = info->get_value();
+		if (!value) {
+			error(L"Failed to get fastboot info line %d value", i);
+			goto exit;
+		}
 
-		snprintf((CHAR8 *)dst, LINE_LEN, (CHAR8 *)"%a - %a",
-			 INFOS[i - 2].header, line.str);
-		ui_textarea_set_line(textarea, i, dst, line.color, line.bold);
+		len = strlen((CHAR8 *)info->header) + strlen((CHAR8 *)value) + 4;
+		line->str = AllocatePool(len);
+		if (!line->str) {
+			error(L"Failed to allocate fastboot line %d buffer len=%d", i, len);
+			goto exit;
+		}
+
+		ret = snprintf((CHAR8 *)line->str, len, (CHAR8 *)"%a - %a",
+			       info->header, value);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to format fastboot info line %d", i);
+			goto exit;
+		}
 	}
 
-	ui_textarea_draw(textarea, x, y);
-	ui_textarea_free(textarea);
+	ui_textarea_display_text(lines, ui_font_get_default(),
+				 x, &y, width, height);
 
-	return y + textarea->height;
+exit:
+	if (lines) {
+		for (i = 2; i < line_nb && lines[i].str; i++)
+			FreePool(lines[i].str);
+		FreePool(lines);
+	}
+	return y;
 }
 
 BOOLEAN fastboot_ui_confirm_for_state(enum device_state target)
@@ -255,7 +267,9 @@ BOOLEAN fastboot_ui_confirm_for_state(enum device_state target)
 		if (target == FASTBOOT_UI_CONFIRM[i].state) {
 			fastboot_ui_clear_dynamic_part();
 			ui_textarea_display_text(FASTBOOT_UI_CONFIRM[i].msg,
-						 fastboot_font, area_x, &y);
+						 ui_font_get_default(), area_x, &y,
+						 swidth - area_x - margin,
+						 sheight - area_y - margin);
 			result = ui_input_to_bool(60);
 			fastboot_ui_refresh();
 		}
@@ -271,8 +285,10 @@ void fastboot_ui_refresh(void)
 		return;
 
 	fastboot_ui_clear_dynamic_part();
-	ui_boot_menu_draw(boot_menu, area_x, &y);
-	fastboot_ui_info_draw(area_x, y + 20);
+	ui_boot_menu_draw(boot_menu, area_x, &y, swidth - area_x - margin);
+	y += 20;
+	fastboot_ui_info_draw(area_x, y, swidth - area_x - margin,
+			      sheight - y - margin);
 }
 
 EFI_STATUS fastboot_ui_init(void)
@@ -289,7 +305,9 @@ EFI_STATUS fastboot_ui_init(void)
 
 	ui_clear_screen();
 
-	margin = swidth * 10 / 100;
+	/* Use large enough margin to not overlap ui_print/ui_error
+	 * area. */
+	margin = swidth * 12 / 100;
 	ret = EFI_UNSUPPORTED;
 
 	droid = ui_image_get(DROID_IMG_NAME);
@@ -320,18 +338,11 @@ EFI_STATUS fastboot_ui_init(void)
 		area_x = swidth / 2 + margin;
 		area_y = y;
 	} else {		/* Portrait orientation. */
-		area_x = x;
+		area_x = margin;
 		area_y = sheight / 2;
 	}
 
-	fastboot_font = ui_font_get(FASTBOOT_FONT_NAME);
-	if (!fastboot_font) {
-		efi_perror(EFI_UNSUPPORTED, L"Unable to find '%a' font",
-			   FASTBOOT_FONT_NAME);
-		return EFI_UNSUPPORTED;
-	}
-
-	boot_menu = ui_boot_menu_create(BOOT_ACTIONS, fastboot_font);
+	boot_menu = ui_boot_menu_create(BOOT_ACTIONS);
 	if (!boot_menu) {
 		error(L"Failed to build boot menu");
 		return EFI_OUT_OF_RESOURCES;

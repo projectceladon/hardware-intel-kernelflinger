@@ -39,9 +39,19 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
 
+#define DEFAULT_FONT_NAME "18x32"
+
 ui_font_t *ui_font_get_default(void)
 {
-	return &ui_fonts[0];
+	static ui_font_t *default_font = NULL;
+
+	if (!default_font)
+		default_font = ui_font_get(DEFAULT_FONT_NAME);
+
+	if (!default_font)
+		error(L"Unable to get %a default font", DEFAULT_FONT_NAME);
+
+	return default_font;
 }
 
 ui_font_t *ui_font_get(char *name)

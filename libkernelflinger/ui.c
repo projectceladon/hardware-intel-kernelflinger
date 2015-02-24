@@ -121,6 +121,11 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 	if (!last_succeed || !graphic.output)
 		return EFI_UNSUPPORTED;
 
+	if (!ui_font_get_default()) {
+		error(L"Default font not available");
+		return EFI_UNSUPPORTED;
+	}
+
 	/* Initialize log area */
 	margin = graphic.width / 10;
 	if (!default_textarea) {
@@ -403,3 +408,72 @@ BOOLEAN ui_input_to_bool(UINTN timeout_secs)
 {
 	return ui_wait_for_input(timeout_secs) == EV_UP ? TRUE : FALSE;
 }
+
+UINT64 ui_get_blt_size(UINTN width, UINTN height)
+{
+	UINTN size = MultU64x32 ((UINT64) width, height);
+
+	if (size > DivU64x32((UINTN) ~0, sizeof (EFI_GRAPHICS_OUTPUT_BLT_PIXEL), NULL))
+		return 0;
+
+	return MultU64x32(size, sizeof(EFI_GRAPHICS_OUTPUT_BLT_PIXEL));
+}
+
+void ui_get_scaled_dimension(UINTN orig_width, UINTN orig_height,
+			     UINTN max_width, UINTN max_height,
+			     UINTN *width, UINTN *height)
+{
+	if (max_width == 0 && max_height != 0) {
+		*width = orig_width * max_height / orig_height;
+		*height = max_height;
+		return;
+	}
+
+	if (max_height == 0 && max_width != 0) {
+		*height = orig_height * max_width / orig_width;
+		*width = max_width;
+		return;
+	}
+
+	*height = max_height;
+	*width = orig_width * max_height / orig_height;
+	if (*width <= max_width)
+		return;
+
+	*height = orig_height * max_width / orig_width;
+	*width = max_width;
+}
+
+/*
+ * Bilinear interpolation:
+ * f(x,y) = (1/(x2-x1)(y2-y1)) * (f(Q11)(x2-x)(y2-y) +
+ *				f(Q21)(x-x1)(y2-y) +
+ *				f(Q12)(x2-x)(y-y1) +
+ *				f(Q22)(x-x1)(y-y1))
+ */
+void ui_bilinear_scale(unsigned char *s, unsigned char *d,
+		       int sx, int sy, int dx, int dy,
+		       int depth)
+{
+	double ratio_x = (double)(sx - 1) / dx;
+	double ratio_y = (double)(sy - 1) / dy;
+	int i, j, k;
+	sx *= depth;
+	for (i = 0; i < dy; i++ )
+		for (j = 0; j < dx; j++) {
+			double x = j * ratio_x;
+			double y = i * ratio_y;
+			int x1 = x;
+			int x2 = x1 + 1;
+			int y1 = y;
+			int y2 = y1 + 1;
+			for (k = 0; k < depth; k++) {
+				d[j * depth + i * dx * depth + k] = (1 / ((x2 - x1) * (y2 - y1))) *
+					(s[x1 * depth + y1 * sx + k] * (x2 - x) * (y2 - y) +
+					 s[x2 * depth + y1 * sx + k] * (x - x1) * (y2 - y) +
+					 s[x1 * depth + y2 * sx + k] * (x2 - x) * (y - y1) +
+					 s[x2 * depth + y2 * sx + k] * (x - x1) * (y - y1));
+			}
+		}
+}
+
