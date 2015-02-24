@@ -555,14 +555,11 @@ static void cmd_getvar(INTN argc, CHAR8 **argv)
 		for (var = varlist; var; var = var->next)
 			fastboot_info("%a: %a", var->name, var->value);
 		fastboot_okay("");
-	} else {
-		var = fastboot_getvar((char *)argv[1]);
-		if (var && var->value) {
-			fastboot_okay("%a", var->value);
-		} else {
-			fastboot_okay("");
-		}
+		return;
 	}
+
+	var = fastboot_getvar((char *)argv[1]);
+	fastboot_okay("%a", var ? var->value : "");
 }
 
 static void cmd_continue(__attribute__((__unused__)) INTN argc,
@@ -643,8 +640,9 @@ static void fastboot_read_command(void)
 
 static void cmd_download(INTN argc, CHAR8 **argv)
 {
-	char response[MAGIC_LENGTH];
+	CHAR8 response[MAGIC_LENGTH];
 	UINTN newdlsize;
+	EFI_STATUS ret;
 
 	if (argc != 2) {
 		fastboot_fail("Invalid parameter");
@@ -677,7 +675,13 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 	}
 	dlsize = newdlsize;
 
-	sprintf(response, "DATA%08x", dlsize);
+	ret = snprintf(response, sizeof(response), (CHAR8 *)"DATA%08x", dlsize);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to format DATA response");
+		fastboot_fail("Failed to format DATA response");
+		return;
+	}
+
 	if (usb_write(response, strlen((CHAR8 *)response)) < 0) {
 		fastboot_state = STATE_ERROR;
 		return;

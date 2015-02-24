@@ -38,13 +38,10 @@
 
 #include "ui.h"
 
-ui_boot_menu_t *ui_boot_menu_create(ui_boot_action_t *actions, ui_font_t *font)
+ui_boot_menu_t *ui_boot_menu_create(ui_boot_action_t *actions)
 {
 	ui_boot_menu_t *menu;
 	UINTN i;
-
-	if (!font)
-		return NULL;
 
 	for (i = 0; actions[i].img_name; i++) {
 		actions[i].image = ui_image_get(actions[i].img_name);
@@ -58,7 +55,6 @@ ui_boot_menu_t *ui_boot_menu_create(ui_boot_action_t *actions, ui_font_t *font)
 
 	menu->actions = actions;
 	menu->action_nb = i;
-	menu->font = font;
 
 	return menu;
 }
@@ -86,13 +82,15 @@ static EFI_STATUS ui_boot_menu_redraw(ui_boot_menu_t *menu, UINTN *y)
 
 	*y += image->height + MARGIN;
 
-	return ui_textarea_display_text(lines, menu->font, menu->x, y);
+	return ui_textarea_display_text(lines, ui_font_get_default(),
+					menu->x, y, menu->max_width, 0);
 }
 
-EFI_STATUS ui_boot_menu_draw(ui_boot_menu_t *menu, UINTN x, UINTN *y)
+EFI_STATUS ui_boot_menu_draw(ui_boot_menu_t *menu, UINTN x, UINTN *y, UINTN max_width)
 {
 	menu->x = x;
 	menu->y = *y;
+	menu->max_width = max_width;
 	return ui_boot_menu_redraw(menu, y);
 }
 

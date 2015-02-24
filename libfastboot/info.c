@@ -47,7 +47,9 @@ static char variant[MAX_INFO_LENGTH];
 
 char *info_bootloader_version(void)
 {
+	EFI_STATUS ret;
 	CHAR16 *version;
+	char *value = INFO_UNDEFINED;
 
 	if (bootloader_version[0] != '\0')
 		return bootloader_version;
@@ -58,14 +60,20 @@ char *info_bootloader_version(void)
 
 	if (StrLen(version) >= sizeof(bootloader_version)) {
 		error(L"Bootloader string is too long.");
-		FreePool(version);
-		return INFO_UNDEFINED;
+		goto exit;
 	}
 
-	str_to_stra((CHAR8 *)bootloader_version, version, StrLen(version) + 1);
-	FreePool(version);
+	ret = str_to_stra((CHAR8 *)bootloader_version, version, StrLen(version) + 1);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to convert bootloader version to CHAR8");
+		goto exit;
+	}
 
-	return bootloader_version;
+	value = bootloader_version;
+
+exit:
+	FreePool(version);
+	return value;
 }
 
 static char *info_get_from_variable(const EFI_GUID *guid, CHAR16 *varname, char *cache)

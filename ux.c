@@ -177,41 +177,35 @@ static EFI_STATUS ux_init_screen() {
 	return EFI_SUCCESS;
 }
 
-static ui_font_t *autoselect_font(const ui_textline_t **texts,
-				  UINTN linesarea, UINTN colsarea) {
-	UINTN i, j;
-	ui_font_t *selected = NULL;
-	UINTN lines = 0, cols = 0;
+static EFI_STATUS display_texts(const ui_textline_t **texts,
+				UINTN x, UINTN y,
+				UINTN linesarea, UINTN colsarea) {
+	EFI_STATUS ret;
+	ui_textline_t *lines;
+	UINTN line_nb = 0;
+	UINTN i, j, pos;
 
 	for (i = 0; texts[i]; i++)
-		for (j = 0; texts[i][j].str; j++, lines++)
-			cols = max(cols, strlena((CHAR8 *)texts[i][j].str));
+		for (j = 0; texts[i][j].color; j++)
+			line_nb++;
 
-	for (i = 0; i < ui_fonts_nb; i++)
-		if ((colsarea >= cols * ui_fonts[i].cwidth)
-		    && (linesarea >= lines * ui_fonts[i].cheight)
-		    && (selected == NULL || selected->cheight < ui_fonts[i].cheight))
-			selected = &ui_fonts[i];
+	lines = AllocateZeroPool((line_nb + 1) * sizeof(ui_textline_t));
+	if (!lines) {
+		error(L"Unable to allocate textline array");
+		return EFI_OUT_OF_RESOURCES;
+	}
 
-	if (!selected)
-		error(L"Text too big for display even with the smallest font available");
+	for (i = 0, pos = 0; texts[i]; i++, pos += j)
+		for (j = 0; texts[i][j].color; j++)
+			memcpy(&lines[pos + j], &texts[i][j], sizeof(*lines));
 
-	return selected;
-}
+	ret = ui_textarea_display_text(lines, ui_font_get_default(),
+				       x, &y, colsarea, linesarea);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Unable to display text.");
 
-static EFI_STATUS display_texts(const ui_textline_t **texts,
-				UINTN x, UINTN y, ui_font_t *font) {
-	EFI_STATUS ret;
-
-	do {
-		ret = ui_textarea_display_text(*texts, font, x, &y);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Unable to display text.");
-			return ret;
-		}
-	} while (*++texts);
-
-	return EFI_SUCCESS;
+	FreePool(lines);
+	return ret;
 }
 
 static ui_textline_t *build_error_code_text(UINT32 error_code)
@@ -235,7 +229,6 @@ static EFI_STATUS display_text(UINT32 error_code,
 			       const ui_textline_t *text2) {
 	UINTN width, height, x, y, linesarea, colsarea;
 	ui_image_t *vendor;
-	ui_font_t *font;
 	EFI_STATUS ret;
 	const ui_textline_t *texts[] =
 		{ build_error_code_text(error_code),
@@ -257,9 +250,6 @@ static EFI_STATUS display_text(UINT32 error_code,
 		height = vendor->height * width / vendor->width;
 		y = (sheight / 2) - (height / 2);
 		ui_image_draw_scale(vendor, wmargin, y , width, height);
-		colsarea = width;
-		linesarea = sheight - (2 * hmargin);
-
 		x = swidth / 2 + wmargin;
 	} else {		/* Portrait orientation. */
 		/* Display splash on the top third of the screen,
@@ -268,18 +258,14 @@ static EFI_STATUS display_text(UINT32 error_code,
 		width = vendor->width * height / vendor->height;
 		x = (swidth / 2) - (width / 2);
 		y = hmargin;
-		colsarea = swidth - (wmargin * 2);
-		linesarea = sheight - height - (hmargin * 2);
 		ui_image_draw_scale(vendor, x, y , width, height);
-
 		y += height + hmargin;
 	}
 
-	font = autoselect_font(texts, linesarea, colsarea);
-	if (!font)
-		return EFI_UNSUPPORTED;
+	colsarea = swidth - x - wmargin;
+	linesarea = sheight - y - hmargin;
 
-	ret = display_texts(texts, x, y, font);
+	ret = display_texts(texts, x, y, linesarea, colsarea);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -365,10 +351,9 @@ static ui_boot_action_t BOOT_ACTIONS[] = {
 enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID) {
 	ui_image_t *img;
 	ui_boot_menu_t *menu = NULL;
-	UINTN width, height, img_x, img_y, area_x, area_y, colsarea;
+	UINTN width, height, img_x, img_y, area_x, area_y, colsarea, linesarea;
 	EFI_STATUS ret = EFI_SUCCESS;
 	enum boot_target target;
-	ui_font_t *font;
 	const ui_textline_t *texts[] = { build_error_code_text(CRASH_EVENT_CODE),
 					 crash_event_message, NULL };
 
@@ -399,40 +384,37 @@ enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID) {
 		img_x = wmargin;
 		img_y = area_y = (sheight / 2) - (height / 2);
 		area_x = img_x + swidth / 2;
-		colsarea = width;
 	} else {		/* Portrait orientation. */
 		/* Display "failure" image on the top third of the
 		 * screen, boot menu below it followed by the
 		 * explanation text.  */
 		height = sheight / 3;
 		width = img->width * height / img->height;
-		img_x = area_x = (swidth / 2) - (width / 2);
+		img_x = (swidth / 2) - (width / 2);
 		img_y = hmargin;
-		area_y = img_y + sheight / 2;
-		colsarea = swidth - (wmargin * 2);
+		area_x = wmargin;
+		area_y = img_y + height + hmargin;
 	}
+	linesarea = sheight - area_y - hmargin;
+	colsarea = swidth - area_x - wmargin;
 
 	ret = ui_image_draw_scale(img, img_x, img_y, width, height);
 	if (EFI_ERROR(ret))
 		goto error;
 
-	menu = ui_boot_menu_create(BOOT_ACTIONS, ui_font_get("18x32"));
+	menu = ui_boot_menu_create(BOOT_ACTIONS);
 	if (!menu) {
 		error(L"Failed to build boot menu");
 		goto error;
 	}
 
-	ret = ui_boot_menu_draw(menu, area_x, &area_y);
+	ret = ui_boot_menu_draw(menu, area_x, &area_y, colsarea);
 	if (EFI_ERROR(ret))
 		goto error;
 
 	area_y += hmargin;
 
-	font = autoselect_font(texts, sheight - area_y, colsarea);
-	if (!font)
-		goto error;
-
-	ret = display_texts(texts, area_x, area_y, font);
+	ret = display_texts(texts, area_x, area_y, linesarea, colsarea);
 	if (EFI_ERROR(ret))
 		goto error;
 
