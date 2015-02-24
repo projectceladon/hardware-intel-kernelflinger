@@ -713,8 +713,10 @@ static EFI_STATUS load_boot_image(
         if (keystore)
                 ret = validate_bootimage(boot_target, *bootimage, keystore, keystore_size);
 
-        if (EFI_ERROR(ret))
+        if (EFI_ERROR(ret)) {
                 FreePool(*bootimage);
+                *bootimage = NULL;
+        }
 
         return ret;
 }
@@ -1160,7 +1162,6 @@ fallback:
                  * can sideload an OTA to fix their device */
                 debug(L"fall back to recovery console");
                 boot_target = RECOVERY;
-                FreePool(bootimage);
                 goto fallback;
         }
 
