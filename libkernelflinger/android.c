@@ -357,7 +357,41 @@ error:
         return StrDuplicate(L"tty0");
 }
 
-static CHAR16 *get_reason_from_rsci(void)
+
+static CHAR16 *get_wake_reason(void)
+{
+        enum wake_sources wake_source;
+        CHAR16 *reason;
+
+        wake_source = rsci_get_wake_source();
+        switch(wake_source) {
+        case WAKE_BATTERY_INSERTED:
+                reason = StrDuplicate(L"battery_inserted");
+                break;
+        case WAKE_USB_CHARGER_INSERTED:
+                reason = StrDuplicate(L"usb_charger_inserted");
+                break;
+        case WAKE_ACDC_CHARGER_INSERTED:
+                reason = StrDuplicate(L"acdc_charger_inserted");
+                break;
+        case WAKE_POWER_BUTTON_PRESSED:
+                reason = StrDuplicate(L"power_button_pressed");
+                break;
+        case WAKE_RTC_TIMER:
+                reason = StrDuplicate(L"rtc_timer");
+                break;
+        case WAKE_BATTERY_REACHED_IA_THRESHOLD:
+                reason = StrDuplicate(L"battery_reached_ia_threshold");
+                break;
+        default:
+                reason = NULL;
+        }
+
+        return reason;
+}
+
+
+static CHAR16 *get_reset_reason(void)
 {
         enum reset_sources reset_source;
         CHAR16 *reason;
@@ -389,11 +423,16 @@ static CHAR16 *get_reason_from_rsci(void)
         return reason;
 }
 
-static CHAR16 *get_reboot_reason(void)
+
+static CHAR16 *get_boot_reason(void)
 {
         CHAR16 *bootreason, *pos;
 
-        bootreason = get_reason_from_rsci();
+        bootreason = get_wake_reason();
+        if (bootreason)
+                goto done;
+
+        bootreason = get_reset_reason();
         if (bootreason)
                 goto done;
 
@@ -504,7 +543,7 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 
-        bootreason = get_reboot_reason();
+        bootreason = get_boot_reason();
         if (!bootreason) {
                 ret = EFI_OUT_OF_RESOURCES;
                 goto out;
