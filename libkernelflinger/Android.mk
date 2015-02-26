@@ -75,7 +75,10 @@ LOCAL_SRC_FILES := \
 	ui_image.c \
 	ui_boot_menu.c \
 	ui_confirm.c \
-	log.c
+	log.c \
+	blobstore.c \
+	arraylist.c \
+	dict.c
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(res_intermediates)
