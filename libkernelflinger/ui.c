@@ -310,6 +310,24 @@ void ui_print_clear(void)
 	ui_textarea_clear(default_textarea);
 }
 
+ui_events_t ui_keycode_to_event(UINT16 keycode)
+{
+	switch (keycode) {
+	case SCAN_UP:
+	case SCAN_PAGE_UP:
+	case SCAN_HOME:
+	case SCAN_RIGHT:
+		return EV_UP;
+	case SCAN_DOWN:
+	case SCAN_PAGE_DOWN:
+	case SCAN_END:
+	case SCAN_LEFT:
+		return EV_DOWN;
+	default:
+		return EV_NONE;
+	}
+}
+
 ui_events_t ui_read_input(void)
 {
 	EFI_INPUT_KEY key;
@@ -318,24 +336,10 @@ ui_events_t ui_read_input(void)
 	ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
 				ST->ConIn, &key);
 
-	if (ret == EFI_SUCCESS) {
-		switch (key.ScanCode) {
-		case SCAN_UP:
-		case SCAN_PAGE_UP:
-		case SCAN_HOME:
-		case SCAN_RIGHT:
-			return EV_UP;
-		case SCAN_DOWN:
-		case SCAN_PAGE_DOWN:
-		case SCAN_END:
-		case SCAN_LEFT:
-			return EV_DOWN;
-		default:
-			break;
-		}
-	}
+	if (ret != EFI_SUCCESS)
+		return EV_NONE;
 
-	return EV_NONE;
+	return ui_keycode_to_event(key.ScanCode);
 }
 
 static BOOLEAN test_key(BOOLEAN check_code, UINT16 ScanCode)

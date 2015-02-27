@@ -66,6 +66,9 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 /* How long magic key should be held to force Fastboot mode */
 #define FASTBOOT_HOLD_DELAY         (2 * 1000 * 1000)
 
+/* Magic key to enter fastboot mode or revovery console */
+#define MAGIC_KEY          EV_DOWN
+
 /* If we find this in the root of the EFI system partition, unconditionally
  * enter Fastboot mode */
 #define FASTBOOT_SENTINEL         L"\\force_fastboot"
@@ -223,31 +226,27 @@ static enum boot_target check_magic_key(VOID)
                 return NORMAL_BOOT;
 
         debug(L"ReadKeyStroke: (%d tries) %d %d", i, key.ScanCode, key.UnicodeChar);
-        switch (key.ScanCode) {
-                case SCAN_DOWN:
-                case SCAN_PAGE_DOWN:
-                case SCAN_END:
-                case SCAN_LEFT:
+        if (ui_keycode_to_event(key.ScanCode) != MAGIC_KEY)
+                return NORMAL_BOOT;
+
 #ifdef USERFASTBOOT
-                        Print(L"Continue holding key for %d second(s) to enter Fastboot mode.\n",
-                              FASTBOOT_HOLD_DELAY / 1000000);
-                        Print(L"Release key now to load Recovery Console... \n");
-                        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, key.ScanCode)) {
-                                bt = FASTBOOT;
-                                Print(L"FASTBOOT\n");
-                        } else {
-                                bt = RECOVERY;
-                                Print(L"RECOVERY\n");
-                        }
-                        return bt;
-#else
-                        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, key.ScanCode))
-                                return FASTBOOT;
-#endif
-                default:
-                        /* fall through */
-                        return NORMAL_BOOT;
+        Print(L"Continue holding key for %d second(s) to enter Fastboot mode.\n",
+              FASTBOOT_HOLD_DELAY / 1000000);
+        Print(L"Release key now to load Recovery Console... \n");
+        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, MAGIC_KEY)) {
+                bt = FASTBOOT;
+                Print(L"FASTBOOT\n");
+        } else {
+                bt = RECOVERY;
+                Print(L"RECOVERY\n");
         }
+        return bt;
+#else
+        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, MAGIC_KEY))
+                return FASTBOOT;
+#endif
+
+        return NORMAL_BOOT;
 }
 
 
