@@ -303,7 +303,7 @@ EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 
 	/* special case for writing inside esp partition */
 	if (!StrnCmp(esp, label, StrLen(esp)))
-		return flash_into_esp(data, size, &label[ARRAY_SIZE(esp)]);
+		return flash_into_esp(data, size, &label[ARRAY_SIZE(esp) - 1]);
 
 	/* special cases */
 	for (i = 0; i < ARRAY_SIZE(LABEL_EXCEPTIONS); i++)
