@@ -56,12 +56,7 @@ EFI_STATUS uefi_write_file_with_dir(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename,
 EFI_STATUS uefi_create_dir(EFI_FILE *parent, EFI_FILE **dir, CHAR16 *dirname);
 EFI_STATUS uefi_delete_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename);
 EFI_STATUS find_device_partition(const EFI_GUID *guid, EFI_HANDLE **handles, UINTN *no_handles);
-void uefi_reset_system(EFI_RESET_TYPE reset_type);
 EFI_STATUS uefi_create_directory(EFI_FILE *parent, CHAR16 *dirname);
 EFI_STATUS uefi_create_directory_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *dirname);
-EFI_STATUS uefi_usleep(UINTN useconds);
-EFI_STATUS uefi_msleep(UINTN mseconds);
-
-int sprintf(char *str, const char *format, ...);
 
 #endif /* __UEFI_UTILS_H__ */
