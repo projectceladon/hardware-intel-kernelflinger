@@ -78,7 +78,7 @@ typedef enum {
 } strTblIndex;
 
 /* String descriptor Table */
-#define LANG_EN_US		0x0409
+#define LANG_EN_US		((UINT16)0x0409)
 #define STR_MANUFACTURER	L"Intel Corporation"
 #define STR_PRODUCT		L"Intel Product"
 #define STR_SERIAL		L"INT123456"
