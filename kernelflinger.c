@@ -49,7 +49,7 @@
 #include "targets.h"
 #include "unittest.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.0C"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.0D"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -64,7 +64,10 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 #define DETECT_KEY_STALL_TIME_MS    1
 
 /* How long magic key should be held to force Fastboot mode */
-#define FASTBOOT_HOLD_DELAY         (4 * 1000 * 1000)
+#define FASTBOOT_HOLD_DELAY         (2 * 1000 * 1000)
+
+/* Magic key to enter fastboot mode or revovery console */
+#define MAGIC_KEY          EV_DOWN
 
 /* If we find this in the root of the EFI system partition, unconditionally
  * enter Fastboot mode */
@@ -222,14 +225,15 @@ static enum boot_target check_magic_key(VOID)
         if (EFI_ERROR(ret))
                 return NORMAL_BOOT;
 
-#ifdef USERFASTBOOT
         debug(L"ReadKeyStroke: (%d tries) %d %d", i, key.ScanCode, key.UnicodeChar);
+        if (ui_keycode_to_event(key.ScanCode) != MAGIC_KEY)
+                return NORMAL_BOOT;
 
-        Print(L"Continue holding key for %d seconds to force Fastboot mode.\n",
-                        FASTBOOT_HOLD_DELAY / 1000000);
-        Print(L"Release key now to load Recovery Console...");
-
-        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY)) {
+#ifdef USERFASTBOOT
+        Print(L"Continue holding key for %d second(s) to enter Fastboot mode.\n",
+              FASTBOOT_HOLD_DELAY / 1000000);
+        Print(L"Release key now to load Recovery Console... \n");
+        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, MAGIC_KEY)) {
                 bt = FASTBOOT;
                 Print(L"FASTBOOT\n");
         } else {
@@ -238,8 +242,11 @@ static enum boot_target check_magic_key(VOID)
         }
         return bt;
 #else
-        return FASTBOOT;
+        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, MAGIC_KEY))
+                return FASTBOOT;
 #endif
+
+        return NORMAL_BOOT;
 }
 
 

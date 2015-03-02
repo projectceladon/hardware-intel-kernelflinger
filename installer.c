@@ -619,3 +619,10 @@ EFI_STATUS fastboot_ui_init(void)
 {
 	return EFI_SUCCESS;
 }
+
+/* Installer does not support UI.  It is intended to be used in
+   factory or for engineering purpose only.  */
+BOOLEAN fastboot_ui_confirm_for_state(__attribute__((__unused__)) enum device_state target)
+{
+	return TRUE;
+}

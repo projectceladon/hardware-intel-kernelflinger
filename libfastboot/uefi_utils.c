@@ -280,17 +280,6 @@ out:
 	return ret;
 }
 
-void uefi_reset_system(EFI_RESET_TYPE reset_type)
-{
-	uefi_call_wrapper(RT->ResetSystem, 4, reset_type,
-			  EFI_SUCCESS, 0, NULL);
-}
-
-void uefi_shutdown(void)
-{
-	uefi_reset_system(EfiResetShutdown);
-}
-
 EFI_STATUS uefi_delete_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename)
 {
 	EFI_STATUS ret;
@@ -371,14 +360,4 @@ EFI_STATUS uefi_create_directory_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *dirname
 	}
 
 	return uefi_create_directory(root, dirname);
-}
-
-EFI_STATUS uefi_usleep(UINTN useconds)
-{
-	return uefi_call_wrapper(BS->Stall, 1, useconds);
-}
-
-EFI_STATUS uefi_msleep(UINTN mseconds)
-{
-	return uefi_usleep(mseconds * 1000);
 }
