@@ -33,6 +33,6 @@
 #ifndef UNITTEST_H
 #define UNITTEST_H
 
-VOID unittest_main(VOID);
+VOID unittest_main(CHAR16 *testname);
 
 #endif
