@@ -312,6 +312,53 @@ static void cmd_oem_reprovision(__attribute__((__unused__)) INTN argc,
 	fastboot_okay("");
 	reboot(L"dnx");
 }
+
+static void cmd_oem_rm(INTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	EFI_FILE_IO_INTERFACE *io;
+	const CHAR8 prefix[] = "/ESP/";
+	CHAR8 *filename;
+	CHAR16 *filename16;
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	if (strncmp(prefix, argv[1], sizeof(prefix) - 1)) {
+		fastboot_fail("File deletion is restricted to the ESP");
+		return;
+	}
+
+	ret = get_esp_fs(&io);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to get partition ESP");
+		return;
+	}
+
+	filename = &argv[1][ARRAY_SIZE(prefix) - 1];
+	CHAR8 *tmp;
+	for (tmp = filename; *tmp; tmp++)
+		if (*tmp == '/')
+			*tmp = '\\';
+
+	filename16 = stra_to_str(filename);
+	if (!filename16) {
+		efi_perror(ret, L"failed to allocate CHAR16 filename");
+		fastboot_fail("failed to allocate CHAR16 filename");
+		return;
+	}
+
+	ret = uefi_delete_file(io, filename16);
+	FreePool(filename16);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to delete file '%a', %r", filename, ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
 #endif
 
 static struct fastboot_cmd COMMANDS[] = {
@@ -321,14 +368,14 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ OFF_MODE_CHARGE,	LOCKED,		cmd_oem_off_mode_charge  },
 	/* The following commands are not part of the Google
 	 * requirements.  They are provided for engineering and
-	 * provisioning purpose only and those which modify the
-	 * device are restricted to the unlocked state.  */
+	 * provisioning purpose only.  */
 	{ CRASH_EVENT_MENU,	LOCKED,		cmd_oem_crash_event_menu  },
 	{ "setvar",		UNLOCKED,	cmd_oem_setvar  },
 	{ "garbage-disk",	UNLOCKED,	cmd_oem_garbage_disk  },
 	{ "reboot",		LOCKED,		cmd_oem_reboot  },
 #ifndef USER
 	{ "reprovision",	LOCKED,		cmd_oem_reprovision  },
+	{ "rm",			LOCKED,		cmd_oem_rm },
 #endif
 	{ "get-hashes",		LOCKED,		cmd_oem_gethashes  }
 };

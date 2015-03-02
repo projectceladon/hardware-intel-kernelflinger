@@ -49,9 +49,9 @@ extern EFI_GUID GraphicsOutputProtocol;
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_BLACK	= { 0, 0, 0, 0 };
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_WHITE	= { 255, 255, 255, 0 };
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_LIGHTGRAY = { 127, 127, 127, 0 };
-EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_LIGHTRED  = { 127, 0, 0, 0 };
-EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_YELLOW	= { 255, 255, 0, 0 };
-EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_RED	= { 255, 0, 0, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_LIGHTRED  = { 0, 0, 127, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_YELLOW	= { 0, 255, 255, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_RED	= { 0, 0, 255, 0 };
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_GREEN	= { 0, 255, 0, 0 };
 
 
@@ -310,6 +310,24 @@ void ui_print_clear(void)
 	ui_textarea_clear(default_textarea);
 }
 
+ui_events_t ui_keycode_to_event(UINT16 keycode)
+{
+	switch (keycode) {
+	case SCAN_UP:
+	case SCAN_PAGE_UP:
+	case SCAN_HOME:
+	case SCAN_RIGHT:
+		return EV_UP;
+	case SCAN_DOWN:
+	case SCAN_PAGE_DOWN:
+	case SCAN_END:
+	case SCAN_LEFT:
+		return EV_DOWN;
+	default:
+		return EV_NONE;
+	}
+}
+
 ui_events_t ui_read_input(void)
 {
 	EFI_INPUT_KEY key;
@@ -318,30 +336,17 @@ ui_events_t ui_read_input(void)
 	ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
 				ST->ConIn, &key);
 
-	if (ret == EFI_SUCCESS) {
-		switch (key.ScanCode) {
-		case SCAN_UP:
-		case SCAN_PAGE_UP:
-		case SCAN_HOME:
-		case SCAN_RIGHT:
-			return EV_UP;
-		case SCAN_DOWN:
-		case SCAN_PAGE_DOWN:
-		case SCAN_END:
-		case SCAN_LEFT:
-			return EV_DOWN;
-		default:
-			break;
-		}
-	}
+	if (ret != EFI_SUCCESS)
+		return EV_NONE;
 
-	return EV_NONE;
+	return ui_keycode_to_event(key.ScanCode);
 }
 
-static EFI_STATUS test_key(VOID)
+static BOOLEAN test_key(BOOLEAN check_code, UINT16 ScanCode)
 {
 	EFI_INPUT_KEY key;
 	EFI_STATUS ret = EFI_SUCCESS;
+	BOOLEAN result = TRUE;
 
 	uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
 
@@ -349,8 +354,11 @@ static EFI_STATUS test_key(VOID)
 					ST->ConIn, &key);
 	if (ret != EFI_SUCCESS) {
 		debug(L"err=%r", ret);
-		return ret;
+		return FALSE;
 	}
+
+	if (check_code)
+		result = (key.ScanCode == ScanCode);
 
 	/* flush any stacked up key events in the queue before
 	 * we sleep again */
@@ -359,26 +367,26 @@ static EFI_STATUS test_key(VOID)
 		/* spin */
 	}
 
-	return ret;
+	return result;
 }
 
-BOOLEAN ui_enforce_key_held(UINT32 microseconds)
+BOOLEAN ui_enforce_key_held(UINT32 microseconds, UINT16 ScanCode)
 {
-	EFI_STATUS ret = EFI_SUCCESS;
+	BOOLEAN ret = TRUE;
 	UINT32 i;
 
 	for (i = 0; i < (microseconds / HOLD_KEY_STALL_TIME); i++) {
-		ret = test_key();
-		if (ret != EFI_SUCCESS) {
+		ret = test_key(TRUE, ScanCode);
+		if (!ret) {
 			break;
 		}
 	}
-	return ret == EFI_SUCCESS;
+	return ret;
 }
 
 void ui_wait_for_key_release(void)
 {
-	while (test_key() == EFI_SUCCESS) { }
+	while (test_key(FALSE, 0)) { }
 }
 
 ui_events_t ui_wait_for_input(UINTN timeout_secs)

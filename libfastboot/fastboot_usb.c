@@ -226,6 +226,11 @@ static EFIAPI EFI_STATUS config_handler(UINT8 cfgVal)
 
 EFIAPI EFI_STATUS data_handler(EFI_USB_DEVICE_XFER_INFO *XferInfo)
 {
+	if (!XferInfo->Buffer || XferInfo->Length == 0) {
+		error(L"Received an unexpected NULL or zero length buffer");
+		return EFI_INVALID_PARAMETER;
+	}
+
 	/* if we are receiving a command or data, call the processing routine */
 	if (XferInfo->EndpointDir == USB_ENDPOINT_DIR_OUT) {
 		if (rx_callback)

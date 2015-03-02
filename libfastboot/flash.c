@@ -108,6 +108,7 @@ EFI_STATUS flash_fill(UINT32 pattern, UINTN size)
 	return ret;
 }
 
+#ifndef USER
 static EFI_STATUS flash_into_esp(VOID *data, UINTN size, CHAR16 *label)
 {
 	EFI_STATUS ret;
@@ -120,6 +121,7 @@ static EFI_STATUS flash_into_esp(VOID *data, UINTN size, CHAR16 *label)
 	}
 	return uefi_write_file_with_dir(io, label, data, size);
 }
+#endif
 
 static EFI_STATUS _flash_gpt(VOID *data, UINTN size, EMMC_PARTITION_CTRL ctrl)
 {
@@ -164,6 +166,7 @@ static EFI_STATUS flash_keystore(VOID *data, UINTN size)
 	return ret;
 }
 
+#ifndef USER
 static EFI_STATUS flash_efirun(VOID *data, UINTN size)
 {
 	return fastboot_usb_stop(NULL, data, size, UNKNOWN_TARGET);
@@ -201,6 +204,7 @@ static EFI_STATUS flash_mbr(VOID *data, UINTN size)
 
 	return ret;
 }
+#endif
 
 static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 {
@@ -287,24 +291,27 @@ static struct label_exception {
 	{ L"gpt", flash_gpt },
 	{ L"gpt-gpp1", flash_gpt_gpp1 },
 	{ L"keystore", flash_keystore },
+#ifndef USER
 	{ L"efirun", flash_efirun },
 	{ L"sfu", flash_sfu },
 	{ L"ifwi", flash_ifwi },
 	{ L"mbr", flash_mbr },
+#endif
 	{ L"oemvars", flash_oemvars },
 	{ L"zimage", flash_zimage }
 };
 
 EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 {
-	CHAR16 esp[] = L"/ESP/";
 	UINTN i;
 	EFI_STATUS ret;
 
+#ifndef USER
 	/* special case for writing inside esp partition */
+	CHAR16 esp[] = L"/ESP/";
 	if (!StrnCmp(esp, label, StrLen(esp)))
-		return flash_into_esp(data, size, &label[ARRAY_SIZE(esp)]);
-
+		return flash_into_esp(data, size, &label[ARRAY_SIZE(esp) - 1]);
+#endif
 	/* special cases */
 	for (i = 0; i < ARRAY_SIZE(LABEL_EXCEPTIONS); i++)
 		if (!StrCmp(LABEL_EXCEPTIONS[i].name, label))
