@@ -489,7 +489,8 @@ static enum boot_target check_command_line(VOID **address)
 #endif
 #ifndef USER
                 if (!StrCmp(argv[pos], L"-U")) {
-                        unittest_main();
+                        pos++;
+                        unittest_main(pos >= argc ? NULL : argv[pos]);
                         FreePool(argv);
                         return EXIT_SHELL;
                 }
