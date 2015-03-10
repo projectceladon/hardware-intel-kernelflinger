@@ -1,10 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,24 +28,52 @@
  *
  */
 
-#ifndef _FLASH_H_
-#define _FLASH_H_
-
 #include <efi.h>
+#include <efilib.h>
+#include <log.h>
+#include "storage.h"
+#include "mmc.h"
+#include "ufs.h"
 
-EFI_STATUS flash_skip(UINT64 size);
-EFI_STATUS flash_write(VOID *data, UINTN size);
-EFI_STATUS flash_fill(UINT32 pattern, UINTN size);
+static struct storage *storage;
 
-/* return value for flash() function */
+static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path)
+{
+	debug(L"Identifying storage");
+	if (!device_path)
+		goto out;
 
-#define REFRESH_PARTITION_VAR 0x1
+	if (is_emmc(device_path)) {
+		debug(L"eMMC storage identified");
+		storage = &storage_emmc;
+		return EFI_SUCCESS;
+	}
 
-EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label);
-EFI_STATUS flash_file(EFI_HANDLE image, CHAR16 *filename, CHAR16 *label);
-EFI_STATUS erase_by_label(CHAR16 *label);
-EFI_STATUS garbage_disk(void);
-EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label);
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
+	if (is_ufs(device_path)) {
+		debug(L"UFS storage identified");
+		storage = &storage_ufs;
+		return EFI_SUCCESS;
+	}
 
-#endif	/* _FLASH_H_ */
+out:
+	error(L"Unsupported storage");
+	return EFI_UNSUPPORTED;
+}
+
+EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
+{
+	if (!storage && EFI_ERROR(identify_storage(p)))
+		return EFI_UNSUPPORTED;
+
+	return storage->check_logical_unit(p, log_unit);
+}
+
+EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+{
+	if (!storage &&
+	    EFI_ERROR(identify_storage(DevicePathFromHandle(handle))))
+		return EFI_UNSUPPORTED;
+
+	debug(L"Erase lba %ld -> %ld", start, end);
+	return storage->erase_blocks(handle, bio, start, end);
+}

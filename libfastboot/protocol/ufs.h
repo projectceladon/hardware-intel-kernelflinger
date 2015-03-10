@@ -1,10 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,26 +26,40 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * This file defines bootlogic data structures, try to keep it without
+ * any external definitions in order to ease export of it.
  */
 
-#ifndef _FLASH_H_
-#define _FLASH_H_
+#ifndef _UFS_PROTOCOL_H_
+#define _UFS_PROTOCOL_H_
 
-#include <efi.h>
+#include <endian.h>
 
-EFI_STATUS flash_skip(UINT64 size);
-EFI_STATUS flash_write(VOID *data, UINTN size);
-EFI_STATUS flash_fill(UINT32 pattern, UINTN size);
+#define CDB_LENGTH			10
+#define BLOCK_TIMEOUT			100	/* 100ns units => 10ms by block */
+#define UFS_UNMAP			0x42
 
-/* return value for flash() function */
+struct command_descriptor_block {
+	__be8 op_code;		/* Operation Code (must be 0x42 for unmap) */
+	__be8 reserved;
+	__be32 reserved2;
+	__be8 group:5;		/* group number */
+	__be8 reserved3:3;
+	__be16 param_length;	/* parameter list length */
+	__be8 control;		/* must be 0 */
+} __attribute__((packed));
 
-#define REFRESH_PARTITION_VAR 0x1
+struct unmap_block_descriptor {
+	__be64 lba;		/* first LBA to be unmapped */
+	__be32 count;		/* number of LBAs to be unmapped */
+	__be32 reserved;
+} __attribute__((packed));
 
-EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label);
-EFI_STATUS flash_file(EFI_HANDLE image, CHAR16 *filename, CHAR16 *label);
-EFI_STATUS erase_by_label(CHAR16 *label);
-EFI_STATUS garbage_disk(void);
-EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label);
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
+struct unmap_parameter {
+	__be16 data_length; /* length in bytes of the following data */
+	__be16 block_desc_length; /* length in bytes of the unmap block descriptor */
+	__be32 reserved;
+	struct unmap_block_descriptor block_desc;
+} __attribute__((packed));
 
-#endif	/* _FLASH_H_ */
+#endif	/* _UFS_PROTOCOL_H_ */

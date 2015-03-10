@@ -58,25 +58,21 @@ struct gpt_partition_interface {
 	struct gpt_partition part;
 	EFI_BLOCK_IO *bio;
 	EFI_DISK_IO *dio;
+	EFI_HANDLE handle;
 };
 
 typedef enum {
-	EMMC_USER_PART = 0x00,
-	EMMC_BOOT_PART1,
-	EMMC_BOOT_PART2,
-	EMMC_GPP_PART1 = 0x04,
-	EMMC_GPP_PART2,
-	EMMC_GPP_PART3,
-	EMMC_GPP_PART4
-} EMMC_PARTITION_CTRL;
+	LOGICAL_UNIT_USER,
+	LOGICAL_UNIT_FACTORY,
+} logical_unit_t;
 
-EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl);
-EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, EMMC_PARTITION_CTRL ctrl);
-EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, EMMC_PARTITION_CTRL ctrl);
+EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, logical_unit_t log_unit);
+EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, logical_unit_t log_unit);
+EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, logical_unit_t log_unit);
 void gpt_free_cache(void);
 EFI_STATUS gpt_refresh(void);
-EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl);
-EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, EMMC_PARTITION_CTRL ctrl);
-EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, EMMC_PARTITION_CTRL ctrl);
+EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, logical_unit_t log_unit);
+EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, logical_unit_t log_unit);
+EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, logical_unit_t log_unit);
 
 #endif	/* _GPT_H_ */

@@ -44,8 +44,7 @@
 #include "gpt.h"
 #include "gpt_bin.h"
 #include "flash.h"
-#include "protocol/SdHostIo.h"
-#include "protocol/Mmc.h"
+#include "storage.h"
 #include "sparse.h"
 #include "oemvars.h"
 #include "vars.h"
@@ -122,7 +121,7 @@ static EFI_STATUS flash_into_esp(VOID *data, UINTN size, CHAR16 *label)
 	return uefi_write_file_with_dir(io, label, data, size);
 }
 
-static EFI_STATUS _flash_gpt(VOID *data, UINTN size, EMMC_PARTITION_CTRL ctrl)
+static EFI_STATUS _flash_gpt(VOID *data, UINTN size, logical_unit_t log_unit)
 {
 	struct gpt_bin_header *gb_hdr;
 	struct gpt_bin_part *gb_part;
@@ -138,7 +137,7 @@ static EFI_STATUS _flash_gpt(VOID *data, UINTN size, EMMC_PARTITION_CTRL ctrl)
 		return EFI_INVALID_PARAMETER;
 	}
 
-	ret = gpt_create(gb_hdr->start_lba, gb_hdr->npart, gb_part, ctrl);
+	ret = gpt_create(gb_hdr->start_lba, gb_hdr->npart, gb_part, log_unit);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -147,12 +146,12 @@ static EFI_STATUS _flash_gpt(VOID *data, UINTN size, EMMC_PARTITION_CTRL ctrl)
 
 static EFI_STATUS flash_gpt(VOID *data, UINTN size)
 {
-	return _flash_gpt(data, size, EMMC_USER_PART);
+	return _flash_gpt(data, size, LOGICAL_UNIT_USER);
 }
 
 static EFI_STATUS flash_gpt_gpp1(VOID *data, UINTN size)
 {
-	return _flash_gpt(data, size, EMMC_GPP_PART1);
+	return _flash_gpt(data, size, LOGICAL_UNIT_FACTORY);
 }
 
 static EFI_STATUS flash_keystore(VOID *data, UINTN size)
@@ -181,7 +180,7 @@ static EFI_STATUS flash_mbr(VOID *data, UINTN size)
 	if (size > MBR_CODE_SIZE)
 		return EFI_INVALID_PARAMETER;
 
-	ret = gpt_get_root_disk(&gparti, EMMC_USER_PART);
+	ret = gpt_get_root_disk(&gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get disk information");
 		return ret;
@@ -213,7 +212,7 @@ static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 	UINTN new_size, partlen;
 	EFI_STATUS ret;
 
-	ret = gpt_get_partition_by_label(L"boot", &gparti, EMMC_USER_PART);
+	ret = gpt_get_partition_by_label(L"boot", &gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
 		error(L"Unable to get information on the boot partition");
 		return ret;
@@ -288,7 +287,7 @@ EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label)
 {
 	EFI_STATUS ret;
 
-	ret = gpt_get_partition_by_label(label, &gparti, EMMC_USER_PART);
+	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get partition %s", label);
 		return ret;
@@ -378,45 +377,6 @@ out:
 
 }
 
-#define SDIO_DFLT_TIMEOUT 3000
-#define CARD_ADDRESS (1 << 16)
-EFI_STATUS secure_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT64 start, UINT64 end, UINTN timeout)
-{
-	CARD_STATUS status;
-	EFI_STATUS ret;
-
-	debug(L"Secure erase lba %ld -> %ld", start, end);
-
-	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, ERASE_GROUP_START, start, NoData, NULL, 0, ResponseR1, SDIO_DFLT_TIMEOUT, (UINT32 *) &status);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed set start erase");
-		return ret;
-	}
-
-	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, ERASE_GROUP_END, end, NoData, NULL, 0, ResponseR1, SDIO_DFLT_TIMEOUT, (UINT32 *) &status);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed set end erase");
-		return ret;
-	}
-
-	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, ERASE, 0x80000000, NoData, NULL, 0, ResponseR1, timeout, (UINT32 *) &status);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Secure Erase Failed");
-		return ret;
-	}
-
-	do {
-		uefi_call_wrapper(BS->Stall, 1, 100000);
-		ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, SEND_STATUS, CARD_ADDRESS, NoData, NULL, 0, ResponseR1, SDIO_DFLT_TIMEOUT, (UINT32 *) &status);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"failed get status");
-			return ret;
-		}
-	} while (!status.READY_FOR_DATA);
-	debug(L"Secure erase success");
-	return ret;
-}
-
 static EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
 			    VOID *pattern, UINTN pattern_blocks)
 {
@@ -447,7 +407,7 @@ static EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
  * 4096 * 512 => 2MB
  */
 #define N_BLOCK (4096)
-static EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 {
 	EFI_STATUS ret;
 	VOID *emptyblock;
@@ -463,94 +423,15 @@ static EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 	return ret;
 }
 
-static EFI_STATUS get_mmc_info(EFI_SD_HOST_IO_PROTOCOL *sdio, UINTN *erase_grp_size, UINTN *timeout)
+EFI_STATUS erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 {
-	EXT_CSD *ext_csd;
-	void *rawbuffer;
-	UINTN offset;
-	UINT32 status;
 	EFI_STATUS ret;
 
-	/* ext_csd pointer must be aligned to a multiple of sdio->HostCapability.BoundarySize
-	 * allocate twice the needed size, and compute the offset to get an aligned buffer
-	 */
-	rawbuffer = AllocateZeroPool(2 * sdio->HostCapability.BoundarySize);
-	if (!rawbuffer)
-		return EFI_OUT_OF_RESOURCES;
+	ret = storage_erase_blocks(handle, bio, start, end);
+	if (ret == EFI_SUCCESS)
+		return ret;
 
-	offset = (UINTN) rawbuffer & (sdio->HostCapability.BoundarySize - 1);
-	offset = sdio->HostCapability.BoundarySize - offset;
-	ext_csd = (EXT_CSD *) ((CHAR8 *)rawbuffer + offset);
-
-	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, SEND_EXT_CSD, CARD_ADDRESS, InData, (void *)ext_csd, sizeof(EXT_CSD), ResponseR1, SDIO_DFLT_TIMEOUT, &status);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"failed get ext_csd");
-		goto out;
-	}
-
-	/* Erase group size is 512Kbyte × HC_ERASE_GRP_SIZE
-	 * so it's 1024 x HC_ERASE_GRP_SIZE in sector count
-	 * timeout is 300ms x ERASE_TIMEOUT_MULT per erase group*/
-	*erase_grp_size = 1024 * ext_csd->HC_ERASE_GRP_SIZE;
-	*timeout = 300 * ext_csd->ERASE_TIMEOUT_MULT;
-
-	debug(L"eMMC parameter: erase grp size %d sectors, timeout %d ms", *erase_grp_size, *timeout);
-
-out:
-	FreePool(rawbuffer);
-	return ret;
-}
-
-EFI_STATUS erase_blocks(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
-{
-	EFI_SD_HOST_IO_PROTOCOL *sdio;
-	EFI_STATUS ret;
-	UINTN erase_grp_size;
-	UINTN timeout;
-	UINT64 reminder;
-	/* UINT64 size; */
-
-	/* size in MB for debug */
-	/* size = (bio->Media->BlockSize * (end - start + 1)) / MiB; */
-	/* debug("Erasing partition start %ld end %ld Size %ld MB", start, end, size); */
-
-	/* check if we can use secure erase command */
-	ret = LibLocateProtocol(&gEfiSdHostIoProtocolGuid, (void **)&sdio);
-	if (EFI_ERROR(ret)) {
-		debug(L"failed to get sdio protocol, fallback to filling with zeros");
-		goto fallback;
-	}
-	ret = get_mmc_info(sdio, &erase_grp_size, &timeout);
-	if (EFI_ERROR(ret)) {
-		debug(L"failed to get mmc parameter, fallback to filling with zeros");
-		goto fallback;
-	}
-	if ((end - start + 1) < erase_grp_size)
-		goto fallback;
-
-	reminder = start % erase_grp_size;
-	if (reminder) {
-		ret = fill_zero(bio, start, start + erase_grp_size - reminder - 1);
-		if (EFI_ERROR(ret)) {
-			error(L"failed to fill with zeros");
-			return ret;
-		}
-		start += erase_grp_size - reminder;
-	}
-
-	reminder = (end + 1) % erase_grp_size;
-	if (reminder) {
-		ret = fill_zero(bio, end + 1 - reminder, end);
-		if (EFI_ERROR(ret)) {
-			error(L"failed to fill with zeros");
-			return ret;
-		}
-		end -= reminder;
-	}
-	timeout = timeout * ((end + 1 - start) / erase_grp_size);
-	return secure_erase(sdio, start, end, timeout);
-
-fallback:
+	debug(L"Fallbacking to filling with zeros");
 	return fill_zero(bio, start, end);
 }
 
@@ -561,12 +442,12 @@ EFI_STATUS erase_by_label(CHAR16 *label)
 	if (!StrCmp(L"keystore", label))
 		return set_user_keystore(NULL, 0);
 
-	ret = gpt_get_partition_by_label(label, &gparti, EMMC_USER_PART);
+	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get partition %s", label);
 		return ret;
 	}
-	ret = erase_blocks(gparti.bio, gparti.part.starting_lba, gparti.part.ending_lba);
+	ret = erase_blocks(gparti.handle, gparti.bio, gparti.part.starting_lba, gparti.part.ending_lba);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to erase partition %s", label);
 		return ret;
@@ -617,7 +498,7 @@ EFI_STATUS garbage_disk(void)
 	VOID *chunk;
 	UINTN size;
 
-	ret = gpt_get_root_disk(&gparti, EMMC_USER_PART);
+	ret = gpt_get_root_disk(&gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get disk information");
 		return ret;

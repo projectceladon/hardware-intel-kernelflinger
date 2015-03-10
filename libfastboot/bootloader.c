@@ -213,7 +213,7 @@ EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	ret = gpt_get_partition_guid(BOOTLOADER_TMP_PART, &guid, EMMC_USER_PART);
+	ret = gpt_get_partition_guid(BOOTLOADER_TMP_PART, &guid, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret))
 		goto exit;
 
@@ -246,7 +246,7 @@ EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 			goto exit;
 	}
 
-	ret = gpt_swap_partition(BOOTLOADER_TMP_PART, BOOTLOADER_PART, EMMC_USER_PART);
+	ret = gpt_swap_partition(BOOTLOADER_TMP_PART, BOOTLOADER_PART, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to swap partitions");
 

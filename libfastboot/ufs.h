@@ -1,10 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,26 +26,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * This file defines bootlogic data structures, try to keep it without
+ * any external definitions in order to ease export of it.
  */
 
-#ifndef _FLASH_H_
-#define _FLASH_H_
+#ifndef _UFS_H_
+#define _UFS_H_
 
 #include <efi.h>
+#include "gpt.h"
+#include "storage.h"
 
-EFI_STATUS flash_skip(UINT64 size);
-EFI_STATUS flash_write(VOID *data, UINTN size);
-EFI_STATUS flash_fill(UINT32 pattern, UINTN size);
+extern struct storage storage_ufs;
 
-/* return value for flash() function */
+EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
+EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
+BOOLEAN is_ufs(EFI_DEVICE_PATH *p);
 
-#define REFRESH_PARTITION_VAR 0x1
-
-EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label);
-EFI_STATUS flash_file(EFI_HANDLE image, CHAR16 *filename, CHAR16 *label);
-EFI_STATUS erase_by_label(CHAR16 *label);
-EFI_STATUS garbage_disk(void);
-EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label);
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-
-#endif	/* _FLASH_H_ */
+#endif	/* _UFS_H_ */

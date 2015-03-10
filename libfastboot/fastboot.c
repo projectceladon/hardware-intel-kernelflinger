@@ -293,7 +293,7 @@ static EFI_STATUS publish_partsize(void)
 	UINTN part_count;
 	UINTN i;
 
-	if (EFI_ERROR(gpt_list_partition(&gparti, &part_count, EMMC_USER_PART)))
+	if (EFI_ERROR(gpt_list_partition(&gparti, &part_count, LOGICAL_UNIT_USER)))
 		return EFI_SUCCESS;
 
 	for (i = 0; i < part_count; i++) {

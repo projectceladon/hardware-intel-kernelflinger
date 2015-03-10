@@ -29,7 +29,10 @@ SHARED_SRC_FILES := \
 	bootmgr.c \
 	hashes.c \
 	text_parser.c \
-	bootloader.c
+	bootloader.c \
+	storage.c \
+	ufs.c \
+	mmc.c
 
 include $(CLEAR_VARS)
 
