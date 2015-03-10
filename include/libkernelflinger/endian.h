@@ -1,10 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,26 +26,22 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * This file defines bootlogic data structures, try to keep it without
+ * any external definitions in order to ease export of it.
  */
 
-#ifndef _FLASH_H_
-#define _FLASH_H_
+#ifndef _ENDIAN_H_
+#define _ENDIAN_H_
 
 #include <efi.h>
 
-EFI_STATUS flash_skip(UINT64 size);
-EFI_STATUS flash_write(VOID *data, UINTN size);
-EFI_STATUS flash_fill(UINT32 pattern, UINTN size);
+#define htobe16 __builtin_bswap16
+#define htobe32 __builtin_bswap32
+#define htobe64 __builtin_bswap64
 
-/* return value for flash() function */
+typedef UINT8 __be8;
+typedef UINT16 __be16;
+typedef UINT32 __be32;
+typedef UINT64 __be64;
 
-#define REFRESH_PARTITION_VAR 0x1
-
-EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label);
-EFI_STATUS flash_file(EFI_HANDLE image, CHAR16 *filename, CHAR16 *label);
-EFI_STATUS erase_by_label(CHAR16 *label);
-EFI_STATUS garbage_disk(void);
-EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label);
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-
-#endif	/* _FLASH_H_ */
+#endif	/* _ENDIAN_H_ */

@@ -211,7 +211,7 @@ static EFI_STATUS set_device_path(CHAR16 *part_label, CHAR16 *bootloader_path)
 	EFI_HANDLE *handle_buf = NULL;
 	EFI_DEVICE_PATH *device_path;
 
-	ret = gpt_get_partition_guid(part_label, &guid, EMMC_USER_PART);
+	ret = gpt_get_partition_guid(part_label, &guid, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get '%s' partition GUID", part_label);
 		return ret;
