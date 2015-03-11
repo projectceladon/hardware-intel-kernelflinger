@@ -43,8 +43,6 @@
 #include "smbios.h"
 #include "info.h"
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
-
 static const ui_textline_t unlocked_headers[] = {
 	{ &COLOR_WHITE,		"        Unlock bootloader?",			TRUE },
 	{ &COLOR_WHITE,		"",						FALSE },
