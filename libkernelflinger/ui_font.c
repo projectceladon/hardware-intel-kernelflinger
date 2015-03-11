@@ -37,8 +37,6 @@
 
 #include "res/font_res.h"
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
-
 #define DEFAULT_FONT_NAME "18x32"
 
 ui_font_t *ui_font_get_default(void)
