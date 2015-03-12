@@ -121,8 +121,8 @@ static EFI_STATUS publish_board(void)
 /* "serialno": The device serial number. */
 static EFI_STATUS publish_serialno(void)
 {
-	return fastboot_publish("serialno",
-				SMBIOS_GET_STRING(1, SerialNumber));
+	char *serial = get_serial_number();
+	return fastboot_publish("serialno", serial ? serial : "N/A");
 }
 
 static EFI_STATUS (*PUBLISH_FUNCTION[])(void) = {

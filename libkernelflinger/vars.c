@@ -351,3 +351,33 @@ VOID clear_provisioning_mode(void)
 {
 	provisioning_mode = FALSE;
 }
+
+/* Per Android CDD, the value must be 7-bit ASCII and match the regex
+ * ^[a-zA-Z0-9](0,20)$  */
+char *get_serial_number(void)
+{
+	static char serialno[21];
+	EFI_STATUS ret;
+	CHAR8 *serial_from_smbios;
+	char *pos;
+	EFI_GUID guid;
+
+	if (serialno[0] != '\0')
+		return serialno;
+
+	ret = LibGetSmbiosSystemGuidAndSerialNumber(&guid,
+						    &serial_from_smbios);
+	if (EFI_ERROR(ret))
+		return NULL;
+
+	memcpy(serialno, serial_from_smbios, min(strlena(serial_from_smbios),
+						 sizeof(serialno) - 1));
+	for (pos = serialno; *pos; pos++)
+		/* Replace foreign characters with zeroes */
+		if (!((*pos >= '0' && *pos <= '9') ||
+		      (*pos >= 'a' && *pos <= 'z') ||
+		      (*pos >= 'A' && *pos <= 'Z')))
+			*pos = '0';
+
+	return serialno;
+}
