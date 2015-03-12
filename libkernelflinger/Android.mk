@@ -55,6 +55,10 @@ ifeq ($(KERNELFLINGER_ALLOW_UNSUPPORTED_ACPI_TABLE),true)
     LOCAL_CFLAGS += -DALLOW_UNSUPPORTED_ACPI_TABLE
 endif
 
+ifeq ($(KERNELFLINGER_USE_POWER_BUTTON),true)
+    LOCAL_CFLAGS += -DUSE_POWER_BUTTON
+endif
+
 LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \
@@ -70,6 +74,7 @@ LOCAL_SRC_FILES := \
 	ui_textarea.c \
 	ui_image.c \
 	ui_boot_menu.c \
+	ui_confirm.c \
 	log.c
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \

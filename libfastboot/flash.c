@@ -108,7 +108,6 @@ EFI_STATUS flash_fill(UINT32 pattern, UINTN size)
 	return ret;
 }
 
-#ifndef USER
 static EFI_STATUS flash_into_esp(VOID *data, UINTN size, CHAR16 *label)
 {
 	EFI_STATUS ret;
@@ -121,7 +120,6 @@ static EFI_STATUS flash_into_esp(VOID *data, UINTN size, CHAR16 *label)
 	}
 	return uefi_write_file_with_dir(io, label, data, size);
 }
-#endif
 
 static EFI_STATUS _flash_gpt(VOID *data, UINTN size, EMMC_PARTITION_CTRL ctrl)
 {
@@ -172,16 +170,6 @@ static EFI_STATUS flash_efirun(VOID *data, UINTN size)
 	return fastboot_usb_stop(NULL, data, size, UNKNOWN_TARGET);
 }
 
-static EFI_STATUS flash_sfu(VOID *data, UINTN size)
-{
-	return flash_into_esp(data, size, L"BIOSUPDATE.fv");
-}
-
-static EFI_STATUS flash_ifwi(VOID *data, UINTN size)
-{
-	return flash_into_esp(data, size, L"ifwi.bin");
-}
-
 #define MBR_CODE_SIZE	440
 static EFI_STATUS flash_mbr(VOID *data, UINTN size)
 {
@@ -205,6 +193,16 @@ static EFI_STATUS flash_mbr(VOID *data, UINTN size)
 	return ret;
 }
 #endif
+
+static EFI_STATUS flash_sfu(VOID *data, UINTN size)
+{
+	return flash_into_esp(data, size, L"BIOSUPDATE.fv");
+}
+
+static EFI_STATUS flash_ifwi(VOID *data, UINTN size)
+{
+	return flash_into_esp(data, size, L"ifwi.bin");
+}
 
 static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 {
@@ -293,10 +291,10 @@ static struct label_exception {
 	{ L"keystore", flash_keystore },
 #ifndef USER
 	{ L"efirun", flash_efirun },
-	{ L"sfu", flash_sfu },
-	{ L"ifwi", flash_ifwi },
 	{ L"mbr", flash_mbr },
 #endif
+	{ L"sfu", flash_sfu },
+	{ L"ifwi", flash_ifwi },
 	{ L"oemvars", flash_oemvars },
 	{ L"zimage", flash_zimage }
 };

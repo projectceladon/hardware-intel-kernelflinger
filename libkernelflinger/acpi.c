@@ -40,8 +40,6 @@ static struct RSCI_TABLE *RSCI_table = NULL;
 #define RSDT_SIG "RSDT"
 #define RSDP_SIG "RSD PTR "
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
-
 #ifndef ALLOW_UNSUPPORTED_ACPI_TABLE
 static const struct ACPI_DESC_HEADER SUPPORTED_TABLES[] = {
 	{ .signature = "RSCI",

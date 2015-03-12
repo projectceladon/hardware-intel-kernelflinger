@@ -49,7 +49,7 @@
 #include "targets.h"
 #include "unittest.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.0D"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.0E"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -489,7 +489,8 @@ static enum boot_target check_command_line(VOID **address)
 #endif
 #ifndef USER
                 if (!StrCmp(argv[pos], L"-U")) {
-                        unittest_main();
+                        pos++;
+                        unittest_main(pos >= argc ? NULL : argv[pos]);
                         FreePool(argv);
                         return EXIT_SHELL;
                 }
