@@ -145,7 +145,8 @@ static char *fastboot_ui_info_ifwi_version(void)
 
 static char *fastboot_ui_info_serial_number(void)
 {
-	return SMBIOS_GET_STRING(1, SerialNumber);
+	char *serial = get_serial_number();
+	return serial ? serial : "N/A";
 }
 
 static char *fastboot_ui_info_secure_boot(void)

@@ -296,8 +296,8 @@ static void fbSetSerialNumber(void)
 {
 	char *serial;
 
-	serial = SMBIOS_GET_STRING(1, SerialNumber);
-	if (serial == SMBIOS_UNDEFINED) {
+	serial = get_serial_number();
+	if (!serial) {
 		error(L"SMBIOS SerialNumber value unavailable");
 		return;
 	}
