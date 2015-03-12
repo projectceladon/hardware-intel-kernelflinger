@@ -255,6 +255,9 @@ EFI_STATUS ui_display_texts(const ui_textline_t **texts, UINTN x, UINTN y,
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Unable to display text.");
 
+	for (i = 0; i < line_nb; i++)
+		debug(L"%a", lines[i].str);
+
 	FreePool(lines);
 	return ret;
 }
