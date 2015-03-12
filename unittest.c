@@ -36,20 +36,62 @@
 #include <efilib.h>
 
 #include "ux.h"
+#include "ui.h"
+#include "lib.h"
 #include "unittest.h"
 
-UINT8 fake_hash[] = {0x12, 0x34, 0x56, 0x78, 0x90, 0xAB};
-
-VOID unittest_main(VOID)
+static VOID test_keys(VOID)
 {
-	/* TODO: some method of programmatically verifying that these work */
-	ux_prompt_user_bootimage_unverified();
-	ux_warn_user_unverified_recovery();
-	ux_prompt_user_device_unlocked();
-	ux_prompt_user_secure_boot_off();
-	ux_prompt_user_keystore_unverified(fake_hash);
-	ux_crash_event_prompt_user_for_boot_target();
+        const UINTN wait_s = 10;
+        UINTN i;
+        ui_events_t event;
 
-	Print(L"Unit tests complete.\n");
+        Print(L"Reading keys for the next %d seconds...\n", wait_s);
+        for (i = 0; i <= wait_s * 1000; i += 1) {
+                event = ui_read_input();
+                if (event == EV_NONE) {
+                        uefi_call_wrapper(BS->Stall, 1, 1000);
+                        continue;
+                }
+                Print(L"Received %d key event\n", event);
+        }
 }
 
+static UINT8 fake_hash[] = {0x12, 0x34, 0x56, 0x78, 0x90, 0xAB};
+
+static VOID test_ux(VOID)
+{
+        /* TODO: some method of programmatically verifying that these work */
+        ux_prompt_user_bootimage_unverified();
+        ux_warn_user_unverified_recovery();
+        ux_prompt_user_device_unlocked();
+        ux_prompt_user_secure_boot_off();
+        ux_prompt_user_keystore_unverified(fake_hash);
+        ux_crash_event_prompt_user_for_boot_target();
+}
+
+static struct test_suite {
+        CHAR16 *name;
+        VOID (*fun)(VOID);
+} TEST_SUITES[] = {
+        { L"ux", test_ux },
+        { L"keys", test_keys }
+};
+
+VOID unittest_main(CHAR16 *testname)
+{
+        BOOLEAN found = FALSE;
+        UINTN i;
+
+        for (i = 0; i < ARRAY_SIZE(TEST_SUITES); i++)
+                if (!testname || !StrCmp(L"all", testname) ||
+                    !StrCmp(TEST_SUITES[i].name, testname)) {
+                        found = TRUE;
+                        Print(L"'%s' test suite begins\n", TEST_SUITES[i].name);
+                        TEST_SUITES[i].fun();
+                        Print(L"'%s' test suite terminated\n", TEST_SUITES[i].name);
+                }
+
+        if (!found)
+                Print(L"'%s' test suite not found\n", testname);
+}

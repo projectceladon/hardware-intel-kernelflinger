@@ -43,8 +43,6 @@
 #include "smbios.h"
 #include "info.h"
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
-
 static const ui_textline_t unlocked_headers[] = {
 	{ &COLOR_WHITE,		"        Unlock bootloader?",			TRUE },
 	{ &COLOR_WHITE,		"",						FALSE },
@@ -57,11 +55,6 @@ static const ui_textline_t unlocked_headers[] = {
 	{ &COLOR_WHITE,		"all personal data from your device",		FALSE },
 	{ &COLOR_WHITE,		"(a 'factory data reset').",			FALSE },
 	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"YES",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",				FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"NO",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",			FALSE },
 	{ NULL, NULL, FALSE }
 };
 
@@ -78,11 +71,6 @@ static ui_textline_t locked_headers[] = {
 	{ &COLOR_WHITE,		"all personal data from your device",		FALSE },
 	{ &COLOR_WHITE,		"(a 'factory data reset').",			FALSE },
 	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"YES",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",				FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"NO",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",			FALSE },
 	{ NULL, NULL, FALSE }
 };
 
@@ -101,11 +89,6 @@ static ui_textline_t verified_headers[] = {
 	{ &COLOR_WHITE,		"all personal data from your device",		FALSE },
 	{ &COLOR_WHITE,		"(a 'factory data reset').",			FALSE },
 	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"YES",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",				FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"NO",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",			FALSE },
 	{ NULL, NULL, FALSE }
 };
 
@@ -242,7 +225,7 @@ static UINTN fastboot_ui_info_draw(UINTN x, UINTN y, UINTN width, UINTN height)
 	}
 
 	ui_textarea_display_text(lines, ui_font_get_default(),
-				 x, &y, width, height);
+				 x, &y, width, height, NULL);
 
 exit:
 	if (lines) {
@@ -257,7 +240,6 @@ BOOLEAN fastboot_ui_confirm_for_state(enum device_state target)
 {
 	UINTN i;
 	BOOLEAN result = FALSE;
-	UINTN y = area_y;
 
 	/* No way to ask for user confirmation, assume yes. */
 	if (!fastboot_ui_initialized)
@@ -266,11 +248,9 @@ BOOLEAN fastboot_ui_confirm_for_state(enum device_state target)
 	for (i = 0; i < ARRAY_SIZE(FASTBOOT_UI_CONFIRM); i++)
 		if (target == FASTBOOT_UI_CONFIRM[i].state) {
 			fastboot_ui_clear_dynamic_part();
-			ui_textarea_display_text(FASTBOOT_UI_CONFIRM[i].msg,
-						 ui_font_get_default(), area_x, &y,
-						 swidth - area_x - margin,
-						 sheight - area_y - margin);
-			result = ui_input_to_bool(60);
+			result = ui_confirm(FASTBOOT_UI_CONFIRM[i].msg, swidth - area_x - margin,
+					    sheight - area_y - margin, area_x, area_y);
+
 			fastboot_ui_refresh();
 		}
 

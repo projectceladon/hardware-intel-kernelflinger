@@ -39,8 +39,6 @@
 
 #include "res/img_res.h"
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
-
 ui_image_t *ui_image_get(const char *name)
 {
 	unsigned int i;

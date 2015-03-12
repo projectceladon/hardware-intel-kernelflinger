@@ -49,6 +49,8 @@
 #define offsetof(TYPE, MEMBER) ((UINTN) &((TYPE *)0)->MEMBER)
 #endif
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
+
 #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \

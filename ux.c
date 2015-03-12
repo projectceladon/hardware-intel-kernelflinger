@@ -177,37 +177,6 @@ static EFI_STATUS ux_init_screen() {
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS display_texts(const ui_textline_t **texts,
-				UINTN x, UINTN y,
-				UINTN linesarea, UINTN colsarea) {
-	EFI_STATUS ret;
-	ui_textline_t *lines;
-	UINTN line_nb = 0;
-	UINTN i, j, pos;
-
-	for (i = 0; texts[i]; i++)
-		for (j = 0; texts[i][j].color; j++)
-			line_nb++;
-
-	lines = AllocateZeroPool((line_nb + 1) * sizeof(ui_textline_t));
-	if (!lines) {
-		error(L"Unable to allocate textline array");
-		return EFI_OUT_OF_RESOURCES;
-	}
-
-	for (i = 0, pos = 0; texts[i]; i++, pos += j)
-		for (j = 0; texts[i][j].color; j++)
-			memcpy(&lines[pos + j], &texts[i][j], sizeof(*lines));
-
-	ret = ui_textarea_display_text(lines, ui_font_get_default(),
-				       x, &y, colsarea, linesarea);
-	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Unable to display text.");
-
-	FreePool(lines);
-	return ret;
-}
-
 static ui_textline_t *build_error_code_text(UINT32 error_code)
 {
 	static char buf[26];
@@ -265,7 +234,7 @@ static EFI_STATUS display_text(UINT32 error_code,
 	colsarea = swidth - x - wmargin;
 	linesarea = sheight - y - hmargin;
 
-	ret = display_texts(texts, x, y, linesarea, colsarea);
+	ret = ui_display_texts(texts, x, y, linesarea, colsarea);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -414,7 +383,7 @@ enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID) {
 
 	area_y += hmargin;
 
-	ret = display_texts(texts, area_x, area_y, linesarea, colsarea);
+	ret = ui_display_texts(texts, area_x, area_y, linesarea, colsarea);
 	if (EFI_ERROR(ret))
 		goto error;
 

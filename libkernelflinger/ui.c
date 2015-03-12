@@ -53,6 +53,7 @@ EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_LIGHTRED  = { 0, 0, 127, 0 };
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_YELLOW	= { 0, 255, 255, 0 };
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_RED	= { 0, 0, 255, 0 };
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_GREEN	= { 0, 255, 0, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_HIGHLIGHT	= { 157, 106, 0, 0 };
 
 
 static BOOLEAN initialized = FALSE;
@@ -135,7 +136,7 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 
 		x = margin / font->cheight;
 		y = (graphic.width - (2 * margin)) / font->cwidth;
-		default_textarea = ui_textarea_create(x, y, font, &COLOR_YELLOW);
+		default_textarea = ui_textarea_create(x, y, font, &COLOR_YELLOW, NULL);
 		if (!default_textarea) {
 			efi_perror(EFI_OUT_OF_RESOURCES, L"Failed to build the textarea");
 			return EFI_OUT_OF_RESOURCES;
@@ -208,21 +209,53 @@ EFI_STATUS ui_clear_screen()
 	return ui_clear_area(0, 0, graphic.width, graphic.height);
 }
 
+EFI_STATUS ui_fill_area(UINTN x, UINTN y, UINTN width, UINTN height,
+			EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color)
+{
+	if (!ui_is_ready())
+		return EFI_UNSUPPORTED;
+
+	return uefi_call_wrapper(graphic.output->Blt, 10, graphic.output,
+				 color, EfiBltVideoFill, 0, 0, x, y, width, height, 0);
+}
+
 EFI_STATUS ui_clear_area(UINTN x, UINTN y, UINTN width, UINTN height)
 {
 	EFI_STATUS ret;
 
-	if (!ui_is_ready())
-		return EFI_UNSUPPORTED;
-
-	ret = uefi_call_wrapper(graphic.output->Blt, 10, graphic.output,
-				(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *)&COLOR_BLACK,
-				EfiBltVideoFill, 0, 0, x, y, width, height, 0);
+	ret = ui_fill_area(x, y, width, height, &COLOR_BLACK);
 
 	if (default_textarea)
 		ret = ui_textarea_draw(default_textarea, default_textarea_x,
 				       default_textarea_y);
+	return ret;
+}
 
+EFI_STATUS ui_display_texts(const ui_textline_t **texts, UINTN x, UINTN y,
+			    UINTN linesarea, UINTN colsarea) {
+	EFI_STATUS ret;
+	ui_textline_t *lines;
+	UINTN line_nb = 0;
+	UINTN i, j, pos;
+
+	for (i = 0; texts[i]; i++)
+		for (j = 0; texts[i][j].color; j++)
+			line_nb++;
+	lines = AllocateZeroPool((line_nb + 1) * sizeof(ui_textline_t));
+	if (!lines) {
+		error(L"Unable to allocate textline array");
+		return EFI_OUT_OF_RESOURCES;
+	}
+	for (i = 0, pos = 0; texts[i]; i++, pos += j)
+		for (j = 0; texts[i][j].color; j++)
+			memcpy(&lines[pos + j], &texts[i][j], sizeof(*lines));
+
+	ret = ui_textarea_display_text(lines, ui_font_get_default(),
+				       x, &y, colsarea, linesarea, NULL);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Unable to display text.");
+
+	FreePool(lines);
 	return ret;
 }
 
@@ -323,6 +356,10 @@ ui_events_t ui_keycode_to_event(UINT16 keycode)
 	case SCAN_END:
 	case SCAN_LEFT:
 		return EV_DOWN;
+#ifdef USE_POWER_BUTTON
+		case SCAN_POWER:
+			return EV_POWER;
+#endif
 	default:
 		return EV_NONE;
 	}
