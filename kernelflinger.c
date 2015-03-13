@@ -529,6 +529,16 @@ out:
         return bt;
 }
 
+static enum boot_target check_battery_inserted()
+{
+        enum wake_sources wake_source;
+
+        wake_source = rsci_get_wake_source();
+        if (wake_source == WAKE_BATTERY_INSERTED)
+                return POWER_OFF;
+
+        return NORMAL_BOOT;
+}
 
 static enum boot_target check_charge_mode()
 {
@@ -555,12 +565,13 @@ static enum boot_target check_charge_mode()
  *    so, force fastboot mode. Use in bootable media.
  * 4. Check for "magic key" being held. Short press loads Recovery. Long press
  *    loads Fastboot.
- * 5. Check bootloader control block for a boot target, which could be
+ * 5. Check if wake source is battery inserted, if so power off
+ * 6. Check bootloader control block for a boot target, which could be
  *    the name of a boot image that we know how to read from a partition,
  *    or a boot image file in the ESP. BCB can specify oneshot or persistent
  *    targets.
- * 6. Check LoaderEntryOneShot for a boot target
- * 7. Check if we should go into charge mode or normal boot
+ * 7. Check LoaderEntryOneShot for a boot target
+ * 8. Check if we should go into charge mode or normal boot
  *
  * target_address - If MEMORY returned, physical address to load data
  * target_path - If ESP_EFI_BINARY or ESP_BOOTIMAGE returned, path to the
@@ -592,6 +603,10 @@ static enum boot_target choose_boot_target(VOID **target_address,
         }
 
         ret = check_magic_key();
+        if (ret != NORMAL_BOOT)
+                return ret;
+
+        ret = check_battery_inserted();
         if (ret != NORMAL_BOOT)
                 return ret;
 
