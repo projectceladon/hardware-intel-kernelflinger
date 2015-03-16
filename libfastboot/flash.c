@@ -282,38 +282,9 @@ static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 	return ret;
 }
 
-static struct label_exception {
-	CHAR16 *name;
-	EFI_STATUS (*flash_func)(VOID *data, UINTN size);
-} LABEL_EXCEPTIONS[] = {
-	{ L"gpt", flash_gpt },
-	{ L"gpt-gpp1", flash_gpt_gpp1 },
-	{ L"keystore", flash_keystore },
-#ifndef USER
-	{ L"efirun", flash_efirun },
-	{ L"mbr", flash_mbr },
-#endif
-	{ L"sfu", flash_sfu },
-	{ L"ifwi", flash_ifwi },
-	{ L"oemvars", flash_oemvars },
-	{ L"zimage", flash_zimage }
-};
-
-EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
+static EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label)
 {
-	UINTN i;
 	EFI_STATUS ret;
-
-#ifndef USER
-	/* special case for writing inside esp partition */
-	CHAR16 esp[] = L"/ESP/";
-	if (!StrnCmp(esp, label, StrLen(esp)))
-		return flash_into_esp(data, size, &label[ARRAY_SIZE(esp) - 1]);
-#endif
-	/* special cases */
-	for (i = 0; i < ARRAY_SIZE(LABEL_EXCEPTIONS); i++)
-		if (!StrCmp(LABEL_EXCEPTIONS[i].name, label))
-			return LABEL_EXCEPTIONS[i].flash_func(data, size);
 
 	ret = gpt_get_partition_by_label(label, &gparti, EMMC_USER_PART);
 	if (EFI_ERROR(ret)) {
@@ -335,6 +306,135 @@ EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 		return gpt_refresh();
 
 	return EFI_SUCCESS;
+}
+
+#define BOOTLOADER_PART		L"bootloader"
+#define BOOTLOADER_TMP_PART	L"bootloader2"
+
+static CHAR16 *SIGNED_FILES[] = { L"\\EFI\\BOOT\\bootx64.efi", L"\\loader.efi" };
+
+/* Safe flash bootloader:
+ * 1. write data to the BOOTLOADER_TMP_PART partition
+ * 2. perform sanity check on BOOTLOADER_TMP_PART partition files
+ * 3. swap BOOTLOADER_PART and BOOTLOADER_TMP_PART partition
+ * 4. erase BOOTLOADER_TMP_PART partition
+ */
+EFI_STATUS flash_bootloader(VOID *data, UINTN size)
+{
+	EFI_STATUS ret, erase_ret;
+	EFI_DEVICE_PATH *edp;
+	EFI_GUID guid;
+	UINTN handle_nb = 0;
+	EFI_HANDLE *handle_buf = NULL;
+	UINTN i;
+	EFI_HANDLE image;
+
+	ret = flash_partition(data, size, BOOTLOADER_TMP_PART);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = gpt_refresh();
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = gpt_get_partition_guid(BOOTLOADER_TMP_PART, &guid, EMMC_USER_PART);
+	if (EFI_ERROR(ret))
+		goto exit;
+
+	ret = LibLocateHandleByDiskSignature(MBR_TYPE_EFI_PARTITION_TABLE_HEADER,
+					     SIGNATURE_TYPE_GUID,
+					     (void *)&guid,
+					     &handle_nb,
+					     &handle_buf);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get handle for '%s' partition",
+			   BOOTLOADER_TMP_PART);
+		goto exit;
+	}
+	if (handle_nb != 1) {
+		error(L"Too many handles for '%s' partition", BOOTLOADER_TMP_PART);
+		ret = EFI_UNSUPPORTED;
+		goto exit;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(SIGNED_FILES); i++) {
+		edp = FileDevicePath(handle_buf[0], SIGNED_FILES[i]);
+		if (!edp) {
+			error(L"Couldn't generate a path for '%s'", SIGNED_FILES[i]);
+			ret = EFI_INVALID_PARAMETER;
+			goto exit;
+		}
+
+		ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
+					edp, NULL, 0, &image);
+		FreePool(edp);
+		if (!EFI_ERROR(ret) || ret == EFI_SECURITY_VIOLATION) {
+			ret = uefi_call_wrapper(BS->UnloadImage, 1, image);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"Failed to unload image");
+				goto exit;
+			}
+		}
+
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to load '%s'", SIGNED_FILES[i]);
+			goto exit;
+		}
+	}
+
+	ret = gpt_swap_partition(BOOTLOADER_TMP_PART, BOOTLOADER_PART, EMMC_USER_PART);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to swap partitions");
+
+exit:
+	/* Microsoft allows to use the FAT32 filesystem for the ESP
+	   partition only and in the context of a UEFI device.  We
+	   have to get rid of this potential second FAT32
+	   partition.  */
+	erase_ret = erase_by_label(BOOTLOADER_TMP_PART);
+	if (EFI_ERROR(erase_ret))
+		efi_perror(erase_ret, L"Failed to erase '%s' partition", BOOTLOADER_TMP_PART);
+
+	if (handle_buf)
+		FreePool(handle_buf);
+
+	return EFI_ERROR(ret) ? ret : erase_ret;
+}
+
+static struct label_exception {
+	CHAR16 *name;
+	EFI_STATUS (*flash_func)(VOID *data, UINTN size);
+} LABEL_EXCEPTIONS[] = {
+	{ L"gpt", flash_gpt },
+	{ L"gpt-gpp1", flash_gpt_gpp1 },
+	{ L"keystore", flash_keystore },
+#ifndef USER
+	{ L"efirun", flash_efirun },
+	{ L"mbr", flash_mbr },
+#endif
+	{ L"sfu", flash_sfu },
+	{ L"ifwi", flash_ifwi },
+	{ L"oemvars", flash_oemvars },
+	{ L"zimage", flash_zimage },
+	{ BOOTLOADER_PART, flash_bootloader }
+};
+
+EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
+{
+	UINTN i;
+
+#ifndef USER
+	/* special case for writing inside esp partition */
+	CHAR16 esp[] = L"/ESP/";
+	if (!StrnCmp(esp, label, StrLen(esp)))
+		return flash_into_esp(data, size, &label[ARRAY_SIZE(esp) - 1]);
+#endif
+	/* special cases */
+	for (i = 0; i < ARRAY_SIZE(LABEL_EXCEPTIONS); i++)
+		if (!StrCmp(LABEL_EXCEPTIONS[i].name, label))
+			return LABEL_EXCEPTIONS[i].flash_func(data, size);
+
+	return flash_partition(data, size, label);
 }
 
 EFI_STATUS flash_file(EFI_HANDLE image, CHAR16 *filename, CHAR16 *label)
