@@ -64,6 +64,10 @@
 #define _CONVERT_TO_WIDE(x) L ## x
 #define CONVERT_TO_WIDE(x) _CONVERT_TO_WIDE(x)
 
+/* Current EFI image handle.  To be use as parent image with the
+   LoadImage boot service */
+extern EFI_HANDLE g_parent_image;
+
 /*
  * EFI Variables
  */

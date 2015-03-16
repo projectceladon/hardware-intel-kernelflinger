@@ -358,14 +358,9 @@ EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, EMMC_PARTITI
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl)
+static struct gpt_partition *gpt_find_partition(CHAR16 *label)
 {
-	EFI_STATUS ret;
 	UINTN p;
-
-	ret = gpt_cache_partition(ctrl);
-	if (EFI_ERROR(ret))
-		return ret;
 
 	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
 		struct gpt_partition *part;
@@ -375,6 +370,23 @@ EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interf
 			continue;
 
 		debug(L"Found label %s in partition %d", label, p);
+		return part;
+	}
+
+	return NULL;
+}
+
+EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl)
+{
+	struct gpt_partition *part;
+	EFI_STATUS ret;
+
+	ret = gpt_cache_partition(ctrl);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	part = gpt_find_partition(label);
+	if (part) {
 		CopyMem(&gpart->part, part, sizeof(*part));
 		gpart->bio = sdisk.bio;
 		gpart->dio = sdisk.dio;
@@ -648,4 +660,57 @@ EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gb
 	gpt_write_partition_tables();
 
 	return EFI_SUCCESS;
+}
+
+EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, EMMC_PARTITION_CTRL ctrl)
+{
+	EFI_STATUS ret;
+	struct gpt_partition *part;
+
+	ret = gpt_cache_partition(ctrl);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	part = gpt_find_partition(label);
+	if (!part) {
+		error(L"Failed to find '%s' partition", label);
+		return EFI_NOT_FOUND;
+	}
+
+	CopyMem(guid, &part->unique, sizeof(*guid));
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, EMMC_PARTITION_CTRL ctrl)
+{
+	EFI_STATUS ret;
+	struct gpt_partition *part1, *part2, save1;
+
+	ret = gpt_cache_partition(ctrl);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	part1 = gpt_find_partition(label1);
+	if (!part1) {
+		error(L"Failed to find '%s' partition", label1);
+		return EFI_NOT_FOUND;
+	}
+
+	part2 = gpt_find_partition(label2);
+	if (!part2) {
+		error(L"Failed to find '%s' partition", label2);
+		return EFI_NOT_FOUND;
+	}
+
+	save1.starting_lba = part1->starting_lba;
+	save1.ending_lba = part1->ending_lba;
+
+	part1->starting_lba = part2->starting_lba;
+	part1->ending_lba = part2->ending_lba;
+
+	part2->starting_lba = save1.starting_lba;
+	part2->ending_lba = save1.ending_lba;
+
+	return gpt_write_partition_tables();
 }

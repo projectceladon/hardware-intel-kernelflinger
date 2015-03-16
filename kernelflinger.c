@@ -88,7 +88,6 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
  *   counter is reset to zero. */
 #define WATCHDOG_DELAY       (10 * 60)
 
-static EFI_HANDLE g_parent_image;
 static EFI_HANDLE g_disk_device;
 static EFI_LOADED_IMAGE *g_loaded_image;
 

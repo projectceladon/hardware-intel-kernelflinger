@@ -76,5 +76,7 @@ EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gb
 void gpt_free_cache(void);
 EFI_STATUS gpt_refresh(void);
 EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl);
+EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, EMMC_PARTITION_CTRL ctrl);
+EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, EMMC_PARTITION_CTRL ctrl);
 
 #endif	/* _GPT_H_ */
