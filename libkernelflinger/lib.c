@@ -100,13 +100,21 @@ EFI_STATUS get_efi_variable(const EFI_GUID *guid, CHAR16 *key,
         UINT32 flags;
         EFI_STATUS ret;
 
-        size = EFI_MAXIMUM_VARIABLE_SIZE;
+        size = 1024; /* Arbitrary starting value */
         data = AllocatePool(size);
         if (!data)
                 return EFI_OUT_OF_RESOURCES;
 
         ret = uefi_call_wrapper(RT->GetVariable, 5, key, (EFI_GUID *)guid,
-                        &flags, &size, data);
+                                &flags, &size, data);
+        if (ret == EFI_BUFFER_TOO_SMALL) {
+                FreePool(data);
+                data = AllocatePool(size);
+                if (!data)
+                        return EFI_OUT_OF_RESOURCES;
+                ret = uefi_call_wrapper(RT->GetVariable, 5, key, (EFI_GUID *)guid,
+                                        &flags, &size, data);
+        }
 
         if (EFI_ERROR(ret)) {
                 FreePool(data);
