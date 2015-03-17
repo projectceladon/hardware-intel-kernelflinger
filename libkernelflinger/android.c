@@ -262,47 +262,6 @@ static EFI_STATUS setup_ramdisk(UINT8 *bootimage)
 }
 
 
-static CHAR16 *get_serial_number(void)
-{
-        /* Per Android CDD, the value must be 7-bit ASCII and
-         * match the regex ^[a-zA-Z0-9](0,20)$ */
-        CHAR8 *tmp, *pos;
-        CHAR16 *ret;
-        CHAR8 *serialno;
-        EFI_GUID guid;
-        UINTN len;
-
-        if (EFI_ERROR(LibGetSmbiosSystemGuidAndSerialNumber(&guid,
-                        &serialno)))
-                return NULL;
-
-        len = strlena(serialno);
-        tmp = AllocatePool(len + 1);
-        if (!tmp)
-                return NULL;
-        tmp[len] = '\0';
-        memcpy(tmp, serialno, strlena(serialno));
-
-        pos = tmp;
-        while (*pos) {
-                /* Truncate if greater than 20 chars */
-                if ((pos - tmp) >= 20) {
-                        *pos = '\0';
-                        break;
-                }
-                /* Replace foreign characters with zeroes */
-                if (!((*pos >= '0' && *pos <= '9') ||
-                            (*pos >= 'a' && *pos <= 'z') ||
-                            (*pos >= 'A' && *pos <= 'Z')))
-                        *pos = '0';
-                pos++;
-        }
-        ret = stra_to_str(tmp);
-        FreePool(tmp);
-        return ret;
-}
-
-
 static CHAR16 *get_serial_port(void)
 {
         CHAR8 *data;
@@ -494,7 +453,7 @@ static EFI_STATUS setup_command_line(
                 IN EFI_GUID *swap_guid)
 {
         CHAR16 *cmdline16 = NULL;
-        CHAR16 *serialno = NULL;
+        char   *serialno = NULL;
         CHAR16 *serialport = NULL;
         CHAR16 *bootreason = NULL;
 
@@ -530,7 +489,7 @@ static EFI_STATUS setup_command_line(
         serialno = get_serial_number();
         if (serialno) {
                 ret = prepend_command_line(&cmdline16,
-                                L"androidboot.serialno=%s g_ffs.iSerialNumber=%s",
+                                L"androidboot.serialno=%a g_ffs.iSerialNumber=%a",
                                 serialno, serialno);
                 if (EFI_ERROR(ret))
                         goto out;
@@ -595,7 +554,6 @@ out:
         FreePool(full_cmdline);
         FreePool(bootreason);
         FreePool(serialport);
-        FreePool(serialno);
 
         return ret;
 }
