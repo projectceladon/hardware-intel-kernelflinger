@@ -229,11 +229,14 @@ EFI_STATUS get_user_keystore(VOID **keystorep, UINTN *sizep)
 	ret = get_efi_variable(&fastboot_guid, KEYSTORE_VAR,
 			       &size, &keystore, &flags);
 
-	if (EFI_ERROR(ret) || size == 0)
+	if (EFI_ERROR(ret) || size == 0) {
+		debug(L"user keystore not set: %r", ret);
 		return EFI_NOT_FOUND;
+	}
 
 #ifndef USERFASTBOOT
 	if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
+		debug(L"user keystore has bad attributes");
 		FreePool(keystore);
 		return EFI_NOT_FOUND;
 	}
