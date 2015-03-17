@@ -229,11 +229,14 @@ EFI_STATUS get_user_keystore(VOID **keystorep, UINTN *sizep)
 	ret = get_efi_variable(&fastboot_guid, KEYSTORE_VAR,
 			       &size, &keystore, &flags);
 
-	if (EFI_ERROR(ret) || size == 0)
+	if (EFI_ERROR(ret) || size == 0) {
+		debug(L"user keystore not set: %r", ret);
 		return EFI_NOT_FOUND;
+	}
 
 #ifndef USERFASTBOOT
 	if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
+		debug(L"user keystore has bad attributes");
 		FreePool(keystore);
 		return EFI_NOT_FOUND;
 	}
@@ -350,4 +353,34 @@ EFI_STATUS set_watchdog_time_reference(EFI_TIME *time)
 VOID clear_provisioning_mode(void)
 {
 	provisioning_mode = FALSE;
+}
+
+/* Per Android CDD, the value must be 7-bit ASCII and match the regex
+ * ^[a-zA-Z0-9](0,20)$  */
+char *get_serial_number(void)
+{
+	static char serialno[21];
+	EFI_STATUS ret;
+	CHAR8 *serial_from_smbios;
+	char *pos;
+	EFI_GUID guid;
+
+	if (serialno[0] != '\0')
+		return serialno;
+
+	ret = LibGetSmbiosSystemGuidAndSerialNumber(&guid,
+						    &serial_from_smbios);
+	if (EFI_ERROR(ret))
+		return NULL;
+
+	memcpy(serialno, serial_from_smbios, min(strlena(serial_from_smbios),
+						 sizeof(serialno) - 1));
+	for (pos = serialno; *pos; pos++)
+		/* Replace foreign characters with zeroes */
+		if (!((*pos >= '0' && *pos <= '9') ||
+		      (*pos >= 'a' && *pos <= 'z') ||
+		      (*pos >= 'A' && *pos <= 'Z')))
+			*pos = '0';
+
+	return serialno;
 }
