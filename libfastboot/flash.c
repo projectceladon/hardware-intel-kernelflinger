@@ -49,6 +49,7 @@
 #include "sparse.h"
 #include "oemvars.h"
 #include "vars.h"
+#include "bootmgr.h"
 
 static struct gpt_partition_interface gparti;
 static UINT64 cur_offset;
@@ -310,14 +311,17 @@ static EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label)
 
 #define BOOTLOADER_PART		L"bootloader"
 #define BOOTLOADER_TMP_PART	L"bootloader2"
+#define BOOTLOADER_PATH		L"\\loader.efi"
+#define BOOTLOADER_BMGR_NAME	L"Android-IA"
 
-static CHAR16 *SIGNED_FILES[] = { L"\\EFI\\BOOT\\bootx64.efi", L"\\loader.efi" };
+static CHAR16 *SIGNED_FILES[] = { L"\\EFI\\BOOT\\bootx64.efi", BOOTLOADER_PATH };
 
 /* Safe flash bootloader:
  * 1. write data to the BOOTLOADER_TMP_PART partition
  * 2. perform sanity check on BOOTLOADER_TMP_PART partition files
  * 3. swap BOOTLOADER_PART and BOOTLOADER_TMP_PART partition
  * 4. erase BOOTLOADER_TMP_PART partition
+ * 5. install bootloader in the Boot Manager
  */
 EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 {
@@ -385,6 +389,11 @@ EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 	ret = gpt_swap_partition(BOOTLOADER_TMP_PART, BOOTLOADER_PART, EMMC_USER_PART);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to swap partitions");
+
+	ret = bootmgr_register_entry(BOOTLOADER_BMGR_NAME, BOOTLOADER_PART, BOOTLOADER_PATH);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to install %s%s into the boot manager",
+			   BOOTLOADER_PART, BOOTLOADER_PATH);
 
 exit:
 	/* Microsoft allows to use the FAT32 filesystem for the ESP
