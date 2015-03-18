@@ -26,6 +26,7 @@ SHARED_SRC_FILES := \
 	info.c \
 	intel_variables.c \
 	oemvars.c \
+	bootmgr.c \
 	hashes.c
 
 include $(CLEAR_VARS)
