@@ -122,6 +122,8 @@ static CHAR16 *boot_target_to_string(enum boot_target bt)
                 return L"RAM bootimage";
         case CHARGER:
                 return L"Charge mode";
+        case POWER_OFF:
+                return L"Power off";
         default:
                 return L"unknown";
         }
