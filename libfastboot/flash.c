@@ -49,7 +49,7 @@
 #include "sparse.h"
 #include "oemvars.h"
 #include "vars.h"
-#include "bootmgr.h"
+#include "bootloader.h"
 
 static struct gpt_partition_interface gparti;
 static UINT64 cur_offset;
@@ -284,7 +284,7 @@ static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 	return ret;
 }
 
-static EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label)
+EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label)
 {
 	EFI_STATUS ret;
 
@@ -308,107 +308,6 @@ static EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label)
 		return gpt_refresh();
 
 	return EFI_SUCCESS;
-}
-
-#define BOOTLOADER_PART		L"bootloader"
-#define BOOTLOADER_TMP_PART	L"bootloader2"
-#define BOOTLOADER_PATH		L"\\loader.efi"
-#define BOOTLOADER_BMGR_NAME	L"Android-IA"
-
-static CHAR16 *SIGNED_FILES[] = { L"\\EFI\\BOOT\\bootx64.efi", BOOTLOADER_PATH };
-
-/* Safe flash bootloader:
- * 1. write data to the BOOTLOADER_TMP_PART partition
- * 2. perform sanity check on BOOTLOADER_TMP_PART partition files
- * 3. swap BOOTLOADER_PART and BOOTLOADER_TMP_PART partition
- * 4. erase BOOTLOADER_TMP_PART partition
- * 5. install bootloader in the Boot Manager
- */
-EFI_STATUS flash_bootloader(VOID *data, UINTN size)
-{
-	EFI_STATUS ret, erase_ret;
-	EFI_DEVICE_PATH *edp;
-	EFI_GUID guid;
-	UINTN handle_nb = 0;
-	EFI_HANDLE *handle_buf = NULL;
-	UINTN i;
-	EFI_HANDLE image;
-
-	ret = flash_partition(data, size, BOOTLOADER_TMP_PART);
-	if (EFI_ERROR(ret))
-		return ret;
-
-	ret = gpt_refresh();
-	if (EFI_ERROR(ret))
-		return ret;
-
-	ret = gpt_get_partition_guid(BOOTLOADER_TMP_PART, &guid, EMMC_USER_PART);
-	if (EFI_ERROR(ret))
-		goto exit;
-
-	ret = LibLocateHandleByDiskSignature(MBR_TYPE_EFI_PARTITION_TABLE_HEADER,
-					     SIGNATURE_TYPE_GUID,
-					     (void *)&guid,
-					     &handle_nb,
-					     &handle_buf);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get handle for '%s' partition",
-			   BOOTLOADER_TMP_PART);
-		goto exit;
-	}
-	if (handle_nb != 1) {
-		error(L"Too many handles for '%s' partition", BOOTLOADER_TMP_PART);
-		ret = EFI_UNSUPPORTED;
-		goto exit;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(SIGNED_FILES); i++) {
-		edp = FileDevicePath(handle_buf[0], SIGNED_FILES[i]);
-		if (!edp) {
-			error(L"Couldn't generate a path for '%s'", SIGNED_FILES[i]);
-			ret = EFI_INVALID_PARAMETER;
-			goto exit;
-		}
-
-		ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
-					edp, NULL, 0, &image);
-		FreePool(edp);
-		if (!EFI_ERROR(ret) || ret == EFI_SECURITY_VIOLATION) {
-			ret = uefi_call_wrapper(BS->UnloadImage, 1, image);
-			if (EFI_ERROR(ret)) {
-				efi_perror(ret, L"Failed to unload image");
-				goto exit;
-			}
-		}
-
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to load '%s'", SIGNED_FILES[i]);
-			goto exit;
-		}
-	}
-
-	ret = gpt_swap_partition(BOOTLOADER_TMP_PART, BOOTLOADER_PART, EMMC_USER_PART);
-	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Failed to swap partitions");
-
-	ret = bootmgr_register_entry(BOOTLOADER_BMGR_NAME, BOOTLOADER_PART, BOOTLOADER_PATH);
-	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Failed to install %s%s into the boot manager",
-			   BOOTLOADER_PART, BOOTLOADER_PATH);
-
-exit:
-	/* Microsoft allows to use the FAT32 filesystem for the ESP
-	   partition only and in the context of a UEFI device.  We
-	   have to get rid of this potential second FAT32
-	   partition.  */
-	erase_ret = erase_by_label(BOOTLOADER_TMP_PART);
-	if (EFI_ERROR(erase_ret))
-		efi_perror(erase_ret, L"Failed to erase '%s' partition", BOOTLOADER_TMP_PART);
-
-	if (handle_buf)
-		FreePool(handle_buf);
-
-	return EFI_ERROR(ret) ? ret : erase_ret;
 }
 
 static struct label_exception {
