@@ -44,6 +44,7 @@
 #include "fastboot.h"
 #include "fastboot_oem.h"
 #include "fastboot_usb.h"
+#include "text_parser.h"
 
 static BOOLEAN last_cmd_succeeded;
 static fastboot_handle fastboot_flash_cmd;
@@ -422,12 +423,15 @@ static EFI_STATUS installer_replace_functions()
 	return EFI_SUCCESS;
 }
 
-static void skip_whitespace(char **line)
+static EFI_STATUS parse_line(char *line)
 {
-	char *cur = *line;
-	while (*cur && isspace(*cur))
-		cur++;
-	*line = cur;
+	Print(L"Starting command: '%a'\n", line);
+	run_command(line, strlen((CHAR8 *)line));
+	if (!last_cmd_succeeded)
+		return EFI_INVALID_PARAMETER;
+
+	Print(L"Command successfully executed\n");
+	return EFI_SUCCESS;
 }
 
 static void run_batch()
@@ -435,8 +439,6 @@ static void run_batch()
 	EFI_STATUS ret;
 	void *data;
 	UINTN size;
-	char *buf, *line, *eol, *p;
-	int lineno = 0;
 
 	ret = uefi_read_file(file_io_interface, installer_batch_filename, &data, &size);
 	if (EFI_ERROR(ret)) {
@@ -446,45 +448,8 @@ static void run_batch()
 	}
 	FreePool(installer_batch_filename);
 
-	/* Extra byte so we can always terminate the last line. */
-	buf = AllocatePool(size + 1);
-	if (!buf) {
-		fastboot_fail("Failed to allocate buffer");
-		FreePool(data);
-		return;
-	}
-	memcpy(buf, data, size);
-	buf[size] = 0;
-
-	for (line = buf; line - buf < (ssize_t)size; line = eol+1) {
-		lineno++;
-
-		/* Detect line and terminate. */
-		eol = (char *)strchr((CHAR8 *)line, '\n');
-		if (!eol)
-			eol = line + strlen((CHAR8 *)line);
-		*eol = 0;
-
-		/* Snip space character for sanity. */
-		p = line + strlen((CHAR8 *)line);
-		while (p > line && isspace(*(p-1)))
-			*(--p) = 0;
-
-		skip_whitespace(&line);
-		if (*line == '\0')
-			continue;
-
-		Print(L"Starting command: '%a'\n", line);
-		run_command(line, strlen((CHAR8 *)line));
-		if (!last_cmd_succeeded) {
-			error(L"Failed at line %d", lineno);
-			break;
-		}
-		Print(L"Command successfully executed\n");
-	}
-
+	parse_text_buffer(data, size, parse_line);
 	FreePool(data);
-	FreePool(buf);
 }
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
