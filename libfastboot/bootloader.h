@@ -1,10 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,23 +30,11 @@
  *
  */
 
-#ifndef _FLASH_H_
-#define _FLASH_H_
+#ifndef _BOOTLOADER_H_
+#define _BOOTLOADER_H_
 
-#include <efi.h>
+#define BOOTLOADER_PART L"bootloader"
 
-EFI_STATUS flash_skip(UINT64 size);
-EFI_STATUS flash_write(VOID *data, UINTN size);
-EFI_STATUS flash_fill(UINT32 pattern, UINTN size);
+EFI_STATUS flash_bootloader(VOID *data, UINTN size);
 
-/* return value for flash() function */
-
-#define REFRESH_PARTITION_VAR 0x1
-
-EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label);
-EFI_STATUS flash_file(EFI_HANDLE image, CHAR16 *filename, CHAR16 *label);
-EFI_STATUS erase_by_label(CHAR16 *label);
-EFI_STATUS garbage_disk(void);
-EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label);
-
-#endif	/* _FLASH_H_ */
+#endif	/* _BOOTLOADER_H_ */

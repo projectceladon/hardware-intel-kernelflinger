@@ -35,11 +35,15 @@
 
 #include <efi.h>
 
-/* Create or update a load option described by DESCRIPTION and set
-   this load option as the first one in the boot order.
-   BOOTLOADER_PATH is the bootloader path relatively to the partition
-   labelled PART_LABEL.  */
-EFI_STATUS bootmgr_register_entry(CHAR16 *description, CHAR16 *part_label,
-				  CHAR16 *bootloader_path);
+typedef struct load_option {
+	CHAR16 *description;
+	CHAR16 *path;
+} load_option_t;
+
+/* Create or update the load options described by LOAD_OPTIONS and set
+   these load options as the first ones in the boot order.  PART_LABEL
+   is the partition label where the load options PATH apply.  */
+EFI_STATUS bootmgr_register_entries(CHAR16 *part_label,
+				    load_option_t *load_options, UINTN load_option_nb);
 
 #endif	/* _BOOTMGR_H_ */

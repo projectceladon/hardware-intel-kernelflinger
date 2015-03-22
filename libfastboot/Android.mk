@@ -28,7 +28,8 @@ SHARED_SRC_FILES := \
 	oemvars.c \
 	bootmgr.c \
 	hashes.c \
-	text_parser.c
+	text_parser.c \
+	bootloader.c
 
 include $(CLEAR_VARS)
 

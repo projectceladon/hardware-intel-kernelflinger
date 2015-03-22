@@ -120,10 +120,8 @@ static EFI_STATUS find_load_option_entry(CHAR16 *description, CHAR16 *entry)
 			continue;
 		if (!(StrLen(name) == StrLen(L"Boot0000") &&
 		      !memcmp(L"Boot", name, StrLen(L"Boot") * sizeof(CHAR16)) &&
-		      name[4] >= '0' && name[4] <= '9' &&
-		      name[5] >= '0' && name[5] <= '9' &&
-		      name[6] >= '0' && name[6] <= '9' &&
-		      name[7] >= '0' && name[7] <= '9'))
+		      isalnum(name[4]) && isalnum(name[5]) &&
+		      isalnum(name[6]) && isalnum(name[7])))
 			continue;
 
 		ret = get_efi_variable(&guid, name, &size, (VOID **)&load_option, &flags);
@@ -262,11 +260,11 @@ exit:
 	return ret;
 }
 
-static EFI_STATUS create_load_option(CHAR16 *description, CHAR16 *part_label,
-				     CHAR16 *bootloader_path, CHAR16 entry)
+static EFI_STATUS create_load_option(CHAR16 *part_label, load_option_t *load_option,
+				     CHAR16 entry)
 {
 	EFI_STATUS ret;
-	EFI_LOAD_OPTION *load_option;
+	EFI_LOAD_OPTION *efi_load_option;
 	CHAR16 varname[BOOTOPTION_LEN + 1];
 	UINTN len, header_size;
 
@@ -276,7 +274,7 @@ static EFI_STATUS create_load_option(CHAR16 *description, CHAR16 *part_label,
 		return ret;
 	}
 
-	ret = append_to_buffer(description, StrSize(description));
+	ret = append_to_buffer(load_option->description, StrSize(load_option->description));
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to append description");
 		goto exit;
@@ -284,7 +282,7 @@ static EFI_STATUS create_load_option(CHAR16 *description, CHAR16 *part_label,
 
 	header_size = buf_size;
 
-	ret = set_device_path(part_label, bootloader_path);
+	ret = set_device_path(part_label, load_option->path);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to set device path");
 		goto exit;
@@ -297,11 +295,11 @@ static EFI_STATUS create_load_option(CHAR16 *description, CHAR16 *part_label,
 		goto exit;
 	}
 
-	load_option = (EFI_LOAD_OPTION *)buffer;
-	load_option->attributes = LOAD_OPTION_ACTIVE;
-	load_option->file_path_list_length = buf_size - header_size;
+	efi_load_option = (EFI_LOAD_OPTION *)buffer;
+	efi_load_option->attributes = LOAD_OPTION_ACTIVE;
+	efi_load_option->file_path_list_length = buf_size - header_size;
 	ret = set_efi_variable(&EfiGlobalVariable, varname, buf_size,
-			       load_option, TRUE, TRUE);
+			       efi_load_option, TRUE, TRUE);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to write '%s' variable", varname);
 
@@ -310,31 +308,44 @@ exit:
 	return ret;
 }
 
-static EFI_STATUS install_in_boot_order(CHAR16 entry)
+static BOOLEAN is_in_set(CHAR16 value, CHAR16 *set, UINTN set_length)
+{
+	UINTN i;
+
+	for (i = 0; i < set_length; i++)
+		if (value == set[i])
+			return TRUE;
+
+	return FALSE;
+}
+
+static EFI_STATUS install_in_boot_order(CHAR16 *entries, UINTN entry_nb)
 {
 	EFI_STATUS ret;
-	CHAR16 *entries = NULL;
+	CHAR16 *old_entries = NULL;
 	CHAR16 *new_entries;
 	UINTN size = 0;
 	UINTN new_size, i, j;
 	UINT32 flags;
+	UINTN missing = entry_nb;
 
 	ret = get_efi_variable(&EfiGlobalVariable, VarBootOrder, &size,
-			       (VOID **)&entries, &flags);
+			       (VOID **)&old_entries, &flags);
 	if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
 		efi_perror(ret, L"Failed to read '%s' variable", VarBootOrder);
 		return ret;
 	}
 
-	if (size && entries[0] == entry)
+	if (size >= (entry_nb * sizeof(CHAR16)) &&
+	    !memcmp(entries, old_entries, entry_nb * sizeof(CHAR16)))
 		goto exit;
 
-	for (i = 0; i < size / sizeof(CHAR16); i++)
-		if (entries[i] == entry)
-			break;
+	for (i = 0; i < entry_nb; i++)
+		if (is_in_set(entries[i], old_entries, size / sizeof(CHAR16)))
+			missing--;
 
-	if (!size || i == (size / sizeof(CHAR16)))
-		new_size = size + sizeof(CHAR16);
+	if (!size || missing)
+		new_size = size + (missing * sizeof(CHAR16));
 	else
 		new_size = size;
 
@@ -345,11 +356,11 @@ static EFI_STATUS install_in_boot_order(CHAR16 entry)
 		goto exit;
 	}
 
-	new_entries[0] = entry;
-	for (i = 0, j = 1; i < size / sizeof(CHAR16); i++) {
-		if (entries[i] == entry)
-			continue;
-		new_entries[j++] = entries[i];
+	memcpy(new_entries, entries, entry_nb * sizeof(CHAR16));
+	for (i = 0, j = entry_nb; i < size / sizeof(CHAR16); i++) {
+		if (is_in_set(old_entries[i], entries, entry_nb))
+		    continue;
+		new_entries[j++] = old_entries[i];
 	}
 
 	ret = set_efi_variable(&EfiGlobalVariable, VarBootOrder, new_size, new_entries,
@@ -360,42 +371,54 @@ static EFI_STATUS install_in_boot_order(CHAR16 entry)
 	FreePool(new_entries);
 
 exit:
-	if (entries)
-		FreePool(entries);
+	if (old_entries)
+		FreePool(old_entries);
 	return ret;
 }
 
-EFI_STATUS bootmgr_register_entry(CHAR16 *description, CHAR16 *part_label,
-				  CHAR16 *bootloader_path)
+EFI_STATUS bootmgr_register_entries(CHAR16 *part_label,
+				    load_option_t *load_options, UINTN load_option_nb)
 {
 	EFI_STATUS ret;
-	CHAR16 entry = -1;
+	CHAR16 *entries;
+	UINTN i;
 
-	ret = find_load_option_entry(description, &entry);
-	if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
-		efi_perror(ret, L"Failed to Look up for the existant load option");
-		return ret;
+	if (load_option_nb == 0) {
+		error(L"Cannot register 0 load options");
+		return EFI_INVALID_PARAMETER;
 	}
 
-	if (ret == EFI_NOT_FOUND) {
-		ret = find_free_entry(&entry);
+	entries = AllocatePool(load_option_nb * sizeof(CHAR16));
+	if (!entries)
+		return EFI_OUT_OF_RESOURCES;
+
+	for (i = 0; i < load_option_nb; i++) {
+		ret = find_load_option_entry(load_options[i].description, &entries[i]);
+		if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
+			efi_perror(ret, L"Failed to Look up for the existant load option");
+			goto exit;
+		}
+
+		if (ret == EFI_NOT_FOUND) {
+			ret = find_free_entry(&entries[i]);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"Failed to find a new free load option entry");
+				goto exit;
+			}
+		}
+
+		ret = create_load_option(part_label, &load_options[i], entries[i]);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to find a new free load option entry");
-			return ret;
+			efi_perror(ret, L"Failed to create/update the load option");
+			goto exit;
 		}
 	}
 
-	ret = create_load_option(description, part_label, bootloader_path, entry);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to create/update the load option");
-		return ret;
-	}
-
-	ret = install_in_boot_order(entry);
-	if (EFI_ERROR(ret)) {
+	ret = install_in_boot_order(entries, load_option_nb);
+	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to set the boot order");
-		return ret;
-	}
 
-	return EFI_SUCCESS;
+exit:
+	FreePool(entries);
+	return ret;
 }
