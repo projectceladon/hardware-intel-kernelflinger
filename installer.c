@@ -66,9 +66,9 @@ static void flush_tx_buffer(void)
 	}
 }
 
-static void run_command(void *line, INTN size)
+static void run_command(void *line, INTN len)
 {
-	fastboot_rx_cb(line, size);
+	fastboot_rx_cb(line, len);
 	flush_tx_buffer();
 }
 
@@ -504,7 +504,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 
 	/* Process options. */
 	run_command(*options != '\0' ? options : DEFAULT_OPTIONS,
-		       *options != '\0' ? strlen(options) + 1 : sizeof(DEFAULT_OPTIONS));
+		    *options != '\0' ? strlen(options) : strlen(DEFAULT_OPTIONS));
 	if (installer_batch_filename)
 		run_batch();
 	fastboot_free();
