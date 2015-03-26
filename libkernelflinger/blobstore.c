@@ -251,6 +251,7 @@ static int superblock_write(superblock_t *self, stream_t *sh) {
         return 0;
 }
 
+#ifndef USER
 static void superblock_print(superblock_t *self) {
         __superblock_t *__sb;
         if (!self) {
@@ -266,6 +267,9 @@ static void superblock_print(superblock_t *self) {
         debug(L"_blobsEndLocation: %d", __sb->blobs_end_location);
         debug(L"..............");
 }
+#else
+static void superblock_print(__attribute__((unused)) superblock_t *self) {}
+#endif
 
 static int superblock_update(superblock_t *self, UINT32 blob_end_location) {
         __superblock_t *__sb;
