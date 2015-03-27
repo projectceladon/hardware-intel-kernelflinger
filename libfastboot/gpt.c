@@ -99,6 +99,7 @@ struct gpt_disk {
 	EFI_BLOCK_IO *bio;
 	EFI_DISK_IO *dio;
 	EFI_HANDLE handle;
+	BOOLEAN label_prefix_removed;
 	EMMC_PARTITION_CTRL ctrl;
 	struct gpt_header gpt_hd;
 	struct gpt_partition *partitions;
@@ -203,15 +204,21 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 	return ret;
 }
 
-/* Remove the "android_" prefix to partition name
- * When we are doing the cache.
- * Note that CopyMem must handle overlapping (ie memmove)
- */
-static void gpt_remove_prefix(void)
+/* Gmin adds the "android_" prefix to the partition label.  Most of
+   the fastboot command relies on the partition name/label.  The
+   following functions get rid of this prefix and put it if previously
+   removed.  */
+const CHAR16 *ANDROID_PREFIX = L"android_";
+
+static EFI_STATUS gpt_remove_prefix(void)
 {
-	const CHAR16 *prefix = L"android_";
-	UINTN prefix_len = StrLen(prefix);
+	UINTN prefix_len = StrLen(ANDROID_PREFIX);
+	BOOLEAN removed = FALSE;
+	BOOLEAN not_removed = FALSE;
 	UINTN p;
+
+	if (sdisk.label_prefix_removed)
+		return EFI_SUCCESS;
 
 	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
 		struct gpt_partition *part;
@@ -220,9 +227,50 @@ static void gpt_remove_prefix(void)
 		if (!CompareGuid(&part->type, &NullGuid))
 			continue;
 
-		if (!StrnCmp(part->name, prefix, prefix_len))
-			CopyMem(part->name, &part->name[prefix_len], sizeof(part->name) - prefix_len);
+		if (!StrnCmp(part->name, ANDROID_PREFIX, prefix_len)) {
+			if (not_removed)
+				goto error;
+			CopyMem(part->name, &part->name[prefix_len],
+				sizeof(part->name) - (prefix_len * sizeof(CHAR16)));
+			removed = TRUE;
+			continue;
+		}
+		if (removed == TRUE)
+			goto error;
+
+		not_removed = TRUE;
 	}
+
+	sdisk.label_prefix_removed = TRUE;
+	return EFI_SUCCESS;
+error:
+	error(L"Not all the partition have the '%s' prefix", ANDROID_PREFIX);
+	return EFI_INVALID_PARAMETER;
+}
+
+static void gpt_put_prefix_back(void)
+{
+	UINTN prefix_len = StrLen(ANDROID_PREFIX);
+	struct gpt_partition save;
+	UINTN p;
+
+	if (!sdisk.label_prefix_removed)
+		return;
+
+	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
+		struct gpt_partition *part;
+
+		part = &sdisk.partitions[p];
+		if (!CompareGuid(&part->type, &NullGuid))
+			continue;
+
+		CopyMem(save.name, part->name, sizeof(part->name));
+		CopyMem(&part->name[prefix_len], save.name,
+			sizeof(part->name) - (prefix_len * sizeof(CHAR16)));
+		CopyMem(part->name, ANDROID_PREFIX, prefix_len * sizeof(CHAR16));
+	}
+
+	sdisk.label_prefix_removed = FALSE;
 }
 
 static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
@@ -236,7 +284,11 @@ static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
 		efi_perror(ret, L"Failed to read GPT partitions");
 		return ret;
 	}
-	gpt_remove_prefix();
+	ret = gpt_remove_prefix();
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to remove prefix of partition label");
+		return ret;
+	}
 
 	return EFI_SUCCESS;
 }
@@ -581,6 +633,8 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	struct gpt_header *gh;
 	struct gpt_header *gh_backup;
 	UINT32 crc;
+
+	gpt_put_prefix_back();
 
 	gh = &sdisk.gpt_hd;
 
