@@ -39,7 +39,7 @@
 #include "protocol.h"
 #include "uefi_utils.h"
 #include "fastboot_usb.h"
-#include "UsbDeviceModeProtocol.h"
+#include "protocol/UsbDeviceModeProtocol.h"
 #include "smbios.h"
 
 #define CONFIG_COUNT            1
