@@ -131,11 +131,12 @@ static EFI_STATUS _flash_gpt(VOID *data, UINTN size, EMMC_PARTITION_CTRL ctrl)
 	gb_hdr = data;
 	gb_part = (struct gpt_bin_part *)&gb_hdr[1];
 
-	if (gb_hdr->magic != GPT_BIN_MAGIC)
+	if (size < sizeof(*gb_hdr) ||
+	    gb_hdr->magic != GPT_BIN_MAGIC ||
+	    size != sizeof(*gb_hdr) + (gb_hdr->npart * sizeof(*gb_part))) {
+		error(L"Invalid gpt binary");
 		return EFI_INVALID_PARAMETER;
-
-	if (size != sizeof(*gb_hdr) + gb_hdr->npart * sizeof(*gb_part))
-		return EFI_INVALID_PARAMETER;
+	}
 
 	ret = gpt_create(gb_hdr->start_lba, gb_hdr->npart, gb_part, ctrl);
 	if (EFI_ERROR(ret))
