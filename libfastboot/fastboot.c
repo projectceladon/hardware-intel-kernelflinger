@@ -770,7 +770,12 @@ static void fastboot_process_rx(void *buf, unsigned len)
 		}
 		break;
 	case STATE_COMPLETE:
-		((CHAR8 *)buf)[len] = 0;
+		if (buf != command_buffer || len >= sizeof(command_buffer)) {
+			fastboot_fail("Inappropriate command buffer or length");
+			return;
+		}
+
+		((CHAR8 *)buf)[len] = '\0';
 		debug(L"GOT %a", (CHAR8 *)buf);
 
 		fastboot_state = STATE_COMMAND;
