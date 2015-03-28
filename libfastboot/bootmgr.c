@@ -44,7 +44,7 @@ typedef struct {
 	EFI_DEVICE_PATH file_path_list[1]; /* variable length field */
 } __attribute__((packed)) EFI_LOAD_OPTION;
 
-static EFI_STATUS find_free_entry(CHAR16 *entry)
+static EFI_STATUS find_free_entry(UINT16 *entry)
 {
 	EFI_STATUS ret;
 	CHAR8 data;
@@ -76,7 +76,7 @@ static EFI_STATUS find_free_entry(CHAR16 *entry)
 	return EFI_NOT_FOUND;
 }
 
-static EFI_STATUS find_load_option_entry(CHAR16 *description, CHAR16 *entry)
+static EFI_STATUS find_load_option_entry(CHAR16 *description, UINT16 *entry)
 {
 	EFI_STATUS ret;
 	UINTN bufsize, namesize;
@@ -261,7 +261,7 @@ exit:
 }
 
 static EFI_STATUS create_load_option(CHAR16 *part_label, load_option_t *load_option,
-				     CHAR16 entry)
+				     UINT16 entry)
 {
 	EFI_STATUS ret;
 	EFI_LOAD_OPTION *efi_load_option;
@@ -308,7 +308,7 @@ exit:
 	return ret;
 }
 
-static BOOLEAN is_in_set(CHAR16 value, CHAR16 *set, UINTN set_length)
+static BOOLEAN is_in_set(UINT16 value, UINT16 *set, UINTN set_length)
 {
 	UINTN i;
 
@@ -319,11 +319,11 @@ static BOOLEAN is_in_set(CHAR16 value, CHAR16 *set, UINTN set_length)
 	return FALSE;
 }
 
-static EFI_STATUS install_in_boot_order(CHAR16 *entries, UINTN entry_nb)
+static EFI_STATUS install_in_boot_order(UINT16 *entries, UINTN entry_nb)
 {
 	EFI_STATUS ret;
-	CHAR16 *old_entries = NULL;
-	CHAR16 *new_entries;
+	UINT16 *old_entries = NULL;
+	UINT16 *new_entries;
 	UINTN size = 0;
 	UINTN new_size, i, j;
 	UINT32 flags;
@@ -336,16 +336,16 @@ static EFI_STATUS install_in_boot_order(CHAR16 *entries, UINTN entry_nb)
 		return ret;
 	}
 
-	if (size >= (entry_nb * sizeof(CHAR16)) &&
-	    !memcmp(entries, old_entries, entry_nb * sizeof(CHAR16)))
+	if (size >= (entry_nb * sizeof(*old_entries)) &&
+	    !memcmp(entries, old_entries, entry_nb * sizeof(*old_entries)))
 		goto exit;
 
 	for (i = 0; i < entry_nb; i++)
-		if (is_in_set(entries[i], old_entries, size / sizeof(CHAR16)))
+		if (is_in_set(entries[i], old_entries, size / sizeof(*old_entries)))
 			missing--;
 
 	if (!size || missing)
-		new_size = size + (missing * sizeof(CHAR16));
+		new_size = size + (missing * sizeof(*old_entries));
 	else
 		new_size = size;
 
@@ -356,8 +356,8 @@ static EFI_STATUS install_in_boot_order(CHAR16 *entries, UINTN entry_nb)
 		goto exit;
 	}
 
-	memcpy(new_entries, entries, entry_nb * sizeof(CHAR16));
-	for (i = 0, j = entry_nb; i < size / sizeof(CHAR16); i++) {
+	memcpy(new_entries, entries, entry_nb * sizeof(*entries));
+	for (i = 0, j = entry_nb; i < size / sizeof(*entries); i++) {
 		if (is_in_set(old_entries[i], entries, entry_nb))
 		    continue;
 		new_entries[j++] = old_entries[i];
@@ -380,7 +380,7 @@ EFI_STATUS bootmgr_register_entries(CHAR16 *part_label,
 				    load_option_t *load_options, UINTN load_option_nb)
 {
 	EFI_STATUS ret;
-	CHAR16 *entries;
+	UINT16 *entries;
 	UINTN i;
 
 	if (load_option_nb == 0) {
@@ -388,7 +388,7 @@ EFI_STATUS bootmgr_register_entries(CHAR16 *part_label,
 		return EFI_INVALID_PARAMETER;
 	}
 
-	entries = AllocatePool(load_option_nb * sizeof(CHAR16));
+	entries = AllocatePool(load_option_nb * sizeof(*entries));
 	if (!entries)
 		return EFI_OUT_OF_RESOURCES;
 
