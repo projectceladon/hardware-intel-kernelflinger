@@ -880,6 +880,9 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 {
 	EFI_STATUS ret;
 
+	if (!bootimage || !efiimage || !imagesize || !target)
+		return EFI_INVALID_PARAMETER;
+
 	if (!initialized)
 		fastboot_init();
 
