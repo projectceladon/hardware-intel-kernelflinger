@@ -710,6 +710,7 @@ EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gb
 		return ret;
 
 	sdisk.partitions = gpt_fill_entries(part_count, gbp);
+	sdisk.label_prefix_removed = FALSE;
 
 	gpt_write_partition_tables();
 
