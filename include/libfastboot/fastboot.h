@@ -63,7 +63,9 @@ EFI_STATUS fastboot_register(struct fastboot_cmd *cmd);
 EFI_STATUS fastboot_oem_register(struct fastboot_cmd *cmd);
 
 EFI_STATUS fastboot_start(void **bootimage, void **efiimage,
-			  UINTN *imagesize, enum boot_target *target,
-			  BOOLEAN dontfree);
+			  UINTN *imagesize, enum boot_target *target);
+EFI_STATUS fastboot_stop(void *bootimage, void *efiimage, UINTN imagesize,
+			 enum boot_target target);
+
 void fastboot_free();
 #endif	/* _FASTBOOT_H_ */

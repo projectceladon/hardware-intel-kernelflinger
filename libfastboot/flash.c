@@ -39,7 +39,6 @@
 #include <openssl/rand.h>
 #include <android.h>
 
-#include "fastboot_usb.h"
 #include "uefi_utils.h"
 #include "gpt.h"
 #include "gpt_bin.h"
@@ -168,7 +167,7 @@ static EFI_STATUS flash_keystore(VOID *data, UINTN size)
 #ifndef USER
 static EFI_STATUS flash_efirun(VOID *data, UINTN size)
 {
-	return fastboot_usb_stop(NULL, data, size, UNKNOWN_TARGET);
+	return fastboot_stop(NULL, data, size, UNKNOWN_TARGET);
 }
 
 #define MBR_CODE_SIZE	440

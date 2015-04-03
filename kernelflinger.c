@@ -894,7 +894,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         for (;;) {
                 target = UNKNOWN_TARGET;
 
-                ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target, FALSE);
+                ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"Fastboot mode failed");
                         break;

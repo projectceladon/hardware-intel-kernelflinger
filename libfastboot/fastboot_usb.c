@@ -33,9 +33,8 @@
  */
 
 #include <lib.h>
-#include <ui.h>
+#include <vars.h>
 
-#include "fastboot_ui.h"
 #include "protocol.h"
 #include "uefi_utils.h"
 #include "fastboot_usb.h"
@@ -337,9 +336,18 @@ static void fbInitDriverObjs(void)
 	gEndpointObjs[1].EndpointCompDesc  = NULL;
 }
 
-static EFI_STATUS fastboot_usb_init(void)
+EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
+					 data_callback_t rx_cb,
+					 data_callback_t tx_cb)
 {
 	EFI_STATUS ret;
+
+	if (!start_cb || !rx_cb || !tx_cb)
+		return EFI_INVALID_PARAMETER;
+
+	start_callback = start_cb;
+	rx_callback = rx_cb;
+	tx_callback = tx_cb;
 
 	ret = LibLocateProtocol(&gEfiUsbDeviceModeProtocolGuid, (void **)&usb_device);
 	if (EFI_ERROR(ret) || !usb_device) {
@@ -361,34 +369,18 @@ static EFI_STATUS fastboot_usb_init(void)
 		return ret;
 	}
 
+	ret = uefi_call_wrapper(usb_device->Connect, 1, usb_device);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to connect");
+		return ret;
+	}
+
 	return EFI_SUCCESS;
 }
 
-static void *fastboot_bootimage;
-static void *fastboot_efiimage;
-static UINTN fastboot_imagesize;
-static enum boot_target fastboot_target;
-
-EFI_STATUS fastboot_usb_stop(void *bootimage, void *efiimage, UINTN imagesize,
-			     enum boot_target target)
+EFI_STATUS fastboot_usb_stop(void)
 {
 	EFI_STATUS ret;
-	VOID *imgbuffer = NULL;
-
-	fastboot_imagesize = imagesize;
-	fastboot_target = target;
-
-	if (imagesize && (bootimage || efiimage)) {
-		imgbuffer = AllocatePool(imagesize);
-		if (!imgbuffer) {
-			error(L"Failed to allocate image buffer");
-			return EFI_OUT_OF_RESOURCES;
-		}
-		memcpy(imgbuffer, bootimage ? bootimage : efiimage, imagesize);
-	}
-
-	fastboot_bootimage = bootimage ? imgbuffer : NULL;
-	fastboot_efiimage = efiimage ? imgbuffer : NULL;
 
 	ret = uefi_call_wrapper(usb_device->Stop, 1, usb_device);
 	if (EFI_ERROR(ret))
@@ -397,81 +389,31 @@ EFI_STATUS fastboot_usb_stop(void *bootimage, void *efiimage, UINTN imagesize,
 	return ret;
 }
 
-EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
-			      data_callback_t rx_cb,
-			      data_callback_t tx_cb,
-			      void **bootimage,
-			      void **efiimage,
-			      UINTN *imagesize,
-			      enum boot_target *target)
+
+EFI_STATUS fastboot_usb_disconnect_and_unbind(void)
 {
 	EFI_STATUS ret;
-
-	start_callback = start_cb;
-	rx_callback = rx_cb;
-	tx_callback = tx_cb;
-
-
-	/* In case user still holding it from answering a UX prompt
-	 * or magic key */
-	ui_wait_for_key_release();
-
-	ret = fastboot_usb_init();
-	if (EFI_ERROR(ret))
-		goto error;
-
-	ret = uefi_call_wrapper(usb_device->Connect, 1, usb_device);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to connect");
-		goto error;
-	}
-
-	fastboot_bootimage = NULL;
-	fastboot_efiimage = NULL;
-	fastboot_target = UNKNOWN_TARGET;
-	*target = UNKNOWN_TARGET;
-
-	for (;;) {
-		*target = fastboot_ui_event_handler();
-		if (*target != UNKNOWN_TARGET)
-			break;
-
-		ret = uefi_call_wrapper(usb_device->Run, 2, usb_device, 600);
-		if (ret == EFI_TIMEOUT)
-			continue;
-
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Error occurred during run");
-			goto error;
-		}
-
-		if (fastboot_target != UNKNOWN_TARGET) {
-			*target = fastboot_target;
-			break;
-		}
-
-		if (fastboot_bootimage || fastboot_efiimage)
-			break;
-	}
 
 	ret = uefi_call_wrapper(usb_device->DisConnect, 1, usb_device);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to disconnect USB");
-		goto error;
+		return ret;
 	}
 
 	ret = uefi_call_wrapper(usb_device->UnBind, 1, usb_device);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to unbind USB");
-		goto error;
+		return ret;
 	}
 
-	*bootimage = fastboot_bootimage;
-	*efiimage = fastboot_efiimage;
-	*imagesize = fastboot_imagesize;
+	start_callback = NULL;
+	rx_callback = NULL;
+	tx_callback = NULL;
 
-	return EFI_SUCCESS;
-
-error:
 	return ret;
+}
+
+EFI_STATUS fastboot_usb_run(void)
+{
+	return uefi_call_wrapper(usb_device->Run, 2, usb_device, 1);
 }
