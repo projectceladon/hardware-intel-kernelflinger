@@ -85,7 +85,6 @@ struct cmd_list {
 	struct fastboot_cmd *cmd;
 };
 
-static BOOLEAN initialized;
 static struct cmd_list *cmdlist;
 static struct cmd_list *oem_cmdlist;
 static char command_buffer[MAGIC_LENGTH];
@@ -593,7 +592,7 @@ static void cmd_boot(__attribute__((__unused__)) INTN argc,
 		return;
 	}
 
-	ret = fastboot_usb_stop(dlbuffer, NULL, dlsize, UNKNOWN_TARGET);
+	ret = fastboot_stop(dlbuffer, NULL, dlsize, UNKNOWN_TARGET);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to stop USB");
 		return;
@@ -643,7 +642,7 @@ static void cmd_getvar(INTN argc, CHAR8 **argv)
 static void cmd_continue(__attribute__((__unused__)) INTN argc,
 			 __attribute__((__unused__)) CHAR8 **argv)
 {
-	EFI_STATUS ret = fastboot_usb_stop(NULL, NULL, 0, NORMAL_BOOT);
+	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, NORMAL_BOOT);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to stop USB");
 		return;
@@ -655,7 +654,7 @@ static void cmd_continue(__attribute__((__unused__)) INTN argc,
 static void cmd_reboot(__attribute__((__unused__)) INTN argc,
 		       __attribute__((__unused__)) CHAR8 **argv)
 {
-	EFI_STATUS ret = fastboot_usb_stop(NULL, NULL, 0, REBOOT);
+	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, REBOOT);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to stop USB");
 		return;
@@ -952,8 +951,6 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Fastboot UI initialization failed, continue anyway.");
 
-	initialized = TRUE;
-
 	return EFI_SUCCESS;
 
 error:
@@ -962,26 +959,92 @@ error:
 	return ret;
 }
 
+static void *fastboot_bootimage;
+static void *fastboot_efiimage;
+static UINTN fastboot_imagesize;
+static enum boot_target fastboot_target;
+
 EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
-			  enum boot_target *target, BOOLEAN dontfree)
+			  enum boot_target *target)
 {
 	EFI_STATUS ret;
 
 	if (!bootimage || !efiimage || !imagesize || !target)
 		return EFI_INVALID_PARAMETER;
 
-	if (!initialized)
-		fastboot_init();
+	fastboot_bootimage = NULL;
+	fastboot_efiimage = NULL;
+	fastboot_target = UNKNOWN_TARGET;
+	*target = UNKNOWN_TARGET;
 
-	ret = fastboot_usb_start(fastboot_start_callback, fastboot_process_rx,
-				 fastboot_process_tx, bootimage, efiimage,
-				 imagesize, target);
+	fastboot_init();
 
-	if (dontfree)
-		return ret;
+	/* In case user still holding it from answering a UX prompt
+	 * or magic key */
+	ui_wait_for_key_release();
 
+	ret = fastboot_usb_init_and_connect(fastboot_start_callback,
+					    fastboot_process_rx,
+					    fastboot_process_tx);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to initialized and connect");
+		goto exit;
+	}
+
+	for (;;) {
+		*target = fastboot_ui_event_handler();
+		if (*target != UNKNOWN_TARGET)
+			break;
+
+		ret = fastboot_usb_run();
+		if (EFI_ERROR(ret) && ret != EFI_TIMEOUT) {
+			efi_perror(ret, L"Error occurred during USB run");
+			goto exit;
+		}
+
+		if (fastboot_target != UNKNOWN_TARGET) {
+			*target = fastboot_target;
+			break;
+		}
+
+		if (fastboot_bootimage || fastboot_efiimage)
+			break;
+	}
+
+	ret = fastboot_usb_disconnect_and_unbind();
+	if (EFI_ERROR(ret))
+		goto exit;
+
+	*bootimage = fastboot_bootimage;
+	*efiimage = fastboot_efiimage;
+	*imagesize = fastboot_imagesize;
+
+exit:
 	fastboot_free();
-	return EFI_SUCCESS;
+	return ret;
+}
+
+EFI_STATUS fastboot_stop(void *bootimage, void *efiimage, UINTN imagesize,
+			 enum boot_target target)
+{
+	VOID *imgbuffer = NULL;
+
+	fastboot_imagesize = imagesize;
+	fastboot_target = target;
+
+	if (imagesize && (bootimage || efiimage)) {
+		imgbuffer = AllocatePool(imagesize);
+		if (!imgbuffer) {
+			error(L"Failed to allocate image buffer");
+			return EFI_OUT_OF_RESOURCES;
+		}
+		memcpy(imgbuffer, bootimage ? bootimage : efiimage, imagesize);
+	}
+
+	fastboot_bootimage = bootimage ? imgbuffer : NULL;
+	fastboot_efiimage = efiimage ? imgbuffer : NULL;
+
+	return fastboot_usb_stop();
 }
 
 void fastboot_free()
@@ -995,6 +1058,4 @@ void fastboot_free()
 	fastboot_unregister_all();
 	fastboot_ui_destroy();
 	gpt_free_cache();
-
-	initialized = FALSE;
 }
