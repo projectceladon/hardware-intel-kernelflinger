@@ -819,13 +819,41 @@ static void split_args(CHAR8 *str, INTN *argc, CHAR8 *argv[])
 	}
 }
 
-static void fastboot_process_rx(void *buf, unsigned len)
+static unsigned received_len;
+static void fastboot_run_command()
 {
 	struct fastboot_cmd *cmd;
-	static unsigned received_len = 0;
-	CHAR8 *s;
 	CHAR8 *argv[MAX_ARGS];
 	INTN argc;
+
+	if (fastboot_state != STATE_COMMAND)
+		return;
+
+	split_args((CHAR8 *)command_buffer, &argc, argv);
+	cmd = get_root_cmd((char *)argv[0]);
+	if (!cmd) {
+		error(L"unknown command '%a'", command_buffer);
+		fastboot_fail("unknown command");
+		return;
+	}
+
+	if (cmd->min_state > get_current_state()) {
+		fastboot_fail("command not allowed in %a state",
+			      get_current_state_string());
+		return;
+	}
+	cmd->handle(argc, argv);
+	received_len = 0;
+
+	if (fastboot_state == STATE_COMMAND)
+		fastboot_fail("unknown reason");
+	if (fastboot_state == STATE_TX)
+		flush_tx_buffer();
+}
+
+static void fastboot_process_rx(void *buf, unsigned len)
+{
+	CHAR8 *s;
 	int req_len;
 
 	switch (fastboot_state) {
@@ -856,26 +884,6 @@ static void fastboot_process_rx(void *buf, unsigned len)
 		debug(L"GOT %a", (CHAR8 *)buf);
 
 		fastboot_state = STATE_COMMAND;
-
-		split_args(buf, &argc, argv);
-		cmd = get_root_cmd((char *)argv[0]);
-		if (cmd) {
-			if (cmd->min_state > get_current_state()) {
-				fastboot_fail("command not allowed in %a state",
-					      get_current_state_string());
-				return;
-			}
-			cmd->handle(argc, argv);
-			received_len = 0;
-
-			if (fastboot_state == STATE_COMMAND)
-				fastboot_fail("unknown reason");
-			if (fastboot_state == STATE_TX)
-				flush_tx_buffer();
-		} else {
-			error(L"unknown command '%a'", buf);
-			fastboot_fail("unknown command");
-		}
 		break;
 	default:
 		error(L"Inconsistent fastboot state: 0x%x", fastboot_state);
@@ -996,11 +1004,17 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 		if (*target != UNKNOWN_TARGET)
 			break;
 
+		/* Keeping this for:
+		 * - retro-compatibility with previous USB device mode
+		 *   protocol implementation;
+		 * - the installer needs to be scheduled; */
 		ret = fastboot_usb_run();
 		if (EFI_ERROR(ret) && ret != EFI_TIMEOUT) {
 			efi_perror(ret, L"Error occurred during USB run");
 			goto exit;
 		}
+
+		fastboot_run_command();
 
 		if (fastboot_target != UNKNOWN_TARGET) {
 			*target = fastboot_target;
