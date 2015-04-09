@@ -99,7 +99,6 @@ static const char *flash_verified_whitelist[] = {
 	"bootloader",
 	"boot",
 	"system",
-	"oem", /* alternate name for vendor */
 	"vendor",
 	"recovery",
 	/* Following three needed even though not specifically listed
@@ -120,7 +119,6 @@ static const char *erase_verified_whitelist[] = {
 	 * be sent over as sparse images */
 	"system",
 	"vendor",
-	"oem",
 	NULL
 };
 
