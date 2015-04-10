@@ -68,6 +68,11 @@ struct fastboot_tx_buffer {
 	char msg[MAGIC_LENGTH];
 };
 
+struct cmdlist {
+	struct cmdlist *next;
+	struct fastboot_cmd *cmd;
+};
+
 enum fastboot_states {
 	STATE_OFFLINE,
 	STATE_COMMAND,
@@ -80,13 +85,7 @@ enum fastboot_states {
 
 EFI_GUID guid_linux_data = {0x0fc63daf, 0x8483, 0x4772, {0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4}};
 
-struct cmd_list {
-	struct cmd_list *next;
-	struct fastboot_cmd *cmd;
-};
-
-static struct cmd_list *cmdlist;
-static struct cmd_list *oem_cmdlist;
+static cmdlist_t cmdlist;
 static char command_buffer[MAGIC_LENGTH];
 static struct fastboot_var *varlist;
 static struct fastboot_tx_buffer *txbuf_head;
@@ -128,9 +127,13 @@ void fastboot_set_dlbuffer(void *buffer, unsigned size)
 	dlsize = size;
 }
 
-static EFI_STATUS cmd_register(struct cmd_list **list, struct fastboot_cmd *cmd)
+EFI_STATUS fastboot_register_into(cmdlist_t *list, struct fastboot_cmd *cmd)
 {
-	struct cmd_list *node;
+	cmdlist_t node;
+
+	if (!list || !cmd)
+		return EFI_INVALID_PARAMETER;
+
 	node = AllocatePool(sizeof(*node));
 	if (!node) {
 		error(L"Failed to allocate fastboot command %a", cmd->name);
@@ -145,27 +148,21 @@ static EFI_STATUS cmd_register(struct cmd_list **list, struct fastboot_cmd *cmd)
 
 EFI_STATUS fastboot_register(struct fastboot_cmd *cmd)
 {
-	return cmd_register(&cmdlist, cmd);
+	return fastboot_register_into(&cmdlist, cmd);
 }
 
-EFI_STATUS fastboot_oem_register(struct fastboot_cmd *cmd)
+void fastboot_cmdlist_unregister(cmdlist_t *list)
 {
-	return cmd_register(&oem_cmdlist, cmd);
-}
+	cmdlist_t next, node;
 
-static void fastboot_unregister_all()
-{
-	struct cmd_list **cmdlists[] = { &cmdlist, &oem_cmdlist };
-	struct cmd_list *next, *node;
-	UINTN i;
+	if (!list)
+		return;
 
-	for (i = 0; i < ARRAY_SIZE(cmdlists); i++) {
-		for (node = *cmdlists[i]; node; node = next) {
-			next = node->next;
-			FreePool(node);
-		}
-		*cmdlists[i] = NULL;
+	for (node = *list; node; node = next) {
+		next = node->next;
+		FreePool(node);
 	}
+	*list = NULL;
 }
 
 struct fastboot_var *fastboot_getvar(const char *name)
@@ -669,9 +666,13 @@ static void cmd_reboot_bootloader(__attribute__((__unused__)) INTN argc,
 	reboot(L"bootloader");
 }
 
-static struct fastboot_cmd *get_cmd(struct cmd_list *list, const char *name)
+static struct fastboot_cmd *get_cmd(cmdlist_t list, const char *name)
 {
-	struct cmd_list *node;
+	cmdlist_t node;
+
+	if (!name || !list)
+		return NULL;
+
 	for (node = list; node; node = node->next)
 		if (!strcmp((CHAR8 *)name, (CHAR8 *)node->cmd->name))
 			return node->cmd;
@@ -679,32 +680,33 @@ static struct fastboot_cmd *get_cmd(struct cmd_list *list, const char *name)
 	return NULL;
 }
 
-struct fastboot_cmd *get_root_cmd(const char *name)
+struct fastboot_cmd *fastboot_get_root_cmd(const char *name)
 {
 	return get_cmd(cmdlist, name);
 }
 
-static void cmd_oem(INTN argc, CHAR8 **argv)
+void fastboot_run_cmd(cmdlist_t list, const char *name, INTN argc, CHAR8 **argv)
 {
 	struct fastboot_cmd *cmd;
 
-	if (argc < 2) {
-		fastboot_fail("Invalid parameter");
-		return;
-	}
-
-	cmd = get_cmd(oem_cmdlist, (char *)argv[1]);
+	cmd = get_cmd(list, name);
 	if (!cmd) {
-		fastboot_fail("unknown command 'oem %a'", argv[1]);
-		return;
-	}
-	if (cmd->min_state > get_current_state()) {
-		fastboot_fail("'oem %a' not allowed in %a state",
-			      argv[1], get_current_state_string());
+		error(L"unknown command '%a'", name);
+		fastboot_fail("unknown command");
 		return;
 	}
 
-	cmd->handle(argc - 1, argv + 1);
+	if (cmd->min_state > get_current_state()) {
+		fastboot_fail("command not allowed in %a state",
+			      get_current_state_string());
+		return;
+	}
+	cmd->handle(argc, argv);
+}
+
+void fastboot_run_root_cmd(const char *name, INTN argc, CHAR8 **argv)
+{
+	fastboot_run_cmd(cmdlist, name, argc, argv);
 }
 
 static void fastboot_read_command(void)
@@ -820,7 +822,6 @@ static void split_args(CHAR8 *str, INTN *argc, CHAR8 *argv[])
 static unsigned received_len;
 static void fastboot_run_command()
 {
-	struct fastboot_cmd *cmd;
 	CHAR8 *argv[MAX_ARGS];
 	INTN argc;
 
@@ -828,19 +829,7 @@ static void fastboot_run_command()
 		return;
 
 	split_args((CHAR8 *)command_buffer, &argc, argv);
-	cmd = get_root_cmd((char *)argv[0]);
-	if (!cmd) {
-		error(L"unknown command '%a'", command_buffer);
-		fastboot_fail("unknown command");
-		return;
-	}
-
-	if (cmd->min_state > get_current_state()) {
-		fastboot_fail("command not allowed in %a state",
-			      get_current_state_string());
-		return;
-	}
-	cmd->handle(argc, argv);
+	fastboot_run_root_cmd((char *)argv[0], argc, argv);
 	received_len = 0;
 
 	if (fastboot_state == STATE_COMMAND)
@@ -902,8 +891,7 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "boot",		UNLOCKED,	cmd_boot },
 	{ "continue",		LOCKED,		cmd_continue },
 	{ "reboot",		LOCKED,		cmd_reboot },
-	{ "reboot-bootloader",	LOCKED,		cmd_reboot_bootloader },
-	{ "oem",		LOCKED,		cmd_oem }
+	{ "reboot-bootloader",	LOCKED,		cmd_reboot_bootloader }
 };
 
 static EFI_STATUS fastboot_init()
@@ -1066,8 +1054,10 @@ void fastboot_free()
 		dlbuffer = NULL;
 		bufsize = dlsize = 0;
 	}
+
 	fastboot_unpublish_all();
-	fastboot_unregister_all();
+	fastboot_cmdlist_unregister(&cmdlist);
+	fastboot_oem_free();
 	fastboot_ui_destroy();
 	gpt_free_cache();
 }

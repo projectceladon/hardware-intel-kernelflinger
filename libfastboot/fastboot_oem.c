@@ -49,6 +49,8 @@
 #define OFF_MODE_CHARGE		"off-mode-charge"
 #define CRASH_EVENT_MENU	"crash-event-menu"
 
+static cmdlist_t cmdlist;
+
 static EFI_STATUS fastboot_oem_publish(void)
 {
 	EFI_STATUS ret;
@@ -374,6 +376,16 @@ static void cmd_oem_rm(INTN argc, CHAR8 **argv)
 }
 #endif
 
+static void cmd_oem(INTN argc, CHAR8 **argv)
+{
+	if (argc < 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	fastboot_run_cmd(cmdlist, (char *)argv[1], argc - 1, argv + 1);
+}
+
 static struct fastboot_cmd COMMANDS[] = {
 	{ "lock",		LOCKED,		cmd_oem_lock },
 	{ "unlock",		LOCKED,		cmd_oem_unlock  },
@@ -393,6 +405,8 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "get-hashes",		LOCKED,		cmd_oem_gethashes  }
 };
 
+static struct fastboot_cmd oem = { "oem", LOCKED, cmd_oem };
+
 EFI_STATUS fastboot_oem_init(void)
 {
 	EFI_STATUS ret;
@@ -403,10 +417,17 @@ EFI_STATUS fastboot_oem_init(void)
 		return ret;
 
 	for (i = 0; i < ARRAY_SIZE(COMMANDS); i++) {
-		ret = fastboot_oem_register(&COMMANDS[i]);
+		ret = fastboot_register_into(&cmdlist, &COMMANDS[i]);
 		if (EFI_ERROR(ret))
 			return ret;
 	}
 
+	fastboot_register(&oem);
+
 	return EFI_SUCCESS;
+}
+
+void fastboot_oem_free()
+{
+	fastboot_cmdlist_unregister(&cmdlist);
 }

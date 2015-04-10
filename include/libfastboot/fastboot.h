@@ -52,20 +52,27 @@ struct fastboot_cmd {
 	fastboot_handle handle;
 };
 
-struct fastboot_cmd *get_root_cmd(const char *name);
+typedef struct cmdlist *cmdlist_t;
+
 void fastboot_set_dlbuffer(void *buffer, unsigned size);
+
+struct fastboot_cmd *fastboot_get_root_cmd(const char *name);
+EFI_STATUS fastboot_register(struct fastboot_cmd *cmd);
+EFI_STATUS fastboot_register_into(cmdlist_t *list, struct fastboot_cmd *cmd);
+void fastboot_cmdlist_unregister(cmdlist_t *list);
+void fastboot_run_cmd(cmdlist_t list, const char *name, INTN argc, CHAR8 **argv);
+void fastboot_run_root_cmd(const char *name, INTN argc, CHAR8 **argv);
 
 EFI_STATUS fastboot_publish(const char *name, const char *value);
 void fastboot_okay(const char *fmt, ...);
 void fastboot_fail(const char *fmt, ...);
 void fastboot_info(const char *fmt, ...);
-EFI_STATUS fastboot_register(struct fastboot_cmd *cmd);
-EFI_STATUS fastboot_oem_register(struct fastboot_cmd *cmd);
 
 EFI_STATUS fastboot_start(void **bootimage, void **efiimage,
 			  UINTN *imagesize, enum boot_target *target);
 EFI_STATUS fastboot_stop(void *bootimage, void *efiimage, UINTN imagesize,
 			 enum boot_target target);
+void fastboot_free(void);
 
-void fastboot_free();
+
 #endif	/* _FASTBOOT_H_ */
