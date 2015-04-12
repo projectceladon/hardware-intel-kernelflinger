@@ -39,6 +39,8 @@
 #define SDIO_DFLT_TIMEOUT 3000
 #define CARD_ADDRESS (1 << 16)
 
+EFI_GUID gEfiSdHostIoProtocolGuid = EFI_SD_HOST_IO_PROTOCOL_GUID;
+
 static EFI_STATUS secure_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT64 start, UINT64 end, UINTN timeout)
 {
 	CARD_STATUS status;
