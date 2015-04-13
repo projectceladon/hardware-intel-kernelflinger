@@ -37,6 +37,8 @@
 #include "vars.h"
 
 
+EFI_HANDLE g_parent_image;
+
 CHAR16 *stra_to_str(CHAR8 *stra)
 {
         UINTN len, i;

@@ -87,6 +87,10 @@ BOOLEAN ui_confirm(const ui_textline_t *text, UINTN width, UINTN height,
 	UINTN text_height, scaled_text_height, scaled_text_width, line_height;
 
 	font = ui_font_get_default();
+	if (!font) {
+		error(L"Default font not available");
+		return FALSE;
+	}
 
 	for (line_nb = 0; text[line_nb].str; line_nb++) {
 		len = strlen((CHAR8 *)text[line_nb].str);

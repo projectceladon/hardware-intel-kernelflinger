@@ -1,10 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@Intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,19 +30,60 @@
  *
  */
 
-#ifndef _FASTBOOT_USB_H_
-#define _FASTBOOT_USB_H_
+#include <lib.h>
 
-typedef void (*data_callback_t)(void *buf, unsigned len);
-typedef void (*start_callback_t)(void);
+#include "text_parser.h"
 
-int usb_write(void *buf, unsigned len);
-int usb_read(void *buf, unsigned len);
-EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
-					 data_callback_t rx_cb,
-					 data_callback_t tx_cb);
-EFI_STATUS fastboot_usb_stop(void);
-EFI_STATUS fastboot_usb_disconnect_and_unbind(void);
-EFI_STATUS fastboot_usb_run(void);
+void skip_whitespace(char **line)
+{
+	char *cur = *line;
+	while (*cur && isspace(*cur))
+		cur++;
+	*line = cur;
+}
 
-#endif	/* _FASTBOOT_USB_H_ */
+EFI_STATUS parse_text_buffer(VOID *data, UINTN size,
+			     EFI_STATUS (*parse_line)(char *line))
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	char *buf, *line, *eol, *p;
+	int lineno = 0;
+
+	/* Extra byte so we can always terminate the last line. */
+	buf = AllocatePool(size + 1);
+	if (!buf) {
+		error(L"Failed to allocate text copy buffer");
+		return EFI_OUT_OF_RESOURCES;
+	}
+	memcpy(buf, data, size);
+	buf[size] = 0;
+
+	for (line = buf; line - buf < (ssize_t)size; line = eol + 1) {
+		lineno++;
+
+		/* Detect line and terminate. */
+		eol = (char *)strchr((CHAR8 *)line, '\n');
+		if (!eol)
+			eol = line + strlen((CHAR8 *)line);
+		*eol = 0;
+
+		/* Snip space character for sanity. */
+		p = line + strlen((CHAR8 *)line);
+		while (p > line && isspace(*(p-1)))
+			*(--p) = 0;
+
+		skip_whitespace(&line);
+		if (*line == '\0')
+			continue;
+
+		ret = parse_line(line);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed at line %d", lineno);
+			goto exit;
+		}
+	}
+
+exit:
+	FreePool(buf);
+	return ret;
+}

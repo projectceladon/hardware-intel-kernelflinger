@@ -34,20 +34,13 @@
 #include "fastboot_oem.h"
 #include "oemvars.h"
 #include "vars.h"
+#include "text_parser.h"
 
 enum vartype {
 	VAR_TYPE_UNKNOWN,
 	VAR_TYPE_STRING,
 	VAR_TYPE_BLOB
 };
-
-static void skip_whitespace(char **line)
-{
-	char *cur = *line;
-	while (*cur && isspace(*cur))
-		cur++;
-	*line = cur;
-}
 
 static BOOLEAN parse_oemvar_guid_line(char *line, EFI_GUID *g)
 {
@@ -201,6 +194,83 @@ static int parse_oemvar_attributes(char **linep, uint32_t *attributesp, enum var
 	return 0;
 }
 
+static EFI_GUID curr_guid;
+
+static EFI_STATUS parse_line(char *line)
+{
+	EFI_STATUS ret;
+	uint32_t attributes;
+	enum vartype type;
+	CHAR16 *varname;
+	UINTN vallen;
+	char  *var, *val, *p;
+
+	/* Snip comments */
+	if ((p = (char *)strchr((CHAR8 *)line, '#')))
+		*p = 0;
+
+	/* GUID line syntax */
+	if (parse_oemvar_guid_line(line, &curr_guid)) {
+		if (!memcmp(&curr_guid, &fastboot_guid, sizeof(curr_guid))) {
+			error(L"fastboot GUID is reserved for Kernelflinger use");
+			return EFI_ACCESS_DENIED;
+		}
+		debug(L"current guid set to %g", &curr_guid);
+		return EFI_SUCCESS;
+	}
+
+	if (parse_oemvar_attributes(&line, &attributes, &type)) {
+		error(L"Invalid attribute specification");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	/* Variable definition? */
+	skip_whitespace(&line);
+	var = line;
+	val = NULL;
+	while (*line && !isspace(*line)) line++;
+	if (*line) {
+		*line++ = 0;
+		skip_whitespace(&line);
+		val = line;
+	}
+
+	if (!*var)
+		return EFI_SUCCESS;
+
+	if (val) {
+		switch (type) {
+		case VAR_TYPE_BLOB:
+			vallen = unescape_oemvar_val(val) - 1;
+			break;
+		case VAR_TYPE_STRING:
+			vallen = unescape_oemvar_val(val);
+			break;
+		default:
+			return EFI_INVALID_PARAMETER;
+		}
+	} else {
+		vallen = 0;
+	}
+
+	varname = stra_to_str((CHAR8 *)var);
+	if (!varname) {
+		error(L"Failed to convert varname string.");
+		return EFI_INVALID_PARAMETER;
+	}
+	debug(L"Setting oemvar: %a", var);
+	ret = uefi_call_wrapper(RT->SetVariable, 5, varname,
+				&curr_guid, attributes,
+				vallen, val);
+	FreePool(varname);
+	if (EFI_ERROR(ret)) {
+		error(L"EFI variable setting failed");
+		return ret;
+	}
+
+	return EFI_SUCCESS;
+}
+
 /*
  * GMIN OEM variables are stored as EFI variables. By default, they
  * are under the fastboot GUID.
@@ -239,106 +309,7 @@ static int parse_oemvar_attributes(char **linep, uint32_t *attributesp, enum var
  */
 EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 {
-        EFI_STATUS ret = EFI_INVALID_PARAMETER;
-	char *buf, *line, *eol, *var, *val, *p;
-	CHAR16 *varname;
-	UINTN vallen;
-	EFI_GUID curr_guid = loader_guid;
-	int lineno = 0;
-
 	debug(L"Parsing and setting values from oemvars file");
-
-	/* extra byte so we can always terminate the last line */
-	buf = AllocatePool(size+1);
-	if (!buf)
-		return EFI_OUT_OF_RESOURCES;
-	memcpy(buf, data, size);
-	buf[size] = 0;
-
-	for (line = buf; line - buf < (ssize_t)size; line = eol+1) {
-		uint32_t attributes;
-		enum vartype type;
-
-		lineno++;
-
-		/* Detect line and terminate */
-		eol = (char *)strchr((CHAR8 *)line, '\n');
-		if (!eol)
-			eol = line + strlen((CHAR8 *)line);
-		*eol = 0;
-
-		/* Snip comments */
-		if ((p = (char *)strchr((CHAR8 *)line, '#')))
-			*p = 0;
-
-		/* Snip trailing whitespace for sanity */
-		p = line + strlen((CHAR8 *)line);
-		while (p > line && isspace(*(p-1)))
-			*(--p) = 0;
-
-		/* GUID line syntax */
-		if (parse_oemvar_guid_line(line, &curr_guid)) {
-			if (!memcmp(&curr_guid, &fastboot_guid, sizeof(curr_guid))) {
-				error(L"fastboot GUID is reserved for Kernelflinger use");
-				goto out;
-			}
-			debug(L"current guid set to %g", &curr_guid);
-			continue;
-		}
-
-		if (parse_oemvar_attributes(&line, &attributes, &type)) {
-			error(L"Invalid attribute specification");
-			goto out;
-		}
-
-		/* Variable definition? */
-		skip_whitespace(&line);
-		var = line;
-		val = NULL;
-		while (*line && !isspace(*line)) line++;
-		if (*line) {
-			*line++ = 0;
-			skip_whitespace(&line);
-			val = line;
-		}
-
-		if (!*var)
-			continue;
-
-		if (val) {
-			switch (type) {
-			case VAR_TYPE_BLOB:
-				vallen = unescape_oemvar_val(val) - 1;
-				break;
-			case VAR_TYPE_STRING:
-				vallen = unescape_oemvar_val(val);
-				break;
-			default:
-				goto out;
-			}
-		} else {
-			vallen = 0;
-		}
-
-		varname = stra_to_str((CHAR8 *)var);
-		if (!varname) {
-			error(L"Failed to convert varname string.");
-			goto out;
-		}
-		debug(L"Setting oemvar: %a", var);
-		ret = uefi_call_wrapper(RT->SetVariable, 5, varname,
-					&curr_guid, attributes,
-					vallen, val);
-		FreePool(varname);
-		if (EFI_ERROR(ret)) {
-			error(L"EFI variable setting failed");
-			goto out;
-		}
-	}
-	ret = EFI_SUCCESS;
-out:
-	FreePool(buf);
-	if (EFI_ERROR(ret))
-		error(L"Failed at line %d", lineno);
-	return ret;
+	curr_guid = loader_guid;
+	return parse_text_buffer(data, size, parse_line);
 }

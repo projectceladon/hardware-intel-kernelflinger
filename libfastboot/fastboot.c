@@ -38,6 +38,7 @@
 #include <vars.h>
 #include <string.h>
 #include <ui.h>
+#include <em.h>
 
 #include "uefi_utils.h"
 #include "gpt.h"
@@ -59,6 +60,7 @@ struct fastboot_var {
 	struct fastboot_var *next;
 	char name[MAX_VARIABLE_LENGTH];
 	char value[MAX_VARIABLE_LENGTH];
+	char *(*get_value)(void);
 };
 
 struct fastboot_tx_buffer {
@@ -83,7 +85,6 @@ struct cmd_list {
 	struct fastboot_cmd *cmd;
 };
 
-static BOOLEAN initialized;
 static struct cmd_list *cmdlist;
 static struct cmd_list *oem_cmdlist;
 static char command_buffer[MAGIC_LENGTH];
@@ -98,7 +99,6 @@ static const char *flash_verified_whitelist[] = {
 	"bootloader",
 	"boot",
 	"system",
-	"oem", /* alternate name for vendor */
 	"vendor",
 	"recovery",
 	/* Following three needed even though not specifically listed
@@ -119,7 +119,6 @@ static const char *erase_verified_whitelist[] = {
 	 * be sent over as sparse images */
 	"system",
 	"vendor",
-	"oem",
 	NULL
 };
 
@@ -180,6 +179,32 @@ struct fastboot_var *fastboot_getvar(const char *name)
 	return NULL;
 }
 
+static struct fastboot_var *fastboot_getvar_or_create(const char *name)
+{
+	struct fastboot_var *var;
+	UINTN size;
+
+	size = strlena((CHAR8 *) name) + 1;
+	if (size > sizeof(var->name)) {
+		error(L"Name too long for variable '%a'", name);
+		return NULL;
+	}
+
+	var = fastboot_getvar(name);
+	if (!var) {
+		var = AllocateZeroPool(sizeof(*var));
+		if (!var) {
+			error(L"Failed to allocate variable '%a'", name);
+			return NULL;
+		}
+		var->next = varlist;
+		varlist = var;
+		CopyMem(var->name, name, size);
+	}
+
+	return var;
+}
+
 /*
  * remove all fastboot variable which starts with partition-
  */
@@ -216,28 +241,39 @@ static void fastboot_unpublish_all()
 	varlist = NULL;
 }
 
+EFI_STATUS fastboot_publish_dynamic(const char *name, char *(get_value)(void))
+{
+	struct fastboot_var *var;
+
+	if (!name || !get_value)
+		return EFI_INVALID_PARAMETER;
+
+	var = fastboot_getvar_or_create(name);
+	if (!var)
+		return EFI_INVALID_PARAMETER;
+
+	var->get_value = get_value;
+
+	return EFI_SUCCESS;
+}
+
 EFI_STATUS fastboot_publish(const char *name, const char *value)
 {
 	struct fastboot_var *var;
-	UINTN namelen = strlena((CHAR8 *) name) + 1;
-	UINTN valuelen = strlena((CHAR8 *) value) + 1;
+	UINTN valuelen;
 
-	if (namelen > sizeof(var->name) ||
-	    valuelen > sizeof(var->value)) {
-		error(L"name or value too long for variable %a", name);
+	if (!name || !value)
+		return EFI_INVALID_PARAMETER;
+
+	valuelen = strlena((CHAR8 *) value) + 1;
+	if (valuelen > sizeof(var->value)) {
+		error(L"name or value too long for variable '%a'", name);
 		return EFI_BUFFER_TOO_SMALL;
 	}
-	var = fastboot_getvar(name);
-	if (!var) {
-		var = AllocateZeroPool(sizeof(*var));
-		if (!var) {
-			error(L"Failed to allocate variable %a", name);
-			return EFI_OUT_OF_RESOURCES;
-		}
-		var->next = varlist;
-		varlist = var;
-	}
-	CopyMem(var->name, name, namelen);
+	var = fastboot_getvar_or_create(name);
+	if (!var)
+		return EFI_INVALID_PARAMETER;
+
 	CopyMem(var->value, value, valuelen);
 
 	return EFI_SUCCESS;
@@ -293,7 +329,7 @@ static EFI_STATUS publish_partsize(void)
 	UINTN part_count;
 	UINTN i;
 
-	if (EFI_ERROR(gpt_list_partition(&gparti, &part_count, EMMC_USER_PART)))
+	if (EFI_ERROR(gpt_list_partition(&gparti, &part_count, LOGICAL_UNIT_USER)))
 		return EFI_SUCCESS;
 
 	for (i = 0; i < part_count; i++) {
@@ -321,6 +357,26 @@ static EFI_STATUS publish_partsize(void)
 	FreePool(gparti);
 
 	return EFI_SUCCESS;
+}
+
+static char *get_battery_voltage_var()
+{
+	EFI_STATUS ret;
+	static char battery_voltage[30]; /* Enough space for %dmV format */
+	UINTN voltage;
+
+	ret = get_battery_voltage(&voltage);
+	if (EFI_ERROR(ret))
+		return NULL;
+
+	ret = snprintf((CHAR8 *)battery_voltage, sizeof(battery_voltage),
+		       (CHAR8 *)"%dmV", voltage);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to format voltage string");
+		return NULL;
+	}
+
+	return battery_voltage;
 }
 
 static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char *fmt, va_list ap)
@@ -534,13 +590,32 @@ static void cmd_boot(__attribute__((__unused__)) INTN argc,
 		return;
 	}
 
-	ret = fastboot_usb_stop(dlbuffer, NULL, dlsize, UNKNOWN_TARGET);
+	ret = fastboot_stop(dlbuffer, NULL, dlsize, UNKNOWN_TARGET);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to stop USB");
 		return;
 	}
 	ui_print(L"Booting received image ...");
 	fastboot_okay("");
+}
+
+static char *fastboot_var_value(struct fastboot_var *var)
+{
+	char *value;
+
+	if (!var->get_value)
+		return var->value;
+
+	value = var->get_value();
+	if (!value)
+		return "";
+
+	if (strlena((CHAR8 *)value) + 1 > sizeof(var->value)) {
+		error(L"value too long for '%a' variable");
+		return "";
+	}
+
+	return value;
 }
 
 static void cmd_getvar(INTN argc, CHAR8 **argv)
@@ -553,19 +628,19 @@ static void cmd_getvar(INTN argc, CHAR8 **argv)
 
 	if (!strcmp(argv[1], (CHAR8 *)"all")) {
 		for (var = varlist; var; var = var->next)
-			fastboot_info("%a: %a", var->name, var->value);
+			fastboot_info("%a: %a", var->name, fastboot_var_value(var));
 		fastboot_okay("");
 		return;
 	}
 
 	var = fastboot_getvar((char *)argv[1]);
-	fastboot_okay("%a", var ? var->value : "");
+	fastboot_okay("%a", var ? fastboot_var_value(var) : "");
 }
 
 static void cmd_continue(__attribute__((__unused__)) INTN argc,
 			 __attribute__((__unused__)) CHAR8 **argv)
 {
-	EFI_STATUS ret = fastboot_usb_stop(NULL, NULL, 0, NORMAL_BOOT);
+	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, NORMAL_BOOT);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to stop USB");
 		return;
@@ -577,7 +652,7 @@ static void cmd_continue(__attribute__((__unused__)) INTN argc,
 static void cmd_reboot(__attribute__((__unused__)) INTN argc,
 		       __attribute__((__unused__)) CHAR8 **argv)
 {
-	EFI_STATUS ret = fastboot_usb_stop(NULL, NULL, 0, REBOOT);
+	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, REBOOT);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to stop USB");
 		return;
@@ -742,13 +817,41 @@ static void split_args(CHAR8 *str, INTN *argc, CHAR8 *argv[])
 	}
 }
 
-static void fastboot_process_rx(void *buf, unsigned len)
+static unsigned received_len;
+static void fastboot_run_command()
 {
 	struct fastboot_cmd *cmd;
-	static unsigned received_len = 0;
-	CHAR8 *s;
 	CHAR8 *argv[MAX_ARGS];
 	INTN argc;
+
+	if (fastboot_state != STATE_COMMAND)
+		return;
+
+	split_args((CHAR8 *)command_buffer, &argc, argv);
+	cmd = get_root_cmd((char *)argv[0]);
+	if (!cmd) {
+		error(L"unknown command '%a'", command_buffer);
+		fastboot_fail("unknown command");
+		return;
+	}
+
+	if (cmd->min_state > get_current_state()) {
+		fastboot_fail("command not allowed in %a state",
+			      get_current_state_string());
+		return;
+	}
+	cmd->handle(argc, argv);
+	received_len = 0;
+
+	if (fastboot_state == STATE_COMMAND)
+		fastboot_fail("unknown reason");
+	if (fastboot_state == STATE_TX)
+		flush_tx_buffer();
+}
+
+static void fastboot_process_rx(void *buf, unsigned len)
+{
+	CHAR8 *s;
 	int req_len;
 
 	switch (fastboot_state) {
@@ -770,30 +873,15 @@ static void fastboot_process_rx(void *buf, unsigned len)
 		}
 		break;
 	case STATE_COMPLETE:
-		((CHAR8 *)buf)[len] = 0;
+		if (buf != command_buffer || len >= sizeof(command_buffer)) {
+			fastboot_fail("Inappropriate command buffer or length");
+			return;
+		}
+
+		((CHAR8 *)buf)[len] = '\0';
 		debug(L"GOT %a", (CHAR8 *)buf);
 
 		fastboot_state = STATE_COMMAND;
-
-		split_args(buf, &argc, argv);
-		cmd = get_root_cmd((char *)argv[0]);
-		if (cmd) {
-			if (cmd->min_state > get_current_state()) {
-				fastboot_fail("command not allowed in %a state",
-					      get_current_state_string());
-				return;
-			}
-			cmd->handle(argc, argv);
-			received_len = 0;
-
-			if (fastboot_state == STATE_COMMAND)
-				fastboot_fail("unknown reason");
-			if (fastboot_state == STATE_TX)
-				flush_tx_buffer();
-		} else {
-			error(L"unknown command '%a'", buf);
-			fastboot_fail("unknown command");
-		}
 		break;
 	default:
 		error(L"Inconsistent fastboot state: 0x%x", fastboot_state);
@@ -838,6 +926,10 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
+	ret = fastboot_publish_dynamic("battery-voltage", get_battery_voltage_var);
+	if (EFI_ERROR(ret))
+		goto error;
+
 	if (EFI_ERROR(snprintf((CHAR8 *)download_max_str, sizeof(download_max_str),
 			       (CHAR8 *)"0x%lX", MAX_DOWNLOAD_SIZE)))
 		debug(L"Failed to set download_max_str string");
@@ -865,8 +957,6 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Fastboot UI initialization failed, continue anyway.");
 
-	initialized = TRUE;
-
 	return EFI_SUCCESS;
 
 error:
@@ -875,23 +965,98 @@ error:
 	return ret;
 }
 
+static void *fastboot_bootimage;
+static void *fastboot_efiimage;
+static UINTN fastboot_imagesize;
+static enum boot_target fastboot_target;
+
 EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
-			  enum boot_target *target, BOOLEAN dontfree)
+			  enum boot_target *target)
 {
 	EFI_STATUS ret;
 
-	if (!initialized)
-		fastboot_init();
+	if (!bootimage || !efiimage || !imagesize || !target)
+		return EFI_INVALID_PARAMETER;
 
-	ret = fastboot_usb_start(fastboot_start_callback, fastboot_process_rx,
-				 fastboot_process_tx, bootimage, efiimage,
-				 imagesize, target);
+	fastboot_bootimage = NULL;
+	fastboot_efiimage = NULL;
+	fastboot_target = UNKNOWN_TARGET;
+	*target = UNKNOWN_TARGET;
 
-	if (dontfree)
-		return ret;
+	fastboot_init();
 
+	/* In case user still holding it from answering a UX prompt
+	 * or magic key */
+	ui_wait_for_key_release();
+
+	ret = fastboot_usb_init_and_connect(fastboot_start_callback,
+					    fastboot_process_rx,
+					    fastboot_process_tx);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to initialized and connect");
+		goto exit;
+	}
+
+	for (;;) {
+		*target = fastboot_ui_event_handler();
+		if (*target != UNKNOWN_TARGET)
+			break;
+
+		/* Keeping this for:
+		 * - retro-compatibility with previous USB device mode
+		 *   protocol implementation;
+		 * - the installer needs to be scheduled; */
+		ret = fastboot_usb_run();
+		if (EFI_ERROR(ret) && ret != EFI_TIMEOUT) {
+			efi_perror(ret, L"Error occurred during USB run");
+			goto exit;
+		}
+
+		fastboot_run_command();
+
+		if (fastboot_target != UNKNOWN_TARGET) {
+			*target = fastboot_target;
+			break;
+		}
+
+		if (fastboot_bootimage || fastboot_efiimage)
+			break;
+	}
+
+	ret = fastboot_usb_disconnect_and_unbind();
+	if (EFI_ERROR(ret))
+		goto exit;
+
+	*bootimage = fastboot_bootimage;
+	*efiimage = fastboot_efiimage;
+	*imagesize = fastboot_imagesize;
+
+exit:
 	fastboot_free();
-	return EFI_SUCCESS;
+	return ret;
+}
+
+EFI_STATUS fastboot_stop(void *bootimage, void *efiimage, UINTN imagesize,
+			 enum boot_target target)
+{
+	VOID *imgbuffer = NULL;
+
+	fastboot_imagesize = imagesize;
+	fastboot_target = target;
+
+	if (imagesize && (bootimage || efiimage)) {
+		imgbuffer = AllocatePool(imagesize);
+		if (!imgbuffer) {
+			error(L"Failed to allocate image buffer");
+			return EFI_OUT_OF_RESOURCES;
+		}
+		memcpy(imgbuffer, bootimage ? bootimage : efiimage, imagesize);
+	}
+
+	fastboot_bootimage = bootimage ? imgbuffer : NULL;
+	fastboot_efiimage = efiimage ? imgbuffer : NULL;
+
+	return fastboot_usb_stop();
 }
 
 void fastboot_free()
@@ -905,6 +1070,4 @@ void fastboot_free()
 	fastboot_unregister_all();
 	fastboot_ui_destroy();
 	gpt_free_cache();
-
-	initialized = FALSE;
 }

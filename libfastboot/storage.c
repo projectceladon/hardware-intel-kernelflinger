@@ -1,10 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,19 +28,52 @@
  *
  */
 
-#ifndef _FASTBOOT_USB_H_
-#define _FASTBOOT_USB_H_
+#include <efi.h>
+#include <efilib.h>
+#include <log.h>
+#include "storage.h"
+#include "mmc.h"
+#include "ufs.h"
 
-typedef void (*data_callback_t)(void *buf, unsigned len);
-typedef void (*start_callback_t)(void);
+static struct storage *storage;
 
-int usb_write(void *buf, unsigned len);
-int usb_read(void *buf, unsigned len);
-EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
-					 data_callback_t rx_cb,
-					 data_callback_t tx_cb);
-EFI_STATUS fastboot_usb_stop(void);
-EFI_STATUS fastboot_usb_disconnect_and_unbind(void);
-EFI_STATUS fastboot_usb_run(void);
+static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path)
+{
+	debug(L"Identifying storage");
+	if (!device_path)
+		goto out;
 
-#endif	/* _FASTBOOT_USB_H_ */
+	if (is_emmc(device_path)) {
+		debug(L"eMMC storage identified");
+		storage = &storage_emmc;
+		return EFI_SUCCESS;
+	}
+
+	if (is_ufs(device_path)) {
+		debug(L"UFS storage identified");
+		storage = &storage_ufs;
+		return EFI_SUCCESS;
+	}
+
+out:
+	error(L"Unsupported storage");
+	return EFI_UNSUPPORTED;
+}
+
+EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
+{
+	if (!storage && EFI_ERROR(identify_storage(p)))
+		return EFI_UNSUPPORTED;
+
+	return storage->check_logical_unit(p, log_unit);
+}
+
+EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+{
+	if (!storage &&
+	    EFI_ERROR(identify_storage(DevicePathFromHandle(handle))))
+		return EFI_UNSUPPORTED;
+
+	debug(L"Erase lba %ld -> %ld", start, end);
+	return storage->erase_blocks(handle, bio, start, end);
+}

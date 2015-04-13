@@ -36,6 +36,7 @@
 #include "lib.h"
 
 static struct RSCI_TABLE *RSCI_table = NULL;
+static struct OEM1_TABLE *OEM1_table = NULL;
 
 #define RSDT_SIG "RSDT"
 #define RSDP_SIG "RSD PTR "
@@ -45,6 +46,10 @@ static const struct ACPI_DESC_HEADER SUPPORTED_TABLES[] = {
 	{ .signature = "RSCI",
 	  .oem_id = "INTEL ",
 	  .oem_table_id = "BOOTSRC ",
+	  .revision = 1 },
+	{ .signature = "OEM1",
+	  .oem_id = "INTEL ",
+	  .oem_table_id = "ENRGYMGT",
 	  .revision = 1 }
 };
 #endif
@@ -196,3 +201,17 @@ enum reset_sources rsci_get_reset_source(void)
 	return get_acpi_field(RSCI, reset_source);
 }
 
+UINT8 oem1_get_ia_apps_to_use(void)
+{
+	return get_acpi_field(OEM1, ia_apps_to_use);
+}
+
+UINT8 oem1_get_ia_apps_cap(void)
+{
+	return get_acpi_field(OEM1, ia_apps_cap);
+}
+
+UINT16 oem1_get_ia_apps_run(void)
+{
+	return get_acpi_field(OEM1, ia_apps_run);
+}

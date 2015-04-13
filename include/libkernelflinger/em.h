@@ -1,10 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,19 +30,11 @@
  *
  */
 
-#ifndef _FASTBOOT_USB_H_
-#define _FASTBOOT_USB_H_
+#ifndef _EM_H_
+#define _EM_H_
 
-typedef void (*data_callback_t)(void *buf, unsigned len);
-typedef void (*start_callback_t)(void);
+BOOLEAN is_charger_plugged_in(void);
+BOOLEAN is_battery_below_boot_OS_threshold(void);
+EFI_STATUS get_battery_voltage(UINTN *voltage);
 
-int usb_write(void *buf, unsigned len);
-int usb_read(void *buf, unsigned len);
-EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
-					 data_callback_t rx_cb,
-					 data_callback_t tx_cb);
-EFI_STATUS fastboot_usb_stop(void);
-EFI_STATUS fastboot_usb_disconnect_and_unbind(void);
-EFI_STATUS fastboot_usb_run(void);
-
-#endif	/* _FASTBOOT_USB_H_ */
+#endif  /* _EM_H_ */

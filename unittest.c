@@ -39,6 +39,118 @@
 #include "ui.h"
 #include "lib.h"
 #include "unittest.h"
+#include "blobstore.h"
+
+
+static VOID test_blobstore(VOID)
+{
+        blobstore_t *db;
+        CHAR8 blob[1024];
+        CHAR8 res_blob[1024];
+        CHAR8 blob_key[64];
+        UINT32 blob_size = 1024;
+        int i;
+        int meta_data_size = 150 * 1024;
+        int data_size = 1024 * 1024 * 2; // dtb+ oem
+        void *location = AllocatePool(meta_data_size + data_size );
+        BOOLEAN test_pass = FALSE;
+        int rc = 0;
+
+        Print(L"Creating blob store with 1024 entries...\n");
+        Print(L"blobstore location : 0x%lx\n", location);
+        db = blobstore_allocate();
+        if (blobstore_create(db, location, 1024) != 0) {
+                Print(L"Failed to create blob store\n");
+                goto end;
+        }
+        Print(L"Put test blobs into blob store...\n");
+        for (i=1; i<=1024; i++) {
+                snprintf(blob_key, 64, (CHAR8 *)"key%d",i);
+                snprintf(blob, 1024, (CHAR8 *)"This is my Dtb%d", i);
+                rc = blobstore_putblob(db, blob, strlen(blob)+1,
+                                          blob_key, BLOB_TYPE_DTB);
+                if(rc != 0)
+                {
+                        Print(L"Failed to Put dtb Blob. ret=%d\n", rc);
+                        Print(L"blob_key:%a Blob:'%a'\n",
+                                          blob_key, blob);
+                        goto end;
+                }
+                snprintf(blob, 1024, (CHAR8 *)"This is my OemVar%d", i);
+                rc = blobstore_putblob(db, blob, strlen(blob)+1,
+                                          blob_key, BLOB_TYPE_OEMVARS);
+                if (rc != 0)
+                {
+                        Print(L"Failed to Put Oem Blob ret=%d\n",rc);
+                        Print(L"blobKey:%a Blob:'%a'\n",
+                                          blob_key, blob);
+                        goto end;
+                }
+        }
+
+        Print(L"Close blob store...\n");
+        blobstore_close(db);
+        Print(L"Re-open/Load blob store...\n");
+        rc = blobstore_load(db, location);
+        if(rc != 0) {
+                Print(L"Failed to load blobstore ret=%d\n",rc);
+                goto end;
+        }
+        Print(L"Query blobs and Verify...\n");
+
+        for (i=1024; i>=1; i--) {
+                snprintf(blob_key, 64, (CHAR8 *)"key%d",i);
+                // reset blobSize to show available size for blob Buffer
+                blob_size = 1024;
+                rc = blobstore_getblob(db, res_blob, &blob_size,
+                                        blob_key, BLOB_TYPE_DTB);
+                if(rc != 0) {
+                        Print(L"Failed to Get Dtb Blob ret=%d\n",rc);
+                        Print(L"blobKey:'%a'\n", blob_key);
+                        goto end;
+                }
+
+                snprintf(blob, 1024, (CHAR8 *)"This is my Dtb%d",i);
+                if(strncmp(res_blob, blob, 1024) != 0) {
+                        Print(L"Dtb Blob Verification failed.\n");
+                        Print(L"blobKey:%a Blob Put:'%a' Got:'%a'\n",
+                                        blob_key, blob, res_blob);
+                        goto end;
+                }
+
+                //reset blob_size to show available size for blob Buffer
+                blob_size = 1024;
+                rc = blobstore_getblob(db, res_blob, &blob_size,
+                                blob_key, BLOB_TYPE_OEMVARS);
+                if(rc != 0) {
+                        Print(L"Failed to Get OemVars Blob. ret=%d\n",rc);
+                        Print(L"blob_key:'%a'\n", blob_key);
+                        goto end;
+                }
+
+                snprintf(blob, 1024, (CHAR8 *)"This is my OemVar%d",i);
+                if(strncmp(res_blob, blob, 1024) != 0) {
+                        Print(L"OemVar Blob Verification failed.\n");
+                        Print(L"blobKey:%a Blob Put:%a Got:%a\n",
+                                                blob_key, blob, res_blob);
+                        goto end;
+                }
+        }
+        test_pass = TRUE;
+end:
+        Print(L"Close blob store...\n");
+        blobstore_close(db);
+        blobstore_free(db);
+        FreePool(location);
+        if (test_pass)
+                Print(L"Test Passed.\n");
+        else
+                Print(L"Test Failed.\n");
+
+}
+
+
+
 
 static VOID test_keys(VOID)
 {
@@ -68,6 +180,7 @@ static VOID test_ux(VOID)
         ux_prompt_user_secure_boot_off();
         ux_prompt_user_keystore_unverified(fake_hash);
         ux_crash_event_prompt_user_for_boot_target();
+        ux_display_low_battery(3);
 }
 
 static struct test_suite {
@@ -75,7 +188,8 @@ static struct test_suite {
         VOID (*fun)(VOID);
 } TEST_SUITES[] = {
         { L"ux", test_ux },
-        { L"keys", test_keys }
+        { L"keys", test_keys },
+        { L"blobstore",test_blobstore }
 };
 
 VOID unittest_main(CHAR16 *testname)
