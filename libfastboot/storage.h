@@ -1,10 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,21 +26,22 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * This file defines bootlogic data structures, try to keep it without
+ * any external definitions in order to ease export of it.
  */
 
-#ifndef _FASTBOOT_USB_H_
-#define _FASTBOOT_USB_H_
+#ifndef _STORAGE_H_
+#define _STORAGE_H_
 
-typedef void (*data_callback_t)(void *buf, unsigned len);
-typedef void (*start_callback_t)(void);
+#include <efi.h>
+#include "gpt.h"
 
-int usb_write(void *buf, unsigned len);
-int usb_read(void *buf, unsigned len);
-EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
-					 data_callback_t rx_cb,
-					 data_callback_t tx_cb);
-EFI_STATUS fastboot_usb_stop(void);
-EFI_STATUS fastboot_usb_disconnect_and_unbind(void);
-EFI_STATUS fastboot_usb_run(void);
+struct storage {
+	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
+	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
+};
 
-#endif	/* _FASTBOOT_USB_H_ */
+EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
+EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
+
+#endif	/* _STORAGE_H_ */

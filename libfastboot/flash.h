@@ -49,5 +49,7 @@ EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label);
 EFI_STATUS flash_file(EFI_HANDLE image, CHAR16 *filename, CHAR16 *label);
 EFI_STATUS erase_by_label(CHAR16 *label);
 EFI_STATUS garbage_disk(void);
+EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label);
+EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
 
 #endif	/* _FLASH_H_ */

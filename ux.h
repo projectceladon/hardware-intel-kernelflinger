@@ -62,6 +62,9 @@ BOOLEAN ux_prompt_user_secure_boot_off(VOID);
  * a boot target */
 enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID);
 
+/* Display a low_battery image during DELAY seconds and exit.  */
+VOID ux_display_low_battery(UINTN delay);
+
 VOID ux_init(VOID);
 
 #endif

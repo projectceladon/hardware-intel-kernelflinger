@@ -419,7 +419,7 @@ BOOLEAN is_efi_secure_boot_enabled(VOID)
         if (EFI_ERROR(ret))
                 return FALSE;
 
-        return value != 0;
+        return value == 1;
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

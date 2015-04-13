@@ -38,6 +38,7 @@
 #include "uefi_utils.h"
 #include "gpt.h"
 #include "gpt_bin.h"
+#include "storage.h"
 
 #define PROTECTIVE_MBR 0xEE
 #define GPT_SIGNATURE "EFI PART"
@@ -99,7 +100,8 @@ struct gpt_disk {
 	EFI_BLOCK_IO *bio;
 	EFI_DISK_IO *dio;
 	EFI_HANDLE handle;
-	EMMC_PARTITION_CTRL ctrl;
+	BOOLEAN label_prefix_removed;
+	logical_unit_t log_unit;
 	struct gpt_header gpt_hd;
 	struct gpt_partition *partitions;
 };
@@ -203,15 +205,21 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 	return ret;
 }
 
-/* Remove the "android_" prefix to partition name
- * When we are doing the cache.
- * Note that CopyMem must handle overlapping (ie memmove)
- */
-static void gpt_remove_prefix(void)
+/* Gmin adds the "android_" prefix to the partition label.  Most of
+   the fastboot command relies on the partition name/label.  The
+   following functions get rid of this prefix and put it if previously
+   removed.  */
+const CHAR16 *ANDROID_PREFIX = L"android_";
+
+static EFI_STATUS gpt_remove_prefix(void)
 {
-	const CHAR16 *prefix = L"android_";
-	UINTN prefix_len = StrLen(prefix);
+	UINTN prefix_len = StrLen(ANDROID_PREFIX);
+	BOOLEAN removed = FALSE;
+	BOOLEAN not_removed = FALSE;
 	UINTN p;
+
+	if (sdisk.label_prefix_removed)
+		return EFI_SUCCESS;
 
 	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
 		struct gpt_partition *part;
@@ -220,9 +228,50 @@ static void gpt_remove_prefix(void)
 		if (!CompareGuid(&part->type, &NullGuid))
 			continue;
 
-		if (!StrnCmp(part->name, prefix, prefix_len))
-			CopyMem(part->name, &part->name[prefix_len], sizeof(part->name) - prefix_len);
+		if (!StrnCmp(part->name, ANDROID_PREFIX, prefix_len)) {
+			if (not_removed)
+				goto error;
+			CopyMem(part->name, &part->name[prefix_len],
+				sizeof(part->name) - (prefix_len * sizeof(CHAR16)));
+			removed = TRUE;
+			continue;
+		}
+		if (removed == TRUE)
+			goto error;
+
+		not_removed = TRUE;
 	}
+
+	sdisk.label_prefix_removed = TRUE;
+	return EFI_SUCCESS;
+error:
+	error(L"Not all the partition have the '%s' prefix", ANDROID_PREFIX);
+	return EFI_INVALID_PARAMETER;
+}
+
+static void gpt_put_prefix_back(void)
+{
+	UINTN prefix_len = StrLen(ANDROID_PREFIX);
+	struct gpt_partition save;
+	UINTN p;
+
+	if (!sdisk.label_prefix_removed)
+		return;
+
+	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
+		struct gpt_partition *part;
+
+		part = &sdisk.partitions[p];
+		if (!CompareGuid(&part->type, &NullGuid))
+			continue;
+
+		CopyMem(save.name, part->name, sizeof(part->name));
+		CopyMem(&part->name[prefix_len], save.name,
+			sizeof(part->name) - (prefix_len * sizeof(CHAR16)));
+		CopyMem(part->name, ANDROID_PREFIX, prefix_len * sizeof(CHAR16));
+	}
+
+	sdisk.label_prefix_removed = FALSE;
 }
 
 static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
@@ -236,27 +285,18 @@ static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
 		efi_perror(ret, L"Failed to read GPT partitions");
 		return ret;
 	}
-	gpt_remove_prefix();
+	ret = gpt_remove_prefix();
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to remove prefix of partition label");
+		return ret;
+	}
 
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS check_controller_dp(EFI_DEVICE_PATH *p, EMMC_PARTITION_CTRL ctrl)
-{
-	while (p->Type != END_DEVICE_PATH_TYPE) {
-		if (p->Type == HARDWARE_DEVICE_PATH && p->SubType == HW_CONTROLLER_DP
-		    && ((CONTROLLER_DEVICE_PATH *)p)->Controller == ctrl)
-			return EFI_SUCCESS;
-		/* get the next device path node */
-		p = (EFI_DEVICE_PATH *)((void *)p + ((UINT16)p->Length[0] | (UINT16)p->Length[1] << 8));
-	}
-
-	return EFI_NOT_FOUND;
-}
-
-/* Given the controller of the emmc part, find the disk and caches
+/* Given the logical unit, find the disk and caches
  * information into the global sdisk variable */
-static EFI_STATUS gpt_cache_partition(EMMC_PARTITION_CTRL ctrl)
+static EFI_STATUS gpt_cache_partition(logical_unit_t log_unit)
 {
 	EFI_STATUS ret;
 	EFI_HANDLE *handles;
@@ -266,7 +306,7 @@ static EFI_STATUS gpt_cache_partition(EMMC_PARTITION_CTRL ctrl)
 	EFI_DEVICE_PATH *device_path;
 
 	/* if  already cached, return */
-	if (sdisk.dio && sdisk.ctrl == ctrl)
+	if (sdisk.dio && sdisk.log_unit == log_unit)
 		return EFI_SUCCESS;
 
 	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol, &BlockIoProtocol, NULL, &nb_handle, &handles);
@@ -277,9 +317,9 @@ static EFI_STATUS gpt_cache_partition(EMMC_PARTITION_CTRL ctrl)
 	debug(L"Found %d block io protocols", nb_handle);
 
 	for (i = 0; i < nb_handle && !found; i++) {
-		/* Check if the controller match the requested one */
+		/* Check if the logical unit match the requested one */
 		device_path = DevicePathFromHandle(handles[i]);
-		ret = check_controller_dp(device_path, ctrl);
+		ret = storage_check_logical_unit(device_path, log_unit);
 		if (EFI_ERROR(ret))
 			continue;
 
@@ -287,20 +327,20 @@ static EFI_STATUS gpt_cache_partition(EMMC_PARTITION_CTRL ctrl)
 		ret = gpt_prepare_disk(handles[i], &sdisk);
 		if (EFI_ERROR(ret))
 			continue;
-		debug(L"Found disk as block io %d using controller %d", i, ctrl);
+		debug(L"Found disk as block io %d for logical unit %d", i, log_unit);
 
 		sdisk.handle = handles[i];
-		sdisk.ctrl = ctrl;
+		sdisk.log_unit = log_unit;
 		found = TRUE;
 	}
 	if (!found) {
-		error(L"No disk found using controller %x", ctrl);
+		error(L"No disk found for logical unit %d", log_unit);
 		ret = EFI_NOT_FOUND;
 		goto free_handles;
 	}
 
 	/* only system's gpt partitions will be flashed through fastboot */
-	if (ctrl != EMMC_USER_PART)
+	if (log_unit != LOGICAL_UNIT_USER)
 		return EFI_SUCCESS;
 
 	ret = gpt_list_partition_on_disk(&sdisk);
@@ -342,11 +382,11 @@ EFI_STATUS gpt_refresh(void)
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl)
+EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, logical_unit_t log_unit)
 {
 	EFI_STATUS ret;
 
-	ret = gpt_cache_partition(ctrl);
+	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -358,14 +398,9 @@ EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, EMMC_PARTITI
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, EMMC_PARTITION_CTRL ctrl)
+static struct gpt_partition *gpt_find_partition(CHAR16 *label)
 {
-	EFI_STATUS ret;
 	UINTN p;
-
-	ret = gpt_cache_partition(ctrl);
-	if (EFI_ERROR(ret))
-		return ret;
 
 	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
 		struct gpt_partition *part;
@@ -375,24 +410,42 @@ EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interf
 			continue;
 
 		debug(L"Found label %s in partition %d", label, p);
+		return part;
+	}
+
+	return NULL;
+}
+
+EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, logical_unit_t log_unit)
+{
+	struct gpt_partition *part;
+	EFI_STATUS ret;
+
+	ret = gpt_cache_partition(log_unit);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	part = gpt_find_partition(label);
+	if (part) {
 		CopyMem(&gpart->part, part, sizeof(*part));
 		gpart->bio = sdisk.bio;
 		gpart->dio = sdisk.dio;
+		gpart->handle = sdisk.handle;
 		return EFI_SUCCESS;
 	}
 
 	if (!StrCmp(label, L"userdata"))
-		return gpt_get_partition_by_label(L"data", gpart, ctrl);
+		return gpt_get_partition_by_label(L"data", gpart, log_unit);
 
 	return EFI_NOT_FOUND;
 }
 
-EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, EMMC_PARTITION_CTRL ctrl)
+EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, logical_unit_t log_unit)
 {
 	EFI_STATUS ret;
 	UINTN p;
 
-	ret = gpt_cache_partition(ctrl);
+	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -570,6 +623,8 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	struct gpt_header *gh_backup;
 	UINT32 crc;
 
+	gpt_put_prefix_back();
+
 	gh = &sdisk.gpt_hd;
 
 	entries_size = gh->number_of_entries * gh->size_of_entry;
@@ -625,11 +680,11 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	return gpt_refresh();
 }
 
-EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, EMMC_PARTITION_CTRL ctrl)
+EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, logical_unit_t log_unit)
 {
 	EFI_STATUS ret;
 
-	ret = gpt_cache_partition(ctrl);
+	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -644,8 +699,62 @@ EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gb
 		return ret;
 
 	sdisk.partitions = gpt_fill_entries(part_count, gbp);
+	sdisk.label_prefix_removed = FALSE;
 
 	gpt_write_partition_tables();
 
 	return EFI_SUCCESS;
+}
+
+EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, logical_unit_t log_unit)
+{
+	EFI_STATUS ret;
+	struct gpt_partition *part;
+
+	ret = gpt_cache_partition(log_unit);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	part = gpt_find_partition(label);
+	if (!part) {
+		error(L"Failed to find '%s' partition", label);
+		return EFI_NOT_FOUND;
+	}
+
+	CopyMem(guid, &part->unique, sizeof(*guid));
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, logical_unit_t log_unit)
+{
+	EFI_STATUS ret;
+	struct gpt_partition *part1, *part2, save1;
+
+	ret = gpt_cache_partition(log_unit);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	part1 = gpt_find_partition(label1);
+	if (!part1) {
+		error(L"Failed to find '%s' partition", label1);
+		return EFI_NOT_FOUND;
+	}
+
+	part2 = gpt_find_partition(label2);
+	if (!part2) {
+		error(L"Failed to find '%s' partition", label2);
+		return EFI_NOT_FOUND;
+	}
+
+	save1.starting_lba = part1->starting_lba;
+	save1.ending_lba = part1->ending_lba;
+
+	part1->starting_lba = part2->starting_lba;
+	part1->ending_lba = part2->ending_lba;
+
+	part2->starting_lba = save1.starting_lba;
+	part2->ending_lba = save1.ending_lba;
+
+	return gpt_write_partition_tables();
 }

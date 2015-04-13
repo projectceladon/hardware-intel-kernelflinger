@@ -44,18 +44,20 @@
 #include "fastboot.h"
 #include "fastboot_oem.h"
 #include "fastboot_usb.h"
+#include "text_parser.h"
 
 static BOOLEAN last_cmd_succeeded;
 static fastboot_handle fastboot_flash_cmd;
 static EFI_FILE_IO_INTERFACE *file_io_interface;
 static data_callback_t fastboot_rx_cb, fastboot_tx_cb;
-static CHAR16 *installer_batch_filename;
 static CHAR8 DEFAULT_OPTIONS[] = "--batch installer.cmd";
 static BOOLEAN need_tx_cb;
+static char *fastboot_cmd_buf;
+static UINTN fastboot_cmd_buf_len;
 
 #define inst_perror(ret, x, ...) do { \
 	fastboot_fail(x ": %r", ##__VA_ARGS__, ret); \
-} while (0);
+} while (0)
 
 static void flush_tx_buffer(void)
 {
@@ -63,12 +65,6 @@ static void flush_tx_buffer(void)
 		need_tx_cb = FALSE;
 		fastboot_tx_cb(NULL, 0);
 	}
-}
-
-static void run_command(void *line, INTN size)
-{
-	fastboot_rx_cb(line, size);
-	flush_tx_buffer();
 }
 
 static void run_fastboot_handle(fastboot_handle handle, INTN argc, CHAR8 **argv)
@@ -340,21 +336,108 @@ free_filename:
 	FreePool(filename);
 }
 
+static char **commands;
+static UINTN command_nb;
+static UINTN current_command;
+
+static void free_commands(void)
+{
+	UINTN i;
+
+	if (!commands)
+		return;
+
+	for (i = 0; i < command_nb; i++)
+		if (commands[i])
+			FreePool(commands);
+
+	FreePool(commands);
+	commands = NULL;
+	command_nb = 0;
+	current_command = 0;
+}
+
+static char *strdup(const char *s)
+{
+	UINTN size;
+	char *new;
+
+	size = strlena((CHAR8 *)s) + 1;
+	new = AllocatePool(size);
+	if (!new)
+		return NULL;
+
+	memcpy(new, s, size);
+	return new;
+}
+
+static EFI_STATUS store_command(char *command)
+{
+	char **new_commands;
+
+	new_commands = AllocatePool((command_nb + 1) * sizeof(*new_commands));
+	if (!new_commands) {
+		free_commands();
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	memcpy(new_commands, commands, command_nb * sizeof(*commands));
+	new_commands[command_nb] = strdup(command);
+	if (!new_commands[command_nb]) {
+		free_commands();
+		return EFI_OUT_OF_RESOURCES;
+	}
+	if (commands)
+		FreePool(commands);
+	commands = new_commands;
+	command_nb++;
+
+	return EFI_SUCCESS;
+}
+
+static char *next_command()
+{
+	if (command_nb == current_command) {
+		free_commands();
+		return NULL;
+	}
+
+	return commands[current_command++];
+}
+
 static void batch(__attribute__((__unused__)) INTN argc,
 		  __attribute__((__unused__)) CHAR8 **argv)
 {
+	EFI_STATUS ret;
+	void *data;
+	UINTN size;
+	CHAR16 *filename;
+
 	if (argc != 2) {
 		fastboot_fail("Batch command takes one parameter");
 		return;
 	}
 
-	installer_batch_filename = stra_to_str(argv[1]);
-	if (!installer_batch_filename) {
+	filename = stra_to_str(argv[1]);
+	if (!filename) {
 		fastboot_fail("Failed to convert CHAR8 filename to CHAR16");
 		return;
 	}
 
-	fastboot_okay("");
+	ret = uefi_read_file(file_io_interface, filename, &data, &size);
+	if (EFI_ERROR(ret)) {
+		inst_perror(ret, "Failed to read %s file", filename);
+		FreePool(filename);
+		return;
+	}
+	FreePool(filename);
+
+	ret = parse_text_buffer(data, size, store_command);
+	FreePool(data);
+	if (EFI_ERROR(ret))
+		inst_perror(ret, "Failed to parse batch file");
+	else
+		fastboot_okay("");
 }
 
 static void usage(__attribute__((__unused__)) INTN argc,
@@ -422,77 +505,16 @@ static EFI_STATUS installer_replace_functions()
 	return EFI_SUCCESS;
 }
 
-static void skip_whitespace(char **line)
-{
-	char *cur = *line;
-	while (*cur && isspace(*cur))
-		cur++;
-	*line = cur;
-}
-
-static void run_batch()
-{
-	EFI_STATUS ret;
-	void *data;
-	UINTN size;
-	char *buf, *line, *eol, *p;
-	int lineno = 0;
-
-	ret = uefi_read_file(file_io_interface, installer_batch_filename, &data, &size);
-	if (EFI_ERROR(ret)) {
-		inst_perror(ret, "Failed to read %s file", installer_batch_filename);
-		FreePool(installer_batch_filename);
-		return;
-	}
-	FreePool(installer_batch_filename);
-
-	/* Extra byte so we can always terminate the last line. */
-	buf = AllocatePool(size + 1);
-	if (!buf) {
-		fastboot_fail("Failed to allocate buffer");
-		FreePool(data);
-		return;
-	}
-	memcpy(buf, data, size);
-	buf[size] = 0;
-
-	for (line = buf; line - buf < (ssize_t)size; line = eol+1) {
-		lineno++;
-
-		/* Detect line and terminate. */
-		eol = (char *)strchr((CHAR8 *)line, '\n');
-		if (!eol)
-			eol = line + strlen((CHAR8 *)line);
-		*eol = 0;
-
-		/* Snip space character for sanity. */
-		p = line + strlen((CHAR8 *)line);
-		while (p > line && isspace(*(p-1)))
-			*(--p) = 0;
-
-		skip_whitespace(&line);
-		if (*line == '\0')
-			continue;
-
-		Print(L"Starting command: '%a'\n", line);
-		run_command(line, strlen((CHAR8 *)line));
-		if (!last_cmd_succeeded) {
-			error(L"Failed at line %d", lineno);
-			break;
-		}
-		Print(L"Command successfully executed\n");
-	}
-
-	FreePool(data);
-	FreePool(buf);
-}
-
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 {
 	EFI_STATUS ret;
 	EFI_LOADED_IMAGE *loaded_img = NULL;
 	CHAR8 *options, *buf;
 	UINTN i;
+	void *bootimage;
+	void *efiimage;
+	UINTN imagesize;
+	enum boot_target target;
 
 	InitializeLib(image, _table);
 
@@ -525,24 +547,15 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	options = strchr(options, ' ');
 	skip_whitespace((char **)&options);
 
-	/* Initialize the fastboot library. */
-	ret = fastboot_start(NULL, NULL, NULL, NULL, TRUE);
-	if (EFI_ERROR(ret))
-		goto exit;
-	ret = installer_replace_functions();
-	if (EFI_ERROR(ret))
-		goto exit;
-	if (!fastboot_flash_cmd) {
-		fastboot_fail("Failed to get the flash handle");
-		goto exit;
-	}
+	store_command(*options != '\0' ? (char *)options : (char *)DEFAULT_OPTIONS);
 
-	/* Process options. */
-	run_command(*options != '\0' ? options : DEFAULT_OPTIONS,
-		       *options != '\0' ? strlen(options) + 1 : sizeof(DEFAULT_OPTIONS));
-	if (installer_batch_filename)
-		run_batch();
-	fastboot_free();
+	/* Run the fastboot library. */
+	ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target);
+	if (EFI_ERROR(ret))
+		goto exit;
+
+	if (target == NORMAL_BOOT || target == REBOOT)
+		reboot(NULL);
 
 exit:
 	FreePool(buf);
@@ -552,35 +565,83 @@ exit:
 }
 
 /* USB wrapper functions. */
-EFI_STATUS fastboot_usb_start(start_callback_t start_cb,
-			      data_callback_t rx_cb,
-			      data_callback_t tx_cb,
-			      __attribute__((__unused__)) void **bootimage,
-			      __attribute__((__unused__)) void **efiimage,
-			      __attribute__((__unused__)) UINTN *imagesize,
-			      __attribute__((__unused__)) enum boot_target *target)
+EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
+					 data_callback_t rx_cb,
+					 data_callback_t tx_cb)
 {
 	fastboot_tx_cb = tx_cb;
 	fastboot_rx_cb = rx_cb;
 	start_cb();
 
-	return EFI_SUCCESS;
-}
-
-EFI_STATUS fastboot_usb_stop(__attribute__((__unused__)) void *bootimage,
-			     __attribute__((__unused__)) void *efiimage,
-			     __attribute__((__unused__)) UINTN imagesize,
-			     enum boot_target target)
-{
-	if (target == NORMAL_BOOT || target == REBOOT)
-		reboot(NULL);
+	if (!fastboot_cmd_buf)
+		return EFI_INVALID_PARAMETER;
 
 	return EFI_SUCCESS;
 }
 
-int usb_read(__attribute__((__unused__)) void *buf,
-	     __attribute__((__unused__)) unsigned len)
+EFI_STATUS fastboot_usb_stop(void)
 {
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS fastboot_usb_disconnect_and_unbind(void)
+{
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS fastboot_usb_run(void)
+{
+	static BOOLEAN initialized = FALSE;
+	EFI_STATUS ret;
+	char *cmd;
+	UINTN cmd_len;
+
+	if (!initialized) {
+		ret = installer_replace_functions();
+		if (EFI_ERROR(ret))
+			return ret;
+		if (!fastboot_flash_cmd) {
+			fastboot_fail("Failed to get the flash handle");
+			return ret;
+		}
+		initialized = TRUE;
+	}
+
+	if (current_command > 0) {
+		flush_tx_buffer();
+		if (!last_cmd_succeeded)
+			goto stop;
+		Print(L"Command successfully executed\n");
+	}
+
+	cmd = next_command();
+	if (!cmd)
+		goto stop;
+
+	cmd_len = strlena((CHAR8 *)cmd);
+	if (cmd_len > fastboot_cmd_buf_len) {
+		inst_perror(EFI_BUFFER_TOO_SMALL,
+			    "command too long for fastboot command buffer");
+		goto stop;
+	}
+
+	memcpy(fastboot_cmd_buf, cmd, cmd_len);
+
+	Print(L"Starting command: '%a'\n", cmd);
+	fastboot_rx_cb(fastboot_cmd_buf, cmd_len);
+
+	return EFI_SUCCESS;
+
+stop:
+	fastboot_stop(NULL, NULL, 0, EXIT_SHELL);
+	return EFI_SUCCESS;
+}
+
+int usb_read(void *buf, unsigned len)
+{
+	fastboot_cmd_buf = buf;
+	fastboot_cmd_buf_len = len;
+
 	return 0;
 }
 
@@ -618,6 +679,11 @@ void fastboot_ui_refresh(void)
 EFI_STATUS fastboot_ui_init(void)
 {
 	return EFI_SUCCESS;
+}
+
+enum boot_target fastboot_ui_event_handler()
+{
+	return UNKNOWN_TARGET;
 }
 
 /* Installer does not support UI.  It is intended to be used in

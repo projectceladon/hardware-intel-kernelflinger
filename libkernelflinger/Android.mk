@@ -59,6 +59,10 @@ ifeq ($(KERNELFLINGER_USE_POWER_BUTTON),true)
     LOCAL_CFLAGS += -DUSE_POWER_BUTTON
 endif
 
+ifeq ($(KERNELFLINGER_USE_CHARGING_APPLET),true)
+    LOCAL_CFLAGS += -DUSE_CHARGING_APPLET
+endif
+
 LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \
@@ -75,7 +79,11 @@ LOCAL_SRC_FILES := \
 	ui_image.c \
 	ui_boot_menu.c \
 	ui_confirm.c \
-	log.c
+	log.c \
+	blobstore.c \
+	arraylist.c \
+	dict.c \
+	em.c
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(res_intermediates)

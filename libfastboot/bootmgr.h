@@ -1,10 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,19 +30,20 @@
  *
  */
 
-#ifndef _FASTBOOT_USB_H_
-#define _FASTBOOT_USB_H_
+#ifndef _BOOTMGR_H_
+#define _BOOTMGR_H_
 
-typedef void (*data_callback_t)(void *buf, unsigned len);
-typedef void (*start_callback_t)(void);
+#include <efi.h>
 
-int usb_write(void *buf, unsigned len);
-int usb_read(void *buf, unsigned len);
-EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
-					 data_callback_t rx_cb,
-					 data_callback_t tx_cb);
-EFI_STATUS fastboot_usb_stop(void);
-EFI_STATUS fastboot_usb_disconnect_and_unbind(void);
-EFI_STATUS fastboot_usb_run(void);
+typedef struct load_option {
+	CHAR16 *description;
+	CHAR16 *path;
+} load_option_t;
 
-#endif	/* _FASTBOOT_USB_H_ */
+/* Create or update the load options described by LOAD_OPTIONS and set
+   these load options as the first ones in the boot order.  PART_LABEL
+   is the partition label where the load options PATH apply.  */
+EFI_STATUS bootmgr_register_entries(CHAR16 *part_label,
+				    load_option_t *load_options, UINTN load_option_nb);
+
+#endif	/* _BOOTMGR_H_ */

@@ -48,8 +48,9 @@
 #include "power.h"
 #include "targets.h"
 #include "unittest.h"
+#include "em.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.0F"
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.10"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -88,7 +89,6 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
  *   counter is reset to zero. */
 #define WATCHDOG_DELAY       (10 * 60)
 
-static EFI_HANDLE g_parent_image;
 static EFI_HANDLE g_disk_device;
 static EFI_LOADED_IMAGE *g_loaded_image;
 
@@ -123,6 +123,8 @@ static CHAR16 *boot_target_to_string(enum boot_target bt)
                 return L"RAM bootimage";
         case CHARGER:
                 return L"Charge mode";
+        case POWER_OFF:
+                return L"Power off";
         default:
                 return L"unknown";
         }
@@ -555,6 +557,13 @@ static enum boot_target check_charge_mode()
         return NORMAL_BOOT;
 }
 
+enum boot_target check_battery()
+{
+        if (is_battery_below_boot_OS_threshold())
+                return is_charger_plugged_in() ? CHARGER : POWER_OFF;
+
+        return NORMAL_BOOT;
+}
 
 /* Policy:
  * 1. Check if we had multiple watchdog reported in a short period of
@@ -615,6 +624,12 @@ static enum boot_target choose_boot_target(VOID **target_address,
                 return ret;
 
         ret = check_loader_entry_one_shot();
+        if (ret != NORMAL_BOOT)
+                return ret;
+
+        ret = check_battery();
+        if (ret == POWER_OFF)
+                ux_display_low_battery(3);
         if (ret != NORMAL_BOOT)
                 return ret;
 
@@ -879,7 +894,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         for (;;) {
                 target = UNKNOWN_TARGET;
 
-                ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target, FALSE);
+                ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"Fastboot mode failed");
                         break;
