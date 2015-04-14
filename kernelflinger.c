@@ -74,8 +74,9 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
  * enter Fastboot mode */
 #define FASTBOOT_SENTINEL         L"\\force_fastboot"
 
-/* Path to Fastboot image */
+/* Paths to interesting alternate boot images */
 #define FASTBOOT_PATH             L"\\fastboot.img"
+#define TDOS_PATH                 L"\\tdos.img"
 
 /* BIOS Capsule update file */
 #define FWUPDATE_FILE             L"\\BIOSUPDATE.fv"
@@ -125,6 +126,8 @@ static CHAR16 *boot_target_to_string(enum boot_target bt)
                 return L"Charge mode";
         case POWER_OFF:
                 return L"Power off";
+        case TDOS:
+                return L"Theft deterrent OS";
         default:
                 return L"unknown";
         }
@@ -328,6 +331,11 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
                 goto out;
         }
 
+        if (!StrCmp(target, L"tdos")) {
+                t = TDOS;
+                goto out;
+        }
+
         error(L"Unknown boot target in BCB: '%s'", target);
         t = NORMAL_BOOT;
 
@@ -354,6 +362,8 @@ static enum boot_target check_loader_entry_one_shot(VOID)
                 ret = FASTBOOT;
         } else if (!StrCmp(target, L"recovery")) {
                 ret = RECOVERY;
+        } else if (!StrCmp(target, L"tdos")) {
+                ret = TDOS;
         } else if (!StrCmp(target, L"charging")) {
                 if (get_current_off_mode_charge()) {
                         ret = CHARGER;
@@ -810,6 +820,47 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state, BOOLEAN charger)
         return ret;
 }
 
+static VOID enter_tdos(UINT8 boot_state) __attribute__ ((noreturn));
+
+static VOID enter_tdos(UINT8 boot_state)
+{
+        EFI_STATUS ret;
+        VOID *bootimage;
+
+        set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
+                        &boot_state, FALSE, TRUE);
+
+        ret = android_image_load_file(g_disk_device, TDOS_PATH,
+                        FALSE, &bootimage);
+        if (EFI_ERROR(ret)) {
+                error(L"Couldn't load TDOS image");
+                goto die;
+        }
+
+#ifdef USERDEBUG
+        debug(L"verify TDOS boot image");
+        CHAR16 target[BOOT_TARGET_SIZE];
+        ret = verify_android_boot_image(bootimage, oem_keystore,
+                        oem_keystore_size, target);
+        if (EFI_ERROR(ret)) {
+                error(L"tdos image not verified");
+                goto die;
+        }
+
+        if (StrCmp(target, L"/tdos")) {
+                error(L"This does not appear to be a tdos image");
+                goto die;
+        }
+#endif
+        load_image(bootimage, boot_state, FALSE);
+        error(L"Couldn't chainload TDOS image");
+die:
+        /* Allow plenty of time for the error to be visible before the
+         * screen goes blank */
+        pause(30);
+        halt_system();
+}
+
 static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         __attribute__ ((noreturn));
 
@@ -844,7 +895,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                 ret = android_image_load_file(g_disk_device, FASTBOOT_PATH,
                                 FALSE, &bootimage);
                 if (EFI_ERROR(ret)) {
-                        Print(L"Couldn't load Fastboot image\n");
+                        error(L"Couldn't load Fastboot image");
                         goto die;
                 }
         }
@@ -855,19 +906,19 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         ret = verify_android_boot_image(bootimage, oem_keystore,
                         oem_keystore_size, target);
         if (EFI_ERROR(ret)) {
-                Print(L"Fastboot image not verified\n");
+                error(L"Fastboot image not verified");
                 goto die;
         }
 
         if (StrCmp(target, L"/fastboot")) {
-                Print(L"This does not appear to be a Fastboot image\n");
+                error(L"This does not appear to be a Fastboot image");
                 goto die;
         }
 #endif
         debug(L"chainloading fastboot, boot state is %s",
                         boot_state_to_string(boot_state));
         load_image(bootimage, boot_state, FALSE);
-        Print(L"Couldn't chainload Fastboot image\n");
+        error(L"Couldn't chainload Fastboot image");
 die:
         /* Allow plenty of time for the error to be visible before the
          * screen goes blank */
@@ -1164,6 +1215,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (boot_target == FASTBOOT || boot_target == MEMORY) {
                 debug(L"entering Fastboot mode");
                 enter_fastboot_mode(boot_state, target_address);
+        }
+
+        if (boot_target == TDOS) {
+                debug(L"entering TDOS");
+                enter_tdos(boot_state);
         }
 
         /* Past this point is where we start to care if the keystore isn't
