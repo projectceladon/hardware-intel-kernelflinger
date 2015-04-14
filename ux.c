@@ -75,8 +75,13 @@ static const ui_textline_t bad_recovery[] = {
 
 #define DEVICE_UNLOCKED_CODE	3
 static const ui_textline_t device_altered_unlocked[] = {
+#ifdef NO_DEVICE_UNLOCK
+	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume UP key",  		FALSE },
+#else
 	{ &COLOR_YELLOW, 	"START",				TRUE },
 	{ &COLOR_WHITE, 	"Press Volume UP key",			FALSE },
+#endif
 	{ &COLOR_WHITE, 	"",					FALSE },
 	{ &COLOR_LIGHTRED, 	"FASTBOOT",				TRUE },
 	{ &COLOR_WHITE, 	"Press Volume DOWN key",		FALSE },
@@ -97,11 +102,16 @@ static const ui_textline_t device_altered_unlocked[] = {
 
 #define SECURE_BOOT_CODE	4
 static const ui_textline_t secure_boot_off[] = {
+#ifdef NO_DEVICE_UNLOCK
+	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
+	{ &COLOR_WHITE,		"Press any key",          		FALSE },
+#else
 	{ &COLOR_YELLOW,	"START",				TRUE },
 	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
 	{ &COLOR_WHITE,		"",					FALSE },
 	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
 	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },
+#endif
 	{ &COLOR_WHITE,		"",					FALSE },
 	{ &COLOR_LIGHTRED,	"WARNING:",				TRUE },
 	{ &COLOR_LIGHTGRAY,	"Your device has been altered",		FALSE },
@@ -110,9 +120,11 @@ static const ui_textline_t secure_boot_off[] = {
 	{ &COLOR_LIGHTGRAY,	"verified state due to UEFI Secure",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"Boot being disabled.",			FALSE },
 	{ &COLOR_LIGHTGRAY,	"",					FALSE },
+#ifndef NO_DEVICE_UNLOCK
 	{ &COLOR_LIGHTGRAY,	"If you were not responsible for",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"these changes, the security of",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"your device may be at risk.",		FALSE },
+#endif
 	{ &COLOR_LIGHTGRAY,	"Please contact customer support",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"from your device's manufacturer.",	FALSE },
 	{ NULL, NULL, FALSE }
@@ -120,8 +132,13 @@ static const ui_textline_t secure_boot_off[] = {
 
 #define KEYSTORE_ALTERED_CODE	5
 static const ui_textline_t device_altered_keystore[] = {
+#ifdef NO_DEVICE_UNLOCK
+	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
+	{ &COLOR_WHITE,		"Press Volume UP key",  		FALSE },
+#else
 	{ &COLOR_YELLOW,	"START",				TRUE },
 	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
+#endif
 	{ &COLOR_WHITE,		"",					FALSE },
 	{ &COLOR_LIGHTRED,	"FASTBOOT",				TRUE },
 	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },

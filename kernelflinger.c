@@ -1107,11 +1107,18 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 boot_state = BOOT_STATE_ORANGE;
                 lock_prompted = TRUE;
 
+#ifdef NO_DEVICE_UNLOCK
+                ux_prompt_user_secure_boot_off();
+                halt_system();
+#else
                 /* Need to warn early, before we even enter Fastboot
                  * or run EFI binaries. Set lock_prompted to true so
                  * we don't ask again later */
                 if (!ux_prompt_user_secure_boot_off())
                         halt_system();
+                else
+                        debug(L"User accepted UEFI secure boot disabled warning");
+#endif
         } else  if (device_is_unlocked()) {
                 boot_state = BOOT_STATE_ORANGE;
                 debug(L"Device is unlocked");
@@ -1126,6 +1133,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         boot_state = BOOT_STATE_YELLOW;
                 }
         }
+
+#ifdef USER
+        if (device_is_provisioning()) {
+                debug(L"device is provisioning, force Fastboot mode");
+                enter_fastboot_mode(boot_state, target_address);
+        }
+#endif
 #else
         /* Make sure it's abundantly clear! */
         error(L"INSECURE BOOTLOADER - SYSTEM SECURITY IN RED STATE");
@@ -1158,17 +1172,31 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
         /* If the user keystore is bad the only way to fix it is via
          * fastboot */
-        if (boot_state == BOOT_STATE_YELLOW &&
-                        !ux_prompt_user_keystore_unverified(hash)) {
-                enter_fastboot_mode(BOOT_STATE_RED, NULL);
+        if (boot_state == BOOT_STATE_YELLOW) {
+                if (!ux_prompt_user_keystore_unverified(hash)) {
+                        enter_fastboot_mode(BOOT_STATE_RED, NULL);
+                } else {
+#ifdef NO_DEVICE_UNLOCK
+                        halt_system();
+#else
+                        debug(L"User accepted unverified keystore warning");
+#endif
+                }
         }
 
         /* If the device is unlocked the only way to re-lock it is
          * via fastboot. Skip this UX if we already prompted earlier
          * about EFI secure boot being turned off */
-        if (boot_state == BOOT_STATE_ORANGE && !lock_prompted &&
-                        !ux_prompt_user_device_unlocked()) {
-                enter_fastboot_mode(BOOT_STATE_RED, NULL);
+        if (boot_state == BOOT_STATE_ORANGE && !lock_prompted) {
+                if (!ux_prompt_user_device_unlocked()) {
+                        enter_fastboot_mode(BOOT_STATE_RED, NULL);
+                } else {
+#ifdef NO_DEVICE_UNLOCK
+                        halt_system();
+#else
+                        debug(L"User accepted unlocked device warning");
+#endif
+                }
         }
 
 fallback:
