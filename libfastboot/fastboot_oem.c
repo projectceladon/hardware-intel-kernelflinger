@@ -130,33 +130,46 @@ static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
 static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
 			   __attribute__((__unused__)) CHAR8 **argv)
 {
-	struct gpt_partition_interface gparti;
-	EFI_STATUS ret;
-	UINT64 offset;
-	UINT8 unlock_allowed;
+	UINT8 persist_byte;
+	BOOLEAN unlock_allowed;
 
 	/* Enforce if we're not in provisioning mode and the persistent
 	 * partition exists */
-	if (!device_is_provisioning() &&
-	    !EFI_ERROR(gpt_get_partition_by_label(L"persistent", &gparti, LOGICAL_UNIT_USER))) {
+	if (!device_is_provisioning()) {
+#ifdef NO_DEVICE_UNLOCK
+		unlock_allowed = FALSE;
+#else
+		struct gpt_partition_interface gparti;
+		EFI_STATUS ret;
+		UINT64 offset;
 
-		/* We need to check the last byte of the partition. The gparti
-		 * .dio object is a handle to the beginning of the disk */
-		offset = ((gparti.part.ending_lba + 1)
-			  * gparti.bio->Media->BlockSize) - 1;
-		ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
-					gparti.bio->Media->MediaId, offset, 1,
-					&unlock_allowed);
-		if (EFI_ERROR(ret)) {
-			/* Pathological if this fails, GPT screwed up? */
-			efi_perror(ret, L"Couldn't read persistent partition");
-			unlock_allowed = 0;
+		if (!EFI_ERROR(gpt_get_partition_by_label(L"persistent", &gparti,
+					                  LOGICAL_UNIT_USER))) {
+			/* We need to check the last byte of the partition. The gparti
+			 * .dio object is a handle to the beginning of the disk */
+			offset = ((gparti.part.ending_lba + 1)
+				  * gparti.bio->Media->BlockSize) - 1;
+			ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
+						gparti.bio->Media->MediaId, offset, 1,
+						&persist_byte);
+			if (EFI_ERROR(ret)) {
+				/* Pathological if this fails, GPT screwed up? */
+				efi_perror(ret, L"Couldn't read persistent partition");
+				unlock_allowed = FALSE;
+			} else {
+				/* Per the specification, value of 1 means
+				 * unlock is OK */
+				unlock_allowed = (persist_byte == 1);
+			}
+		} else {
+			unlock_allowed = TRUE;
 		}
+#endif
 	} else {
-		unlock_allowed = 1;
+		unlock_allowed = TRUE;
 	}
 
-	if (unlock_allowed == 0) {
+	if (unlock_allowed == FALSE) {
 #ifdef USER
 		fastboot_fail("Unlocking device not allowed");
 #else
