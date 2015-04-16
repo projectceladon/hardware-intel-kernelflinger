@@ -414,6 +414,6 @@ struct _EFI_SD_HOST_IO_PROTOCOL {
 	EFI_SD_HOST_IO_PROTOCOL_SET_HOST_SPEED_MODE        SetHostSpeedMode;
 };
 
-EFI_GUID gEfiSdHostIoProtocolGuid = EFI_SD_HOST_IO_PROTOCOL_GUID;
+extern EFI_GUID gEfiSdHostIoProtocolGuid;
 
 #endif

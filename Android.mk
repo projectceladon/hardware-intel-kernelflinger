@@ -67,6 +67,10 @@ LOCAL_SRC_FILES := \
 	oemkeystore.S \
 	ux.c
 
+ifeq ($(TARGET_NO_DEVICE_UNLOCK),true)
+    LOCAL_CFLAGS += -DNO_DEVICE_UNLOCK
+endif
+
 ifeq ($(TARGET_USE_USERFASTBOOT),true)
     LOCAL_CFLAGS += -DUSERFASTBOOT
 else

@@ -50,7 +50,15 @@
 #include "unittest.h"
 #include "em.h"
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.10"
+#if defined(USER)
+#define BUILD_VARIANT           L""
+#elif defined(USERDEBUG)
+#define BUILD_VARIANT           L"-userdebug"
+#else
+#define BUILD_VARIANT           L"-eng"
+#endif
+
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.11" BUILD_VARIANT
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -74,8 +82,9 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
  * enter Fastboot mode */
 #define FASTBOOT_SENTINEL         L"\\force_fastboot"
 
-/* Path to Fastboot image */
+/* Paths to interesting alternate boot images */
 #define FASTBOOT_PATH             L"\\fastboot.img"
+#define TDOS_PATH                 L"\\tdos.img"
 
 /* BIOS Capsule update file */
 #define FWUPDATE_FILE             L"\\BIOSUPDATE.fv"
@@ -125,6 +134,8 @@ static CHAR16 *boot_target_to_string(enum boot_target bt)
                 return L"Charge mode";
         case POWER_OFF:
                 return L"Power off";
+        case TDOS:
+                return L"Theft deterrent OS";
         default:
                 return L"unknown";
         }
@@ -234,7 +245,7 @@ static enum boot_target check_magic_key(VOID)
 #ifdef USERFASTBOOT
         Print(L"Continue holding key for %d second(s) to enter Fastboot mode.\n",
               FASTBOOT_HOLD_DELAY / 1000000);
-        Print(L"Release key now to load Recovery Console... \n");
+        Print(L"Release key now to load Recovery Console...");
         if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, MAGIC_KEY)) {
                 bt = FASTBOOT;
                 Print(L"FASTBOOT\n");
@@ -328,6 +339,11 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
                 goto out;
         }
 
+        if (!StrCmp(target, L"tdos")) {
+                t = TDOS;
+                goto out;
+        }
+
         error(L"Unknown boot target in BCB: '%s'", target);
         t = NORMAL_BOOT;
 
@@ -354,6 +370,8 @@ static enum boot_target check_loader_entry_one_shot(VOID)
                 ret = FASTBOOT;
         } else if (!StrCmp(target, L"recovery")) {
                 ret = RECOVERY;
+        } else if (!StrCmp(target, L"tdos")) {
+                ret = TDOS;
         } else if (!StrCmp(target, L"charging")) {
                 if (get_current_off_mode_charge()) {
                         ret = CHARGER;
@@ -810,6 +828,47 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state, BOOLEAN charger)
         return ret;
 }
 
+static VOID enter_tdos(UINT8 boot_state) __attribute__ ((noreturn));
+
+static VOID enter_tdos(UINT8 boot_state)
+{
+        EFI_STATUS ret;
+        VOID *bootimage;
+
+        set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
+                        &boot_state, FALSE, TRUE);
+
+        ret = android_image_load_file(g_disk_device, TDOS_PATH,
+                        FALSE, &bootimage);
+        if (EFI_ERROR(ret)) {
+                error(L"Couldn't load TDOS image");
+                goto die;
+        }
+
+#ifdef USERDEBUG
+        debug(L"verify TDOS boot image");
+        CHAR16 target[BOOT_TARGET_SIZE];
+        ret = verify_android_boot_image(bootimage, oem_keystore,
+                        oem_keystore_size, target);
+        if (EFI_ERROR(ret)) {
+                error(L"tdos image not verified");
+                goto die;
+        }
+
+        if (StrCmp(target, L"/tdos")) {
+                error(L"This does not appear to be a tdos image");
+                goto die;
+        }
+#endif
+        load_image(bootimage, boot_state, FALSE);
+        error(L"Couldn't chainload TDOS image");
+die:
+        /* Allow plenty of time for the error to be visible before the
+         * screen goes blank */
+        pause(30);
+        halt_system();
+}
+
 static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         __attribute__ ((noreturn));
 
@@ -844,7 +903,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                 ret = android_image_load_file(g_disk_device, FASTBOOT_PATH,
                                 FALSE, &bootimage);
                 if (EFI_ERROR(ret)) {
-                        Print(L"Couldn't load Fastboot image\n");
+                        error(L"Couldn't load Fastboot image");
                         goto die;
                 }
         }
@@ -855,19 +914,19 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         ret = verify_android_boot_image(bootimage, oem_keystore,
                         oem_keystore_size, target);
         if (EFI_ERROR(ret)) {
-                Print(L"Fastboot image not verified\n");
+                error(L"Fastboot image not verified");
                 goto die;
         }
 
         if (StrCmp(target, L"/fastboot")) {
-                Print(L"This does not appear to be a Fastboot image\n");
+                error(L"This does not appear to be a Fastboot image");
                 goto die;
         }
 #endif
         debug(L"chainloading fastboot, boot state is %s",
                         boot_state_to_string(boot_state));
         load_image(bootimage, boot_state, FALSE);
-        Print(L"Couldn't chainload Fastboot image\n");
+        error(L"Couldn't chainload Fastboot image");
 die:
         /* Allow plenty of time for the error to be visible before the
          * screen goes blank */
@@ -1102,16 +1161,23 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #ifdef USERDEBUG
         debug(L"checking device state");
 
-        if (!is_efi_secure_boot_enabled()) {
+        if (!is_efi_secure_boot_enabled() && !device_is_provisioning()) {
                 debug(L"uefi secure boot is disabled");
                 boot_state = BOOT_STATE_ORANGE;
                 lock_prompted = TRUE;
 
+#ifdef NO_DEVICE_UNLOCK
+                ux_prompt_user_secure_boot_off();
+                halt_system();
+#else
                 /* Need to warn early, before we even enter Fastboot
                  * or run EFI binaries. Set lock_prompted to true so
                  * we don't ask again later */
                 if (!ux_prompt_user_secure_boot_off())
                         halt_system();
+                else
+                        debug(L"User accepted UEFI secure boot disabled warning");
+#endif
         } else  if (device_is_unlocked()) {
                 boot_state = BOOT_STATE_ORANGE;
                 debug(L"Device is unlocked");
@@ -1126,6 +1192,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         boot_state = BOOT_STATE_YELLOW;
                 }
         }
+
+#ifdef USER
+        if (device_is_provisioning()) {
+                debug(L"device is provisioning, force Fastboot mode");
+                enter_fastboot_mode(boot_state, target_address);
+        }
+#endif
 #else
         /* Make sure it's abundantly clear! */
         error(L"INSECURE BOOTLOADER - SYSTEM SECURITY IN RED STATE");
@@ -1152,23 +1225,42 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 enter_fastboot_mode(boot_state, target_address);
         }
 
+        if (boot_target == TDOS) {
+                debug(L"entering TDOS");
+                enter_tdos(boot_state);
+        }
+
         /* Past this point is where we start to care if the keystore isn't
          * validated or the device is unlocked via Fastboot, start to prompt
          * the user if we aren't GREEN */
 
         /* If the user keystore is bad the only way to fix it is via
          * fastboot */
-        if (boot_state == BOOT_STATE_YELLOW &&
-                        !ux_prompt_user_keystore_unverified(hash)) {
-                enter_fastboot_mode(BOOT_STATE_RED, NULL);
+        if (boot_state == BOOT_STATE_YELLOW) {
+                if (!ux_prompt_user_keystore_unverified(hash)) {
+                        enter_fastboot_mode(BOOT_STATE_RED, NULL);
+                } else {
+#ifdef NO_DEVICE_UNLOCK
+                        halt_system();
+#else
+                        debug(L"User accepted unverified keystore warning");
+#endif
+                }
         }
 
         /* If the device is unlocked the only way to re-lock it is
          * via fastboot. Skip this UX if we already prompted earlier
          * about EFI secure boot being turned off */
-        if (boot_state == BOOT_STATE_ORANGE && !lock_prompted &&
-                        !ux_prompt_user_device_unlocked()) {
-                enter_fastboot_mode(BOOT_STATE_RED, NULL);
+        if (boot_state == BOOT_STATE_ORANGE && !lock_prompted) {
+                if (!ux_prompt_user_device_unlocked()) {
+                        enter_fastboot_mode(BOOT_STATE_RED, NULL);
+                } else {
+#ifdef NO_DEVICE_UNLOCK
+                        halt_system();
+#else
+                        debug(L"User accepted unlocked device warning");
+#endif
+                }
         }
 
 fallback:
