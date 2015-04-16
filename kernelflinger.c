@@ -237,7 +237,7 @@ static enum boot_target check_magic_key(VOID)
 #ifdef USERFASTBOOT
         Print(L"Continue holding key for %d second(s) to enter Fastboot mode.\n",
               FASTBOOT_HOLD_DELAY / 1000000);
-        Print(L"Release key now to load Recovery Console... \n");
+        Print(L"Release key now to load Recovery Console...");
         if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, MAGIC_KEY)) {
                 bt = FASTBOOT;
                 Print(L"FASTBOOT\n");
