@@ -15,6 +15,10 @@ ifeq ($(TARGET_BUILD_VARIANT),userdebug)
     SHARED_CFLAGS += -DUSERDEBUG
 endif
 
+ifeq ($(TARGET_NO_DEVICE_UNLOCK),true)
+    SHARED_CFLAGS += -DNO_DEVICE_UNLOCK
+endif
+
 SHARED_SRC_FILES := \
 	fastboot.c \
 	fastboot_oem.c \
