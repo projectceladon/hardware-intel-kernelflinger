@@ -432,6 +432,23 @@ void fastboot_ack_buffered(const char *code, const char *fmt, va_list ap)
 	fastboot_state = STATE_TX;
 }
 
+EFI_STATUS fastboot_info_long_string(char *str)
+{
+	char linebuf[INFO_PAYLOAD];
+	const UINTN max_len = sizeof(linebuf) - 1;
+
+	linebuf[max_len] = '\0';
+
+	while (strlen((CHAR8 *)str) > max_len) {
+		memcpy(linebuf, str, max_len);
+		fastboot_info(linebuf);
+		str += max_len;
+	}
+	fastboot_info(str);
+
+	return EFI_SUCCESS;
+}
+
 void fastboot_info(const char *fmt, ...)
 {
 	va_list ap;

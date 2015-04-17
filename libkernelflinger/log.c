@@ -50,12 +50,11 @@ static SERIAL_IO_INTERFACE *serial;
 static CHAR16 buf16[BUFFER_SIZE];
 static CHAR8 buf8[BUFFER_SIZE];
 
-#ifndef USER
 #define LOG_BUF_SIZE 1024
 static CHAR8 log_buf[LOG_BUF_SIZE];
 static UINTN pos, last_pos;
 
-EFI_STATUS log_flush_to_var()
+EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 {
 	EFI_STATUS ret;
 	CHAR8 *buf, *cur;
@@ -76,8 +75,8 @@ EFI_STATUS log_flush_to_var()
 	} else
 		buf = log_buf;
 
-	ret = set_efi_variable(&loader_guid, L"KernelflingerLogs",
-			       size, buf, FALSE, TRUE);
+	ret = set_efi_variable(&loader_guid, LOG_VAR,
+			       size, buf, nonvol, TRUE);
 	if (last_pos)
 		FreePool(log);
 	return ret;
@@ -96,7 +95,6 @@ static void log_append_to_buffer(CHAR8 *msg, UINTN length)
 	memcpy(log_buf + pos, msg, length);
 	pos += length;
 }
-#endif
 
 static EFI_STATUS serial_init()
 {
@@ -139,9 +137,9 @@ void log(const CHAR16 *fmt, ...)
 	if (EFI_ERROR(uefi_call_wrapper(serial->Write, 3, serial, &length, buf8)))
 		goto exit;
 
-#ifndef USER
-	log_append_to_buffer(buf8, length);
-#endif
+	if (device_is_provisioning())
+		log_append_to_buffer(buf8, length);
+
 exit:
 	va_end(args);
 }

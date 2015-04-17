@@ -147,21 +147,21 @@ enum device_state get_current_state()
 				       &dsize, (void **)&stored_state, &flags);
 		/* If the variable does not exist, assume unlocked. */
 		if (ret == EFI_NOT_FOUND) {
-			debug(L"OEMLock not set, device is in provisioning mode");
 			provisioning_mode = TRUE;
 			current_state = UNLOCKED;
+			debug(L"OEMLock not set, device is in provisioning mode");
 			goto exit;
 		}
 
 		/* If we can't read the state, be safe and assume locked. */
 		if (EFI_ERROR(ret) || !dsize) {
-			error(L"Couldn't read %s, assuming locked", OEM_LOCK_VAR);
 			current_state = LOCKED;
+			error(L"Couldn't read %s, assuming locked", OEM_LOCK_VAR);
 			goto exit;
 #ifndef USERFASTBOOT
 		} else if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
-			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK_VAR);
 			current_state = LOCKED;
+			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK_VAR);
 #endif
 		} else {
 			if (stored_state[0] & OEM_LOCK_UNLOCKED)
