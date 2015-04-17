@@ -610,7 +610,7 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         ui_free();
 
 #ifndef USER
-        log_flush_to_var();
+        log_flush_to_var(FALSE);
 #endif
 
         boot_params = (struct boot_params *)(UINTN)boot_addr;

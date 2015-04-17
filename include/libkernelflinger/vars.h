@@ -64,6 +64,9 @@ extern const EFI_GUID fastboot_guid;
 
 #define OEM_KEY_VAR		L"OEMKey"
 
+/* EFI variable to store the kernelflinger logs.  */
+#define LOG_VAR			L"KernelflingerLogs"
+
 /* Various interesting partition GUIDs */
 extern const EFI_GUID boot_ptn_guid;
 extern const EFI_GUID recovery_ptn_guid;

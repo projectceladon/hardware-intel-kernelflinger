@@ -67,6 +67,7 @@ EFI_STATUS fastboot_publish(const char *name, const char *value);
 void fastboot_okay(const char *fmt, ...);
 void fastboot_fail(const char *fmt, ...);
 void fastboot_info(const char *fmt, ...);
+EFI_STATUS fastboot_info_long_string(char *str);
 
 EFI_STATUS fastboot_start(void **bootimage, void **efiimage,
 			  UINTN *imagesize, enum boot_target *target);
