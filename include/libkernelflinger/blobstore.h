@@ -33,7 +33,7 @@
 #ifndef BLOBSTORE_H_
 #define BLOBSTORE_H_
 
-#include <stdint.h>
+#include <efi.h>
 
 #define BLOB_KEY_LENGTH                  64
 

@@ -30,14 +30,10 @@
  *
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-#include <assert.h>
-#include <unistd.h>
-
 #include "blobstore.h"
+
+#include <efilib.h>
+
 #include "log.h"
 #include "lib.h"
 #include "arraylist.h"
