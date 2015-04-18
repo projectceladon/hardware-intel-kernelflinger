@@ -471,6 +471,10 @@ EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN 
 		CopyMem(&parti->part, part, sizeof(*part));
 		(*part_count)++;
 	}
+
+	if (!*part_count)
+		FreePool(*gpartlist);
+
 	return EFI_SUCCESS;
 }
 
