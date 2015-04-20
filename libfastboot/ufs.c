@@ -78,8 +78,8 @@ EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK
  * with a different mapping, we will have to find a clean way to
  * identify it
  */
-#define LUN_FACTORY 1
-#define LUN_USER 7
+#define LUN_FACTORY 3
+#define LUN_USER 0
 #define LUN_UNKNOWN ((UINT64)-1)
 static UINT64 log_unit_to_ufs_lun(logical_unit_t log_unit)
 {
