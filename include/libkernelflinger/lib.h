@@ -126,4 +126,6 @@ VOID pause(UINTN seconds);
 
 VOID reboot(CHAR16 *target) __attribute__ ((noreturn));
 
+EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
+                         UINTN size, UINTN align);
 #endif
