@@ -35,6 +35,15 @@
 #include "protocol/ufs.h"
 #include "protocol/ScsiPassThruExt.h"
 
+static EFI_DEVICE_PATH *get_scsi_device_path(EFI_DEVICE_PATH *p)
+{
+	for (; !IsDevicePathEndType(p); p = NextDevicePathNode(p))
+		if (DevicePathType(p) == MESSAGING_DEVICE_PATH
+		    && DevicePathSubType(p) == MSG_SCSI_DP)
+			return p;
+	return NULL;
+}
+
 EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 {
 	EFI_STATUS ret;
@@ -43,11 +52,40 @@ EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK
 	EFI_EXT_SCSI_PASS_THRU_SCSI_REQUEST_PACKET scsi_req;
 	struct unmap_parameter unmap;
 	struct command_descriptor_block cdb;
+	EFI_HANDLE scsi_handle;
+	EFI_DEVICE_PATH *dp = DevicePathFromHandle(handle);
+	EFI_DEVICE_PATH *scsi_dp = dp;
+	UINT8 target_bytes[TARGET_MAX_BYTES];
+	UINT8 *target = target_bytes;
+	UINT64 lun;
 
-	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle,
+	if (!dp) {
+		error(L"Failed to get device path from handle");
+		return EFI_INVALID_PARAMETER;
+	}
+	ret = uefi_call_wrapper(BS->LocateDevicePath, 3, &ScsiPassThruProtocolGuid,
+				&scsi_dp, &scsi_handle);
+	if (EFI_ERROR(ret)) {
+		error(L"Failed to locate SCSI root device");
+		return ret;
+	}
+
+	ret = uefi_call_wrapper(BS->HandleProtocol, 3, scsi_handle,
 				&ScsiPassThruProtocolGuid, (void *)&scsi);
 	if (EFI_ERROR(ret)) {
-		debug(L"failed to get scsi protocol");
+		error(L"failed to get scsi protocol");
+		return ret;
+	}
+
+	scsi_dp = get_scsi_device_path(dp);
+	if (!dp) {
+		error(L"Failed to get SCSI device path");
+		return EFI_NOT_FOUND;
+	}
+
+	ret = uefi_call_wrapper(scsi->GetTargetLun, 4, scsi, scsi_dp, (UINT8 **)&target, &lun);
+	if (EFI_ERROR(ret)) {
+		error(L"Failed to get LUN of current device");
 		return ret;
 	}
 
@@ -70,7 +108,7 @@ EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK
 	scsi_req.CdbLength = sizeof(cdb);
 	scsi_req.DataDirection = EFI_EXT_SCSI_DATA_DIRECTION_READ;
 
-	ret = uefi_call_wrapper(scsi->PassThru, 5, scsi, 0, 0, &scsi_req, NULL);
+	ret = uefi_call_wrapper(scsi->PassThru, 5, scsi, target, lun, &scsi_req, NULL);
 	return ret;
 }
 
@@ -99,7 +137,8 @@ EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
 	EFI_GUID ScsiPassThruProtocolGuid = EFI_EXT_SCSI_PASS_THRU_PROTOCOL_GUID;
 	EFI_EXT_SCSI_PASS_THRU_PROTOCOL *scsi;
 	EFI_STATUS ret;
-	UINT8 target[TARGET_MAX_BYTES];
+	UINT8 target_bytes[TARGET_MAX_BYTES];
+	UINT8 *target = target_bytes;
 	UINT64 target_lun;
 	UINT64 lun;
 
@@ -109,23 +148,24 @@ EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
 
 	ret = LibLocateProtocol(&ScsiPassThruProtocolGuid, (void **)&scsi);
 	if (EFI_ERROR(ret)) {
-		debug(L"failed to get scsi protocol");
+		error(L"failed to get scsi protocol");
 		return ret;
 	}
-	uefi_call_wrapper(scsi->GetTargetLun, 4, scsi, p, (UINT8 **)&target, &target_lun);
+
+	p = get_scsi_device_path(p);
+	if (!p)
+		return EFI_NOT_FOUND;
+
+	ret = uefi_call_wrapper(scsi->GetTargetLun, 4, scsi, p, (UINT8 **)&target, &target_lun);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to get LUN for device");
 
 	return target_lun == lun ? EFI_SUCCESS : EFI_NOT_FOUND;
 }
 
 BOOLEAN is_ufs(EFI_DEVICE_PATH *p)
 {
-	while (!IsDevicePathEndType(p)) {
-		if (DevicePathType(p) == MESSAGING_DEVICE_PATH
-		    && DevicePathSubType(p) == MSG_SCSI_DP)
-			return TRUE;
-		p = NextDevicePathNode(p);
-	}
-	return FALSE;
+	return get_scsi_device_path(p) != NULL;
 }
 
 struct storage storage_ufs = {
