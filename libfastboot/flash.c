@@ -99,7 +99,7 @@ EFI_STATUS flash_fill(UINT32 pattern, UINTN size)
 	if (!buf)
 		return EFI_OUT_OF_RESOURCES;
 
-	for (i = 0; i < size / sizeof(UINTN); i++)
+	for (i = 0; i < size / sizeof(*buf); i++)
 		buf[i] = pattern;
 
 	ret = flash_write(buf, size);
