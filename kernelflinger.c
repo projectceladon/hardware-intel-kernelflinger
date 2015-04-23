@@ -811,7 +811,8 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
 }
 
 
-static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state, BOOLEAN charger)
+static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
+                             enum boot_target boot_target)
 {
         EFI_STATUS ret;
 
@@ -821,7 +822,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state, BOOLEAN charger)
         debug(L"chainloading boot image, boot state is %s",
                         boot_state_to_string(boot_state));
         ret = android_image_start_buffer(g_parent_image, bootimage,
-                                         charger, NULL);
+                                         boot_target, NULL);
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Couldn't load Boot image");
 
@@ -860,7 +861,7 @@ static VOID enter_tdos(UINT8 boot_state)
                 goto die;
         }
 #endif
-        load_image(bootimage, boot_state, FALSE);
+        load_image(bootimage, boot_state, TDOS);
         error(L"Couldn't chainload TDOS image");
 die:
         /* Allow plenty of time for the error to be visible before the
@@ -925,7 +926,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 #endif
         debug(L"chainloading fastboot, boot state is %s",
                         boot_state_to_string(boot_state));
-        load_image(bootimage, boot_state, FALSE);
+        load_image(bootimage, boot_state, FASTBOOT);
         error(L"Couldn't chainload Fastboot image");
 die:
         /* Allow plenty of time for the error to be visible before the
@@ -1299,7 +1300,7 @@ fallback:
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                         &boot_state, FALSE, TRUE);
 
-        return load_image(bootimage, boot_state, boot_target == CHARGER);
+        return load_image(bootimage, boot_state, boot_target);
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab
