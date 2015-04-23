@@ -67,6 +67,12 @@ extern const EFI_GUID fastboot_guid;
 /* EFI variable to store the kernelflinger logs.  */
 #define LOG_VAR			L"KernelflingerLogs"
 
+#ifndef USER
+#define CMDLINE_PREPEND_VAR     L"PrependCmdline"
+#define CMDLINE_APPEND_VAR      L"AppendCmdline"
+#define CMDLINE_REPLACE_VAR     L"ReplaceCmdline"
+#endif
+
 /* Various interesting partition GUIDs */
 extern const EFI_GUID boot_ptn_guid;
 extern const EFI_GUID recovery_ptn_guid;
