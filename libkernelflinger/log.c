@@ -78,7 +78,7 @@ EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 	ret = set_efi_variable(&loader_guid, LOG_VAR,
 			       size, buf, nonvol, TRUE);
 	if (last_pos)
-		FreePool(log);
+		FreePool(buf);
 	return ret;
 }
 
