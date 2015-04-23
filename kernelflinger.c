@@ -734,7 +734,8 @@ static EFI_STATUS validate_bootimage(
  * Return values:
  * EFI_INVALID_PARAMETER - Unsupported boot target type, keystore is not well-formed,
  * or loaded boot image was missing or corrupt
- * EFI_ACCESS_DENIED - Validation failed against supplied keystore
+ * EFI_ACCESS_DENIED - Validation failed against supplied keystore, boot image
+ * still usable
  */
 static EFI_STATUS load_boot_image(
                 IN enum boot_target boot_target,
@@ -760,6 +761,7 @@ static EFI_STATUS load_boot_image(
                         bootimage);
                 break;
         default:
+                *bootimage = NULL;
                 return EFI_INVALID_PARAMETER;
         }
 
@@ -769,11 +771,6 @@ static EFI_STATUS load_boot_image(
         debug(L"boot image loaded");
         if (keystore)
                 ret = validate_bootimage(boot_target, *bootimage, keystore, keystore_size);
-
-        if (EFI_ERROR(ret)) {
-                FreePool(*bootimage);
-                *bootimage = NULL;
-        }
 
         return ret;
 }
@@ -1167,17 +1164,14 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 boot_state = BOOT_STATE_ORANGE;
                 lock_prompted = TRUE;
 
-#ifdef NO_DEVICE_UNLOCK
-                ux_prompt_user_secure_boot_off();
-                halt_system();
-#else
                 /* Need to warn early, before we even enter Fastboot
                  * or run EFI binaries. Set lock_prompted to true so
                  * we don't ask again later */
-                if (!ux_prompt_user_secure_boot_off())
-                        halt_system();
-                else
-                        debug(L"User accepted UEFI secure boot disabled warning");
+                ux_prompt_user_secure_boot_off();
+#ifdef NO_DEVICE_UNLOCK
+                halt_system();
+#else
+                debug(L"User accepted UEFI secure boot disabled warning");
 #endif
         } else  if (device_is_unlocked()) {
                 boot_state = BOOT_STATE_ORANGE;
@@ -1200,7 +1194,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 enter_fastboot_mode(boot_state, target_address);
         }
 #endif
-#else
+#else /* !USERDEBUG */
         /* Make sure it's abundantly clear! */
         error(L"INSECURE BOOTLOADER - SYSTEM SECURITY IN RED STATE");
         pause(1);
@@ -1238,63 +1232,52 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         /* If the user keystore is bad the only way to fix it is via
          * fastboot */
         if (boot_state == BOOT_STATE_YELLOW) {
-                if (!ux_prompt_user_keystore_unverified(hash)) {
-                        enter_fastboot_mode(BOOT_STATE_RED, NULL);
-                } else {
+                ux_prompt_user_keystore_unverified(hash);
 #ifdef NO_DEVICE_UNLOCK
-                        halt_system();
+                halt_system();
 #else
-                        debug(L"User accepted unverified keystore warning");
+                debug(L"User accepted unverified keystore warning");
 #endif
-                }
         }
 
         /* If the device is unlocked the only way to re-lock it is
          * via fastboot. Skip this UX if we already prompted earlier
          * about EFI secure boot being turned off */
         if (boot_state == BOOT_STATE_ORANGE && !lock_prompted) {
-                if (!ux_prompt_user_device_unlocked()) {
-                        enter_fastboot_mode(BOOT_STATE_RED, NULL);
-                } else {
+                ux_prompt_user_device_unlocked();
 #ifdef NO_DEVICE_UNLOCK
-                        halt_system();
+                halt_system();
 #else
-                        debug(L"User accepted unlocked device warning");
+                debug(L"User accepted unlocked device warning");
 #endif
-                }
         }
 
-fallback:
         debug(L"loading boot image");
         ret = load_boot_image(boot_target, selected_keystore,
                         selected_keystore_size, target_path,
                         &bootimage, oneshot);
         FreePool(target_path);
-        target_path = NULL;
 
         if (EFI_ERROR(ret)) {
-                debug(L"couldn't load boot image: %r", ret);
-                if (ret == EFI_ACCESS_DENIED)
-                        boot_state = BOOT_STATE_RED;
+                debug(L"issue loading boot image: %r", ret);
+                boot_state = BOOT_STATE_RED;
 
-                /* Recovery itself is unverified. Only way to
-                 * un-hose this device is through Fastboot */
-                if (boot_target == RECOVERY) {
-                        debug(L"recovery image is bad");
-                        if (ux_warn_user_unverified_recovery())
-                                enter_fastboot_mode(BOOT_STATE_RED, NULL);
-                        else
-                                halt_system();
-                }
+                if (boot_target == RECOVERY)
+                        ux_warn_user_unverified_recovery();
+                else
+                        ux_prompt_user_bootimage_unverified();
 
-                if (!ux_prompt_user_bootimage_unverified())
+#ifdef NO_DEVICE_UNLOCK
+                halt_system();
+#else
+                debug(L"User accepted bad boot image warning");
+#endif
+
+                if (bootimage == NULL) {
+                        error(L"Unable to load boot image at all; stop.");
+                        pause(5);
                         halt_system();
-
-                /* Fall back to loading Recovery Console so they
-                 * can sideload an OTA to fix their device */
-                debug(L"fall back to recovery console");
-                boot_target = RECOVERY;
-                goto fallback;
+                }
         }
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),

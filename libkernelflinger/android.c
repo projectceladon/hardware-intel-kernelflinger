@@ -805,6 +805,7 @@ EFI_STATUS android_image_load_partition(
         EFI_STATUS ret;
         struct boot_img_hdr aosp_header;
 
+        *bootimage_p = NULL;
         debug(L"Locating boot image");
         ret = open_partition(guid, &MediaId, &BlockIo, &DiskIo);
         if (EFI_ERROR(ret))
@@ -858,6 +859,7 @@ EFI_STATUS android_image_load_file(
         UINTN buffersize = sizeof(EFI_FILE_INFO);
         struct boot_img_hdr *aosp_header;
 
+        *bootimage_p = NULL;
         debug(L"Locating boot image from file %s", loader);
         path = FileDevicePath(device, loader);
         if (!path) {
