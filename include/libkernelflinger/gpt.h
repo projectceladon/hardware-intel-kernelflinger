@@ -66,7 +66,7 @@ typedef enum {
 	LOGICAL_UNIT_FACTORY,
 } logical_unit_t;
 
-EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, logical_unit_t log_unit);
+EFI_STATUS gpt_get_partition_by_label(const CHAR16 *label, struct gpt_partition_interface *gpart, logical_unit_t log_unit);
 EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, logical_unit_t log_unit);
 EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, logical_unit_t log_unit);
 void gpt_free_cache(void);
