@@ -44,7 +44,6 @@ typedef UINTN size_t;
 #define ALIGN(x, y) ((y) * DIV_ROUND_UP((x), (y)))
 #define ALIGN_DOWN(x, y) ((y) * ((x) / (y)))
 
-EFI_STATUS get_esp_handle(EFI_HANDLE *esp);
 EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs);
 EFI_STATUS uefi_open_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, EFI_FILE **file);
 EFI_STATUS uefi_get_file_size(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename, UINTN *size);

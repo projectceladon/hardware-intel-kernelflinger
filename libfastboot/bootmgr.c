@@ -206,57 +206,35 @@ static EFI_STATUS set_file_path(CHAR16 *bootloader_path)
 static EFI_STATUS set_device_path(CHAR16 *part_label, CHAR16 *bootloader_path)
 {
 	EFI_STATUS ret;
-	EFI_GUID guid;
-	UINTN handle_nb = 0;
-	EFI_HANDLE *handle_buf = NULL;
+	EFI_HANDLE handle = NULL;
 	EFI_DEVICE_PATH *device_path;
 
-	ret = gpt_get_partition_guid(part_label, &guid, LOGICAL_UNIT_USER);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get '%s' partition GUID", part_label);
-		return ret;
-	}
-
-	ret = LibLocateHandleByDiskSignature(MBR_TYPE_EFI_PARTITION_TABLE_HEADER,
-					     SIGNATURE_TYPE_GUID,
-					     (void *)&guid,
-					     &handle_nb,
-					     &handle_buf);
+	ret = gpt_get_partition_handle(part_label, LOGICAL_UNIT_USER, &handle);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get handle for '%s' partition",
 			   part_label);
 		return ret;
 	}
-	if (handle_nb != 1) {
-		error(L"Too many handles for '%s' partition", part_label);
-		ret = EFI_UNSUPPORTED;
-		goto exit;
-	}
 
-	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle_buf[0],
+	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle,
 				&DevicePathProtocol, (VOID*)&device_path);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get device path");
-		goto exit;
+		return ret;
 	}
 
 	while (!IsDevicePathEndType(device_path)) {
 		ret = append_to_buffer(device_path, DevicePathNodeLength(device_path));
 		if (EFI_ERROR(ret))
-			goto exit;
+			return ret;
 		device_path = NextDevicePathNode(device_path);
 	}
 
 	ret = set_file_path(bootloader_path);
 	if (EFI_ERROR(ret))
-		goto exit;
+		return ret;
 
 	ret = append_to_buffer(device_path, DevicePathNodeLength(device_path));
-	if (EFI_ERROR(ret))
-		goto exit;
-
-exit:
-	FreePool(handle_buf);
 	return ret;
 }
 
