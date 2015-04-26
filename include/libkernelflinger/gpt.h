@@ -38,6 +38,8 @@
 #include <efi.h>
 #include "gpt_bin.h"
 
+#define BOOTLOADER_PART L"bootloader"
+
 struct gpt_partition {
 	EFI_GUID type;
 	EFI_GUID unique;
@@ -75,5 +77,6 @@ EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, logical_unit
 EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, logical_unit_t log_unit);
 EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, logical_unit_t log_unit);
 EFI_STATUS gpt_sync(void);
+EFI_STATUS gpt_get_partition_handle(const CHAR16 *label, logical_unit_t log_unit, EFI_HANDLE *handle);
 
 #endif	/* _GPT_H_ */

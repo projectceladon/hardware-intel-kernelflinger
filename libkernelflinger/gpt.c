@@ -786,3 +786,55 @@ EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, logical_unit_t log
 
 	return gpt_write_partition_tables();
 }
+
+static HARDDRIVE_DEVICE_PATH *get_hd_device_path(EFI_DEVICE_PATH *p)
+{
+	while (!IsDevicePathEndType(p)) {
+		if (DevicePathType(p) == MEDIA_DEVICE_PATH
+		    && DevicePathSubType(p) == MEDIA_HARDDRIVE_DP)
+			return (HARDDRIVE_DEVICE_PATH *)p;
+		p = NextDevicePathNode(p);
+	}
+	return NULL;
+}
+
+EFI_STATUS gpt_get_partition_handle(const CHAR16 *label,
+				    logical_unit_t log_unit,
+				    EFI_HANDLE *handle)
+{
+	EFI_STATUS ret;
+	struct gpt_partition_interface gpart;
+	EFI_HANDLE *handles;
+	UINTN nb_handle = 0;
+	UINTN i;
+	EFI_DEVICE_PATH *device_path;
+	HARDDRIVE_DEVICE_PATH *hd_path;
+
+	*handle = NULL;
+
+	ret = gpt_get_partition_by_label(label, &gpart, log_unit);
+	if (EFI_ERROR(ret)) {
+		error(L"Partition '%s' not found", label);
+		return ret;
+	}
+
+	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol, &BlockIoProtocol, NULL, &nb_handle, &handles);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to locate Block IO Protocol");
+		return ret;
+	}
+
+	for (i = 0; i < nb_handle; i++) {
+		device_path = DevicePathFromHandle(handles[i]);
+		hd_path = get_hd_device_path(device_path);
+		if (!hd_path)
+			continue;
+		if (hd_path->PartitionStart == gpart.part.starting_lba) {
+			*handle = handles[i];
+			break;
+		}
+	}
+
+	FreePool(handles);
+	return *handle ? EFI_SUCCESS : EFI_NOT_FOUND;
+}

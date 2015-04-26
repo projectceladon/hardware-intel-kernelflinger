@@ -35,43 +35,13 @@
 #include <efi.h>
 #include <efilib.h>
 #include <lib.h>
+#include <gpt.h>
 #include "protocol.h"
 #include "uefi_utils.h"
 
 /* GUID for ESP partition on gmin */
 const EFI_GUID esp_ptn_guid = { 0x2568845d, 0x2332, 0x4675,
 		{0xbc, 0x39, 0x8f, 0xa5, 0xa4, 0x74, 0x8d, 0x15}};
-
-EFI_STATUS get_esp_handle(EFI_HANDLE *esp)
-{
-	EFI_STATUS ret;
-	UINTN no_handles;
-	EFI_HANDLE *handles;
-
-	ret = LibLocateHandleByDiskSignature(
-		MBR_TYPE_EFI_PARTITION_TABLE_HEADER,
-		SIGNATURE_TYPE_GUID,
-		(void *)&esp_ptn_guid,
-		&no_handles,
-		&handles);
-
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to found partition");
-		return ret;
-	}
-
-	if (no_handles == 1) {
-		*esp = handles[0];
-		ret = EFI_SUCCESS;
-	} else {
-		error(L"%d handles found for ESP, expecting 1", no_handles);
-		ret = EFI_VOLUME_CORRUPTED;
-	}
-
-	if (handles)
-		FreePool(handles);
-	return ret;
-}
 
 EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs)
 {
@@ -80,7 +50,8 @@ EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs)
 	EFI_HANDLE esp_handle = NULL;
 	EFI_FILE_IO_INTERFACE *esp;
 
-	ret = get_esp_handle(&esp_handle);
+	ret = gpt_get_partition_handle(BOOTLOADER_PART, LOGICAL_UNIT_USER,
+				       &esp_handle);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get ESP partition");
 		return ret;

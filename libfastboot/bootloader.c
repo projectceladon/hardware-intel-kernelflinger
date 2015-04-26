@@ -200,9 +200,7 @@ static EFI_STATUS verify_image(EFI_HANDLE handle, CHAR16 *path)
 EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 {
 	EFI_STATUS ret, erase_ret;
-	EFI_GUID guid;
-	UINTN handle_nb = 0;
-	EFI_HANDLE *handle_buf = NULL;
+	EFI_HANDLE handle;
 	UINTN i;
 
 	ret = flash_partition(data, size, BOOTLOADER_TMP_PART);
@@ -213,35 +211,24 @@ EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	ret = gpt_get_partition_guid(BOOTLOADER_TMP_PART, &guid, LOGICAL_UNIT_USER);
-	if (EFI_ERROR(ret))
-		goto exit;
-
-	ret = LibLocateHandleByDiskSignature(MBR_TYPE_EFI_PARTITION_TABLE_HEADER,
-					     SIGNATURE_TYPE_GUID,
-					     (void *)&guid,
-					     &handle_nb,
-					     &handle_buf);
+	ret = gpt_get_partition_handle(BOOTLOADER_TMP_PART,
+				       LOGICAL_UNIT_USER, &handle);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get handle for '%s' partition",
 			   BOOTLOADER_TMP_PART);
-		goto exit;
-	}
-	if (handle_nb != 1) {
-		error(L"Too many handles for '%s' partition", BOOTLOADER_TMP_PART);
-		ret = EFI_UNSUPPORTED;
+		ret = EFI_NOT_FOUND;
 		goto exit;
 	}
 
-	ret = read_load_options(handle_buf[0]);
+	ret = read_load_options(handle);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get load options");
 		goto exit;
 	}
 
-	verify_image(handle_buf[0], DEFAULT_UEFI_LOAD_PATH);
+	verify_image(handle, DEFAULT_UEFI_LOAD_PATH);
 	for (i = 0; i < load_option_nb; i++) {
-		ret = verify_image(handle_buf[0], load_options->path);
+		ret = verify_image(handle, load_options->path);
 		if (EFI_ERROR(ret))
 			goto exit;
 	}
@@ -264,9 +251,6 @@ exit:
 		efi_perror(erase_ret, L"Failed to erase '%s' partition", BOOTLOADER_TMP_PART);
 
 	free_load_options();
-
-	if (handle_buf)
-		FreePool(handle_buf);
 
 	return EFI_ERROR(ret) ? ret : erase_ret;
 }
