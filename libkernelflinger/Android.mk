@@ -37,7 +37,7 @@ $(font_res): $(KERNELFLINGER_FONTS) $(PNG2C) $(GEN_FONTS)
 LOCAL_MODULE := libkernelflinger-$(TARGET_BUILD_VARIANT)
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/../include/libkernelflinger
 LOCAL_CFLAGS := -DKERNELFLINGER -Wall -Wextra -Werror
-LOCAL_STATIC_LIBRARIES := libefi libgnuefi libopenssl-efi libcryptlib
+LOCAL_STATIC_LIBRARIES := libefi libgnuefi libopenssl-efi libcryptlib libuefi_common
 
 ifeq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_CFLAGS += -DUSER -DUSERDEBUG
@@ -83,7 +83,12 @@ LOCAL_SRC_FILES := \
 	blobstore.c \
 	arraylist.c \
 	dict.c \
-	em.c
+	em.c \
+	gpt.c \
+	storage.c \
+	mmc.c \
+	ufs.c \
+	uefi_utils.c
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(res_intermediates)
