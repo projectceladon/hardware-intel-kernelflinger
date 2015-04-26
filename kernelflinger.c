@@ -269,7 +269,7 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
         *oneshot = FALSE;
         *target_path = NULL;
 
-        ret = read_bcb(&misc_ptn_guid, &bcb);
+        ret = read_bcb(MISC_LABEL, &bcb);
         if (EFI_ERROR(ret)) {
                 error(L"Unable to read BCB");
                 t = NORMAL_BOOT;
@@ -289,7 +289,7 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
                 *oneshot = TRUE;
         }
 
-        ret = write_bcb(&misc_ptn_guid, &bcb);
+        ret = write_bcb(MISC_LABEL, &bcb);
         if (EFI_ERROR(ret))
                 error(L"Unable to update BCB contents!");
 
@@ -745,10 +745,10 @@ static EFI_STATUS load_boot_image(
         switch (boot_target) {
         case NORMAL_BOOT:
         case CHARGER:
-                ret = android_image_load_partition(&boot_ptn_guid, bootimage);
+                ret = android_image_load_partition(BOOT_LABEL, bootimage);
                 break;
         case RECOVERY:
-                ret = android_image_load_partition(&recovery_ptn_guid, bootimage);
+                ret = android_image_load_partition(RECOVERY_LABEL, bootimage);
                 break;
         case ESP_BOOTIMAGE:
                 /* "fastboot boot" case */

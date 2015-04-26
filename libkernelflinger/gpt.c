@@ -179,6 +179,11 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 {
 	EFI_STATUS ret;
 
+	/* Call to connect to the controller. Don't check for errors
+	 * as it will report error if the controller is already
+	 * connected (when not booted in 'fast boot' mode) */
+	uefi_call_wrapper(BS->ConnectController, 4, handle, NULL, NULL, TRUE);
+
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &BlockIoProtocol, (VOID *)&disk->bio);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get block io protocol");
@@ -415,7 +420,7 @@ EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, logical_unit
 	return EFI_SUCCESS;
 }
 
-static struct gpt_partition *gpt_find_partition(CHAR16 *label)
+static struct gpt_partition *gpt_find_partition(const CHAR16 *label)
 {
 	UINTN p;
 
@@ -433,7 +438,9 @@ static struct gpt_partition *gpt_find_partition(CHAR16 *label)
 	return NULL;
 }
 
-EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, logical_unit_t log_unit)
+EFI_STATUS gpt_get_partition_by_label(const CHAR16 *label,
+				      struct gpt_partition_interface *gpart,
+				      logical_unit_t log_unit)
 {
 	struct gpt_partition *part;
 	EFI_STATUS ret;
