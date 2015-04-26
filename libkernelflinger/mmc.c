@@ -32,7 +32,6 @@
 
 #include <lib.h>
 #include "mmc.h"
-#include "flash.h"
 #include "protocol/Mmc.h"
 #include "protocol/SdHostIo.h"
 
