@@ -43,6 +43,7 @@
 #include "power.h"
 #include "targets.h"
 #include "gpt.h"
+#include "storage.h"
 
 struct setup_header {
         UINT8 setup_secs;        /* Sectors for setup code */
@@ -593,6 +594,16 @@ static EFI_STATUS setup_command_line(
         ret = prepend_command_line(&cmdline16, L"console=%s", serialport);
         if (EFI_ERROR(ret))
                 goto out;
+
+        PCI_DEVICE_PATH *boot_device = get_boot_device();
+        if (boot_device)
+                ret = prepend_command_line(&cmdline16,
+                                           L"androidboot.diskbus=%02x.%x",
+                                           boot_device->Device,
+                                           boot_device->Function);
+        else
+                error(L"Boot device not found, diskbus parameter not set in the commandline!");
+
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */
