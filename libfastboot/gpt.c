@@ -362,19 +362,32 @@ void gpt_free_cache(void)
 	ZeroMem(&sdisk, sizeof(sdisk));
 }
 
+EFI_STATUS gpt_sync(void)
+{
+	EFI_STATUS ret;
+
+	if (!sdisk.bio)
+		return EFI_SUCCESS;
+
+	ret = uefi_call_wrapper(sdisk.bio->FlushBlocks, 1, sdisk.bio);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to flush block io interface");
+
+	return ret;
+}
+
 EFI_STATUS gpt_refresh(void)
 {
 	EFI_STATUS ret;
+
+	ret = gpt_sync();
+	if (EFI_ERROR(ret))
+		return ret;
 
 	/* Nothing cached, just return */
 	if (!sdisk.bio)
 		return EFI_SUCCESS;
 
-	ret = uefi_call_wrapper(sdisk.bio->FlushBlocks, 1, sdisk.bio);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to flush block io interface");
-		return ret;
-	}
 	ret = uefi_call_wrapper(BS->ReinstallProtocolInterface, 4, sdisk.handle, &BlockIoProtocol, sdisk.bio, sdisk.bio);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to Reinstall block io interface on System disk");

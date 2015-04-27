@@ -556,6 +556,8 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 		return;
 	}
 
+	gpt_sync();
+
 	/* update partition variable in case it has changed */
 	if (ret & REFRESH_PARTITION_VAR) {
 		clean_partition_var();
