@@ -64,15 +64,18 @@ static BOOLEAN is_boot_device(EFI_DEVICE_PATH *p)
 		&& pci->Device == boot_device.Device;
 }
 
-static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path)
+static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
+				   enum storage_type filter)
 {
-	if (is_emmc(device_path)) {
+	if ((filter == STORAGE_EMMC || filter == STORAGE_ALL)
+	    && is_emmc(device_path)) {
 		debug(L"eMMC storage identified");
 		storage = &storage_emmc;
 		return EFI_SUCCESS;
 	}
 
-	if (is_ufs(device_path)) {
+	if ((filter == STORAGE_UFS || filter == STORAGE_ALL)
+	    && is_ufs(device_path)) {
 		debug(L"UFS storage identified");
 		storage = &storage_ufs;
 		return EFI_SUCCESS;
@@ -81,7 +84,7 @@ static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path)
 	return EFI_UNSUPPORTED;
 }
 
-EFI_STATUS identify_boot_device(void)
+EFI_STATUS identify_boot_device(enum storage_type type)
 {
 	EFI_STATUS ret;
 	EFI_HANDLE *handles;
@@ -102,7 +105,7 @@ EFI_STATUS identify_boot_device(void)
 		device_path = DevicePathFromHandle(handles[i]);
 		pci = get_pci_device_path(device_path);
 
-		if (!pci || EFI_ERROR(identify_storage(device_path)))
+		if (!pci || EFI_ERROR(identify_storage(device_path, type)))
 			continue;
 		if (!boot_device.Header.Type) {
 			memcpy(&boot_device, pci, sizeof(boot_device));
@@ -131,7 +134,7 @@ static BOOLEAN valid_storage(void)
 {
 	if (!initialized) {
 		initialized = TRUE;
-		return !EFI_ERROR(identify_boot_device());
+		return !EFI_ERROR(identify_boot_device(STORAGE_ALL));
 	}
 	return boot_device.Header.Type && storage;
 }
@@ -218,7 +221,7 @@ EFI_STATUS storage_set_boot_device(EFI_HANDLE device)
 		return EFI_UNSUPPORTED;
 	}
 
-	ret = identify_storage((EFI_DEVICE_PATH*)pci);
+	ret = identify_storage((EFI_DEVICE_PATH*)pci, STORAGE_ALL);
 	if (EFI_ERROR(ret)) {
 		error(L"Boot device unsupported");
 		return ret;
@@ -237,7 +240,7 @@ PCI_DEVICE_PATH *get_boot_device(void)
 	EFI_STATUS ret;
 
 	if (!initialized) {
-		ret = identify_boot_device();
+		ret = identify_boot_device(STORAGE_ALL);
 		if (EFI_ERROR(ret))
 			efi_perror(ret, L"Failed to get boot device");
 	}

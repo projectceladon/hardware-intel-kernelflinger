@@ -36,6 +36,12 @@
 #include <efi.h>
 #include "gpt.h"
 
+enum storage_type {
+	STORAGE_EMMC,
+	STORAGE_UFS,
+	STORAGE_ALL,
+};
+
 /* It is faster to erase multiple block at once */
 #define N_BLOCK (4096)
 
@@ -44,7 +50,7 @@ struct storage {
 	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
 };
 
-EFI_STATUS identify_boot_device(void);
+EFI_STATUS identify_boot_device(enum storage_type type);
 PCI_DEVICE_PATH *get_boot_device(void);
 EFI_STATUS storage_set_boot_device(EFI_HANDLE device);
 EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
