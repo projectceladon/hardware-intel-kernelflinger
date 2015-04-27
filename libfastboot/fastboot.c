@@ -467,8 +467,8 @@ void fastboot_fail(const char *fmt, ...)
 	if (fastboot_state == STATE_TX)
 		fastboot_ack_buffered("FAIL", fmt, ap);
 	else {
-		fastboot_ack("FAIL", fmt, ap);
 		fastboot_state = STATE_COMPLETE;
+		fastboot_ack("FAIL", fmt, ap);
 	}
 	va_end(ap);
 }
@@ -481,8 +481,8 @@ void fastboot_okay(const char *fmt, ...)
 	if (fastboot_state == STATE_TX)
 		fastboot_ack_buffered("OKAY", fmt, ap);
 	else {
-		fastboot_ack("OKAY", fmt, ap);
 		fastboot_state = STATE_COMPLETE;
+		fastboot_ack("OKAY", fmt, ap);
 	}
 	va_end(ap);
 }
@@ -492,15 +492,14 @@ static void flush_tx_buffer(void)
 	static struct fastboot_tx_buffer *msg;
 
 	msg = txbuf_head;
-	if (usb_write(msg->msg, sizeof(msg->msg)) < 0) {
-		fastboot_state = STATE_ERROR;
-		return;
-	}
-
 	txbuf_head = txbuf_head->next;
-	FreePool(msg);
 	if (!txbuf_head)
 		fastboot_state = STATE_COMPLETE;
+
+	if (usb_write(msg->msg, sizeof(msg->msg)) < 0)
+		fastboot_state = STATE_ERROR;
+
+	FreePool(msg);
 }
 
 static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
@@ -815,7 +814,7 @@ static void fastboot_process_tx(__attribute__((__unused__)) void *buf,
 		worker_download();
 		break;
 	default:
-		/* Nothing to do */
+		error(L"Unexpected tx event while in state %d", fastboot_state);
 		break;
 	}
 }
@@ -850,8 +849,6 @@ static void fastboot_run_command()
 	fastboot_run_root_cmd((char *)argv[0], argc, argv);
 	received_len = 0;
 
-	if (fastboot_state == STATE_COMMAND)
-		fastboot_fail("unknown reason");
 	if (fastboot_state == STATE_TX)
 		flush_tx_buffer();
 }
