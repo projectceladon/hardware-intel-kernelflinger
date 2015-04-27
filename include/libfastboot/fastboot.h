@@ -75,6 +75,7 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage,
 EFI_STATUS fastboot_stop(void *bootimage, void *efiimage, UINTN imagesize,
 			 enum boot_target target);
 void fastboot_free(void);
+EFI_STATUS refresh_partition_var(void);
 
 void fastboot_reboot(enum boot_target target, CHAR16 *msg);
 
