@@ -129,7 +129,7 @@ typedef enum ui_events {
 } ui_events_t;
 ui_events_t ui_keycode_to_event(UINT16 keycode);
 ui_events_t ui_read_input(void);
-BOOLEAN ui_enforce_key_held(UINT32 microseconds, UINT16 ScanCode);
+BOOLEAN ui_enforce_key_held(UINT32 milliseconds, UINT16 ScanCode);
 void ui_wait_for_key_release(void);
 ui_events_t ui_wait_for_input(UINTN timeout_secs);
 BOOLEAN ui_input_to_bool(UINTN timeout_secs, BOOLEAN timeout_true);

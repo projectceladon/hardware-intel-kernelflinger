@@ -72,8 +72,9 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 /* Interval in ms to check on startup for initial press of magic key */
 #define DETECT_KEY_STALL_TIME_MS    1
 
-/* How long magic key should be held to force Fastboot mode */
-#define FASTBOOT_HOLD_DELAY         (2 * 1000 * 1000)
+/* How long (in milliseconds) magic key should be held to force
+ * Fastboot mode */
+#define FASTBOOT_HOLD_DELAY         (2 * 1000)
 
 /* Magic key to enter fastboot mode or revovery console */
 #define MAGIC_KEY          EV_DOWN
@@ -191,15 +192,13 @@ static enum boot_target check_fastboot_sentinel(VOID)
 
 static enum boot_target check_magic_key(VOID)
 {
-        int i;
+        unsigned long i;
         EFI_STATUS ret = EFI_NOT_READY;
         EFI_INPUT_KEY key;
 #ifdef USERFASTBOOT
         enum boot_target bt;
 #endif
-        UINT8 *data;
-        UINTN dsize;
-        int wait_ms = EFI_RESET_WAIT_MS;
+        unsigned long wait_ms = EFI_RESET_WAIT_MS;
 
         debug(L"checking for magic key");
         uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
@@ -207,19 +206,15 @@ static enum boot_target check_magic_key(VOID)
         /* Some systems require a short stall before we can be sure there
          * wasn't a keypress at boot. Read the EFI variable which determines
          * that time for this platform */
-        if (EFI_ERROR(get_efi_variable(&loader_guid, MAGIC_KEY_TIMEOUT_VAR,
-                                       &dsize, (void **)&data, NULL)) || !dsize) {
+        ret = get_efi_variable_long_from_str8(&loader_guid,
+                                             MAGIC_KEY_TIMEOUT_VAR,
+                                             &wait_ms);
+        if (EFI_ERROR(ret)) {
                 debug(L"Couldn't read timeout variable; assuming default");
         } else {
-                if (data[dsize - 1] != '\0') {
-                        debug(L"bad data for magic key timeout");
+                if (wait_ms > 1000) {
+                        debug(L"pathological magic key timeout, use default");
                         wait_ms = EFI_RESET_WAIT_MS;
-                } else {
-                        wait_ms = strtoul((char *)data, NULL, 10);
-                        if (wait_ms < 0 || wait_ms > 1000) {
-                                debug(L"pathological magic key timeout, use default");
-                                wait_ms = EFI_RESET_WAIT_MS;
-                        }
                 }
         }
 
