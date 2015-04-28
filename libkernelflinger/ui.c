@@ -54,6 +54,7 @@ EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_YELLOW	= { 0, 255, 255, 0 };
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_RED	= { 0, 0, 255, 0 };
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_GREEN	= { 0, 255, 0, 0 };
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_HIGHLIGHT	= { 157, 106, 0, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_ORANGE	= { 0, 157, 255, 0 };
 
 
 static BOOLEAN initialized = FALSE;
@@ -444,17 +445,26 @@ ui_events_t ui_wait_for_input(UINTN timeout_secs)
 		/* If we get here, either we had EFI_NOT_READY indicating
 		 * no pending keystroke, EFI_DEVICE_ERROR, or some key
 		 * we don't care about was pressed */
-
 		uefi_call_wrapper(BS->Stall, 1, NOT_READY_USECS);
 		timeout_left -= NOT_READY_USECS;
-	} while (timeout_left);
+	} while (timeout_left || timeout_secs == 0);
 
-	halt_system();
+	return EV_TIMEOUT;
 }
 
-BOOLEAN ui_input_to_bool(UINTN timeout_secs)
+BOOLEAN ui_input_to_bool(UINTN timeout_secs, BOOLEAN timeout_true)
 {
-	return ui_wait_for_input(timeout_secs) == EV_UP ? TRUE : FALSE;
+	ui_events_t ue;
+
+	ue = ui_wait_for_input(timeout_secs);
+	switch (ue) {
+	case EV_UP:
+		return TRUE;
+	case EV_TIMEOUT:
+		return timeout_true;
+	default:
+		return FALSE;
+	}
 }
 
 UINT64 ui_get_blt_size(UINTN width, UINTN height)

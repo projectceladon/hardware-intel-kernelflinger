@@ -36,7 +36,7 @@
 #include <endian.h>
 
 #define CDB_LENGTH			10
-#define BLOCK_TIMEOUT			100	/* 100ns units => 10ms by block */
+#define BLOCK_TIMEOUT			1000	/* 100ns units => 100ms by block */
 #define UFS_UNMAP			0x42
 
 struct command_descriptor_block {

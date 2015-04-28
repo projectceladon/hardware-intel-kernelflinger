@@ -67,17 +67,12 @@ static void flush_tx_buffer(void)
 	}
 }
 
-static void run_fastboot_handle(fastboot_handle handle, INTN argc, CHAR8 **argv)
-{
-	handle(argc, argv);
-	flush_tx_buffer();
-}
-
 static void installer_flash_buffer(void *data, unsigned size,
 				   INTN argc, CHAR8 **argv)
 {
 	fastboot_set_dlbuffer(data, size);
-	run_fastboot_handle(fastboot_flash_cmd, argc, argv);
+	fastboot_flash_cmd(argc, argv);
+	flush_tx_buffer();
 	fastboot_set_dlbuffer(NULL, 0);
 }
 
@@ -302,7 +297,6 @@ static void installer_format(INTN argc, CHAR8 **argv)
 	void *data = NULL;
 	UINTN size;
 	CHAR16 *filename;
-	struct fastboot_cmd *cmd;
 
 	filename = get_format_image_filename(argv[1]);
 	if (!filename)
@@ -317,13 +311,8 @@ static void installer_format(INTN argc, CHAR8 **argv)
 		goto free_filename;
 	}
 
-	cmd = get_root_cmd("erase");
-	if (!cmd) {
-		fastboot_fail("Unknown 'erase' command");
-		goto free_data;
-	}
-
-	run_fastboot_handle(cmd->handle, argc, argv);
+	fastboot_run_root_cmd("erase", argc, argv);
+	flush_tx_buffer();
 	if (!last_cmd_succeeded)
 		goto free_data;
 
@@ -487,7 +476,7 @@ static EFI_STATUS installer_replace_functions()
 	UINTN i;
 
 	for (i = 0; i < ARRAY_SIZE(REPLACEMENTS); i++) {
-		cmd = get_root_cmd(REPLACEMENTS[i].cmd.name);
+		cmd = fastboot_get_root_cmd(REPLACEMENTS[i].cmd.name);
 
 		if (cmd && REPLACEMENTS[i].save_handle)
 			*(REPLACEMENTS[i].save_handle) = cmd->handle;

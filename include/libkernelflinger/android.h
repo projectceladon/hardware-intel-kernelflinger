@@ -19,6 +19,8 @@
 #include "efi.h"
 #include "efilib.h"
 
+#include "targets.h"
+
 #define BOOT_MAGIC "ANDROID!"
 #define BOOT_MAGIC_SIZE 8
 #define BOOT_NAME_SIZE 16
@@ -111,7 +113,7 @@ struct bootloader_message {
 EFI_STATUS android_image_start_buffer(
                 IN EFI_HANDLE parent_image,
                 IN VOID *bootimage,
-                IN BOOLEAN enable_charger,
+                IN enum boot_target boot_target,
                 IN EFI_GUID *swap);
 
 EFI_STATUS android_image_load_partition(

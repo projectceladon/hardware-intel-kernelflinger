@@ -36,57 +36,35 @@
 #include "ux.h"
 #include "vars.h"
 
-#define TIMEOUT_SECS	60
+#define TIMEOUT_SECS	5
+#ifdef NO_DEVICE_UNLOCK
+#define	PENDING_TIMEOUT		"Your device will power off in 5 seconds."
+#define NO_TIMEOUT		"Press Volume Up to power off."
+#else
+#define	PENDING_TIMEOUT		"Your device will boot in 5 seconds."
+#define NO_TIMEOUT		"Press Volume Up to continue."
+#endif
+
 
 #define RED_STATE_CODE		1
 static const ui_textline_t red_state[] = {
-	{ &COLOR_YELLOW,	"RECOVER",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
-	{ &COLOR_WHITE,		"",					FALSE },
-	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },
-	{ &COLOR_WHITE,		"",					FALSE },
-	{ &COLOR_LIGHTGRAY,	"Your device is unable to start",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"Your device may not work correctly",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"because the boot image has",		FALSE },
 	{ &COLOR_LIGHTGRAY,	"failed to verify or is corrupted.",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"",					FALSE },
-	{ &COLOR_LIGHTGRAY,	"You may attempt to recover",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"the device.",				FALSE },
 	{ NULL, NULL, FALSE}
 };
 
 #define BAD_RECOVERY_CODE	2
 static const ui_textline_t bad_recovery[] = {
-	{ &COLOR_YELLOW,	"FASTBOOT",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
-	{ &COLOR_WHITE,		"",					FALSE },
-	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },
-	{ &COLOR_WHITE,		"",					FALSE },
-	{ &COLOR_LIGHTGRAY,	"Your device is unable to start",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"Your device may not work correctly",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"because the Recovery Console",		FALSE },
 	{ &COLOR_LIGHTGRAY,	"image has failed to verify or is",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"corrupted.",				FALSE },
-	{ &COLOR_LIGHTGRAY, 	"",					FALSE },
-	{ &COLOR_LIGHTGRAY,	"You may repair your device with",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"Fastboot.",				FALSE },
 	{ NULL, NULL, FALSE }
 };
 
 #define DEVICE_UNLOCKED_CODE	3
 static const ui_textline_t device_altered_unlocked[] = {
-#ifdef NO_DEVICE_UNLOCK
-	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",  		FALSE },
-#else
-	{ &COLOR_YELLOW, 	"START",				TRUE },
-	{ &COLOR_WHITE, 	"Press Volume UP key",			FALSE },
-#endif
-	{ &COLOR_WHITE, 	"",					FALSE },
-	{ &COLOR_LIGHTRED, 	"FASTBOOT",				TRUE },
-	{ &COLOR_WHITE, 	"Press Volume DOWN key",		FALSE },
-	{ &COLOR_WHITE, 	"",					FALSE },
-	{ &COLOR_LIGHTRED, 	"WARNING:",				TRUE },
 	{ &COLOR_LIGHTGRAY, 	"Your device has been altered",		FALSE },
 	{ &COLOR_LIGHTGRAY, 	"from its factory configuration.",	FALSE },
 	{ &COLOR_LIGHTGRAY, 	"and is no longer in a locked or",	FALSE },
@@ -95,63 +73,31 @@ static const ui_textline_t device_altered_unlocked[] = {
 	{ &COLOR_LIGHTGRAY, 	"If you were not responsible for",	FALSE },
 	{ &COLOR_LIGHTGRAY, 	"these changes, the security of",	FALSE },
 	{ &COLOR_LIGHTGRAY, 	"your device may be at risk.",		FALSE },
-	{ &COLOR_LIGHTGRAY, 	"Choose \"FASTBOOT\" to change",	FALSE },
-	{ &COLOR_LIGHTGRAY, 	"your device's state.",			FALSE },
 	{ NULL, NULL, FALSE }
 };
 
 #define SECURE_BOOT_CODE	4
 static const ui_textline_t secure_boot_off[] = {
-#ifdef NO_DEVICE_UNLOCK
-	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
-	{ &COLOR_WHITE,		"Press any key",          		FALSE },
-#else
-	{ &COLOR_YELLOW,	"START",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
-	{ &COLOR_WHITE,		"",					FALSE },
-	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },
-#endif
-	{ &COLOR_WHITE,		"",					FALSE },
-	{ &COLOR_LIGHTRED,	"WARNING:",				TRUE },
 	{ &COLOR_LIGHTGRAY,	"Your device has been altered",		FALSE },
 	{ &COLOR_LIGHTGRAY,	"from its factory configuration.",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"and is no longer in a locked or",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"verified state due to UEFI Secure",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"Boot being disabled.",			FALSE },
 	{ &COLOR_LIGHTGRAY,	"",					FALSE },
-#ifndef NO_DEVICE_UNLOCK
 	{ &COLOR_LIGHTGRAY,	"If you were not responsible for",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"these changes, the security of",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"your device may be at risk.",		FALSE },
-#endif
-	{ &COLOR_LIGHTGRAY,	"Please contact customer support",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"from your device's manufacturer.",	FALSE },
 	{ NULL, NULL, FALSE }
 };
 
 #define KEYSTORE_ALTERED_CODE	5
 static const ui_textline_t device_altered_keystore[] = {
-#ifdef NO_DEVICE_UNLOCK
-	{ &COLOR_LIGHTRED,	"POWER OFF",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",  		FALSE },
-#else
-	{ &COLOR_YELLOW,	"START",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",			FALSE },
-#endif
-	{ &COLOR_WHITE,		"",					FALSE },
-	{ &COLOR_LIGHTRED,	"FASTBOOT",				TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",		FALSE },
-	{ &COLOR_WHITE,		"",					FALSE },
-	{ &COLOR_LIGHTRED,	"WARNING:",				TRUE },
-	{ &COLOR_LIGHTGRAY,	"Your device has been altered",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"from its factory configuration.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"Your device has loaded a different",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"operating system.",			FALSE },
 	{ &COLOR_LIGHTGRAY,	"",					FALSE },
 	{ &COLOR_LIGHTGRAY,	"If you were not responsible for",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"these changes, the security of",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"your device may be at risk.",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"Choose \"FASTBOOT\" to clear",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"or upload a new user keystore.",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"",					FALSE },
 	{ &COLOR_LIGHTGRAY,	"The device was unable to verify",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"the keystore with ID:",		FALSE },
@@ -195,31 +141,54 @@ static EFI_STATUS ux_init_screen() {
 	return EFI_SUCCESS;
 }
 
-static ui_textline_t *build_error_code_text(UINT32 error_code)
+static ui_textline_t *build_footer_text(BOOLEAN timeout)
+{
+	static char buf[60];
+	static ui_textline_t footer_text[] = {
+		{ &COLOR_WHITE, "", FALSE },
+		{ &COLOR_LIGHTGRAY, "Please contact customer support",	FALSE },
+		{ &COLOR_LIGHTGRAY, "from your device's manufacturer.",	FALSE },
+		{ &COLOR_WHITE, "", FALSE },
+		{ &COLOR_GREEN, buf, TRUE },
+		{ NULL, NULL, FALSE }
+	};
+
+	strncpy((CHAR8 *)buf, (CHAR8 *)(timeout ? PENDING_TIMEOUT : NO_TIMEOUT),
+		sizeof(buf));
+	return footer_text;
+}
+
+static ui_textline_t *build_error_code_text(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *ecolor,
+					    UINT32 error_code)
 {
 	static char buf[26];
 	static ui_textline_t code_text[] = {
-		{ &COLOR_GREEN, buf, TRUE },
+		{ NULL, buf, TRUE },
 		{ &COLOR_WHITE, "", FALSE },
 		{ NULL, NULL, FALSE }
 	};
 
+	code_text[0].color = ecolor;
 	snprintf((CHAR8 *)buf, sizeof(buf),
 		 (CHAR8 *)"BOOTLOADER ERROR CODE %02x", error_code);
 
 	return code_text;
 }
 
-
 static EFI_STATUS display_text(UINT32 error_code,
+			       EFI_GRAPHICS_OUTPUT_BLT_PIXEL *ecolor,
 			       const ui_textline_t *text1,
-			       const ui_textline_t *text2) {
+			       const ui_textline_t *text2,
+			       BOOLEAN show_timeout_message)
+{
 	UINTN width, height, x, y, linesarea, colsarea;
 	ui_image_t *vendor;
 	EFI_STATUS ret;
 	const ui_textline_t *texts[] =
-		{ build_error_code_text(error_code),
-		  text1, text2, NULL };
+		{ build_error_code_text(ecolor, error_code),
+		  text1, text2,
+		  build_footer_text(show_timeout_message),
+		  NULL };
 
 	ui_clear_screen();
 
@@ -279,21 +248,30 @@ static BOOLEAN ux_display_splash() {
 	return TRUE;
 }
 
-static BOOLEAN ux_prompt_user(UINT32 code, const ui_textline_t *text1,
-			      const ui_textline_t *text2) {
-	BOOLEAN answer;
+static VOID ux_prompt_user(UINT32 code,
+			   EFI_GRAPHICS_OUTPUT_BLT_PIXEL *ecolor,
+			   const ui_textline_t *text1,
+			   const ui_textline_t *text2)
+{
+	BOOLEAN timeout = TRUE;
+	UINTN timeout_secs = TIMEOUT_SECS;
 
 	if (EFI_ERROR(ux_init_screen()))
-		/* User won't be prompted.  Assume the answer is "yes".  */
-		return TRUE;
+		return;
 
-	display_text(code, text1, text2);
-	answer = ui_input_to_bool(TIMEOUT_SECS);
+	while (1) {
+		display_text(code, ecolor, text1, text2, timeout);
+		if (ui_input_to_bool(timeout_secs, TRUE))
+			break;
+
+		timeout_secs = 0;
+		timeout = FALSE;
+	}
+
 	clear_text();
-	return answer;
 }
 
-BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash) {
+VOID ux_prompt_user_keystore_unverified(UINT8 *hash) {
 	char buf[15];
 	const ui_textline_t hash_text[] = {
 		{ &COLOR_WHITE, buf, FALSE },
@@ -304,25 +282,30 @@ BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash) {
 		 (CHAR8 *)"%02x%02x-%02x%02x-%02x%02x",
 		 hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
 
-	return ux_prompt_user(KEYSTORE_ALTERED_CODE, device_altered_keystore,
-			      hash_text);
+	ux_prompt_user(KEYSTORE_ALTERED_CODE, &COLOR_YELLOW,
+		       device_altered_keystore, hash_text);
 }
 
-BOOLEAN ux_warn_user_unverified_recovery(VOID) {
-	return ux_prompt_user(BAD_RECOVERY_CODE, bad_recovery, NULL);
+static const ui_textline_t empty_text[] = {
+	{ NULL, NULL, FALSE }
+};
+
+VOID ux_warn_user_unverified_recovery(VOID) {
+	ux_prompt_user(BAD_RECOVERY_CODE, &COLOR_RED, bad_recovery, empty_text);
 }
 
-BOOLEAN ux_prompt_user_bootimage_unverified(VOID) {
-	return ux_prompt_user(RED_STATE_CODE, red_state, NULL);
+VOID ux_prompt_user_bootimage_unverified(VOID) {
+	ux_prompt_user(RED_STATE_CODE, &COLOR_RED, red_state, empty_text);
 }
 
-BOOLEAN ux_prompt_user_secure_boot_off(VOID) {
-	return ux_prompt_user(SECURE_BOOT_CODE, secure_boot_off, NULL);
+VOID ux_prompt_user_secure_boot_off(VOID) {
+	ux_prompt_user(SECURE_BOOT_CODE, &COLOR_ORANGE, secure_boot_off,
+		       empty_text);
 }
 
-BOOLEAN ux_prompt_user_device_unlocked(VOID) {
-	return ux_prompt_user(DEVICE_UNLOCKED_CODE, device_altered_unlocked,
-			      NULL);
+VOID ux_prompt_user_device_unlocked(VOID) {
+	ux_prompt_user(DEVICE_UNLOCKED_CODE, &COLOR_ORANGE,
+		       device_altered_unlocked, empty_text);
 }
 
 static const char *CRASH_IMG_NAME = "crash_event";
@@ -341,7 +324,7 @@ enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID) {
 	UINTN width, height, img_x, img_y, area_x, area_y, colsarea, linesarea;
 	EFI_STATUS ret = EFI_SUCCESS;
 	enum boot_target target;
-	const ui_textline_t *texts[] = { build_error_code_text(CRASH_EVENT_CODE),
+	const ui_textline_t *texts[] = { build_error_code_text(&COLOR_LIGHTRED, CRASH_EVENT_CODE),
 					 crash_event_message, NULL };
 
 	ret = ux_init_screen();

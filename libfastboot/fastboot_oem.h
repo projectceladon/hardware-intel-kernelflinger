@@ -36,5 +36,6 @@
 #define _FASTBOOT_OEM_H_
 
 EFI_STATUS fastboot_oem_init(void);
+void fastboot_oem_free();
 
 #endif	/* _FASTBOOT_OEM_H_ */

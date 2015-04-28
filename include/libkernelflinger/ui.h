@@ -45,6 +45,7 @@ extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_YELLOW;
 extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_RED;
 extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_GREEN;
 extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_HIGHLIGHT;
+extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_ORANGE;
 
 /* Image */
 typedef struct image {
@@ -121,6 +122,7 @@ typedef enum ui_events {
 	EV_NONE,
 	EV_UP,
 	EV_DOWN,
+	EV_TIMEOUT,
 #ifdef USE_POWER_BUTTON
 	EV_POWER
 #endif
@@ -130,7 +132,7 @@ ui_events_t ui_read_input(void);
 BOOLEAN ui_enforce_key_held(UINT32 microseconds, UINT16 ScanCode);
 void ui_wait_for_key_release(void);
 ui_events_t ui_wait_for_input(UINTN timeout_secs);
-BOOLEAN ui_input_to_bool(UINTN timeout_secs);
+BOOLEAN ui_input_to_bool(UINTN timeout_secs, BOOLEAN timeout_true);
 
 /* Boot menu */
 typedef struct ui_boot_action {
