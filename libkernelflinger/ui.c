@@ -42,7 +42,8 @@
 /* Time between calls to ReadKeyStroke to check if it is being actively held
  * Smaller stall values seem to result in false reporting of no key pressed
  * on several devices */
-#define HOLD_KEY_STALL_TIME         (500 * 1000)
+#define HOLD_KEY_STALL_TIME         500
+#define HOLD_KEY_STALL_TIME_MAX     (10 * 1000)
 
 extern EFI_GUID GraphicsOutputProtocol;
 
@@ -73,6 +74,33 @@ static UINTN default_textarea_x;
 static UINTN default_textarea_y;
 
 static const char *VENDOR_IMG_NAME = "splash_intel";
+
+static int get_hold_key_stall_time(void)
+{
+	EFI_STATUS ret;
+	static unsigned long hold_key_stall_time;
+
+	if (hold_key_stall_time)
+		goto out;
+
+	ret = get_efi_variable_long_from_str8(&loader_guid,
+					     HOLD_KEY_STALL_TIME_VAR,
+					     &hold_key_stall_time);
+	if (EFI_ERROR(ret)) {
+		debug(L"Couldn't read timeout variable; assuming default");
+	} else {
+		if (hold_key_stall_time > 0 &&
+		    hold_key_stall_time < HOLD_KEY_STALL_TIME_MAX) {
+			debug(L"hold_key_stall_time=%d ms", hold_key_stall_time);
+			goto out;
+		}
+		debug(L"pathological key stall time, use default");
+	}
+
+	hold_key_stall_time = HOLD_KEY_STALL_TIME;
+out:
+	return hold_key_stall_time;
+}
 
 EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 {
@@ -389,7 +417,7 @@ static BOOLEAN test_key(BOOLEAN check_code, UINT16 ScanCode)
 	EFI_STATUS ret = EFI_SUCCESS;
 	BOOLEAN result = TRUE;
 
-	uefi_call_wrapper(BS->Stall, 1, HOLD_KEY_STALL_TIME);
+	uefi_call_wrapper(BS->Stall, 1, get_hold_key_stall_time() * 1000);
 
 	ret = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2,
 					ST->ConIn, &key);
@@ -411,12 +439,13 @@ static BOOLEAN test_key(BOOLEAN check_code, UINT16 ScanCode)
 	return result;
 }
 
-BOOLEAN ui_enforce_key_held(UINT32 microseconds, UINT16 ScanCode)
+BOOLEAN ui_enforce_key_held(UINT32 milliseconds, UINT16 ScanCode)
 {
 	BOOLEAN ret = TRUE;
 	UINT32 i;
+	int stall_time = get_hold_key_stall_time();
 
-	for (i = 0; i < (microseconds / HOLD_KEY_STALL_TIME); i++) {
+	for (i = 0; i < (milliseconds / stall_time); i++) {
 		ret = test_key(TRUE, ScanCode);
 		if (!ret) {
 			break;

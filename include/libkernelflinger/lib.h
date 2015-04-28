@@ -78,6 +78,8 @@ CHAR16 *get_efi_variable_str(const EFI_GUID *guid, CHAR16 *key);
 CHAR16 *get_efi_variable_str8(const EFI_GUID *guid, CHAR16 *key);
 
 EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte);
+EFI_STATUS get_efi_variable_long_from_str8(const EFI_GUID *guid, CHAR16 *key,
+                                           unsigned long *i);
 
 EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 UINTN size, VOID *data, BOOLEAN nonvol, BOOLEAN runtime);

@@ -194,6 +194,36 @@ EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte)
         return EFI_SUCCESS;
 }
 
+EFI_STATUS get_efi_variable_long_from_str8(const EFI_GUID *guid, CHAR16 *key,
+                                          unsigned long *i)
+{
+        char *data, *end;
+        EFI_STATUS ret;
+        UINTN size;
+
+        ret = get_efi_variable(guid, key, &size, (VOID **)&data, NULL);
+        if (EFI_ERROR(ret))
+                return ret;
+
+        if (!size) {
+                ret = EFI_NOT_FOUND;
+                goto out;
+        }
+
+        if (data[size - 1] != '\0') {
+                ret = EFI_INVALID_PARAMETER;
+                goto out;
+        }
+
+        *i = strtoul((char *)data, &end, 10);
+        if (end == data || *end != '\0')
+                ret = EFI_INVALID_PARAMETER;
+        else
+                ret = EFI_SUCCESS;
+out:
+        FreePool(data);
+        return ret;
+}
 
 EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 UINTN size, VOID *data, BOOLEAN nonvol, BOOLEAN runtime)

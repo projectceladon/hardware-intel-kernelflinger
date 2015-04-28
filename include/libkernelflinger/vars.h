@@ -54,6 +54,10 @@ extern const EFI_GUID fastboot_guid;
  * magic key was pressed at startup */
 #define MAGIC_KEY_TIMEOUT_VAR   L"MagicKeyTimeout"
 
+/* EFI variable which stores the time in milliseconds to wait between
+ * two key events for a hold key */
+#define HOLD_KEY_STALL_TIME_VAR   L"HoldKeyStallTime"
+
 /* Boot state that we report before exiting boot services, per
  * Google's verified boot spec */
 #define BOOT_STATE_VAR		L"BootState"
