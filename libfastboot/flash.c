@@ -99,7 +99,7 @@ EFI_STATUS flash_fill(UINT32 pattern, UINTN size)
 	if (!buf)
 		return EFI_OUT_OF_RESOURCES;
 
-	for (i = 0; i < size / sizeof(UINTN); i++)
+	for (i = 0; i < size / sizeof(*buf); i++)
 		buf[i] = pattern;
 
 	ret = flash_write(buf, size);
@@ -410,12 +410,15 @@ EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 {
 	EFI_STATUS ret;
 	VOID *emptyblock;
+	VOID *aligned_emptyblock;
 
-	emptyblock = AllocateZeroPool(bio->Media->BlockSize * N_BLOCK);
-	if (!emptyblock)
-		return EFI_OUT_OF_RESOURCES;
+	ret = alloc_aligned(&emptyblock, &aligned_emptyblock,
+			    bio->Media->BlockSize * N_BLOCK,
+			    bio->Media->IoAlign);
+	if (EFI_ERROR(ret))
+		return ret;
 
-	ret = fill_with(bio, start, end, emptyblock, N_BLOCK);
+	ret = fill_with(bio, start, end, aligned_emptyblock, N_BLOCK);
 
 	FreePool(emptyblock);
 
@@ -495,6 +498,7 @@ EFI_STATUS garbage_disk(void)
 	struct gpt_partition_interface gparti;
 	EFI_STATUS ret;
 	VOID *chunk;
+	VOID *aligned_chunk;
 	UINTN size;
 
 	ret = gpt_get_root_disk(&gparti, LOGICAL_UNIT_USER);
@@ -504,20 +508,20 @@ EFI_STATUS garbage_disk(void)
 	}
 
 	size = gparti.bio->Media->BlockSize * N_BLOCK;
-	chunk = AllocatePool(size);
-	if (!chunk) {
+	ret = alloc_aligned(&chunk, &aligned_chunk, size, gparti.bio->Media->IoAlign);
+	if (EFI_ERROR(ret)) {
 		error(L"Unable to allocate the garbage chunk");
-		return EFI_OUT_OF_RESOURCES;
+		return ret;
 	}
 
-	ret = generate_random_number_chunk(chunk, size);
+	ret = generate_random_number_chunk(aligned_chunk, size);
 	if (EFI_ERROR(ret)) {
 		FreePool(chunk);
 		return ret;
 	}
 
 	ret = fill_with(gparti.bio, gparti.part.starting_lba,
-			gparti.part.ending_lba, chunk, N_BLOCK);
+			gparti.part.ending_lba, aligned_chunk, N_BLOCK);
 
 	FreePool(chunk);
 	return gpt_refresh();

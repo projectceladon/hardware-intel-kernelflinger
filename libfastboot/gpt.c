@@ -366,6 +366,10 @@ EFI_STATUS gpt_refresh(void)
 {
 	EFI_STATUS ret;
 
+	/* Nothing cached, just return */
+	if (!sdisk.bio)
+		return EFI_SUCCESS;
+
 	ret = uefi_call_wrapper(sdisk.bio->FlushBlocks, 1, sdisk.bio);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to flush block io interface");
@@ -471,6 +475,10 @@ EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN 
 		CopyMem(&parti->part, part, sizeof(*part));
 		(*part_count)++;
 	}
+
+	if (!*part_count)
+		FreePool(*gpartlist);
+
 	return EFI_SUCCESS;
 }
 

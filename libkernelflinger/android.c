@@ -41,6 +41,7 @@
 #include "security.h"
 #include "vars.h"
 #include "power.h"
+#include "targets.h"
 
 
 struct setup_header {
@@ -447,9 +448,85 @@ static EFI_STATUS prepend_command_line(CHAR16 **cmdline, CHAR16 *fmt, ...)
 }
 
 
+static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
+                                IN enum boot_target boot_target)
+{
+        CHAR16 *cmdline16 = NULL;
+#ifndef USER
+        CHAR16 *cmdline_append = NULL;
+        CHAR16 *cmdline_prepend = NULL;
+        BOOLEAN needs_pause = FALSE;
+
+        if (boot_target == NORMAL_BOOT) {
+                cmdline16 = get_efi_variable_str8(&loader_guid, CMDLINE_REPLACE_VAR);
+                cmdline_append = get_efi_variable_str8(&loader_guid, CMDLINE_APPEND_VAR);
+                cmdline_prepend = get_efi_variable_str8(&loader_guid, CMDLINE_PREPEND_VAR);
+        }
+#else
+        (void)boot_target; /* Get rid of a unused parameter warning */
+#endif
+
+        if (!cmdline16) {
+                CHAR8 full_cmdline[BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE];
+
+                memcpy(full_cmdline, aosp_header->cmdline, (BOOT_ARGS_SIZE - 1));
+                if (aosp_header->cmdline[BOOT_ARGS_SIZE - 2]) {
+                        memcpy(full_cmdline + (BOOT_ARGS_SIZE - 1),
+                               aosp_header->extra_cmdline,
+                               BOOT_EXTRA_ARGS_SIZE);
+                }
+
+                cmdline16 = stra_to_str(full_cmdline);
+
+                if (!cmdline16)
+                        return NULL;
+#ifndef USER
+        } else {
+                error(L"Boot image command line overridden with '%s'", cmdline16);
+                needs_pause = TRUE;
+#endif
+        }
+
+#ifndef USER
+        if (cmdline_prepend) {
+                EFI_STATUS ret;
+
+                error(L"Prepending '%s' to command line", cmdline_prepend);
+                needs_pause = TRUE;
+
+                ret = prepend_command_line(&cmdline16, L"%s", cmdline_prepend);
+                FreePool(cmdline_prepend);
+                if (EFI_ERROR(ret))
+                        error(L"couldn't prepend to command line");
+        }
+
+        if (cmdline_append) {
+                EFI_STATUS ret;
+
+                error(L"Appending '%s' to command line", cmdline_append);
+                needs_pause = TRUE;
+
+                ret = prepend_command_line(&cmdline_append, L"%s", cmdline16);
+                if (EFI_ERROR(ret)) {
+                        error(L"couldn't prepend to command line");
+                        FreePool(cmdline_append);
+                } else {
+                        FreePool(cmdline16);
+                        cmdline16 = cmdline_append;
+                }
+        }
+
+        if (needs_pause)
+                pause(1);
+#endif
+
+        return cmdline16;
+}
+
+
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
-                BOOLEAN enable_charger,
+                IN enum boot_target boot_target,
                 IN EFI_GUID *swap_guid)
 {
         CHAR16 *cmdline16 = NULL;
@@ -458,28 +535,16 @@ static EFI_STATUS setup_command_line(
         CHAR16 *bootreason = NULL;
 
         EFI_PHYSICAL_ADDRESS cmdline_addr;
-        CHAR8 *full_cmdline;
         CHAR8 *cmdline;
         UINTN cmdlen;
         EFI_STATUS ret;
-        struct boot_img_hdr *aosp_header;
         struct boot_params *buf;
+        struct boot_img_hdr *aosp_header;
 
         aosp_header = (struct boot_img_hdr *)bootimage;
         buf = (struct boot_params *)(bootimage + aosp_header->page_size);
 
-        full_cmdline = AllocatePool(BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE);
-        if (!full_cmdline) {
-                ret = EFI_OUT_OF_RESOURCES;
-                goto out;
-        }
-        memcpy(full_cmdline, aosp_header->cmdline, (BOOT_ARGS_SIZE - 1));
-        if (aosp_header->cmdline[BOOT_ARGS_SIZE - 2]) {
-                memcpy(full_cmdline + (BOOT_ARGS_SIZE - 1),
-                                aosp_header->extra_cmdline,
-                                BOOT_EXTRA_ARGS_SIZE);
-        }
-        cmdline16 = stra_to_str(full_cmdline);
+        cmdline16 = get_command_line(aosp_header, boot_target);
         if (!cmdline16) {
                 ret = EFI_OUT_OF_RESOURCES;
                 goto out;
@@ -495,7 +560,7 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 
-        if (enable_charger) {
+        if (boot_target == CHARGER) {
                 ret = prepend_command_line(&cmdline16,
                                 L"androidboot.mode=charger");
                 if (EFI_ERROR(ret))
@@ -551,7 +616,6 @@ static EFI_STATUS setup_command_line(
         ret = EFI_SUCCESS;
 out:
         FreePool(cmdline16);
-        FreePool(full_cmdline);
         FreePool(bootreason);
         FreePool(serialport);
 
@@ -610,7 +674,7 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         ui_free();
 
 #ifndef USER
-        log_flush_to_var();
+        log_flush_to_var(FALSE);
 #endif
 
         boot_params = (struct boot_params *)(UINTN)boot_addr;
@@ -741,6 +805,7 @@ EFI_STATUS android_image_load_partition(
         EFI_STATUS ret;
         struct boot_img_hdr aosp_header;
 
+        *bootimage_p = NULL;
         debug(L"Locating boot image");
         ret = open_partition(guid, &MediaId, &BlockIo, &DiskIo);
         if (EFI_ERROR(ret))
@@ -794,6 +859,7 @@ EFI_STATUS android_image_load_file(
         UINTN buffersize = sizeof(EFI_FILE_INFO);
         struct boot_img_hdr *aosp_header;
 
+        *bootimage_p = NULL;
         debug(L"Locating boot image from file %s", loader);
         path = FileDevicePath(device, loader);
         if (!path) {
@@ -912,7 +978,7 @@ out_free:
 EFI_STATUS android_image_start_buffer(
                 IN EFI_HANDLE parent_image,
                 IN VOID *bootimage,
-                IN BOOLEAN enable_charger,
+                IN enum boot_target boot_target,
                 IN EFI_GUID *swap_guid)
 {
         struct boot_img_hdr *aosp_header;
@@ -963,7 +1029,7 @@ EFI_STATUS android_image_start_buffer(
         }
 
         debug(L"Creating command line");
-        ret = setup_command_line(bootimage, enable_charger, swap_guid);
+        ret = setup_command_line(bootimage, boot_target, swap_guid);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"setup_command_line");
                 return ret;

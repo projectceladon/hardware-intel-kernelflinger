@@ -49,7 +49,7 @@
 #endif
 
 static const load_option_t DEFAULT_LOAD_OPTIONS[] = {
-	{ L"Android-IA", L"\\loader.efi" }
+	{ L"Android-IA", DEFAULT_UEFI_LOAD_PATH }
 };
 
 static load_option_t *load_options;

@@ -493,6 +493,22 @@ VOID reboot(CHAR16 *target)
         while (1) { }
 }
 
+EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
+				    UINTN size, UINTN align)
+{
+	*free_addr = AllocateZeroPool(size + align);
+	if (!*free_addr)
+		return EFI_OUT_OF_RESOURCES;
+
+	if (align > 1)
+		*aligned_addr = (char *)*free_addr +
+			((UINTN)*free_addr % align);
+	else
+		*aligned_addr = *free_addr;
+
+	return EFI_SUCCESS;
+}
+
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
 

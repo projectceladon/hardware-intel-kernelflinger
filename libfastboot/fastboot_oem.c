@@ -45,9 +45,12 @@
 
 #include "fastboot_oem.h"
 #include "intel_variables.h"
+#include "text_parser.h"
 
 #define OFF_MODE_CHARGE		"off-mode-charge"
 #define CRASH_EVENT_MENU	"crash-event-menu"
+
+static cmdlist_t cmdlist;
 
 static EFI_STATUS fastboot_oem_publish(void)
 {
@@ -117,8 +120,12 @@ static void change_device_state(enum device_state new_state)
 	ret = fastboot_oem_publish();
 	if (EFI_ERROR(ret))
 		fastboot_fail("Failed to publish OEM variables");
-	else
+	else {
 		fastboot_okay("");
+		/* Ensure logs variable is deleted on a successful
+		   state transition.  */
+		set_efi_variable(&loader_guid, LOG_VAR, 0, NULL, FALSE, TRUE);
+	}
 }
 
 static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
@@ -374,24 +381,66 @@ static void cmd_oem_rm(INTN argc, CHAR8 **argv)
 }
 #endif
 
+static void cmd_oem_get_logs(__attribute__((__unused__)) INTN argc,
+			     __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	UINT32 flags;
+	char *buf;
+	UINTN size;
+
+	if (argc != 1) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	ret = get_efi_variable(&loader_guid, LOG_VAR, &size, (VOID **)&buf, &flags);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("failed to get log buffer from variable, %r", ret);
+		return;
+	}
+
+	ret = parse_text_buffer(buf, size, fastboot_info_long_string);
+	FreePool(buf);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to parse log buffer, %r", ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
+
+static void cmd_oem(INTN argc, CHAR8 **argv)
+{
+	if (argc < 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	fastboot_run_cmd(cmdlist, (char *)argv[1], argc - 1, argv + 1);
+}
+
 static struct fastboot_cmd COMMANDS[] = {
-	{ "lock",		LOCKED,		cmd_oem_lock },
-	{ "unlock",		LOCKED,		cmd_oem_unlock  },
-	{ "verified",		LOCKED,		cmd_oem_verified  },
-	{ OFF_MODE_CHARGE,	LOCKED,		cmd_oem_off_mode_charge  },
+	{ "lock",			LOCKED,		cmd_oem_lock },
+	{ "unlock",			LOCKED,		cmd_oem_unlock  },
+	{ "verified",			LOCKED,		cmd_oem_verified  },
+	{ OFF_MODE_CHARGE,		LOCKED,		cmd_oem_off_mode_charge  },
 	/* The following commands are not part of the Google
 	 * requirements.  They are provided for engineering and
 	 * provisioning purpose only.  */
-	{ CRASH_EVENT_MENU,	LOCKED,		cmd_oem_crash_event_menu  },
-	{ "setvar",		UNLOCKED,	cmd_oem_setvar  },
-	{ "garbage-disk",	UNLOCKED,	cmd_oem_garbage_disk  },
-	{ "reboot",		LOCKED,		cmd_oem_reboot  },
+	{ CRASH_EVENT_MENU,		LOCKED,		cmd_oem_crash_event_menu  },
+	{ "setvar",			UNLOCKED,	cmd_oem_setvar  },
+	{ "garbage-disk",		UNLOCKED,	cmd_oem_garbage_disk  },
+	{ "reboot",			LOCKED,		cmd_oem_reboot  },
 #ifndef USER
-	{ "reprovision",	LOCKED,		cmd_oem_reprovision  },
-	{ "rm",			LOCKED,		cmd_oem_rm },
+	{ "reprovision",		LOCKED,		cmd_oem_reprovision  },
+	{ "rm",				LOCKED,		cmd_oem_rm },
 #endif
-	{ "get-hashes",		LOCKED,		cmd_oem_gethashes  }
+	{ "get-hashes",			LOCKED,		cmd_oem_gethashes  },
+	{ "get-provisioning-logs",	LOCKED,		cmd_oem_get_logs }
 };
+
+static struct fastboot_cmd oem = { "oem", LOCKED, cmd_oem };
 
 EFI_STATUS fastboot_oem_init(void)
 {
@@ -403,10 +452,17 @@ EFI_STATUS fastboot_oem_init(void)
 		return ret;
 
 	for (i = 0; i < ARRAY_SIZE(COMMANDS); i++) {
-		ret = fastboot_oem_register(&COMMANDS[i]);
+		ret = fastboot_register_into(&cmdlist, &COMMANDS[i]);
 		if (EFI_ERROR(ret))
 			return ret;
 	}
 
+	fastboot_register(&oem);
+
 	return EFI_SUCCESS;
+}
+
+void fastboot_oem_free()
+{
+	fastboot_cmdlist_unregister(&cmdlist);
 }
