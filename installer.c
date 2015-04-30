@@ -54,6 +54,8 @@ static CHAR8 DEFAULT_OPTIONS[] = "--batch installer.cmd";
 static BOOLEAN need_tx_cb;
 static char *fastboot_cmd_buf;
 static UINTN fastboot_cmd_buf_len;
+static char command_buffer[256]; /* Large enough to fit long filename
+				    on flash command.  */
 
 #define inst_perror(ret, x, ...) do { \
 	fastboot_fail(x ": %r", ##__VA_ARGS__, ret); \
@@ -559,6 +561,14 @@ EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
 					 data_callback_t rx_cb,
 					 data_callback_t tx_cb)
 {
+	EFI_STATUS ret;
+	ret = fastboot_set_command_buffer(command_buffer,
+					  sizeof(command_buffer));
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to set fastboot command buffer");
+		return ret;
+	}
+
 	fastboot_tx_cb = tx_cb;
 	fastboot_rx_cb = rx_cb;
 	start_cb();
