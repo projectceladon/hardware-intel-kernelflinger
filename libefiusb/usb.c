@@ -33,23 +33,25 @@
  */
 
 #include <lib.h>
+#include <uefi_utils.h>
 #include <vars.h>
 
 #include "protocol.h"
-#include "uefi_utils.h"
-#include "fastboot_usb.h"
+#include "usb.h"
 #include "protocol/UsbDeviceModeProtocol.h"
 #include "smbios.h"
 
 #define CONFIG_COUNT            1
 #define INTERFACE_COUNT         1
 #define ENDPOINT_COUNT          2
-#define CFG_MAX_POWER           0x00	/* Max power consumption of the USB device from the bus for this config */
-#define FB_IF_SUBCLASS          0x42	/* Fastboot subclass */
-#define FB_IF_PROTOCOL          0x03	/* Fastboot protocol */
+#define CFG_MAX_POWER           0x00	/* Max power consumption of
+					   the USB device from the bus
+					   for this config */
+#define IF_SUBCLASS          	0x00	/* Default subclass */
+#define IF_PROTOCOL          	0x00	/* Default protocol */
 #define IN_ENDPOINT_NUM         1
 #define OUT_ENDPOINT_NUM        2
-#define FB_BULK_EP_PKT_SIZE     USB_BULK_EP_PKT_SIZE_HS	/* default to using high speed */
+#define BULK_EP_PKT_SIZE     	USB_BULK_EP_PKT_SIZE_HS	/* default to using high speed */
 #define VENDOR_ID               0x8087	/* Intel Inc. */
 #define PRODUCT_ID		0x09EF
 #define BCD_DEVICE		0x0100
@@ -81,8 +83,8 @@ typedef enum {
 #define STR_MANUFACTURER	L"Intel Corporation"
 #define STR_PRODUCT		L"Intel Product"
 #define STR_SERIAL		L"INT123456"
-#define STR_CONFIGURATION	L"USB-Update"
-#define STR_INTERFACE		L"Fastboot"
+#define STR_CONFIGURATION	L"Default configuration"
+#define STR_INTERFACE		L"Default interface"
 
 static USB_STRING_DESCRIPTOR string_table[] = {
 	{ 2 + sizeof(LANG_EN_US)	, USB_DESC_TYPE_STRING, {LANG_EN_US} },
@@ -93,19 +95,19 @@ static USB_STRING_DESCRIPTOR string_table[] = {
 	{ 2 + sizeof(STR_INTERFACE)	, USB_DESC_TYPE_STRING, STR_INTERFACE },
 };
 
-/* Complete Configuration structure for Fastboot */
-struct fb_config_descriptor {
+/* Complete Configuration structure */
+struct config_descriptor {
 	EFI_USB_CONFIG_DESCRIPTOR    config;
 	EFI_USB_INTERFACE_DESCRIPTOR interface;
 	EFI_USB_ENDPOINT_DESCRIPTOR  ep_in;
 	EFI_USB_ENDPOINT_DESCRIPTOR  ep_out;
 } __attribute__((packed));
 
-static struct fb_config_descriptor config_descriptor = {
+static struct config_descriptor config_descriptor = {
 	.config = {
 		sizeof(EFI_USB_CONFIG_DESCRIPTOR),
 		USB_DESC_TYPE_CONFIG,
-		sizeof(struct fb_config_descriptor),
+		sizeof(struct config_descriptor),
 		INTERFACE_COUNT,
 		1,
 		STR_TBL_CONFIG,
@@ -119,8 +121,8 @@ static struct fb_config_descriptor config_descriptor = {
 		0x0,
 		ENDPOINT_COUNT,
 		USB_DEVICE_VENDOR_CLASS,
-		FB_IF_SUBCLASS,
-		FB_IF_PROTOCOL,
+		IF_SUBCLASS,
+		IF_PROTOCOL,
 		STR_TBL_INTERFACE
 	},
 	.ep_in = {
@@ -128,7 +130,7 @@ static struct fb_config_descriptor config_descriptor = {
 		USB_DESC_TYPE_ENDPOINT,
 		IN_ENDPOINT_NUM | USB_ENDPOINT_DIR_IN,
 		USB_ENDPOINT_BULK,
-		FB_BULK_EP_PKT_SIZE,
+		BULK_EP_PKT_SIZE,
 		0x00 /* Not specified for bulk endpoint */
 	},
 	.ep_out = {
@@ -136,7 +138,7 @@ static struct fb_config_descriptor config_descriptor = {
 		USB_DESC_TYPE_ENDPOINT,
 		OUT_ENDPOINT_NUM | USB_ENDPOINT_DIR_OUT,
 		USB_ENDPOINT_BULK,
-		FB_BULK_EP_PKT_SIZE,
+		BULK_EP_PKT_SIZE,
 		0x00 /* Not specified for bulk endpoint */
 	}
 };
@@ -202,7 +204,7 @@ static EFIAPI EFI_STATUS setup_handler(__attribute__((__unused__)) EFI_USB_DEVIC
 				       __attribute__((__unused__)) USB_DEVICE_IO_INFO *IoInfo)
 {
 
-	/* Fastboot doesn't handle any Class/Vendor specific setup requests */
+	/* Does not handle any Class/Vendor specific setup requests */
 
 	return EFI_SUCCESS;
 }
@@ -240,9 +242,23 @@ EFIAPI EFI_STATUS data_handler(EFI_USB_DEVICE_XFER_INFO *XferInfo)
 	return EFI_SUCCESS;
 }
 
-static void fbSetStringTableLine(UINTN line, char *string)
+static void set_string16_table_line(UINTN line, CHAR16 *str)
 {
 	UINTN size;
+
+	size = (StrLen(str) + 1) * sizeof(CHAR16);
+
+	if (size > sizeof(string_table[line].LangID)) {
+		error(L"String number from SMBIOS table is too long.");
+		return;
+	}
+
+	memcpy(string_table[line].LangID, str, size);
+	string_table[line].Length = size;
+}
+
+static void set_string_table_line(UINTN line, char *string)
+{
 	CHAR16 *str;
 
 	str = stra_to_str((CHAR8 *)string);
@@ -251,21 +267,11 @@ static void fbSetStringTableLine(UINTN line, char *string)
 		return;
 	}
 
-	size = (StrLen(str) + 1) * sizeof(CHAR16);
-
-	if (size > sizeof(string_table[line].LangID)) {
-		error(L"String number from SMBIOS table is too long.");
-		goto exit;
-	}
-
-	memcpy(string_table[line].LangID, str, size);
-	string_table[line].Length = size;
-
-exit:
+	set_string16_table_line(line, str);
 	FreePool(str);
 }
 
-static void fbSetManufacturer(void)
+static void set_manufacturer(void)
 {
 	char *manufacturer;
 
@@ -275,10 +281,10 @@ static void fbSetManufacturer(void)
 		return;
 	}
 
-	fbSetStringTableLine(1, manufacturer);
+	set_string_table_line(1, manufacturer);
 }
 
-static void fbSetProduct(void)
+static void set_product(void)
 {
 	char *product;
 
@@ -288,10 +294,10 @@ static void fbSetProduct(void)
 		return;
 	}
 
-	fbSetStringTableLine(2, product);
+	set_string_table_line(2, product);
 }
 
-static void fbSetSerialNumber(void)
+static void set_serial_number(void)
 {
 	char *serial;
 
@@ -301,14 +307,23 @@ static void fbSetSerialNumber(void)
 		return;
 	}
 
-	fbSetStringTableLine(3, serial);
+	set_string_table_line(3, serial);
 }
 
-static void fbInitDriverObjs(void)
+static void init_driver_objs(UINT8 subclass,
+			     UINT8 protocol,
+			     CHAR16 *str_configuration,
+			     CHAR16 *str_interface)
 {
-	fbSetManufacturer();
-	fbSetProduct();
-	fbSetSerialNumber();
+	config_descriptor.interface.InterfaceSubClass = subclass;
+	config_descriptor.interface.InterfaceProtocol = protocol;
+
+	set_manufacturer();
+	set_product();
+	set_serial_number();
+
+	set_string16_table_line(STR_TBL_CONFIG, str_configuration);
+	set_string16_table_line(STR_TBL_INTERFACE, str_interface);
 
 	/* Device driver objects */
 	gDevObj.DeviceDesc                 = &device_descriptor;
@@ -336,13 +351,17 @@ static void fbInitDriverObjs(void)
 	gEndpointObjs[1].EndpointCompDesc  = NULL;
 }
 
-EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
-					 data_callback_t rx_cb,
-					 data_callback_t tx_cb)
+EFI_STATUS usb_init_and_connect(UINT8 subclass,
+				UINT8 protocol,
+				CHAR16 *str_configuration,
+				CHAR16 *str_interface,
+				start_callback_t start_cb,
+				data_callback_t rx_cb,
+				data_callback_t tx_cb)
 {
 	EFI_STATUS ret;
 
-	if (!start_cb || !rx_cb || !tx_cb)
+	if (!str_configuration || !str_interface || !start_cb || !rx_cb || !tx_cb)
 		return EFI_INVALID_PARAMETER;
 
 	start_callback = start_cb;
@@ -360,9 +379,9 @@ EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
 		return ret;
 	}
 
-	fbInitDriverObjs();
+	init_driver_objs(subclass, protocol, str_configuration, str_interface);
 
-	/* Bind this Fastboot layer to the USB device driver layer */
+	/* Bind this layer to the USB device driver layer */
 	ret = uefi_call_wrapper(usb_device->Bind, 2, usb_device, &gDevObj);
 	if (EFI_ERROR(ret)) {
 		debug(L"Failed to initialize USB Device driver layer: %r", ret);
@@ -378,7 +397,7 @@ EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS fastboot_usb_stop(void)
+EFI_STATUS usb_stop(void)
 {
 	EFI_STATUS ret;
 
@@ -390,7 +409,7 @@ EFI_STATUS fastboot_usb_stop(void)
 }
 
 
-EFI_STATUS fastboot_usb_disconnect_and_unbind(void)
+EFI_STATUS usb_disconnect_and_unbind(void)
 {
 	EFI_STATUS ret;
 
@@ -413,7 +432,7 @@ EFI_STATUS fastboot_usb_disconnect_and_unbind(void)
 	return ret;
 }
 
-EFI_STATUS fastboot_usb_run(void)
+EFI_STATUS usb_run(void)
 {
 	return uefi_call_wrapper(usb_device->Run, 2, usb_device, 1);
 }

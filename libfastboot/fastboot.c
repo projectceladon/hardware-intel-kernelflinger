@@ -39,17 +39,22 @@
 #include <string.h>
 #include <ui.h>
 #include <em.h>
+#include <usb.h>
 
 #include "uefi_utils.h"
 #include "gpt.h"
 #include "fastboot.h"
-#include "fastboot_usb.h"
 #include "flash.h"
 #include "fastboot_oem.h"
 #include "fastboot_ui.h"
 #include "smbios.h"
 #include "info.h"
 #include "authenticated_action.h"
+
+#define FASTBOOT_IF_SUBCLASS	0x42
+#define FASTBOOT_IF_PROTOCOL	0x03
+#define STR_CONFIGURATION	L"USB-Update"
+#define STR_INTERFACE		L"Fastboot"
 
 #define MAGIC_LENGTH 64
 /* size of "INFO" "OKAY" or "FAIL" */
@@ -1065,9 +1070,13 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 	 * or magic key */
 	ui_wait_for_key_release();
 
-	ret = fastboot_usb_init_and_connect(fastboot_start_callback,
-					    fastboot_process_rx,
-					    fastboot_process_tx);
+	ret = usb_init_and_connect(FASTBOOT_IF_SUBCLASS,
+				   FASTBOOT_IF_PROTOCOL,
+				   STR_CONFIGURATION,
+				   STR_INTERFACE,
+				   fastboot_start_callback,
+				   fastboot_process_rx,
+				   fastboot_process_tx);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to initialized and connect");
 		goto exit;
@@ -1082,7 +1091,7 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 		 * - retro-compatibility with previous USB device mode
 		 *   protocol implementation;
 		 * - the installer needs to be scheduled; */
-		ret = fastboot_usb_run();
+		ret = usb_run();
 		if (EFI_ERROR(ret) && ret != EFI_TIMEOUT) {
 			efi_perror(ret, L"Error occurred during USB run");
 			goto exit;
@@ -1094,12 +1103,12 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 			break;
 	}
 
-	fastboot_usb_stop();
+	usb_stop();
 
 	if (fastboot_target != UNKNOWN_TARGET)
 		*target = fastboot_target;
 
-	ret = fastboot_usb_disconnect_and_unbind();
+	ret = usb_disconnect_and_unbind();
 	if (EFI_ERROR(ret))
 		goto exit;
 

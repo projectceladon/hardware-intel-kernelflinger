@@ -33,6 +33,7 @@
 #include <efiapi.h>
 #include <efilib.h>
 #include <stdio.h>
+#include <usb.h>
 
 #include "lib.h"
 #include "uefi_utils.h"
@@ -43,7 +44,6 @@
 #include "sparse_format.h"
 #include "fastboot.h"
 #include "fastboot_oem.h"
-#include "fastboot_usb.h"
 #include "text_parser.h"
 
 static BOOLEAN last_cmd_succeeded;
@@ -543,9 +543,13 @@ exit:
 }
 
 /* USB wrapper functions. */
-EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
-					 data_callback_t rx_cb,
-					 data_callback_t tx_cb)
+EFI_STATUS usb_init_and_connect(__attribute__((__unused__)) UINT8 subclass,
+				__attribute__((__unused__)) UINT8 protocol,
+				__attribute__((__unused__)) CHAR16 *str_configuration,
+				__attribute__((__unused__)) CHAR16 *str_interface,
+				start_callback_t start_cb,
+				data_callback_t rx_cb,
+				data_callback_t tx_cb)
 {
 	EFI_STATUS ret;
 	ret = fastboot_set_command_buffer(command_buffer,
@@ -565,17 +569,17 @@ EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS fastboot_usb_stop(void)
+EFI_STATUS usb_stop(void)
 {
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS fastboot_usb_disconnect_and_unbind(void)
+EFI_STATUS usb_disconnect_and_unbind(void)
 {
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS fastboot_usb_run(void)
+EFI_STATUS usb_run(void)
 {
 	static BOOLEAN initialized = FALSE;
 	EFI_STATUS ret;
