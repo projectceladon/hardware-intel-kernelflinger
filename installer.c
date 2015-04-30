@@ -506,6 +506,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	enum boot_target target;
 
 	InitializeLib(image, _table);
+	g_parent_image = image;
 
 	ret = handle_protocol(image, &LoadedImageProtocol, (void **)&loaded_img);
 	if (ret != EFI_SUCCESS) {
