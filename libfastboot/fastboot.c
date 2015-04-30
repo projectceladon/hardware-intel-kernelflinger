@@ -86,7 +86,8 @@ enum fastboot_states {
 EFI_GUID guid_linux_data = {0x0fc63daf, 0x8483, 0x4772, {0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4}};
 
 static cmdlist_t cmdlist;
-static char command_buffer[MAGIC_LENGTH];
+static char *command_buffer;
+static UINTN command_buffer_size;
 static struct fastboot_var *varlist;
 static struct fastboot_tx_buffer *txbuf_head;
 static enum fastboot_states fastboot_state = STATE_OFFLINE;
@@ -125,6 +126,17 @@ void fastboot_set_dlbuffer(void *buffer, unsigned size)
 {
 	dlbuffer = buffer;
 	dlsize = size;
+}
+
+EFI_STATUS fastboot_set_command_buffer(char *buffer, UINTN size)
+{
+	if (!buffer)
+		return EFI_INVALID_PARAMETER;
+
+	command_buffer = buffer;
+	command_buffer_size = size;
+
+	return EFI_SUCCESS;
 }
 
 EFI_STATUS fastboot_register_into(cmdlist_t *list, struct fastboot_cmd *cmd)
@@ -728,7 +740,7 @@ void fastboot_run_root_cmd(const char *name, INTN argc, CHAR8 **argv)
 
 static void fastboot_read_command(void)
 {
-	usb_read(command_buffer, sizeof(command_buffer));
+	usb_read(command_buffer, command_buffer_size);
 }
 #define BLK_DOWNLOAD (8*1024*1024)
 
@@ -877,7 +889,7 @@ static void fastboot_process_rx(void *buf, unsigned len)
 		}
 		break;
 	case STATE_COMPLETE:
-		if (buf != command_buffer || len >= sizeof(command_buffer)) {
+		if (buf != command_buffer || len >= command_buffer_size) {
 			fastboot_fail("Inappropriate command buffer or length");
 			return;
 		}
@@ -914,6 +926,14 @@ static EFI_STATUS fastboot_init()
 	EFI_STATUS ret;
 	UINTN i;
 	char download_max_str[30];
+	static char default_command_buffer[MAGIC_LENGTH];
+
+	ret = fastboot_set_command_buffer(default_command_buffer,
+					  sizeof(default_command_buffer));
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to set fastboot command buffer");
+		goto error;
+	}
 
 	ret = uefi_call_wrapper(BS->SetWatchdogTimer, 4, 0, 0, 0, NULL);
 	if (EFI_ERROR(ret) && ret != EFI_UNSUPPORTED) {
