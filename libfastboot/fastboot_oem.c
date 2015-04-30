@@ -75,7 +75,7 @@ static void change_device_state(enum device_state new_state)
 {
 	EFI_STATUS ret;
 
-	if (get_current_state() == new_state) {
+	if (get_current_state() == new_state && !device_is_provisioning()) {
 		error(L"Device is already in the required state.");
 		fastboot_okay("");
 		return;
