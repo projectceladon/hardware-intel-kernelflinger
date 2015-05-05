@@ -63,6 +63,10 @@ ifeq ($(KERNELFLINGER_USE_CHARGING_APPLET),true)
     LOCAL_CFLAGS += -DUSE_CHARGING_APPLET
 endif
 
+ifeq ($(KERNELFLINGER_USE_RSCI),true)
+    LOCAL_CFLAGS += -DUSE_RSCI
+endif
+
 LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \
