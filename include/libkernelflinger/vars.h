@@ -109,6 +109,7 @@ EFI_STATUS reset_watchdog_status(VOID);
 EFI_STATUS set_watchdog_counter(UINT8 counter);
 EFI_STATUS set_watchdog_time_reference(EFI_TIME *time);
 char *get_serial_number(void);
+CHAR16 *boot_state_to_string(UINT8 boot_state);
 #ifndef USER
 EFI_STATUS reprovision_state_vars(VOID);
 #endif

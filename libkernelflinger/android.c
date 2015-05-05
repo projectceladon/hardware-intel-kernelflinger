@@ -528,7 +528,8 @@ static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
-                IN EFI_GUID *swap_guid)
+                IN EFI_GUID *swap_guid,
+                IN UINT8 boot_state)
 {
         CHAR16 *cmdline16 = NULL;
         char   *serialno = NULL;
@@ -575,6 +576,11 @@ static EFI_STATUS setup_command_line(
         }
 
         ret = prepend_command_line(&cmdline16, L"androidboot.bootreason=%s", bootreason);
+        if (EFI_ERROR(ret))
+                goto out;
+
+        ret = prepend_command_line(&cmdline16, L"androidboot.state=%s",
+                                   boot_state_to_string(boot_state));
         if (EFI_ERROR(ret))
                 goto out;
 
@@ -894,6 +900,7 @@ EFI_STATUS android_image_start_buffer(
                 IN EFI_HANDLE parent_image,
                 IN VOID *bootimage,
                 IN enum boot_target boot_target,
+                IN UINT8 boot_state,
                 IN EFI_GUID *swap_guid)
 {
         struct boot_img_hdr *aosp_header;
@@ -944,7 +951,7 @@ EFI_STATUS android_image_start_buffer(
         }
 
         debug(L"Creating command line");
-        ret = setup_command_line(bootimage, boot_target, swap_guid);
+        ret = setup_command_line(bootimage, boot_target, swap_guid, boot_state);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"setup_command_line");
                 return ret;
