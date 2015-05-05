@@ -75,6 +75,22 @@ static struct state_display {
 static CHAR8 current_off_mode_charge[2];
 static CHAR8 current_crash_event_menu[2];
 
+CHAR16 *boot_state_to_string(UINT8 boot_state)
+{
+	switch (boot_state) {
+	case BOOT_STATE_GREEN:
+		return L"green";
+	case BOOT_STATE_YELLOW:
+		return L"yellow";
+	case BOOT_STATE_ORANGE:
+		return L"orange";
+	case BOOT_STATE_RED:
+		return L"red";
+	default:
+		return L"unknown";
+	}
+}
+
 BOOLEAN get_current_boolean_var(CHAR16 *varname, CHAR8 cache[2])
 {
 	UINTN size;

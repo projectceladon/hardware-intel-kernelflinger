@@ -114,6 +114,7 @@ EFI_STATUS android_image_start_buffer(
                 IN EFI_HANDLE parent_image,
                 IN VOID *bootimage,
                 IN enum boot_target boot_target,
+                IN UINT8 boot_state,
                 IN EFI_GUID *swap);
 
 EFI_STATUS android_image_load_partition(

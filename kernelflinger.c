@@ -116,24 +116,6 @@ static UINTN oem_keystore_size;
 static VOID *oem_key;
 static UINTN oem_key_size;
 
-#if DEBUG_MESSAGES
-
-static CHAR16 *boot_state_to_string(UINT8 boot_state)
-{
-        switch (boot_state) {
-        case BOOT_STATE_GREEN:
-                return L"GREEN";
-        case BOOT_STATE_YELLOW:
-                return L"YELLOW";
-        case BOOT_STATE_ORANGE:
-                return L"ORANGE";
-        case BOOT_STATE_RED:
-                return L"RED";
-        default:
-                return L"UNKNOWN";
-        }
-}
-#endif
 
 #ifdef USERDEBUG
 /* If a user-provided keystore is present it must be selected for later.
@@ -766,10 +748,14 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
         /* per bootloaderequirements.pdf */
         if (boot_state != BOOT_STATE_GREEN)
                 android_clear_memory();
+
+        set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
+                        &boot_state, FALSE, TRUE);
+
         debug(L"chainloading boot image, boot state is %s",
                         boot_state_to_string(boot_state));
         ret = android_image_start_buffer(g_parent_image, bootimage,
-                                         boot_target, NULL);
+                                         boot_target, boot_state, NULL);
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Couldn't load Boot image");
 
@@ -782,9 +768,6 @@ static VOID enter_tdos(UINT8 boot_state)
 {
         EFI_STATUS ret;
         VOID *bootimage;
-
-        set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
-                        &boot_state, FALSE, TRUE);
 
         ret = android_image_load_file(g_disk_device, TDOS_PATH,
                         FALSE, &bootimage);
@@ -838,9 +821,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
          * of the device's current boot state/selected keystore/etc. If it
          * doesn't verify we unconditionally halt the system. */
         EFI_STATUS ret;
-
-        set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
-                        &boot_state, FALSE, TRUE);
 
         /* Publish the OEM key in a volatile EFI variable so that
          * Userfastboot can use it to validate flashed bootloader images */
@@ -1215,9 +1195,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         halt_system();
                 }
         }
-
-        set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
-                        &boot_state, FALSE, TRUE);
 
         return load_image(bootimage, boot_state, boot_target);
 }
