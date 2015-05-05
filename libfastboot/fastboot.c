@@ -302,27 +302,28 @@ static char *get_ptype_str(EFI_GUID *guid)
 static EFI_STATUS publish_part(UINT64 size, CHAR16 *name, EFI_GUID *guid)
 {
 	EFI_STATUS ret;
+	int len;
 	char fastboot_var[MAX_VARIABLE_LENGTH];
 	char partsize[MAX_VARIABLE_LENGTH];
 
-	ret = snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
+	len = snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
 		       (CHAR8 *)"partition-size:%s", name);
-	if (EFI_ERROR(ret))
-		return ret;
+	if (len < 0)
+		return EFI_INVALID_PARAMETER;
 
-	ret = snprintf((CHAR8 *)partsize, sizeof(partsize),
+	len = snprintf((CHAR8 *)partsize, sizeof(partsize),
 		       (CHAR8 *)"0x%lX", size);
-	if (EFI_ERROR(ret))
-		return ret;
+	if (len < 0)
+		return EFI_INVALID_PARAMETER;
 
 	ret = fastboot_publish(fastboot_var, partsize);
 	if (EFI_ERROR(ret))
 		return ret;
 
-	ret = snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
+	len = snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
 		       (CHAR8 *)"partition-type:%s", name);
-	if (EFI_ERROR(ret))
-		return ret;
+	if (len < 0)
+		return EFI_INVALID_PARAMETER;
 
 	ret = fastboot_publish(fastboot_var, get_ptype_str(guid));
 	if (EFI_ERROR(ret))
@@ -372,6 +373,7 @@ static EFI_STATUS publish_partsize(void)
 static char *get_battery_voltage_var()
 {
 	EFI_STATUS ret;
+	int len;
 	static char battery_voltage[30]; /* Enough space for %dmV format */
 	UINTN voltage;
 
@@ -379,10 +381,10 @@ static char *get_battery_voltage_var()
 	if (EFI_ERROR(ret))
 		return NULL;
 
-	ret = snprintf((CHAR8 *)battery_voltage, sizeof(battery_voltage),
+	len = snprintf((CHAR8 *)battery_voltage, sizeof(battery_voltage),
 		       (CHAR8 *)"%dmV", voltage);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to format voltage string");
+	if (len < 0) {
+		error(L"Failed to format voltage string");
 		return NULL;
 	}
 
@@ -392,15 +394,19 @@ static char *get_battery_voltage_var()
 static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char *fmt, va_list ap)
 {
 	char *response;
-	EFI_STATUS ret;
+	int len;
 
 	CopyMem(msg, code, CODE_LENGTH);
 	response = &msg[CODE_LENGTH];
 
-	ret = vsnprintf((CHAR8 *)response, INFO_PAYLOAD, (CHAR8 *)fmt, ap);
-	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Failed to build reason string");
-	return ret;
+	len = vsnprintf((CHAR8 *)response, INFO_PAYLOAD, (CHAR8 *)fmt, ap);
+	if (len < 0) {
+		error(L"Failed to build reason string");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	return EFI_SUCCESS;
+
 }
 
 void fastboot_ack(const char *code, const char *fmt, va_list ap)
@@ -748,9 +754,9 @@ static void fastboot_read_command(void)
 
 static void cmd_download(INTN argc, CHAR8 **argv)
 {
+	int len;
 	CHAR8 response[MAGIC_LENGTH];
 	UINTN newdlsize;
-	EFI_STATUS ret;
 
 	if (argc != 2) {
 		fastboot_fail("Invalid parameter");
@@ -783,9 +789,9 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 	}
 	dlsize = newdlsize;
 
-	ret = snprintf(response, sizeof(response), (CHAR8 *)"DATA%08x", dlsize);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to format DATA response");
+	len = snprintf(response, sizeof(response), (CHAR8 *)"DATA%08x", dlsize);
+	if (len < 0) {
+		error(L"Failed to format DATA response");
 		fastboot_fail("Failed to format DATA response");
 		return;
 	}
@@ -955,10 +961,12 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
-	if (EFI_ERROR(snprintf((CHAR8 *)download_max_str, sizeof(download_max_str),
-			       (CHAR8 *)"0x%lX", MAX_DOWNLOAD_SIZE)))
-		debug(L"Failed to set download_max_str string");
-	else {
+	if (snprintf((CHAR8 *)download_max_str, sizeof(download_max_str),
+		     (CHAR8 *)"0x%lX", MAX_DOWNLOAD_SIZE) < 0) {
+		error(L"Failed to set download_max_str string");
+		ret = EFI_INVALID_PARAMETER;
+		goto error;
+	} else {
 		ret = fastboot_publish("max-download-size", download_max_str);
 		if (EFI_ERROR(ret))
 			goto error;

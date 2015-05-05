@@ -61,14 +61,14 @@ static EFI_STATUS publish_product_name(void)
 static char firmware_str[128];
 static EFI_STATUS publish_firmware(void)
 {
-	EFI_STATUS ret;
+	int len;
 
-	ret = snprintf((CHAR8 *)firmware_str, sizeof(firmware_str) - 1,
+	len = snprintf((CHAR8 *)firmware_str, sizeof(firmware_str) - 1,
 		       (CHAR8 *)"%a %a",
 		       SMBIOS_GET_STRING(0, Vendor),
 		       SMBIOS_GET_STRING(0, BiosVersion));
-	if (EFI_ERROR(ret))
-		return ret;
+	if (len == -1)
+		return EFI_INVALID_PARAMETER;
 
 	return fastboot_publish("firmware", firmware_str);
 }
@@ -105,15 +105,15 @@ static EFI_STATUS publish_device_state(void)
 static char board_str[128];
 static EFI_STATUS publish_board(void)
 {
-	EFI_STATUS ret;
+	int len;
 
-	ret = snprintf((CHAR8 *)board_str, sizeof(board_str),
+	len = snprintf((CHAR8 *)board_str, sizeof(board_str),
 		       (CHAR8 *)"%a %a %a",
 		       SMBIOS_GET_STRING(2, Manufacturer),
 		       SMBIOS_GET_STRING(2, ProductName),
 		       SMBIOS_GET_STRING(2, Version));
-	if (EFI_ERROR(ret))
-		return ret;
+	if (len < 0)
+		return EFI_INVALID_PARAMETER;
 
 	return fastboot_publish("board", board_str);
 }
