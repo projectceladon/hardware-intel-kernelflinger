@@ -56,13 +56,15 @@ CHAR16 *stra_to_str(CHAR8 *stra)
 }
 
 
-EFI_STATUS vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
+int vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
 {
-        UINTN len;
-        EFI_STATUS ret = EFI_OUT_OF_RESOURCES;
-        CHAR16 *format16 = stra_to_str((CHAR8 *)format);
+        EFI_STATUS ret;
+        int len = -1;
+        CHAR16 *format16;
+
+        format16 = stra_to_str((CHAR8 *)format);
         if (!format16)
-                return ret;
+                return -1;
 
         CHAR16 *dst16 = AllocatePool(size * sizeof(CHAR16));
         if (!dst16)
@@ -70,19 +72,22 @@ EFI_STATUS vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
 
         len = VSPrint(dst16, size * sizeof(CHAR16), format16, ap);
 
-        if (str_to_stra((CHAR8 *)dst, dst16, len + 1) == EFI_SUCCESS) {
-                ret = EFI_SUCCESS;
+        ret = str_to_stra((CHAR8 *)dst, dst16, len + 1);
+        if (EFI_ERROR(ret))
+                len = -1;
+        else
                 dst[len] = '\0';
-        }
 
         FreePool(dst16);
+
 free_format16:
         FreePool(format16);
-        return ret;
+
+        return len;
 }
 
 
-EFI_STATUS snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...)
+int snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...)
 {
         va_list args;
         int ret;
