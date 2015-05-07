@@ -282,6 +282,7 @@ static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
 
 static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
 {
+	enum boot_target bt;
 	CHAR16 *target;
 
 	if (argc != 2) {
@@ -295,9 +296,14 @@ static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
 		return;
 	}
 
-	ui_print(L"Rebooting to %s ...", target);
-	fastboot_okay("");
-	reboot(target);
+	bt = name_to_boot_target(target);
+	FreePool(target);
+	if (bt == UNKNOWN_TARGET) {
+		fastboot_fail("Unknown %a boot target", argv[1]);
+		return;
+	}
+
+	fastboot_reboot(bt, L"Rebooting to requested target ...");
 }
 
 static void cmd_oem_garbage_disk(__attribute__((__unused__)) INTN argc,
@@ -329,8 +335,7 @@ static void cmd_oem_reprovision(__attribute__((__unused__)) INTN argc,
 		fastboot_fail("Unable to clear provisioning variables");
 		return;
 	}
-	fastboot_okay("");
-	reboot(L"dnx");
+	fastboot_reboot(DNX, L"Rebooting to dnx ...");
 }
 
 static void cmd_oem_rm(INTN argc, CHAR8 **argv)

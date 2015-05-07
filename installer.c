@@ -659,9 +659,11 @@ int usb_write(void *pBuf, uint32_t size)
 		if (((char *)pBuf)[PREFIX_LEN] != '\0')
 			Print(L"%a\n", pBuf + PREFIX_LEN);
 		last_cmd_succeeded = TRUE;
+		fastboot_tx_cb(NULL, 0);
 	} else if (!memcmp((CHAR8 *)"FAIL", pBuf, PREFIX_LEN)) {
 		error(L"%a", pBuf + PREFIX_LEN);
 		last_cmd_succeeded = FALSE;
+		fastboot_tx_cb(NULL, 0);
 	}
 
 	return 0;

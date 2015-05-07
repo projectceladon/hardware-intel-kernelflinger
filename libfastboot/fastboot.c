@@ -80,6 +80,8 @@ enum fastboot_states {
 	STATE_START_DOWNLOAD,
 	STATE_DOWNLOAD,
 	STATE_TX,
+	STATE_STOPPING,
+	STATE_STOPPED,
 	STATE_ERROR,
 };
 
@@ -90,7 +92,9 @@ static char *command_buffer;
 static UINTN command_buffer_size;
 static struct fastboot_var *varlist;
 static struct fastboot_tx_buffer *txbuf_head;
-static enum fastboot_states fastboot_state = STATE_OFFLINE;
+static enum fastboot_states fastboot_state;
+static enum fastboot_states next_state;
+
 /* Download buffer and size, for download and flash commands */
 static void *dlbuffer;
 static unsigned dlsize, bufsize;
@@ -419,6 +423,7 @@ void fastboot_ack(const char *code, const char *fmt, va_list ap)
 		return;
 
 	debug(L"SENT %a", msg);
+	fastboot_state = next_state;
 	if (usb_write(msg, MAGIC_LENGTH) < 0)
 		fastboot_state = STATE_ERROR;
 }
@@ -484,10 +489,8 @@ void fastboot_fail(const char *fmt, ...)
 	va_start(ap, fmt);
 	if (fastboot_state == STATE_TX)
 		fastboot_ack_buffered("FAIL", fmt, ap);
-	else {
-		fastboot_state = STATE_COMPLETE;
+	else
 		fastboot_ack("FAIL", fmt, ap);
-	}
 	va_end(ap);
 }
 
@@ -498,10 +501,8 @@ void fastboot_okay(const char *fmt, ...)
 	va_start(ap, fmt);
 	if (fastboot_state == STATE_TX)
 		fastboot_ack_buffered("OKAY", fmt, ap);
-	else {
-		fastboot_state = STATE_COMPLETE;
+	else
 		fastboot_ack("OKAY", fmt, ap);
-	}
 	va_end(ap);
 }
 
@@ -512,7 +513,7 @@ static void flush_tx_buffer(void)
 	msg = txbuf_head;
 	txbuf_head = txbuf_head->next;
 	if (!txbuf_head)
-		fastboot_state = STATE_COMPLETE;
+		fastboot_state = next_state;
 
 	if (usb_write(msg->msg, sizeof(msg->msg)) < 0)
 		fastboot_state = STATE_ERROR;
@@ -671,36 +672,33 @@ static void cmd_getvar(INTN argc, CHAR8 **argv)
 	fastboot_okay("%a", var ? fastboot_var_value(var) : "");
 }
 
-static void cmd_continue(__attribute__((__unused__)) INTN argc,
-			 __attribute__((__unused__)) CHAR8 **argv)
+void fastboot_reboot(enum boot_target target, CHAR16 *msg)
 {
-	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, NORMAL_BOOT);
+	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, target);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to stop USB");
 		return;
 	}
-	ui_print(L"Continuing ...");
+	ui_print(msg);
 	fastboot_okay("");
+}
+
+static void cmd_continue(__attribute__((__unused__)) INTN argc,
+			 __attribute__((__unused__)) CHAR8 **argv)
+{
+	fastboot_reboot(NORMAL_BOOT, L"Continuing ...");
 }
 
 static void cmd_reboot(__attribute__((__unused__)) INTN argc,
 		       __attribute__((__unused__)) CHAR8 **argv)
 {
-	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, NORMAL_BOOT);
-	if (EFI_ERROR(ret)) {
-		fastboot_fail("Failed to stop USB");
-		return;
-	}
-	ui_print(L"Rebooting ...");
-	fastboot_okay("");
+	fastboot_reboot(NORMAL_BOOT, L"Rebooting ...");
 }
 
 static void cmd_reboot_bootloader(__attribute__((__unused__)) INTN argc,
 				  __attribute__((__unused__)) CHAR8 **argv)
 {
-	ui_print(L"Rebooting to bootloader ...");
-	fastboot_okay("");
-	reboot(L"bootloader");
+	fastboot_reboot(FASTBOOT, L"Rebooting to bootloader ...");
 }
 
 static struct fastboot_cmd *get_cmd(cmdlist_t list, const char *name)
@@ -824,6 +822,9 @@ static void fastboot_process_tx(__attribute__((__unused__)) void *buf,
 				__attribute__((__unused__)) unsigned len)
 {
 	switch (fastboot_state) {
+	case STATE_STOPPING:
+		fastboot_state = STATE_STOPPED;
+		break;
 	case STATE_TX:
 		flush_tx_buffer();
 		break;
@@ -914,7 +915,7 @@ static void fastboot_process_rx(void *buf, unsigned len)
 
 static void fastboot_start_callback(void)
 {
-	fastboot_state = STATE_COMPLETE;
+	fastboot_state = next_state;
 	fastboot_read_command();
 }
 
@@ -990,6 +991,9 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Fastboot UI initialization failed, continue anyway.");
 
+	fastboot_state = STATE_OFFLINE;
+	next_state = STATE_COMPLETE;
+
 	return EFI_SUCCESS;
 
 error:
@@ -1047,14 +1051,14 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 
 		fastboot_run_command();
 
-		if (fastboot_target != UNKNOWN_TARGET) {
-			*target = fastboot_target;
-			break;
-		}
-
-		if (fastboot_bootimage || fastboot_efiimage)
+		if (fastboot_state == STATE_STOPPED)
 			break;
 	}
+
+	fastboot_usb_stop();
+
+	if (fastboot_target != UNKNOWN_TARGET)
+		*target = fastboot_target;
 
 	ret = fastboot_usb_disconnect_and_unbind();
 	if (EFI_ERROR(ret))
@@ -1089,7 +1093,12 @@ EFI_STATUS fastboot_stop(void *bootimage, void *efiimage, UINTN imagesize,
 	fastboot_bootimage = bootimage ? imgbuffer : NULL;
 	fastboot_efiimage = efiimage ? imgbuffer : NULL;
 
-	return fastboot_usb_stop();
+	if (fastboot_state == STATE_COMPLETE)
+		fastboot_state = STATE_STOPPED;
+	else
+		next_state = STATE_STOPPING;
+
+	return EFI_SUCCESS;
 }
 
 void fastboot_free()
