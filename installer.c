@@ -546,8 +546,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	if (EFI_ERROR(ret))
 		goto exit;
 
-	if (target == NORMAL_BOOT || target == REBOOT)
-		reboot(NULL);
+	if (target != UNKNOWN_TARGET)
+		reboot_to_target(target);
 
 exit:
 	FreePool(buf);
