@@ -119,6 +119,8 @@ UINTN strtoul16(const CHAR16 *nptr, CHAR16 **endptr, UINTN base);
 
 char *strcasestr(const char *s, const char *find);
 
+char *strdup(const char *s);
+
 /*
  * misc
  */

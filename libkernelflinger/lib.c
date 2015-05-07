@@ -72,6 +72,20 @@
 
 EFI_HANDLE g_parent_image;
 
+char *strdup(const char *s)
+{
+	UINTN size;
+	char *new;
+
+	size = strlena((CHAR8 *)s) + 1;
+	new = AllocatePool(size);
+	if (!new)
+		return NULL;
+
+	memcpy(new, s, size);
+	return new;
+}
+
 char *strcasestr(const char *s, const char *find)
 {
         char c, sc;
