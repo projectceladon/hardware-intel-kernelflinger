@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
+ * Author: Andrew Boie <andrew.p.boie@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,19 +30,21 @@
  *
  */
 
-#ifndef _SMBIOS_H_
-#define _SMBIOS_H_
+#ifndef KERNELFLINGER_VERSION_H
+#define KERNELFLINGER_VERSION_H
 
-#define TYPE_BIOS	0
-#define TYPE_PRODUCT	1
-#define TYPE_BOARD	2
-#define TYPE_CHASSIS	3
+#define WIDE_STR2(x) L ## x
+#define WIDE_STR(x) WIDE_STR2(x)
 
-extern char *SMBIOS_UNDEFINED;
+#if defined(USER)
+#define BUILD_VARIANT           ""
+#elif defined(USERDEBUG)
+#define BUILD_VARIANT           "-userdebug"
+#else
+#define BUILD_VARIANT           "-eng"
+#endif
 
-char *smbios_get_string(UINT8 type, UINT8 offset);
+#define KERNELFLINGER_VERSION_8	"kernelflinger-02.14" BUILD_VARIANT
+#define KERNELFLINGER_VERSION   WIDE_STR(KERNELFLINGER_VERSION_8)
 
-#define SMBIOS_GET_STRING(type, field) \
-	smbios_get_string(type, offsetof(SMBIOS_TYPE##type, field))
-
-#endif	/* _SMBIOS_H_ */
+#endif
