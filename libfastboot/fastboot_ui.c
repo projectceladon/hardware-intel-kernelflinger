@@ -109,7 +109,7 @@ static ui_boot_action_t BOOT_ACTIONS[] = {
 	{ "start",		NULL,	NORMAL_BOOT },
 	{ "restartbootloader",	NULL,	FASTBOOT },
 	{ "recoverymode",	NULL,	RECOVERY },
-	{ "reboot",		NULL,	REBOOT },
+	{ "reboot",		NULL,	NORMAL_BOOT },
 	{ "power_off",		NULL,	POWER_OFF },
 	{ NULL,			NULL,	UNKNOWN_TARGET }
 };

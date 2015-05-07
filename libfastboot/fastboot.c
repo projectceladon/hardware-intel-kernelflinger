@@ -686,7 +686,7 @@ static void cmd_continue(__attribute__((__unused__)) INTN argc,
 static void cmd_reboot(__attribute__((__unused__)) INTN argc,
 		       __attribute__((__unused__)) CHAR8 **argv)
 {
-	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, REBOOT);
+	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, NORMAL_BOOT);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to stop USB");
 		return;

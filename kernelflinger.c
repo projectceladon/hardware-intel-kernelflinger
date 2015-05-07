@@ -116,32 +116,6 @@ static VOID *oem_key;
 static UINTN oem_key_size;
 
 #if DEBUG_MESSAGES
-static CHAR16 *boot_target_to_string(enum boot_target bt)
-{
-        switch (bt) {
-        case NORMAL_BOOT:
-                return L"boot";
-        case RECOVERY:
-                return L"recovery";
-        case FASTBOOT:
-                return L"fastboot";
-        case ESP_BOOTIMAGE:
-                return L"ESP bootimage";
-        case ESP_EFI_BINARY:
-                return L"ESP efi binary";
-        case MEMORY:
-                return L"RAM bootimage";
-        case CHARGER:
-                return L"Charge mode";
-        case POWER_OFF:
-                return L"Power off";
-        case TDOS:
-                return L"Theft deterrent OS";
-        default:
-                return L"unknown";
-        }
-}
-
 
 static CHAR16 *boot_state_to_string(UINT8 boot_state)
 {
@@ -324,20 +298,9 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
                 goto out;
         }
 
-        if (!StrCmp(target, L"fastboot") || !StrCmp(target, L"bootloader")) {
-                t = FASTBOOT;
+        t = name_to_boot_target(target);
+        if (t != UNKNOWN_TARGET)
                 goto out;
-        }
-
-        if (!StrCmp(target, L"recovery")) {
-                t = RECOVERY;
-                goto out;
-        }
-
-        if (!StrCmp(target, L"tdos")) {
-                t = TDOS;
-                goto out;
-        }
 
         error(L"Unknown boot target in BCB: '%s'", target);
         t = NORMAL_BOOT;
@@ -359,24 +322,15 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         set_efi_variable(&loader_guid, LOADER_ENTRY_ONESHOT, 0, NULL,
                         TRUE, TRUE);
 
-        if (!target || !StrCmp(target, L"")) {
-                ret = NORMAL_BOOT;
-        } else if (!StrCmp(target, L"fastboot") || !StrCmp(target, L"bootloader")) {
-                ret = FASTBOOT;
-        } else if (!StrCmp(target, L"recovery")) {
-                ret = RECOVERY;
-        } else if (!StrCmp(target, L"tdos")) {
-                ret = TDOS;
-        } else if (!StrCmp(target, L"charging")) {
-                if (get_current_off_mode_charge()) {
-                        ret = CHARGER;
-                } else {
-                        ret = POWER_OFF;
-                }
-        } else {
+        if (!target)
+                return NORMAL_BOOT;
+
+        ret = name_to_boot_target(target);
+        if (ret == UNKNOWN_TARGET) {
                 error(L"Unknown oneshot boot target: '%s'", target);
                 ret = NORMAL_BOOT;
-        }
+        } else if (ret == CHARGER && !get_current_off_mode_charge())
+                ret = POWER_OFF;
 
         FreePool(target);
         return ret;
@@ -979,27 +933,8 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                         continue;
                 }
 
-                if (target == UNKNOWN_TARGET)
-                        continue;
-
-                switch (target) {
-                case FASTBOOT:
-                        reboot(L"bootloader");
-                        break;
-                case RECOVERY:
-                        reboot(L"recovery");
-                        break;
-                case NORMAL_BOOT:
-                        /* fall through */
-                case REBOOT:
-                        reboot(NULL);
-                        break;
-                case POWER_OFF:
-                        halt_system();
-                        break;
-                default:
-                        continue;
-                }
+                if (target != UNKNOWN_TARGET)
+                        reboot_to_target(target);
         }
 
         /* Allow plenty of time for the error to be visible before the
@@ -1146,7 +1081,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (boot_target == EXIT_SHELL)
                 return EFI_SUCCESS;
 
-        debug(L"selected '%s'",  boot_target_to_string(boot_target));
+        debug(L"selected '%s'",  boot_target_description(boot_target));
 
         if (boot_target == POWER_OFF)
                 halt_system();
