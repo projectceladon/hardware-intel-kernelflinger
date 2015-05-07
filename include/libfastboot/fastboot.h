@@ -76,5 +76,6 @@ EFI_STATUS fastboot_stop(void *bootimage, void *efiimage, UINTN imagesize,
 			 enum boot_target target);
 void fastboot_free(void);
 
+void fastboot_reboot(enum boot_target target, CHAR16 *msg);
 
 #endif	/* _FASTBOOT_H_ */
