@@ -37,6 +37,8 @@
 #include "vars.h"
 #include "ui.h"
 #include "lib.h"
+#include "smbios.h"
+#include "version.h"
 
 #define OFF_MODE_CHARGE_VAR	L"off-mode-charge"
 #define OEM_LOCK_VAR		L"OEMLock"
@@ -47,6 +49,8 @@
 
 #define OEM_LOCK_UNLOCKED	(1 << 0)
 #define OEM_LOCK_VERIFIED	(1 << 1)
+
+#define ANDROID_PROP_VALUE_MAX	92
 
 const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
 	{0x9a, 0x99, 0xde, 0xbe, 0xb4, 0x31, 0xfc, 0xc1} };
@@ -371,32 +375,248 @@ VOID clear_provisioning_mode(void)
 	provisioning_mode = FALSE;
 }
 
+static void CDD_clean_string(char *buf)
+{
+	char *c;
+	int len;
+
+	/* insure the string conforms with CDD v4.4 section 3.2.2
+	 * which requires matching the regexp "^[a-zA-Z0-9.,_-]+$",
+	 * but disallow '.' which Google has confirmed should not be
+	 * allowed in at least the device build fingerprint prefix
+	 * and thus by paranoia we fall back to removing it everywhere */
+
+	c = buf;
+	while (*c) {
+		if ( (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
+		     (*c >= '0' && *c <='9') || (*c == ',') || (*c == '_') ||
+		     (*c == '-')) {
+			/* Google prefers lower case */
+			*c = tolower(*c);
+			/* valid character */
+		} else {
+			*c = '_';
+		}
+
+		c++;
+	}
+
+	len = strlena((CHAR8 *)buf);
+	while (len > 0 && (buf[len - 1] == '_' || buf[len - 1] == '.')) {
+		buf[len - 1] = 0;
+		len = strlena((CHAR8 *)buf);
+	}
+}
+
+#define SMBIOS_TO_BUFFER(buffer, type, field) do { \
+	if (!buffer[0]) { \
+		UINTN bufsz = sizeof(buffer); \
+		char *dmidata = SMBIOS_GET_STRING(type, field); \
+		if (dmidata && dmidata != SMBIOS_UNDEFINED) { \
+			strncpy((CHAR8 *)buffer, (CHAR8 *)dmidata, bufsz); \
+			buffer[bufsz - 1] = '\0'; \
+		} \
+	} \
+} while(0)
+
+char *get_property_bootloader(void)
+{
+	static char loader[ANDROID_PROP_VALUE_MAX];
+
+	if (!loader[0]) {
+		char buf[ANDROID_PROP_VALUE_MAX];
+
+		buf[0] = 0;
+		SMBIOS_TO_BUFFER(buf, TYPE_BIOS, BiosVersion);
+		snprintf((CHAR8 *)loader, ANDROID_PROP_VALUE_MAX,
+			 (CHAR8 *)"%a_%a", buf,
+			 KERNELFLINGER_VERSION_8);
+		CDD_clean_string(loader);
+	}
+
+	return loader;
+}
+
+#ifdef HAL_AUTODETECT
+/* Remove any trailing "_inc*", "_corp*", "_gmbh*".
+ * Force set some known-to-misbehave brands names to a good form */
+static void chop_brand_tail(char *brand)
+{
+	UINTN i;
+
+	static char *BRANDS[] = {"intel", "asus"};
+	static char *SUFFIXES[] = {"_inc", "_corp", "_gmbh"};
+
+	if (brand[0] == 0)
+		return;
+
+	/* If the brand begins with a particular string, chop off
+	 * anything after it */
+	for (i = 0; i < ARRAY_SIZE(BRANDS); i++) {
+		char *b = BRANDS[i];
+		int len = strlen((CHAR8*)b);
+
+		if (strncasecmp(brand, b, len) == 0) {
+			strcpy((CHAR8*)brand, (CHAR8*)b);
+			return;
+		}
+	}
+
+	/* If a particular suffix appears, get rid of it */
+	for (i = 0; i < ARRAY_SIZE(SUFFIXES); i++) {
+		char *c = strcasestr(brand, SUFFIXES[i]);
+		if (c) {
+			*c = 0;
+			return;
+		}
+	}
+}
+
+char *get_property_name(void)
+{
+	static char name[ANDROID_PROP_VALUE_MAX];
+
+	if (!name[0]) {
+		SMBIOS_TO_BUFFER(name, TYPE_PRODUCT, ProductName);
+		SMBIOS_TO_BUFFER(name, TYPE_BOARD, ProductName);
+		CDD_clean_string(name);
+		debug(L"Detected product name '%a'", name);
+	}
+
+	return name;
+}
+
+/* product_vendor observed to be blank on some devices
+ * bios_vendor will be different than what we want here (DO NOT USE IT)
+ * board_vendor observed to be reasonable on sample of devices */
+char *get_property_brand(void)
+{
+	static char brand[ANDROID_PROP_VALUE_MAX];
+
+	if (!brand[0]) {
+		SMBIOS_TO_BUFFER(brand, TYPE_BOARD, Manufacturer);
+		SMBIOS_TO_BUFFER(brand, TYPE_PRODUCT, Manufacturer);
+		CDD_clean_string(brand);
+		chop_brand_tail(brand);
+		debug(L"Detected product brand '%a'", brand);
+	}
+
+	return brand;
+}
+
+char *get_property_model(void)
+{
+	/* FIXME This is supposed to be read from some non-standard
+	 * "board_name1" field, but without a specification we
+	 * can't do anything. Menwhile just return the device */
+	return get_property_device();
+}
+
+char *get_property_device(void)
+{
+	static char device[ANDROID_PROP_VALUE_MAX];
+	if (!device[0]) {
+		char board_name[ANDROID_PROP_VALUE_MAX];
+		char board_version[ANDROID_PROP_VALUE_MAX];
+
+		board_name[0] = 0;
+		board_version[0] = 0;
+
+		SMBIOS_TO_BUFFER(board_name, TYPE_BOARD, ProductName);
+		SMBIOS_TO_BUFFER(board_version, TYPE_BOARD, Version);
+
+		if (board_version[0]) {
+			snprintf((CHAR8 *)device, ANDROID_PROP_VALUE_MAX,
+				 (CHAR8 *)"%a_%a", board_name, board_version);
+		} else {
+			snprintf((CHAR8 *)device, ANDROID_PROP_VALUE_MAX,
+				 (CHAR8*)"%a", board_name);
+		}
+		CDD_clean_string(device);
+		debug(L"Detected product device '%a'", device);
+	}
+
+	return device;
+}
+
+char *get_device_id(void)
+{
+	static char deviceid[ANDROID_PROP_VALUE_MAX];
+	if (!deviceid[0]) {
+		snprintf((CHAR8 *)deviceid, sizeof(deviceid),
+			 (CHAR8 *)"%a/%a/%a", get_property_brand(),
+			 get_property_name(), get_property_device());
+	}
+	return deviceid;
+}
+#else
+char *get_device_id(void)
+{
+	return "DEFAULT";
+}
+#endif
+
+#define SERIALNO_MIN_SIZE	6
+#define SERIALNO_MAX_SIZE	20
 /* Per Android CDD, the value must be 7-bit ASCII and match the regex
- * ^[a-zA-Z0-9](0,20)$  */
+ * ^[a-zA-Z0-9](6,20)$  */
 char *get_serial_number(void)
 {
-	static char serialno[21];
-	EFI_STATUS ret;
-	CHAR8 *serial_from_smbios;
+	static char serialno[SERIALNO_MAX_SIZE + 1];
 	char *pos;
-	EFI_GUID guid;
+	unsigned int zeroes = 0;
+	UINTN len;
 
 	if (serialno[0] != '\0')
 		return serialno;
 
-	ret = LibGetSmbiosSystemGuidAndSerialNumber(&guid,
-						    &serial_from_smbios);
-	if (EFI_ERROR(ret))
-		return NULL;
+	SMBIOS_TO_BUFFER(serialno, TYPE_PRODUCT, SerialNumber);
+	SMBIOS_TO_BUFFER(serialno, TYPE_CHASSIS, SerialNumber);
+	SMBIOS_TO_BUFFER(serialno, TYPE_BOARD, SerialNumber);
+	SMBIOS_TO_BUFFER(serialno, TYPE_CHASSIS, AssetTag);
 
-	memcpy(serialno, serial_from_smbios, min(strlena(serial_from_smbios),
-						 sizeof(serialno) - 1));
-	for (pos = serialno; *pos; pos++)
+	if (!serialno[0]) {
+		error(L"couldn't read serial number from SMBIOS");
+		goto bad;
+	}
+
+	/* basic IQ test for BIOS s/n:
+	 * Check for stuff like "System Serial Number",
+	 * "To be filled by O.E.M,, common non-random number.
+	 * Not intended to be exhaustive */
+	if ((strcasestr(serialno, "serial") != NULL) ||
+	    (strcasestr(serialno, "filled") != NULL) ||
+	    (strcasestr(serialno, "12345678") != NULL)) {
+		error(L"SMBIOS has a bad serial number");
+		goto bad;
+	}
+
+	for (pos = serialno; *pos; pos++) {
 		/* Replace foreign characters with zeroes */
 		if (!((*pos >= '0' && *pos <= '9') ||
 		      (*pos >= 'a' && *pos <= 'z') ||
 		      (*pos >= 'A' && *pos <= 'Z')))
 			*pos = '0';
+		if (*pos == '0')
+			zeroes++;
+	}
+
+	len = strlena((CHAR8 *)serialno);
+	/* If it's too short or is all zeroes reject it */
+	if (len < SERIALNO_MIN_SIZE) {
+		error(L"SMBIOS serial number too short");
+		goto bad;
+	}
+
+	if (len == zeroes) {
+		error(L"SMBIOS serial number is all zeroes");
+		goto bad;
+	}
 
 	return serialno;
+bad:
+	strncpy((CHAR8 *)serialno, (CHAR8 *)"00badbios00badbios00",
+		SERIALNO_MAX_SIZE);
+	return serialno;
 }
+

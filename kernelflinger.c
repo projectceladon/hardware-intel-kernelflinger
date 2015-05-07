@@ -50,16 +50,7 @@
 #include "unittest.h"
 #include "em.h"
 #include "storage.h"
-
-#if defined(USER)
-#define BUILD_VARIANT           L""
-#elif defined(USERDEBUG)
-#define BUILD_VARIANT           L"-userdebug"
-#else
-#define BUILD_VARIANT           L"-eng"
-#endif
-
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.14" BUILD_VARIANT
+#include "version.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";

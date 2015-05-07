@@ -601,14 +601,30 @@ static EFI_STATUS setup_command_line(
                 goto out;
 
         PCI_DEVICE_PATH *boot_device = get_boot_device();
-        if (boot_device)
+        if (boot_device) {
                 ret = prepend_command_line(&cmdline16,
                                            L"androidboot.diskbus=%02x.%x",
                                            boot_device->Device,
                                            boot_device->Function);
-        else
+                if (EFI_ERROR(ret))
+                        goto out;
+        } else
                 error(L"Boot device not found, diskbus parameter not set in the commandline!");
 
+        ret = prepend_command_line(&cmdline16, L"androidboot.bootloader=%a",
+                                   get_property_bootloader());
+        if (EFI_ERROR(ret))
+                goto out;
+
+#ifdef HAL_AUTODETECT
+        ret = prepend_command_line(&cmdline16, L"androidboot.brand=%a "
+                                   "androidboot.name=%a androidboot.device=%a "
+                                   "androidboot.model=%a", get_property_brand(),
+                                   get_property_name(), get_property_device(),
+                                   get_property_model());
+        if (EFI_ERROR(ret))
+                goto out;
+#endif
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */
