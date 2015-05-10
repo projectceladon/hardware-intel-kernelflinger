@@ -302,8 +302,7 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         debug(L"checking %s", LOADER_ENTRY_ONESHOT);
         target = get_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT);
 
-        set_efi_variable(&loader_guid, LOADER_ENTRY_ONESHOT, 0, NULL,
-                        TRUE, TRUE);
+        del_efi_variable(&loader_guid, LOADER_ENTRY_ONESHOT);
 
         if (!target)
                 return NORMAL_BOOT;

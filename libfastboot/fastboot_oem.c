@@ -125,7 +125,7 @@ static void change_device_state(enum device_state new_state)
 		fastboot_okay("");
 		/* Ensure logs variable is deleted on a successful
 		   state transition.  */
-		set_efi_variable(&loader_guid, LOG_VAR, 0, NULL, FALSE, TRUE);
+		del_efi_variable(&loader_guid, LOG_VAR);
 	}
 }
 
@@ -269,9 +269,12 @@ static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
 	if (argc == 3)
 		value = argv[2];
 
-	ret = set_efi_variable(&loader_guid, varname,
-			       value ? strlen(value) + 1 : 0, value,
-			       TRUE, FALSE);
+	if (!value)
+		ret = del_efi_variable(&loader_guid, varname);
+	else
+		ret = set_efi_variable(&loader_guid, varname,
+				       strlen(value) + 1, value,
+				       TRUE, FALSE);
 	if (EFI_ERROR(ret))
 		fastboot_fail("Unable to %a '%s' variable",
 			      value ? "set" : "clear", varname);
