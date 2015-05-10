@@ -299,11 +299,25 @@ out:
         return ret;
 }
 
+EFI_STATUS del_efi_variable(const EFI_GUID *guid, CHAR16 *key)
+{
+        EFI_STATUS ret;
+
+        ret = uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, 0, 0, NULL);
+        if (ret == EFI_NOT_FOUND)
+                return EFI_SUCCESS;
+
+        return ret;
+}
+
+
 EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 UINTN size, VOID *data, BOOLEAN nonvol, BOOLEAN runtime)
 {
         EFI_STATUS ret;
-        UINT32 flags = EFI_VARIABLE_BOOTSERVICE_ACCESS;
+        UINT32 curflags, flags = EFI_VARIABLE_BOOTSERVICE_ACCESS;
+        UINTN cursize;
+        VOID *curdata;
 
         if (nonvol)
                 flags |= EFI_VARIABLE_NON_VOLATILE;
@@ -316,16 +330,21 @@ EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
          * implementations. The correct method of changing the attributes of a
          * variable is to delete the variable and recreate it with different
          * attributes. */
-        ret = uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, 0, 0, 0);
-        if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
-                efi_perror(ret, L"Couldn't clear EFI variable");
+        ret = get_efi_variable((EFI_GUID *)guid, key, &cursize, &curdata, &curflags);
+        if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND)
                 return ret;
+        if (ret == EFI_SUCCESS)
+                FreePool(curdata);
+        if (ret == EFI_SUCCESS && curflags != flags) {
+                ret = del_efi_variable((EFI_GUID *)guid, key);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Couldn't clear EFI variable");
+                        return ret;
+                }
         }
 
-        if (size && data)
-                return uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, flags,
-                        size, data);
-        return EFI_SUCCESS;
+        return uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, flags,
+                                 size, data);
 }
 
 

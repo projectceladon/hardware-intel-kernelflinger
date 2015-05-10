@@ -417,8 +417,7 @@ static CHAR16 *get_boot_reason(void)
                 pos++;
         }
 done:
-        set_efi_variable(&loader_guid, L"LoaderEntryRebootReason", 0, NULL,
-                         TRUE, TRUE);
+        del_efi_variable(&loader_guid, L"LoaderEntryRebootReason");
         return bootreason;
 }
 

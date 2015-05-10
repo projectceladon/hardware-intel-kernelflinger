@@ -227,8 +227,7 @@ EFI_STATUS set_current_state(enum device_state state)
 #ifndef USER
 EFI_STATUS reprovision_state_vars(VOID)
 {
-	return set_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
-				0, 0, TRUE, FALSE);
+	return del_efi_variable(&fastboot_guid, OEM_LOCK_VAR);
 }
 #endif
 
@@ -351,16 +350,20 @@ EFI_STATUS reset_watchdog_status(VOID)
 
 EFI_STATUS set_watchdog_counter(UINT8 counter)
 {
+	if (counter == 0)
+		return del_efi_variable(&fastboot_guid, WDT_COUNTER_VAR);
+
 	return set_efi_variable(&fastboot_guid, WDT_COUNTER_VAR,
-				counter == 0 ? 0 : sizeof(counter),
-				&counter, TRUE, FALSE);
+				sizeof(counter), &counter, TRUE, FALSE);
 }
 
 EFI_STATUS set_watchdog_time_reference(EFI_TIME *time)
 {
+	if (time == NULL)
+		return del_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR);
+
 	return set_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR,
-				time == NULL ? 0 : sizeof(*time),
-				time, TRUE, FALSE);
+				sizeof(*time), time, TRUE, FALSE);
 }
 
 VOID clear_provisioning_mode(void)
