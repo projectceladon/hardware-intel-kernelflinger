@@ -69,11 +69,13 @@ void fastboot_fail(const char *fmt, ...);
 void fastboot_info(const char *fmt, ...);
 EFI_STATUS fastboot_info_long_string(char *str);
 
+EFI_STATUS fastboot_set_command_buffer(char *buffer, UINTN size);
 EFI_STATUS fastboot_start(void **bootimage, void **efiimage,
 			  UINTN *imagesize, enum boot_target *target);
 EFI_STATUS fastboot_stop(void *bootimage, void *efiimage, UINTN imagesize,
 			 enum boot_target target);
 void fastboot_free(void);
 
+void fastboot_reboot(enum boot_target target, CHAR16 *msg);
 
 #endif	/* _FASTBOOT_H_ */

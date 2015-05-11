@@ -179,6 +179,11 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 {
 	EFI_STATUS ret;
 
+	/* Call to connect to the controller. Don't check for errors
+	 * as it will report error if the controller is already
+	 * connected (when not booted in 'fast boot' mode) */
+	uefi_call_wrapper(BS->ConnectController, 4, handle, NULL, NULL, TRUE);
+
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &BlockIoProtocol, (VOID *)&disk->bio);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get block io protocol");
@@ -362,19 +367,32 @@ void gpt_free_cache(void)
 	ZeroMem(&sdisk, sizeof(sdisk));
 }
 
+EFI_STATUS gpt_sync(void)
+{
+	EFI_STATUS ret;
+
+	if (!sdisk.bio)
+		return EFI_SUCCESS;
+
+	ret = uefi_call_wrapper(sdisk.bio->FlushBlocks, 1, sdisk.bio);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to flush block io interface");
+
+	return ret;
+}
+
 EFI_STATUS gpt_refresh(void)
 {
 	EFI_STATUS ret;
+
+	ret = gpt_sync();
+	if (EFI_ERROR(ret))
+		return ret;
 
 	/* Nothing cached, just return */
 	if (!sdisk.bio)
 		return EFI_SUCCESS;
 
-	ret = uefi_call_wrapper(sdisk.bio->FlushBlocks, 1, sdisk.bio);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to flush block io interface");
-		return ret;
-	}
 	ret = uefi_call_wrapper(BS->ReinstallProtocolInterface, 4, sdisk.handle, &BlockIoProtocol, sdisk.bio, sdisk.bio);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to Reinstall block io interface on System disk");
@@ -402,7 +420,7 @@ EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, logical_unit
 	return EFI_SUCCESS;
 }
 
-static struct gpt_partition *gpt_find_partition(CHAR16 *label)
+static struct gpt_partition *gpt_find_partition(const CHAR16 *label)
 {
 	UINTN p;
 
@@ -420,7 +438,9 @@ static struct gpt_partition *gpt_find_partition(CHAR16 *label)
 	return NULL;
 }
 
-EFI_STATUS gpt_get_partition_by_label(CHAR16 *label, struct gpt_partition_interface *gpart, logical_unit_t log_unit)
+EFI_STATUS gpt_get_partition_by_label(const CHAR16 *label,
+				      struct gpt_partition_interface *gpart,
+				      logical_unit_t log_unit)
 {
 	struct gpt_partition *part;
 	EFI_STATUS ret;
@@ -765,4 +785,56 @@ EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, logical_unit_t log
 	part2->ending_lba = save1.ending_lba;
 
 	return gpt_write_partition_tables();
+}
+
+static HARDDRIVE_DEVICE_PATH *get_hd_device_path(EFI_DEVICE_PATH *p)
+{
+	while (!IsDevicePathEndType(p)) {
+		if (DevicePathType(p) == MEDIA_DEVICE_PATH
+		    && DevicePathSubType(p) == MEDIA_HARDDRIVE_DP)
+			return (HARDDRIVE_DEVICE_PATH *)p;
+		p = NextDevicePathNode(p);
+	}
+	return NULL;
+}
+
+EFI_STATUS gpt_get_partition_handle(const CHAR16 *label,
+				    logical_unit_t log_unit,
+				    EFI_HANDLE *handle)
+{
+	EFI_STATUS ret;
+	struct gpt_partition_interface gpart;
+	EFI_HANDLE *handles;
+	UINTN nb_handle = 0;
+	UINTN i;
+	EFI_DEVICE_PATH *device_path;
+	HARDDRIVE_DEVICE_PATH *hd_path;
+
+	*handle = NULL;
+
+	ret = gpt_get_partition_by_label(label, &gpart, log_unit);
+	if (EFI_ERROR(ret)) {
+		error(L"Partition '%s' not found", label);
+		return ret;
+	}
+
+	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol, &BlockIoProtocol, NULL, &nb_handle, &handles);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to locate Block IO Protocol");
+		return ret;
+	}
+
+	for (i = 0; i < nb_handle; i++) {
+		device_path = DevicePathFromHandle(handles[i]);
+		hd_path = get_hd_device_path(device_path);
+		if (!hd_path)
+			continue;
+		if (hd_path->PartitionStart == gpart.part.starting_lba) {
+			*handle = handles[i];
+			break;
+		}
+	}
+
+	FreePool(handles);
+	return *handle ? EFI_SUCCESS : EFI_NOT_FOUND;
 }

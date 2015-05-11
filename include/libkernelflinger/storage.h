@@ -36,6 +36,9 @@
 #include <efi.h>
 #include "gpt.h"
 
+/* It is faster to erase multiple block at once */
+#define N_BLOCK (4096)
+
 struct storage {
 	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
 	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
@@ -43,5 +46,7 @@ struct storage {
 
 EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
 EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-
+EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
+		     VOID *pattern, UINTN pattern_blocks);
+EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
 #endif	/* _STORAGE_H_ */

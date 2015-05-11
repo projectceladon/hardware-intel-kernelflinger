@@ -376,55 +376,6 @@ out:
 
 }
 
-static EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
-			    VOID *pattern, UINTN pattern_blocks)
-{
-	UINT64 lba;
-	UINT64 size;
-	EFI_STATUS ret;
-
-	debug(L"Fill lba %d -> %d", start, end);
-	for (lba = start; lba <= end; lba += pattern_blocks) {
-		if (lba + pattern_blocks > end + 1)
-			size = end - lba + 1;
-		else
-			size = pattern_blocks;
-
-		ret = uefi_call_wrapper(bio->WriteBlocks, 5, bio, bio->Media->MediaId, lba, bio->Media->BlockSize * size, pattern);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to erase block %ld", lba);
-			goto exit;
-		}
-	}
-	ret = EFI_SUCCESS;
-
- exit:
-	return ret;
-}
-
-/* It is faster to erase multiple block at once
- * 4096 * 512 => 2MB
- */
-#define N_BLOCK (4096)
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
-{
-	EFI_STATUS ret;
-	VOID *emptyblock;
-	VOID *aligned_emptyblock;
-
-	ret = alloc_aligned(&emptyblock, &aligned_emptyblock,
-			    bio->Media->BlockSize * N_BLOCK,
-			    bio->Media->IoAlign);
-	if (EFI_ERROR(ret))
-		return ret;
-
-	ret = fill_with(bio, start, end, aligned_emptyblock, N_BLOCK);
-
-	FreePool(emptyblock);
-
-	return ret;
-}
-
 EFI_STATUS erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 {
 	EFI_STATUS ret;

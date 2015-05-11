@@ -54,6 +54,10 @@ extern const EFI_GUID fastboot_guid;
  * magic key was pressed at startup */
 #define MAGIC_KEY_TIMEOUT_VAR   L"MagicKeyTimeout"
 
+/* EFI variable which stores the time in milliseconds to wait between
+ * two key events for a hold key */
+#define HOLD_KEY_STALL_TIME_VAR   L"HoldKeyStallTime"
+
 /* Boot state that we report before exiting boot services, per
  * Google's verified boot spec */
 #define BOOT_STATE_VAR		L"BootState"
@@ -73,10 +77,10 @@ extern const EFI_GUID fastboot_guid;
 #define CMDLINE_REPLACE_VAR     L"ReplaceCmdline"
 #endif
 
-/* Various interesting partition GUIDs */
-extern const EFI_GUID boot_ptn_guid;
-extern const EFI_GUID recovery_ptn_guid;
-extern const EFI_GUID misc_ptn_guid;
+/* Various interesting partition labels */
+extern const CHAR16 *BOOT_LABEL;
+extern const CHAR16 *RECOVERY_LABEL;
+extern const CHAR16 *MISC_LABEL;
 
 BOOLEAN device_is_unlocked(void);
 BOOLEAN device_is_locked(void);

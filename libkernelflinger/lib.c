@@ -56,13 +56,15 @@ CHAR16 *stra_to_str(CHAR8 *stra)
 }
 
 
-EFI_STATUS vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
+int vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
 {
-        UINTN len;
-        EFI_STATUS ret = EFI_OUT_OF_RESOURCES;
-        CHAR16 *format16 = stra_to_str((CHAR8 *)format);
+        EFI_STATUS ret;
+        int len = -1;
+        CHAR16 *format16;
+
+        format16 = stra_to_str((CHAR8 *)format);
         if (!format16)
-                return ret;
+                return -1;
 
         CHAR16 *dst16 = AllocatePool(size * sizeof(CHAR16));
         if (!dst16)
@@ -70,19 +72,22 @@ EFI_STATUS vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
 
         len = VSPrint(dst16, size * sizeof(CHAR16), format16, ap);
 
-        if (str_to_stra((CHAR8 *)dst, dst16, len + 1) == EFI_SUCCESS) {
-                ret = EFI_SUCCESS;
+        ret = str_to_stra((CHAR8 *)dst, dst16, len + 1);
+        if (EFI_ERROR(ret))
+                len = -1;
+        else
                 dst[len] = '\0';
-        }
 
         FreePool(dst16);
+
 free_format16:
         FreePool(format16);
-        return ret;
+
+        return len;
 }
 
 
-EFI_STATUS snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...)
+int snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...)
 {
         va_list args;
         int ret;
@@ -194,6 +199,36 @@ EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte)
         return EFI_SUCCESS;
 }
 
+EFI_STATUS get_efi_variable_long_from_str8(const EFI_GUID *guid, CHAR16 *key,
+                                          unsigned long *i)
+{
+        char *data, *end;
+        EFI_STATUS ret;
+        UINTN size;
+
+        ret = get_efi_variable(guid, key, &size, (VOID **)&data, NULL);
+        if (EFI_ERROR(ret))
+                return ret;
+
+        if (!size) {
+                ret = EFI_NOT_FOUND;
+                goto out;
+        }
+
+        if (data[size - 1] != '\0') {
+                ret = EFI_INVALID_PARAMETER;
+                goto out;
+        }
+
+        *i = strtoul((char *)data, &end, 10);
+        if (end == data || *end != '\0')
+                ret = EFI_INVALID_PARAMETER;
+        else
+                ret = EFI_SUCCESS;
+out:
+        FreePool(data);
+        return ret;
+}
 
 EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 UINTN size, VOID *data, BOOLEAN nonvol, BOOLEAN runtime)

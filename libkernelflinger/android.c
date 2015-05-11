@@ -42,7 +42,7 @@
 #include "vars.h"
 #include "power.h"
 #include "targets.h"
-
+#include "gpt.h"
 
 struct setup_header {
         UINT8 setup_secs;        /* Sectors for setup code */
@@ -622,7 +622,6 @@ out:
         return ret;
 }
 
-
 static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
 {
         EFI_PHYSICAL_ADDRESS kernel_start;
@@ -694,126 +693,31 @@ out:
         return ret;
 }
 
-
-static UINT32 swap_bytes32(UINT32 n)
-{
-        return ((n & 0x000000FF) << 24) |
-               ((n & 0x0000FF00) << 8 ) |
-               ((n & 0x00FF0000) >> 8 ) |
-               ((n & 0xFF000000) >> 24);
-}
-
-
-static UINT16 swap_bytes16(UINT16 n)
-{
-        return ((n & 0x00FF) << 8) | ((n & 0xFF00) >> 8);
-}
-
-
-static void copy_and_swap_guid(EFI_GUID *dst, const EFI_GUID *src)
-{
-        memcpy((CHAR8 *)&dst->Data4, (CHAR8 *)src->Data4, sizeof(src->Data4));
-        dst->Data1 = swap_bytes32(src->Data1);
-        dst->Data2 = swap_bytes16(src->Data2);
-        dst->Data3 = swap_bytes16(src->Data3);
-}
-
-
-static EFI_STATUS open_partition(
-                IN const EFI_GUID *guid,
-                OUT UINT32 *MediaIdPtr,
-                OUT EFI_BLOCK_IO **BlockIoPtr,
-                OUT EFI_DISK_IO **DiskIoPtr)
-{
-        EFI_STATUS ret;
-        EFI_BLOCK_IO *BlockIo;
-        EFI_DISK_IO *DiskIo;
-        UINT32 MediaId;
-        UINTN NoHandles = 0;
-        EFI_HANDLE *HandleBuffer = NULL;
-
-        /* Get a handle on the partition containing the boot image */
-        ret = LibLocateHandleByDiskSignature(
-                        MBR_TYPE_EFI_PARTITION_TABLE_HEADER,
-                        SIGNATURE_TYPE_GUID,
-                        (void *)guid,
-                        &NoHandles,
-                        &HandleBuffer);
-        if (EFI_ERROR(ret) || NoHandles == 0) {
-                /* Workaround for old installers which incorrectly wrote
-                 * GUIDs strings as little-endian */
-                EFI_GUID g;
-                copy_and_swap_guid(&g, guid);
-                ret = LibLocateHandleByDiskSignature(
-                                MBR_TYPE_EFI_PARTITION_TABLE_HEADER,
-                                SIGNATURE_TYPE_GUID,
-                                (void *)&g,
-                                &NoHandles,
-                                &HandleBuffer);
-                if (EFI_ERROR(ret)) {
-                        efi_perror(ret, L"LibLocateHandle");
-                        return ret;
-                }
-        }
-        if (NoHandles != 1) {
-                error(L"%d handles found for GUID, expecting 1: %g",
-                                NoHandles, guid);
-                ret = EFI_VOLUME_CORRUPTED;
-                goto out;
-        }
-
-        /* Call to connect to the controller. Don't check for errors
-         * as it will report error if the controller is already
-         * connected (when not booted in 'fast boot' mode */
-        ret = uefi_call_wrapper(BS->ConnectController, 4, HandleBuffer[0],
-                        NULL, NULL, TRUE);
-
-        /* Instantiate BlockIO and DiskIO protocols so we can read various data */
-        ret = uefi_call_wrapper(BS->HandleProtocol, 3, HandleBuffer[0],
-                        &BlockIoProtocol,
-                        (void **)&BlockIo);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"HandleProtocol (BlockIoProtocol)");
-                goto out;;
-        }
-        ret = uefi_call_wrapper(BS->HandleProtocol, 3, HandleBuffer[0],
-                        &DiskIoProtocol, (void **)&DiskIo);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"HandleProtocol (DiskIoProtocol)");
-                goto out;
-        }
-        MediaId = BlockIo->Media->MediaId;
-
-        *MediaIdPtr = MediaId;
-        *BlockIoPtr = BlockIo;
-        *DiskIoPtr = DiskIo;
-out:
-        FreePool(HandleBuffer);
-        return ret;
-}
-
-
 EFI_STATUS android_image_load_partition(
-                IN const EFI_GUID *guid,
+                IN const CHAR16 *label,
                 OUT VOID **bootimage_p)
 {
-        EFI_BLOCK_IO *BlockIo;
-        EFI_DISK_IO *DiskIo;
         UINT32 MediaId;
         UINT32 img_size;
         VOID *bootimage;
         EFI_STATUS ret;
         struct boot_img_hdr aosp_header;
+        struct gpt_partition_interface gpart;
+        UINTN partition_start;
 
         *bootimage_p = NULL;
-        debug(L"Locating boot image");
-        ret = open_partition(guid, &MediaId, &BlockIo, &DiskIo);
-        if (EFI_ERROR(ret))
+        ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
+        if (EFI_ERROR(ret)) {
+                debug(L"Partition %s not found", label);
                 return ret;
+        }
+        MediaId = gpart.bio->Media->MediaId;
+        partition_start = gpart.part.starting_lba * gpart.bio->Media->BlockSize;
 
         debug(L"Reading boot image header");
-        ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
-                        sizeof(aosp_header), &aosp_header);
+        ret = uefi_call_wrapper(gpart.dio->ReadDisk, 5, gpart.dio, MediaId,
+                                partition_start,
+                                sizeof(aosp_header), &aosp_header);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"ReadDisk (header)");
                 return ret;
@@ -829,8 +733,8 @@ EFI_STATUS android_image_load_partition(
                 return EFI_OUT_OF_RESOURCES;
 
         debug(L"Reading full boot image (%d bytes)", img_size);
-        ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
-                        img_size, bootimage);
+        ret = uefi_call_wrapper(gpart.dio->ReadDisk, 5, gpart.dio, MediaId, partition_start,
+                                img_size, bootimage);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"ReadDisk");
                 FreePool(bootimage);
@@ -1075,22 +979,23 @@ VOID dump_bcb(IN struct bootloader_message *bcb)
 #endif
 
 EFI_STATUS read_bcb(
-                IN const EFI_GUID *bcb_guid,
+                IN const CHAR16 *label,
                 OUT struct bootloader_message *bcb)
 {
         EFI_STATUS ret;
-        EFI_BLOCK_IO *BlockIo;
-        EFI_DISK_IO *DiskIo;
-        UINT32 MediaId;
+        struct gpt_partition_interface gpart;
+        UINTN partition_start;
 
         debug(L"Locating BCB");
-        ret = open_partition(bcb_guid, &MediaId, &BlockIo, &DiskIo);
+        ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
         if (EFI_ERROR(ret))
                 return EFI_INVALID_PARAMETER;
+        partition_start = gpart.part.starting_lba * gpart.bio->Media->BlockSize;
 
         debug(L"Reading BCB");
-        ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
-                        sizeof(*bcb), bcb);
+        ret = uefi_call_wrapper(gpart.dio->ReadDisk, 5, gpart.dio,
+                                gpart.bio->Media->MediaId,
+                                partition_start, sizeof(*bcb), bcb);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"ReadDisk (bcb)");
                 return ret;
@@ -1105,22 +1010,23 @@ EFI_STATUS read_bcb(
 
 
 EFI_STATUS write_bcb(
-                IN const EFI_GUID *bcb_guid,
+                IN const CHAR16 *label,
                 IN struct bootloader_message *bcb)
 {
         EFI_STATUS ret;
-        EFI_BLOCK_IO *BlockIo;
-        EFI_DISK_IO *DiskIo;
-        UINT32 MediaId;
+        struct gpt_partition_interface gpart;
+        UINTN partition_start;
 
         debug(L"Locating BCB");
-        ret = open_partition(bcb_guid, &MediaId, &BlockIo, &DiskIo);
+        ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
         if (EFI_ERROR(ret))
                 return EFI_INVALID_PARAMETER;
+        partition_start = gpart.part.starting_lba * gpart.bio->Media->BlockSize;
 
         debug(L"Writing BCB");
-        ret = uefi_call_wrapper(DiskIo->WriteDisk, 5, DiskIo, MediaId, 0,
-                        sizeof(*bcb), bcb);
+        ret = uefi_call_wrapper(gpart.dio->WriteDisk, 5, gpart.dio,
+                                gpart.bio->Media->MediaId,
+                                partition_start, sizeof(*bcb), bcb);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"WriteDisk (bcb)");
                 return ret;

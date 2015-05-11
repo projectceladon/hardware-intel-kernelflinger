@@ -34,6 +34,9 @@
 #ifndef _TARGETS_H_
 #define _TARGETS_H_
 
+#include <efi.h>
+#include <efilib.h>
+
 enum boot_target {
         UNKNOWN_TARGET = -1,
         NORMAL_BOOT,
@@ -43,10 +46,15 @@ enum boot_target {
         ESP_EFI_BINARY,
         MEMORY,
         CHARGER,
-        REBOOT,
         POWER_OFF,
         EXIT_SHELL,
-        TDOS
+        TDOS,
+        DNX
 };
+
+const CHAR16 *boot_target_name(enum boot_target bt);
+const CHAR16 *boot_target_description(enum boot_target bt);
+enum boot_target name_to_boot_target(const CHAR16 *str);
+EFI_STATUS reboot_to_target(enum boot_target bt);
 
 #endif	/* _TARGETS_H_ */

@@ -54,6 +54,8 @@ static CHAR8 DEFAULT_OPTIONS[] = "--batch installer.cmd";
 static BOOLEAN need_tx_cb;
 static char *fastboot_cmd_buf;
 static UINTN fastboot_cmd_buf_len;
+static char command_buffer[256]; /* Large enough to fit long filename
+				    on flash command.  */
 
 #define inst_perror(ret, x, ...) do { \
 	fastboot_fail(x ": %r", ##__VA_ARGS__, ret); \
@@ -506,6 +508,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	enum boot_target target;
 
 	InitializeLib(image, _table);
+	g_parent_image = image;
 
 	ret = handle_protocol(image, &LoadedImageProtocol, (void **)&loaded_img);
 	if (ret != EFI_SUCCESS) {
@@ -543,8 +546,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	if (EFI_ERROR(ret))
 		goto exit;
 
-	if (target == NORMAL_BOOT || target == REBOOT)
-		reboot(NULL);
+	if (target != UNKNOWN_TARGET)
+		reboot_to_target(target);
 
 exit:
 	FreePool(buf);
@@ -558,6 +561,14 @@ EFI_STATUS fastboot_usb_init_and_connect(start_callback_t start_cb,
 					 data_callback_t rx_cb,
 					 data_callback_t tx_cb)
 {
+	EFI_STATUS ret;
+	ret = fastboot_set_command_buffer(command_buffer,
+					  sizeof(command_buffer));
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to set fastboot command buffer");
+		return ret;
+	}
+
 	fastboot_tx_cb = tx_cb;
 	fastboot_rx_cb = rx_cb;
 	start_cb();
@@ -648,9 +659,11 @@ int usb_write(void *pBuf, uint32_t size)
 		if (((char *)pBuf)[PREFIX_LEN] != '\0')
 			Print(L"%a\n", pBuf + PREFIX_LEN);
 		last_cmd_succeeded = TRUE;
+		fastboot_tx_cb(NULL, 0);
 	} else if (!memcmp((CHAR8 *)"FAIL", pBuf, PREFIX_LEN)) {
 		error(L"%a", pBuf + PREFIX_LEN);
 		last_cmd_succeeded = FALSE;
+		fastboot_tx_cb(NULL, 0);
 	}
 
 	return 0;

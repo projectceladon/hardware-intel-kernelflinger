@@ -117,7 +117,7 @@ EFI_STATUS android_image_start_buffer(
                 IN EFI_GUID *swap);
 
 EFI_STATUS android_image_load_partition(
-                IN const EFI_GUID *guid,
+                IN const CHAR16 *label,
                 OUT VOID **bootimage_p);
 
 EFI_STATUS android_image_load_file(
@@ -127,11 +127,11 @@ EFI_STATUS android_image_load_file(
                 OUT VOID **bootimage_p);
 
 EFI_STATUS read_bcb(
-                IN const EFI_GUID *bcb_guid,
+                IN const CHAR16 *label,
                 OUT struct bootloader_message *bcb);
 
 EFI_STATUS write_bcb(
-                IN const EFI_GUID *bcb_guid,
+                IN const CHAR16 *label,
                 IN struct bootloader_message *bcb);
 
 /* Perform a security  RAM wipe */

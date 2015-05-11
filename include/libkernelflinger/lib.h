@@ -78,6 +78,8 @@ CHAR16 *get_efi_variable_str(const EFI_GUID *guid, CHAR16 *key);
 CHAR16 *get_efi_variable_str8(const EFI_GUID *guid, CHAR16 *key);
 
 EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte);
+EFI_STATUS get_efi_variable_long_from_str8(const EFI_GUID *guid, CHAR16 *key,
+                                           unsigned long *i);
 
 EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 UINTN size, VOID *data, BOOLEAN nonvol, BOOLEAN runtime);
@@ -103,9 +105,9 @@ CHAR16 *stra_to_str(CHAR8 *stra);
 
 EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN len);
 
-EFI_STATUS vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap);
+int vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap);
 
-EFI_STATUS snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...);
+int snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...);
 
 VOID StrNCpy(OUT CHAR16 *dest, IN const CHAR16 *src, UINT32 n);
 

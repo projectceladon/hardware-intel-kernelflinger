@@ -94,19 +94,19 @@ EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK
 	ZeroMem(&cdb, sizeof(cdb));
 
 	cdb.op_code = UFS_UNMAP;
-	cdb.param_length = sizeof(unmap);
+	cdb.param_length = htobe16(sizeof(unmap));
 
 	unmap.data_length = htobe16(sizeof(unmap) - sizeof(unmap.data_length));
 	unmap.block_desc_length = htobe16(sizeof(unmap.block_desc));
 	unmap.block_desc.lba = htobe64(start);
-	unmap.block_desc.count = htobe32(end - start);
+	unmap.block_desc.count = htobe32(end - start + 1);
 
-	scsi_req.Timeout = BLOCK_TIMEOUT * (end - start);
+	scsi_req.Timeout = BLOCK_TIMEOUT * (end - start + 1);
 	scsi_req.OutDataBuffer = &unmap;
 	scsi_req.Cdb = &cdb;
 	scsi_req.OutTransferLength = sizeof(unmap);
 	scsi_req.CdbLength = sizeof(cdb);
-	scsi_req.DataDirection = EFI_EXT_SCSI_DATA_DIRECTION_READ;
+	scsi_req.DataDirection = EFI_EXT_SCSI_DATA_DIRECTION_WRITE;
 
 	ret = uefi_call_wrapper(scsi->PassThru, 5, scsi, target, lun, &scsi_req, NULL);
 	return ret;
