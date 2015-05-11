@@ -31,6 +31,7 @@
 #include <efi.h>
 #include <efilib.h>
 #include <log.h>
+#include <lib.h>
 #include "storage.h"
 #include "mmc.h"
 #include "ufs.h"
@@ -76,4 +77,49 @@ EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 sta
 
 	debug(L"Erase lba %ld -> %ld", start, end);
 	return storage->erase_blocks(handle, bio, start, end);
+}
+
+EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
+			    VOID *pattern, UINTN pattern_blocks)
+{
+	UINT64 lba;
+	UINT64 size;
+	EFI_STATUS ret;
+
+	debug(L"Fill lba %d -> %d", start, end);
+	for (lba = start; lba <= end; lba += pattern_blocks) {
+		if (lba + pattern_blocks > end + 1)
+			size = end - lba + 1;
+		else
+			size = pattern_blocks;
+
+		ret = uefi_call_wrapper(bio->WriteBlocks, 5, bio, bio->Media->MediaId, lba, bio->Media->BlockSize * size, pattern);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to erase block %ld", lba);
+			goto exit;
+		}
+	}
+	ret = EFI_SUCCESS;
+
+ exit:
+	return ret;
+}
+
+EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+{
+	EFI_STATUS ret;
+	VOID *emptyblock;
+	VOID *aligned_emptyblock;
+
+	ret = alloc_aligned(&emptyblock, &aligned_emptyblock,
+			    bio->Media->BlockSize * N_BLOCK,
+			    bio->Media->IoAlign);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = fill_with(bio, start, end, aligned_emptyblock, N_BLOCK);
+
+	FreePool(emptyblock);
+
+	return ret;
 }

@@ -109,7 +109,7 @@ static ui_boot_action_t BOOT_ACTIONS[] = {
 	{ "start",		NULL,	NORMAL_BOOT },
 	{ "restartbootloader",	NULL,	FASTBOOT },
 	{ "recoverymode",	NULL,	RECOVERY },
-	{ "reboot",		NULL,	REBOOT },
+	{ "reboot",		NULL,	NORMAL_BOOT },
 	{ "power_off",		NULL,	POWER_OFF },
 	{ NULL,			NULL,	UNKNOWN_TARGET }
 };
@@ -178,7 +178,6 @@ static const char *FASTBOOT_TITLE = "FASTBOOT MODE";
 
 static UINTN fastboot_ui_info_draw(UINTN x, UINTN y, UINTN width, UINTN height)
 {
-	EFI_STATUS ret;
 	UINTN i, line_nb = ARRAY_SIZE(FASTBOOT_INFOS) + 2;
 	ui_textline_t *lines;
 
@@ -196,7 +195,7 @@ static UINTN fastboot_ui_info_draw(UINTN x, UINTN y, UINTN width, UINTN height)
 		const struct info_text_fun *info = &FASTBOOT_INFOS[i - 2];
 		ui_textline_t *line = &lines[i];
 		char *value;
-		UINTN len;
+		int len;
 
 		line->color = info->get_color();
 		if (!line->color) {
@@ -217,10 +216,10 @@ static UINTN fastboot_ui_info_draw(UINTN x, UINTN y, UINTN width, UINTN height)
 			goto exit;
 		}
 
-		ret = snprintf((CHAR8 *)line->str, len, (CHAR8 *)"%a - %a",
+		len = snprintf((CHAR8 *)line->str, len, (CHAR8 *)"%a - %a",
 			       info->header, value);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to format fastboot info line %d", i);
+		if (len < 0) {
+			error(L"Failed to format fastboot info line %d", i);
 			goto exit;
 		}
 	}

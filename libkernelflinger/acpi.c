@@ -35,7 +35,9 @@
 #include "efilinux.h"
 #include "lib.h"
 
+#ifdef USE_RSCI
 static struct RSCI_TABLE *RSCI_table = NULL;
+#endif
 static struct OEM1_TABLE *OEM1_table = NULL;
 
 #define RSDT_SIG "RSDT"
@@ -191,6 +193,7 @@ out:
 	return ret;
 }
 
+#ifdef USE_RSCI
 enum wake_sources rsci_get_wake_source(void)
 {
 	return get_acpi_field(RSCI, wake_source);
@@ -200,6 +203,17 @@ enum reset_sources rsci_get_reset_source(void)
 {
 	return get_acpi_field(RSCI, reset_source);
 }
+#else
+enum wake_sources rsci_get_wake_source(void)
+{
+	return WAKE_NOT_APPLICABLE;
+}
+
+enum reset_sources rsci_get_reset_source(void)
+{
+	return RESET_NOT_APPLICABLE;
+}
+#endif /* USE_RSCI */
 
 UINT8 oem1_get_ia_apps_to_use(void)
 {

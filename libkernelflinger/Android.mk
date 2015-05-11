@@ -63,6 +63,10 @@ ifeq ($(KERNELFLINGER_USE_CHARGING_APPLET),true)
     LOCAL_CFLAGS += -DUSE_CHARGING_APPLET
 endif
 
+ifneq ($(KERNELFLINGER_IGNORE_RSCI),true)
+    LOCAL_CFLAGS += -DUSE_RSCI
+endif
+
 LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \
@@ -83,7 +87,13 @@ LOCAL_SRC_FILES := \
 	blobstore.c \
 	arraylist.c \
 	dict.c \
-	em.c
+	em.c \
+	gpt.c \
+	storage.c \
+	mmc.c \
+	ufs.c \
+	uefi_utils.c \
+	targets.c
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(res_intermediates)
