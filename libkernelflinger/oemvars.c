@@ -30,8 +30,6 @@
 
 #include <lib.h>
 
-#include "fastboot.h"
-#include "fastboot_oem.h"
 #include "oemvars.h"
 #include "vars.h"
 #include "text_parser.h"
