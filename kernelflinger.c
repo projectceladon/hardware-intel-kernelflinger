@@ -51,6 +51,8 @@
 #include "em.h"
 #include "storage.h"
 #include "version.h"
+#include "blobstore.h"
+#include "oemvars.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -730,6 +732,70 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
 }
 
 
+static EFI_STATUS fetch_blobstore_data(VOID *blobstore, blobtype_t btype,
+                                       VOID **blob, UINT32 *blobsize)
+{
+        blobstore_t *bs = NULL;
+        CHAR8 *device;
+        EFI_STATUS ret;
+
+        bs = blobstore_allocate();
+        if (!bs) {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto out;
+        }
+        if (blobstore_load(bs, blobstore)) {
+                error(L"Blobstore corrupted");
+                ret = EFI_INVALID_PARAMETER;
+                goto out;
+        }
+
+        device = (CHAR8 *)get_device_id();
+
+        if (blobstore_getblob_addr(bs, blob, blobsize, device, btype)) {
+                error(L"No blobstore data type %d found for '%s'",
+                      btype, device);
+                ret = EFI_NOT_FOUND;
+                goto out;
+        }
+        ret = EFI_SUCCESS;
+out:
+        blobstore_close(bs);
+        return ret;
+}
+
+
+static EFI_STATUS set_image_oemvars(VOID *bootimage)
+{
+        struct boot_img_hdr *bh;
+        UINT32 offset;
+        UINT8 *second;
+        VOID *oemvars;
+        UINT32 osz;
+        EFI_STATUS ret;
+
+        bh = get_bootimage_header(bootimage);
+        if (!bh)
+                return EFI_INVALID_PARAMETER;
+
+        /* Nothing to do? */
+        if (bh->second_size == 0) {
+                debug(L"No blobstore in this boot image");
+                return EFI_SUCCESS;
+        }
+
+        offset = bh->page_size + pagealign(bh, bh->kernel_size) +
+                 pagealign(bh, bh->ramdisk_size);
+        second = (UINT8*)bootimage + offset;
+
+        ret = fetch_blobstore_data(second, BLOB_TYPE_OEMVARS, &oemvars, &osz);
+        if (EFI_ERROR(ret)) {
+                return ret;
+        }
+
+        return flash_oemvars(oemvars, osz);
+}
+
 static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                              enum boot_target boot_target)
 {
@@ -741,6 +807,10 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                         &boot_state, FALSE, TRUE);
+
+        ret = set_image_oemvars(bootimage);
+        if (EFI_ERROR(ret))
+                efi_perror(ret, L"Couldn't set oem vars");
 
         debug(L"chainloading boot image, boot state is %s",
                         boot_state_to_string(boot_state));
