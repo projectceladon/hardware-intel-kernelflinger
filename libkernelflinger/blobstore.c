@@ -156,6 +156,7 @@ struct stream_t {
         int (*read)(stream_t *self, void *buf, UINT32 size);
         int (*write)(stream_t *self, void *buf, UINT32 size);
         int (*seek)(stream_t *self, UINT32 offset);
+        int (*address)(stream_t *self, void **addr);
         void (*close)(stream_t *self);
 };
 
@@ -493,6 +494,14 @@ static int memorystream_read(stream_t *self, void *buf, UINT32 size) {
         return 0;
 }
 
+static int memorystream_address(stream_t *self, void **addr)
+{
+        if (!self && !addr)
+                return -1;
+        *addr = self->sd + self->position;
+        return 0;
+}
+
 static int memorystream_write(stream_t *self, void *buf, UINT32 size) {
         if (!self || !self->ready || !buf) {
                 return -1;
@@ -524,6 +533,7 @@ static stream_t *memorystream_allocate() {
         sh->write = memorystream_write;
         sh->seek = memorystream_seek;
         sh->close = memorystream_close;
+        sh->address = memorystream_address;
         return sh;
 }
 
@@ -796,6 +806,56 @@ revert_metadata:
 
 #endif //#ifndef USER
 
+
+static int get_blob_meta(blobstore_t *self, CHAR8 blob_key[BLOB_KEY_LENGTH],
+                                   blobtype_t blob_type, __metablob_t **mbp)
+{
+        metablock_t *matched_block = NULL;
+        __metablob_t *__mBlob = NULL;
+        superblock_t *sb = NULL;
+        UINT32 data_start, data_end;
+
+        if (!self || !self->ready || !mbp) {
+                error(L"Invalid parameters");
+                return -1;
+        }
+
+        if (!VALID_BLOB_TYPE(blob_type)) {
+                error(L"invalid blob type %d", blob_type);
+                return BLOBSTORE_BLOBTYPE_UNKNOWN;
+        }
+
+        sb = self->superblock;
+        data_start = sb->__sb.blobs_location;
+        data_end = sb->__sb.blobs_end_location;
+
+
+        //dictionary Lookup
+        matched_block = (metablock_t*) dict_get(self->used_blocks_dict, blob_key);
+        if (matched_block == NULL) {
+                error(L"No Blob found with given key %s", blob_key);
+                return BLOBSTORE_BLOB_NOT_FOUND;
+        }
+        __mBlob = matched_block->getBlob(matched_block, blob_type);
+        if (!__mBlob) {
+                error(L"failed to get meta blob");
+                return -1;
+        }
+
+        //validate blobLocation and size before reading
+        if (__mBlob->blob_location < data_start && __mBlob->blob_location > data_end) {
+                error(L"MetaBlob: Invalid blobLocation found");
+                return -1;
+        }
+        if (__mBlob->blob_size <= 0) {
+                error(L"MetaBlob: Invalid blobSize found");
+                return -1;
+        }
+
+        *mbp = __mBlob;
+        return 0;
+}
+
 /**
  * blobstore_getblob - lookups requested blob from blob store given blob key and type
  * @self: handle to blob store
@@ -822,50 +882,20 @@ revert_metadata:
  *
  */
 int blobstore_getblob(blobstore_t *self, void *blob, UINT32 *blob_size,
-                CHAR8 blob_key[BLOB_KEY_LENGTH], blobtype_t blob_type) {
-        metablock_t *matched_block = NULL;
+                CHAR8 blob_key[BLOB_KEY_LENGTH], blobtype_t blob_type) 
+{
         __metablob_t *__mBlob = NULL;
         stream_t *sh;
-        superblock_t *sb = NULL;
-        UINT32 data_start, data_end;
+        int ret;
 
         if (!self || !self->ready || !blob_size) {
                 error(L"Invalid parameters");
                 return -1;
         }
 
-        if (!VALID_BLOB_TYPE(blob_type)) {
-                return BLOBSTORE_BLOBTYPE_UNKNOWN;
-        }
-
-        sh = self->stream;
-        sb = self->superblock;
-        data_start = sb->__sb.blobs_location;
-        data_end = sb->__sb.blobs_end_location;
-
-
-
-        //dictionary Lookup
-        matched_block = (metablock_t*) dict_get(self->used_blocks_dict, blob_key);
-        if (matched_block == NULL) {
-                error(L"No Blob found with given key %s", blob_key);
-                return BLOBSTORE_BLOB_NOT_FOUND;
-        }
-        __mBlob = matched_block->getBlob(matched_block, blob_type);
-        if (!__mBlob) {
-                error(L"failed to get meta blob");
-                return -1;
-        }
-
-        //validate blobLocation and size before reading
-        if (__mBlob->blob_location < data_start && __mBlob->blob_location > data_end) {
-                error(L"MetaBlob: Invalid blobLocation found");
-                return -1;
-        }
-        if (__mBlob->blob_size <= 0) {
-                error(L"MetaBlob: Invalid blobSize found");
-                return -1;
-        }
+        ret = get_blob_meta(self, blob_key, blob_type, &__mBlob);
+        if (ret)
+                return ret;
 
         if ((blob == NULL) || (*blob_size == 0)) {
                 *blob_size = __mBlob->blob_size;
@@ -873,9 +903,60 @@ int blobstore_getblob(blobstore_t *self, void *blob, UINT32 *blob_size,
         }
 
         //read blob and return
+        sh = self->stream;
         sh->seek(sh, __mBlob->blob_location);
         if (sh->read(sh, blob, __mBlob->blob_size) != 0) {
                 error(L"Unable to retrieve the blob");
+                return -1;
+        }
+        *blob_size = __mBlob->blob_size;
+        return 0;
+}
+
+/**
+ * blobstore_getblob_addr - lookups requested blob from blob store given blob
+ * key and type, returning a pointer to the blob if found. Only works for
+ * ram-backed blobstores.
+ *
+ * @self: handle to blob store
+ * @blob: pointer to blob memory location
+ * @blob_size: size of blob data looked up
+ * @blob_key: Key which is used to lookup blob in blob store
+ * @blob_type: Type of blob to be returned with matching key
+ *
+ * blobstore_getblob lookups given key in blob store and if key is found then
+ * blobs are enumerated on given blobType. Once  blob is found it's addr is
+ * copied to given pointer location (@blob) and @blob_size is set with blob size
+ *
+ * On success, 0 is returned.
+ * On failure,
+ *         negative value(<0)  is returned. failure reasons are as follows,
+ *         1) If no blob found with given key  BLOBSTORE_BLOB_NOT_FOUND is returned
+ *         2) If wrong blob_type is passed fails with BLOBSTORE_BLOBTYPE_UNKNOWN
+ *
+ */
+int blobstore_getblob_addr(blobstore_t *self, void **blob, UINT32 *blob_size,
+                CHAR8 blob_key[BLOB_KEY_LENGTH], blobtype_t blob_type) {
+        __metablob_t *__mBlob;
+        int ret;
+        stream_t *sh;
+
+        if (!self || !self->ready || !blob_size || !blob) {
+                error(L"Invalid parameters");
+                return -1;
+        }
+
+        ret = get_blob_meta(self, blob_key, blob_type, &__mBlob);
+        if (ret)
+                return ret;
+
+        //read blob and return
+        sh = self->stream;
+        sh->seek(sh, __mBlob->blob_location);
+        if (sh->address(sh, blob) != 0) {
+                error(L"Unable to retrieve the blob address");
+                *blob = NULL;
+                *blob_size = 0;
                 return -1;
         }
         *blob_size = __mBlob->blob_size;
@@ -1006,4 +1087,7 @@ void blobstore_free(blobstore_t *self) {
         self->stream = NULL;
         FreePool(self);
 }
+
+/* vim: softtabstop=8:shiftwidth=8:expandtab
+ */
 

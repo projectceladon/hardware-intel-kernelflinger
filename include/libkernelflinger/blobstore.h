@@ -113,6 +113,31 @@ int blobstore_getblob(blobstore_t *self, void *blob, UINT32 *blob_size,
                 CHAR8 blob_key[BLOB_KEY_LENGTH], blobtype_t blob_type);
 
 /**
+ * blobstore_getblob_addr - lookups requested blob from blob store given blob
+ * key and type, returning a pointer to the blob if found. Only works for
+ * RAM-backed blobstores.
+ *
+ * @self: handle to blob store
+ * @blob: pointer to blob memory location
+ * @blob_size: size of blob data looked up
+ * @blob_key: Key which is used to lookup blob in blob store
+ * @blob_type: Type of blob to be returned with matching key
+ *
+ * blobstore_getblob lookups given key in blob store and if key is found then
+ * blobs are enumerated on given blobType. Once  blob is found it's addr is
+ * copied to given pointer location (@blob) and @blob_size is set with blob size
+ *
+ * On success, 0 is returned.
+ * On failure,
+ *         negative value(<0)  is returned. failure reasons are as follows,
+ *         1) If no blob found with given key  BLOBSTORE_BLOB_NOT_FOUND is returned
+ *         2) If wrong blob_type is passed fails with BLOBSTORE_BLOBTYPE_UNKNOWN
+ *
+ */
+int blobstore_getblob_addr(blobstore_t *self, void **blob, UINT32 *blob_size,
+                CHAR8 blob_key[BLOB_KEY_LENGTH], blobtype_t blob_type);
+
+/**
  * blobstore_close - closes blob store
  * @self: handle to blob store
  *
