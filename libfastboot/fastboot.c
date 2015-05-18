@@ -531,6 +531,12 @@ static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
 	return FALSE;
 }
 
+EFI_STATUS refresh_partition_var(void)
+{
+	clean_partition_var();
+	return publish_partsize();
+}
+
 static void cmd_flash(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
@@ -567,8 +573,7 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 
 	/* update partition variable in case it has changed */
 	if (ret & REFRESH_PARTITION_VAR) {
-		clean_partition_var();
-		ret = publish_partsize();
+		ret = refresh_partition_var();
 		if (EFI_ERROR(ret)) {
 			fastboot_fail("Failed to publish partition variables, %r", ret);
 			return;

@@ -35,6 +35,7 @@
 
 #include <lib.h>
 #include <vars.h>
+#include <storage.h>
 
 #include "uefi_utils.h"
 #include "flash.h"
@@ -124,7 +125,7 @@ static void change_device_state(enum device_state new_state)
 		fastboot_okay("");
 		/* Ensure logs variable is deleted on a successful
 		   state transition.  */
-		set_efi_variable(&loader_guid, LOG_VAR, 0, NULL, FALSE, TRUE);
+		del_efi_variable(&loader_guid, LOG_VAR);
 	}
 }
 
@@ -268,9 +269,12 @@ static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
 	if (argc == 3)
 		value = argv[2];
 
-	ret = set_efi_variable(&loader_guid, varname,
-			       value ? strlen(value) + 1 : 0, value,
-			       TRUE, FALSE);
+	if (!value)
+		ret = del_efi_variable(&loader_guid, varname);
+	else
+		ret = set_efi_variable(&loader_guid, varname,
+				       strlen(value) + 1, value,
+				       TRUE, FALSE);
 	if (EFI_ERROR(ret))
 		fastboot_fail("Unable to %a '%s' variable",
 			      value ? "set" : "clear", varname);
@@ -328,6 +332,47 @@ static void cmd_oem_gethashes(__attribute__((__unused__)) INTN argc,
 }
 
 #ifndef USER
+static void cmd_oem_set_storage(INTN argc,
+			        CHAR8 **argv)
+{
+	enum storage_type type;
+	EFI_STATUS ret;
+
+	if (argc != 2) {
+		fastboot_fail("Supported storage: ufs, emmc");
+		return;
+	}
+
+	if (!strcmp(argv[1], (CHAR8*)"emmc")) {
+		type = STORAGE_EMMC;
+		goto set;
+	}
+	if (!strcmp(argv[1], (CHAR8*)"ufs")) {
+		type = STORAGE_UFS;
+		goto set;
+	}
+	fastboot_fail("Unsupported storage");
+	return;
+set:
+	ret = identify_boot_device(type);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to set storage: %r", ret);
+		return;
+	}
+
+	ret = gpt_refresh();
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to refresh partition table: %r", ret);
+		return;
+	}
+
+	ret = refresh_partition_var();
+	if (EFI_ERROR(ret))
+		fastboot_fail("Failed to refresh partition vars: %r", ret);
+	else
+		fastboot_okay("");
+}
+
 static void cmd_oem_reprovision(__attribute__((__unused__)) INTN argc,
 			        __attribute__((__unused__)) CHAR8 **argv)
 {
@@ -438,6 +483,7 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "garbage-disk",		UNLOCKED,	cmd_oem_garbage_disk  },
 	{ "reboot",			LOCKED,		cmd_oem_reboot  },
 #ifndef USER
+	{ "set-storage",		LOCKED,		cmd_oem_set_storage  },
 	{ "reprovision",		LOCKED,		cmd_oem_reprovision  },
 	{ "rm",				LOCKED,		cmd_oem_rm },
 #endif

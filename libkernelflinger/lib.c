@@ -29,6 +29,39 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+/*-
+ * For strcasestr()
+ *
+ * Copyright (c) 1987, 1990, 1993
+ *        The Regents of the University of California.  All rights reserved.
+ *
+ * This code is derived from software contributed to Berkeley by
+ * Chris Torek.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
 
 #include <efi.h>
 #include <efilib.h>
@@ -38,6 +71,42 @@
 
 
 EFI_HANDLE g_parent_image;
+
+char *strdup(const char *s)
+{
+	UINTN size;
+	char *new;
+
+	size = strlena((CHAR8 *)s) + 1;
+	new = AllocatePool(size);
+	if (!new)
+		return NULL;
+
+	memcpy(new, s, size);
+	return new;
+}
+
+char *strcasestr(const char *s, const char *find)
+{
+        char c, sc;
+        size_t len;
+
+        if (!s || !find)
+                return NULL;
+
+        if ((c = *find++) != 0) {
+                c = tolower((unsigned char)c);
+                len = strlen((CHAR8 *)find);
+                do {
+                        do {
+                                if ((sc = *s++) == 0)
+                                        return (NULL);
+                        } while ((char)tolower((unsigned char)sc) != c);
+                } while (strncasecmp(s, find, len) != 0);
+                s--;
+        }
+        return (char *)s;
+}
 
 CHAR16 *stra_to_str(CHAR8 *stra)
 {
@@ -230,11 +299,25 @@ out:
         return ret;
 }
 
+EFI_STATUS del_efi_variable(const EFI_GUID *guid, CHAR16 *key)
+{
+        EFI_STATUS ret;
+
+        ret = uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, 0, 0, NULL);
+        if (ret == EFI_NOT_FOUND)
+                return EFI_SUCCESS;
+
+        return ret;
+}
+
+
 EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 UINTN size, VOID *data, BOOLEAN nonvol, BOOLEAN runtime)
 {
         EFI_STATUS ret;
-        UINT32 flags = EFI_VARIABLE_BOOTSERVICE_ACCESS;
+        UINT32 curflags, flags = EFI_VARIABLE_BOOTSERVICE_ACCESS;
+        UINTN cursize;
+        VOID *curdata;
 
         if (nonvol)
                 flags |= EFI_VARIABLE_NON_VOLATILE;
@@ -247,16 +330,21 @@ EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
          * implementations. The correct method of changing the attributes of a
          * variable is to delete the variable and recreate it with different
          * attributes. */
-        ret = uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, 0, 0, 0);
-        if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
-                efi_perror(ret, L"Couldn't clear EFI variable");
+        ret = get_efi_variable((EFI_GUID *)guid, key, &cursize, &curdata, &curflags);
+        if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND)
                 return ret;
+        if (ret == EFI_SUCCESS)
+                FreePool(curdata);
+        if (ret == EFI_SUCCESS && curflags != flags) {
+                ret = del_efi_variable((EFI_GUID *)guid, key);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Couldn't clear EFI variable");
+                        return ret;
+                }
         }
 
-        if (size && data)
-                return uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, flags,
-                        size, data);
-        return EFI_SUCCESS;
+        return uefi_call_wrapper(RT->SetVariable, 5, key, (EFI_GUID *)guid, flags,
+                                 size, data);
 }
 
 
@@ -529,19 +617,19 @@ VOID reboot(CHAR16 *target)
 }
 
 EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
-				    UINTN size, UINTN align)
+                         UINTN size, UINTN align)
 {
-	*free_addr = AllocateZeroPool(size + align);
-	if (!*free_addr)
-		return EFI_OUT_OF_RESOURCES;
+        *free_addr = AllocateZeroPool(size + align);
+        if (!*free_addr)
+                return EFI_OUT_OF_RESOURCES;
 
-	if (align > 1)
-		*aligned_addr = (char *)*free_addr +
-			((UINTN)*free_addr % align);
-	else
-		*aligned_addr = *free_addr;
+        if (align > 1)
+                *aligned_addr = (char *)*free_addr +
+                                ((UINTN)*free_addr % align);
+        else
+                *aligned_addr = *free_addr;
 
-	return EFI_SUCCESS;
+        return EFI_SUCCESS;
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

@@ -348,20 +348,6 @@ static void free_commands(void)
 	current_command = 0;
 }
 
-static char *strdup(const char *s)
-{
-	UINTN size;
-	char *new;
-
-	size = strlena((CHAR8 *)s) + 1;
-	new = AllocatePool(size);
-	if (!new)
-		return NULL;
-
-	memcpy(new, s, size);
-	return new;
-}
-
 static EFI_STATUS store_command(char *command)
 {
 	char **new_commands;
