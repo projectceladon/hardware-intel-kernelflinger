@@ -59,7 +59,7 @@
 #define BUILD_VARIANT           L"-eng"
 #endif
 
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.13" BUILD_VARIANT
+#define KERNELFLINGER_VERSION	L"kernelflinger-02.14" BUILD_VARIANT
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
