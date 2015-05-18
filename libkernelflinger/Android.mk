@@ -93,7 +93,10 @@ LOCAL_SRC_FILES := \
 	mmc.c \
 	ufs.c \
 	uefi_utils.c \
-	targets.c
+	targets.c \
+	smbios.c \
+	oemvars.c \
+	text_parser.c
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(res_intermediates)

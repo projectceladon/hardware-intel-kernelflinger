@@ -75,6 +75,22 @@ static struct state_display {
 static CHAR8 current_off_mode_charge[2];
 static CHAR8 current_crash_event_menu[2];
 
+CHAR16 *boot_state_to_string(UINT8 boot_state)
+{
+	switch (boot_state) {
+	case BOOT_STATE_GREEN:
+		return L"green";
+	case BOOT_STATE_YELLOW:
+		return L"yellow";
+	case BOOT_STATE_ORANGE:
+		return L"orange";
+	case BOOT_STATE_RED:
+		return L"red";
+	default:
+		return L"unknown";
+	}
+}
+
 BOOLEAN get_current_boolean_var(CHAR16 *varname, CHAR8 cache[2])
 {
 	UINTN size;
@@ -211,8 +227,7 @@ EFI_STATUS set_current_state(enum device_state state)
 #ifndef USER
 EFI_STATUS reprovision_state_vars(VOID)
 {
-	return set_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
-				0, 0, TRUE, FALSE);
+	return del_efi_variable(&fastboot_guid, OEM_LOCK_VAR);
 }
 #endif
 
@@ -335,16 +350,20 @@ EFI_STATUS reset_watchdog_status(VOID)
 
 EFI_STATUS set_watchdog_counter(UINT8 counter)
 {
+	if (counter == 0)
+		return del_efi_variable(&fastboot_guid, WDT_COUNTER_VAR);
+
 	return set_efi_variable(&fastboot_guid, WDT_COUNTER_VAR,
-				counter == 0 ? 0 : sizeof(counter),
-				&counter, TRUE, FALSE);
+				sizeof(counter), &counter, TRUE, FALSE);
 }
 
 EFI_STATUS set_watchdog_time_reference(EFI_TIME *time)
 {
+	if (time == NULL)
+		return del_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR);
+
 	return set_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR,
-				time == NULL ? 0 : sizeof(*time),
-				time, TRUE, FALSE);
+				sizeof(*time), time, TRUE, FALSE);
 }
 
 VOID clear_provisioning_mode(void)

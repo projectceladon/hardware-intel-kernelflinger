@@ -81,6 +81,8 @@ EFI_STATUS get_efi_variable_byte(const EFI_GUID *guid, CHAR16 *key, UINT8 *byte)
 EFI_STATUS get_efi_variable_long_from_str8(const EFI_GUID *guid, CHAR16 *key,
                                            unsigned long *i);
 
+EFI_STATUS del_efi_variable(const EFI_GUID *guid, CHAR16 *key);
+
 EFI_STATUS set_efi_variable(const EFI_GUID *guid, CHAR16 *key,
                 UINTN size, VOID *data, BOOLEAN nonvol, BOOLEAN runtime);
 
@@ -116,6 +118,10 @@ UINT8 getdigit(IN CHAR16 *str);
 EFI_STATUS string_to_guid(IN CHAR16 *in_guid_str, OUT EFI_GUID *guid);
 
 UINTN strtoul16(const CHAR16 *nptr, CHAR16 **endptr, UINTN base);
+
+char *strcasestr(const char *s, const char *find);
+
+char *strdup(const char *s);
 
 /*
  * misc

@@ -43,6 +43,7 @@
 #include "power.h"
 #include "targets.h"
 #include "gpt.h"
+#include "storage.h"
 
 struct setup_header {
         UINT8 setup_secs;        /* Sectors for setup code */
@@ -416,8 +417,7 @@ static CHAR16 *get_boot_reason(void)
                 pos++;
         }
 done:
-        set_efi_variable(&loader_guid, L"LoaderEntryRebootReason", 0, NULL,
-                         TRUE, TRUE);
+        del_efi_variable(&loader_guid, L"LoaderEntryRebootReason");
         return bootreason;
 }
 
@@ -527,7 +527,8 @@ static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
-                IN EFI_GUID *swap_guid)
+                IN EFI_GUID *swap_guid,
+                IN UINT8 boot_state)
 {
         CHAR16 *cmdline16 = NULL;
         char   *serialno = NULL;
@@ -577,6 +578,11 @@ static EFI_STATUS setup_command_line(
         if (EFI_ERROR(ret))
                 goto out;
 
+        ret = prepend_command_line(&cmdline16, L"androidboot.state=%s",
+                                   boot_state_to_string(boot_state));
+        if (EFI_ERROR(ret))
+                goto out;
+
         if (swap_guid) {
                 ret = prepend_command_line(&cmdline16, L"resume=PARTUUID=%g",
                         swap_guid);
@@ -593,6 +599,16 @@ static EFI_STATUS setup_command_line(
         ret = prepend_command_line(&cmdline16, L"console=%s", serialport);
         if (EFI_ERROR(ret))
                 goto out;
+
+        PCI_DEVICE_PATH *boot_device = get_boot_device();
+        if (boot_device)
+                ret = prepend_command_line(&cmdline16,
+                                           L"androidboot.diskbus=%02x.%x",
+                                           boot_device->Device,
+                                           boot_device->Function);
+        else
+                error(L"Boot device not found, diskbus parameter not set in the commandline!");
+
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */
@@ -883,6 +899,7 @@ EFI_STATUS android_image_start_buffer(
                 IN EFI_HANDLE parent_image,
                 IN VOID *bootimage,
                 IN enum boot_target boot_target,
+                IN UINT8 boot_state,
                 IN EFI_GUID *swap_guid)
 {
         struct boot_img_hdr *aosp_header;
@@ -933,7 +950,7 @@ EFI_STATUS android_image_start_buffer(
         }
 
         debug(L"Creating command line");
-        ret = setup_command_line(bootimage, boot_target, swap_guid);
+        ret = setup_command_line(bootimage, boot_target, swap_guid, boot_state);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"setup_command_line");
                 return ret;

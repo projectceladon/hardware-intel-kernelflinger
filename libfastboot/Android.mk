@@ -24,13 +24,10 @@ SHARED_SRC_FILES := \
 	fastboot_oem.c \
 	flash.c \
 	sparse.c \
-	smbios.c \
 	info.c \
 	intel_variables.c \
-	oemvars.c \
 	bootmgr.c \
 	hashes.c \
-	text_parser.c \
 	bootloader.c
 
 include $(CLEAR_VARS)
