@@ -38,6 +38,7 @@
 
 void skip_whitespace(char **line);
 EFI_STATUS parse_text_buffer(VOID *data, UINTN size,
-			     EFI_STATUS (*parse_line)(char *line));
+			     EFI_STATUS (*parse_line)(char *line, VOID *ctx),
+			     VOID *context);
 
 #endif	/* _TEXT_PARSER_H_ */

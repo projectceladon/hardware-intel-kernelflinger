@@ -43,7 +43,8 @@ void skip_whitespace(char **line)
 }
 
 EFI_STATUS parse_text_buffer(VOID *data, UINTN size,
-			     EFI_STATUS (*parse_line)(char *line))
+			     EFI_STATUS (*parse_line)(char *line, VOID *ctx),
+			     VOID *context)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
 	char *buf, *line, *eol, *p;
@@ -76,7 +77,7 @@ EFI_STATUS parse_text_buffer(VOID *data, UINTN size,
 		if (*line == '\0')
 			continue;
 
-		ret = parse_line(line);
+		ret = parse_line(line, context);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed at line %d", lineno);
 			goto exit;

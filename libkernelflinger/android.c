@@ -44,6 +44,7 @@
 #include "targets.h"
 #include "gpt.h"
 #include "storage.h"
+#include "text_parser.h"
 
 struct setup_header {
         UINT8 setup_secs;        /* Sectors for setup code */
@@ -528,6 +529,104 @@ static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
 }
 
 
+static EFI_STATUS fetch_blobstore_data(VOID *blobstore, blobtype_t btype,
+                                       VOID **blob, UINT32 *blobsize)
+{
+        blobstore_t *bs = NULL;
+        CHAR8 *device;
+        EFI_STATUS ret;
+        int bsret;
+
+        bs = blobstore_allocate();
+        if (!bs) {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto out;
+        }
+        if (blobstore_load(bs, blobstore)) {
+                error(L"Blobstore corrupted");
+                ret = EFI_INVALID_PARAMETER;
+                goto out;
+        }
+
+        device = (CHAR8 *)get_device_id();
+
+        bsret = blobstore_getblob_addr(bs, blob, blobsize, device, btype);
+        switch (bsret) {
+        case BLOBSTORE_BLOB_NOT_FOUND:
+                ret = EFI_NOT_FOUND;
+                break;
+        case 0:
+                ret = EFI_SUCCESS;
+                break;
+        default:
+                error(L"Blobstore corrupted: getblob_addr()=%d", bsret);
+                ret = EFI_INVALID_PARAMETER;
+                break;
+        }
+out:
+        blobstore_close(bs);
+        return ret;
+}
+
+
+EFI_STATUS get_bootimage_blob(VOID *bootimage, blobtype_t btype, VOID **blob,
+                              UINT32 *blobsize)
+{
+        struct boot_img_hdr *bh;
+        UINT32 offset;
+        UINT8 *second;
+
+        bh = get_bootimage_header(bootimage);
+        if (!bh)
+                return EFI_INVALID_PARAMETER;
+
+        /* Nothing to do? */
+        if (bh->second_size == 0)
+                return EFI_UNSUPPORTED;
+
+        offset = bh->page_size + pagealign(bh, bh->kernel_size) +
+                 pagealign(bh, bh->ramdisk_size);
+        second = (UINT8*)bootimage + offset;
+
+        return fetch_blobstore_data(second, btype, blob, blobsize);
+}
+
+
+/* File format is a series of lines, which could be a blank line,
+ * #<comment> or <key>=<value>. We don't do sanity checking as the
+ * blobstore is covered by the verified boot signature and is hence
+ * trusted */
+static EFI_STATUS parse_bootvars_line(char *line, VOID *ctx)
+{
+        CHAR16 **cmdline16 = (CHAR16 **)ctx;
+
+        if (strlen((CHAR8 *)line) == 0 || line[0] == '#')
+                return EFI_SUCCESS;
+
+        return prepend_command_line(cmdline16, L"%a", line);
+}
+
+static EFI_STATUS add_bootvars(VOID *bootimage, CHAR16 **cmdline16)
+{
+        VOID *bootvars;
+        UINT32 bvsize;
+        EFI_STATUS ret;
+
+        ret = get_bootimage_blob(bootimage, BLOB_TYPE_BOOTVARS, &bootvars,
+                                 &bvsize);
+        if (EFI_ERROR(ret)) {
+                if (ret == EFI_UNSUPPORTED || ret == EFI_NOT_FOUND) {
+                        debug(L"Not setting bootvars: %r", ret);
+                        return EFI_SUCCESS;
+                }
+                efi_perror(ret, L"Couldn't get bootvars");
+                return ret;
+        }
+
+        return parse_text_buffer(bootvars, bvsize, parse_bootvars_line,
+                                 cmdline16);
+}
+
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
@@ -629,6 +728,10 @@ static EFI_STATUS setup_command_line(
         if (EFI_ERROR(ret))
                 goto out;
 #endif
+
+        ret = add_bootvars(bootimage, &cmdline16);
+        if (EFI_ERROR(ret))
+                goto out;
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */

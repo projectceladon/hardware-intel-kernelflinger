@@ -833,7 +833,7 @@ static int get_blob_meta(blobstore_t *self, CHAR8 blob_key[BLOB_KEY_LENGTH],
         //dictionary Lookup
         matched_block = (metablock_t*) dict_get(self->used_blocks_dict, blob_key);
         if (matched_block == NULL) {
-                error(L"No Blob found with given key %s", blob_key);
+                debug(L"No Blob found with given key %a", blob_key);
                 return BLOBSTORE_BLOB_NOT_FOUND;
         }
         __mBlob = matched_block->getBlob(matched_block, blob_type);
@@ -847,9 +847,9 @@ static int get_blob_meta(blobstore_t *self, CHAR8 blob_key[BLOB_KEY_LENGTH],
                 error(L"MetaBlob: Invalid blobLocation found");
                 return -1;
         }
-        if (__mBlob->blob_size <= 0) {
-                error(L"MetaBlob: Invalid blobSize found");
-                return -1;
+        if (__mBlob->blob_size == 0) {
+                debug(L"No %a blob data for type %d", blob_key, blob_type);
+                return BLOBSTORE_BLOB_NOT_FOUND;
         }
 
         *mbp = __mBlob;
