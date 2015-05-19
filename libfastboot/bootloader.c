@@ -108,7 +108,7 @@ static EFI_STATUS add_load_option(CHAR8 *description, CHAR8 *path)
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS parse_line(char *line)
+static EFI_STATUS parse_line(char *line, VOID *context _unused)
 {
 	CHAR8 *description = (CHAR8 *)line;
 	CHAR8 *path;
@@ -149,7 +149,7 @@ static EFI_STATUS read_load_options(EFI_HANDLE handle)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	ret = parse_text_buffer(data, size, parse_line);
+	ret = parse_text_buffer(data, size, parse_line, NULL);
 	FreePool(data);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to parse '%s' file", MANIFEST_PATH);

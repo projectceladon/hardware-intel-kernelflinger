@@ -46,7 +46,10 @@
 #define BLOBSTORE_UNKNOWN_ERROR         -500
 
 typedef enum blobtypes_t {
-        BLOB_TYPE_DTB = 0, BLOB_TYPE_OEMVARS, BLOB_TYPE_END
+        BLOB_TYPE_DTB = 0,
+        BLOB_TYPE_OEMVARS,
+        BLOB_TYPE_BOOTVARS,
+        BLOB_TYPE_END
 } blobtype_t;
 
 #define VALID_BLOB_TYPE(__t)  ((__t) >= BLOB_TYPE_DTB && (__t) < BLOB_TYPE_END)
