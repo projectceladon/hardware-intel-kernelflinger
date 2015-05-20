@@ -825,7 +825,12 @@ EFI_STATUS gpt_get_partition_handle(const CHAR16 *label,
 	}
 
 	for (i = 0; i < nb_handle; i++) {
+		/* Check if the logical unit match the requested one */
 		device_path = DevicePathFromHandle(handles[i]);
+		ret = storage_check_logical_unit(device_path, log_unit);
+		if (EFI_ERROR(ret))
+			continue;
+
 		hd_path = get_hd_device_path(device_path);
 		if (!hd_path)
 			continue;
