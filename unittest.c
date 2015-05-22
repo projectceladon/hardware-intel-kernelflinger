@@ -40,7 +40,31 @@
 #include "lib.h"
 #include "unittest.h"
 #include "blobstore.h"
+#include "watchdog.h"
 
+/*
+ * This is the hardware second timeout value
+ */
+#define TCO_SECOND_TIMEOUT 3
+
+static VOID test_watchdog(VOID)
+{
+        EFI_STATUS ret;
+        UINT32 timeout = 30;
+
+        ret = start_watchdog(timeout);
+        if (EFI_ERROR(ret))
+                Print(L"Coudln't start watchdog, ");
+        else {
+                Print(L"Watchdog should reset at the end of the countdown\n");
+                for (timeout += TCO_SECOND_TIMEOUT; timeout != 0; timeout--) {
+                        pause(1);
+                        Print(L"%d seconds left...\n", timeout);
+                }
+                Print(L"Watchdog did not reset the platform, ");
+        }
+        Print(L"test Failed\n");
+}
 
 
 static VOID test_keys(VOID)
@@ -80,6 +104,7 @@ static struct test_suite {
 } TEST_SUITES[] = {
         { L"ux", test_ux },
         { L"keys", test_keys },
+        { L"watchdog", test_watchdog }
 };
 
 VOID unittest_main(CHAR16 *testname)

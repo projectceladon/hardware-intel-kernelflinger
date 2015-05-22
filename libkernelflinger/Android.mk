@@ -47,6 +47,10 @@ ifeq ($(KERNELFLINGER_USE_POWER_BUTTON),true)
     LOCAL_CFLAGS += -DUSE_POWER_BUTTON
 endif
 
+ifeq ($(KERNELFLINGER_USE_WATCHDOG),true)
+    LOCAL_CFLAGS += -DUSE_WATCHDOG
+endif
+
 ifeq ($(KERNELFLINGER_USE_CHARGING_APPLET),true)
     LOCAL_CFLAGS += -DUSE_CHARGING_APPLET
 endif
@@ -84,7 +88,8 @@ LOCAL_SRC_FILES := \
 	targets.c \
 	smbios.c \
 	oemvars.c \
-	text_parser.c
+	text_parser.c \
+	watchdog.c
 
 ifeq ($(HAL_AUTODETECT),true)
     LOCAL_SRC_FILES += blobstore.c
