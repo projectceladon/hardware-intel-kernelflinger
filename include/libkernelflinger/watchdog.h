@@ -1,8 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Author: Andrew Boie <andrew.p.boie@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,14 +28,19 @@
  *
  */
 
-#ifndef UNITTEST_H
-#define UNITTEST_H
+#ifndef _WATCHDOG_H_
+#define _WATCHDOG_H_
 
-/*
- * This is the hardware second timeout value
- */
-#define TCO_SECOND_TIMEOUT 5
+#include <efi.h>
 
-VOID unittest_main(CHAR16 *testname);
-
+#ifndef TCO_DEFAULT_TIMEOUT
+#define TCO_DEFAULT_TIMEOUT 60
 #endif
+
+#ifndef TCO_MIN_TIMEOUT
+#define TCO_MIN_TIMEOUT 4
+#endif
+
+EFI_STATUS start_watchdog(UINT32 seconds);
+
+#endif  /* _WATCHDOG_H_ */
