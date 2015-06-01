@@ -50,6 +50,7 @@ enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID);
 
 /* Display a low_battery image during DELAY seconds and exit.  */
 VOID ux_display_low_battery(UINTN delay);
+VOID ux_display_empty_battery(VOID);
 
 VOID ux_init(VOID);
 

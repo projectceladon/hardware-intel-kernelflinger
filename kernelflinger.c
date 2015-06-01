@@ -1132,6 +1132,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (boot_target == POWER_OFF)
                 halt_system();
 
+        if (boot_target == CHARGER)
+                ux_display_empty_battery();
+
 #ifdef USERDEBUG
         debug(L"checking device state");
 
