@@ -799,11 +799,11 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 		return;
 	}
 
+	fastboot_state = STATE_START_DOWNLOAD;
 	if (usb_write(response, strlen((CHAR8 *)response)) < 0) {
 		fastboot_state = STATE_ERROR;
 		return;
 	}
-	fastboot_state = STATE_START_DOWNLOAD;
 }
 
 static void worker_download(void)
