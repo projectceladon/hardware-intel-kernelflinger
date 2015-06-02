@@ -345,6 +345,7 @@ static CHAR16 *get_wake_reason(void)
                 reason = StrDuplicate(L"battery_reached_ia_threshold");
                 break;
         default:
+                debug(L"wake_source = 0x%02x", wake_source);
                 reason = NULL;
         }
 
@@ -378,6 +379,7 @@ static CHAR16 *get_reset_reason(void)
                 reason = StrDuplicate(L"security_initiated");
                 break;
         default:
+                debug(L"reset_source = 0x%02x", reset_source);
                 reason = NULL;
         }
 
@@ -400,6 +402,7 @@ static CHAR16 *get_boot_reason(void)
         bootreason = get_efi_variable_str(&loader_guid,
                                           L"LoaderEntryRebootReason");
         if (!bootreason) {
+                debug(L"Error while trying to get LoaderEntryRebootReason variable");
                 bootreason = StrDuplicate(L"unknown");
                 goto done;
         }
@@ -410,6 +413,7 @@ static CHAR16 *get_boot_reason(void)
                 if (!((*pos >= L'0' && *pos <= L'9') ||
                             (*pos >= L'a' && *pos <= L'z') ||
                             *pos == L'_')) {
+                        debug(L"Error, LoaderEntryRebootReason contains non-alphanumeric characters");
                         FreePool(bootreason);
                         bootreason = StrDuplicate(L"unknown");
                         break;
