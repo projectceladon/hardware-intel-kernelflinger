@@ -1040,6 +1040,10 @@ void blobstore_printinfo(blobstore_t *self) {
 
         for (i = 0; i <= arraylist_length(self->free_blocks_list); i++) {
                 block = (metablock_t*) arraylist_get(self->free_blocks_list, i);
+                if (!block) {
+                        debug(L"block %d is NULL", i);
+                        continue;
+                }
                 block->print_info(block);
         }
 }
