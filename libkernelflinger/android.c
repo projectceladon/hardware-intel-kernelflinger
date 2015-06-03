@@ -529,52 +529,17 @@ static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
 }
 
 
-static EFI_STATUS fetch_blobstore_data(VOID *blobstore, blobtype_t btype,
-                                       VOID **blob, UINT32 *blobsize)
-{
-        blobstore_t *bs = NULL;
-        CHAR8 *device;
-        EFI_STATUS ret;
-        int bsret;
-
-        bs = blobstore_allocate();
-        if (!bs) {
-                ret = EFI_OUT_OF_RESOURCES;
-                goto out;
-        }
-        if (blobstore_load(bs, blobstore)) {
-                error(L"Blobstore corrupted");
-                ret = EFI_INVALID_PARAMETER;
-                goto out;
-        }
-
-        device = (CHAR8 *)get_device_id();
-
-        bsret = blobstore_getblob_addr(bs, blob, blobsize, device, btype);
-        switch (bsret) {
-        case BLOBSTORE_BLOB_NOT_FOUND:
-                ret = EFI_NOT_FOUND;
-                break;
-        case 0:
-                ret = EFI_SUCCESS;
-                break;
-        default:
-                error(L"Blobstore corrupted: getblob_addr()=%d", bsret);
-                ret = EFI_INVALID_PARAMETER;
-                break;
-        }
-out:
-        blobstore_close(bs);
-        return ret;
-}
-
-
-EFI_STATUS get_bootimage_blob(VOID *bootimage, blobtype_t btype, VOID **blob,
+EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
                               UINT32 *blobsize)
 {
         struct boot_img_hdr *bh;
         UINT32 offset;
         UINT8 *second;
+        struct blobstore *bs;
+        char *device_id;
+
+        device_id = get_device_id();
+        debug(L"Lookup blobstore data %a-%d", device_id, btype);
 
         bh = get_bootimage_header(bootimage);
         if (!bh)
@@ -588,7 +553,14 @@ EFI_STATUS get_bootimage_blob(VOID *bootimage, blobtype_t btype, VOID **blob,
                  pagealign(bh, bh->ramdisk_size);
         second = (UINT8*)bootimage + offset;
 
-        return fetch_blobstore_data(second, btype, blob, blobsize);
+        bs = blobstore_get(second, bh->second_size);
+        if (!bs)
+                return EFI_UNSUPPORTED;
+
+        if (blobstore_get_item(bs, device_id, btype, blob, blobsize))
+                return EFI_NOT_FOUND;
+
+        return EFI_SUCCESS;
 }
 
 

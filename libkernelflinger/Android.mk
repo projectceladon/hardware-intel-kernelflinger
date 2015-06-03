@@ -89,8 +89,6 @@ LOCAL_SRC_FILES := \
 	ui_confirm.c \
 	log.c \
 	blobstore.c \
-	arraylist.c \
-	dict.c \
 	em.c \
 	gpt.c \
 	storage.c \

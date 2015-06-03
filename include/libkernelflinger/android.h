@@ -161,7 +161,7 @@ UINT32 pagealign(struct boot_img_hdr *hdr, UINT32 blob_size);
  * blobstore
  * EFI_NOT_FOUND - Specified type not found
  * EFI_OUT_OF_RESOURCES - Out of memory */
-EFI_STATUS get_bootimage_blob(VOID *bootimage, blobtype_t btype, VOID **blob,
+EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
                               UINT32 *blobsize);
 #endif
 
