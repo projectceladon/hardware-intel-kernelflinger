@@ -740,7 +740,7 @@ static EFI_STATUS set_image_oemvars(VOID *bootimage)
 
         ret = get_bootimage_blob(bootimage, BLOB_TYPE_OEMVARS, &oemvars, &osz);
         if (EFI_ERROR(ret)) {
-                if (ret == EFI_UNSUPPORTED) {
+                if (ret == EFI_UNSUPPORTED || ret == EFI_NOT_FOUND) {
                         debug(L"No blobstore in this boot image");
                         return EFI_SUCCESS;
                 }
