@@ -51,7 +51,9 @@
 #include "em.h"
 #include "storage.h"
 #include "version.h"
+#ifdef HAL_AUTODETECT
 #include "blobstore.h"
+#endif
 #include "oemvars.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
@@ -732,12 +734,24 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
 }
 
 
+#define OEMVARS_MAGIC           "#OEMVARS\n"
+#define OEMVARS_MAGIC_SZ        9
+
 static EFI_STATUS set_image_oemvars(VOID *bootimage)
 {
         VOID *oemvars;
         UINT32 osz;
         EFI_STATUS ret;
 
+        ret = get_bootimage_2nd(bootimage, &oemvars, &osz);
+        if (ret == EFI_SUCCESS && osz > OEMVARS_MAGIC_SZ &&
+            !memcmp(oemvars, OEMVARS_MAGIC, OEMVARS_MAGIC_SZ)) {
+                debug(L"secondstage contains raw oemvars");
+                return flash_oemvars((CHAR8*)oemvars + OEMVARS_MAGIC_SZ,
+                                osz - OEMVARS_MAGIC_SZ);
+        }
+
+#ifdef HAL_AUTODETECT
         ret = get_bootimage_blob(bootimage, BLOB_TYPE_OEMVARS, &oemvars, &osz);
         if (EFI_ERROR(ret)) {
                 if (ret == EFI_UNSUPPORTED || ret == EFI_NOT_FOUND) {
@@ -748,6 +762,9 @@ static EFI_STATUS set_image_oemvars(VOID *bootimage)
         }
 
         return flash_oemvars(oemvars, osz);
+#else
+        return EFI_NOT_FOUND;
+#endif
 }
 
 static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,

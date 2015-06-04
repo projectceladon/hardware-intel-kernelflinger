@@ -18,9 +18,10 @@
 
 #include "efi.h"
 #include "efilib.h"
-
-#include "targets.h"
+#ifdef HAL_AUTODETECT
 #include "blobstore.h"
+#endif
+#include "targets.h"
 
 #define BOOT_MAGIC "ANDROID!"
 #define BOOT_MAGIC_SIZE 8
@@ -150,6 +151,7 @@ UINTN bootimage_size(struct boot_img_hdr *aosp_header);
 /* Return the blob_size aligned on hdr->page_size.  */
 UINT32 pagealign(struct boot_img_hdr *hdr, UINT32 blob_size);
 
+#ifdef HAL_AUTODETECT
 /* Get a particular blob type out of a boot image's blobstore, stored in
  * the 'second stage' area.
  *
@@ -163,6 +165,11 @@ UINT32 pagealign(struct boot_img_hdr *hdr, UINT32 blob_size);
  * EFI_OUT_OF_RESOURCES - Out of memory */
 EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
                               UINT32 *blobsize);
+#endif
+
+/* Get a pointer and size to the 2ndstage area of a boot image */
+EFI_STATUS get_bootimage_2nd(VOID *bootimage, VOID **second, UINT32 *size);
+
 #endif
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

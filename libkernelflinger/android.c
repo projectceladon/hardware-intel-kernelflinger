@@ -45,6 +45,9 @@
 #include "gpt.h"
 #include "storage.h"
 #include "text_parser.h"
+#ifdef HAL_AUTODETECT
+#include "blobstore.h"
+#endif
 
 struct setup_header {
         UINT8 setup_secs;        /* Sectors for setup code */
@@ -528,18 +531,10 @@ static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
         return cmdline16;
 }
 
-
-EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
-                              UINT32 *blobsize)
+EFI_STATUS get_bootimage_2nd(VOID *bootimage, VOID **second, UINT32 *size)
 {
         struct boot_img_hdr *bh;
         UINT32 offset;
-        UINT8 *second;
-        struct blobstore *bs;
-        char *device_id;
-
-        device_id = get_device_id();
-        debug(L"Lookup blobstore data %a-%d", device_id, btype);
 
         bh = get_bootimage_header(bootimage);
         if (!bh)
@@ -547,13 +542,33 @@ EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
 
         /* Nothing to do? */
         if (bh->second_size == 0)
-                return EFI_UNSUPPORTED;
+                return EFI_NOT_FOUND;
 
         offset = bh->page_size + pagealign(bh, bh->kernel_size) +
                  pagealign(bh, bh->ramdisk_size);
-        second = (UINT8*)bootimage + offset;
+        *second = (UINT8*)bootimage + offset;
+        *size = bh->second_size;
+        return EFI_SUCCESS;
+}
 
-        bs = blobstore_get(second, bh->second_size);
+#ifdef HAL_AUTODETECT
+EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
+                              UINT32 *blobsize)
+{
+        VOID *second;
+        UINT32 second_size;
+        struct blobstore *bs;
+        char *device_id;
+        EFI_STATUS ret;
+
+        device_id = get_device_id();
+        debug(L"Lookup blobstore data %a-%d", device_id, btype);
+
+        ret = get_bootimage_2nd(bootimage, &second, &second_size);
+        if (EFI_ERROR(ret))
+                return EFI_UNSUPPORTED;
+
+        bs = blobstore_get(second, second_size);
         if (!bs)
                 return EFI_UNSUPPORTED;
 
@@ -562,7 +577,6 @@ EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
 
         return EFI_SUCCESS;
 }
-
 
 /* File format is a series of lines, which could be a blank line,
  * #<comment> or <key>=<value>. We don't do sanity checking as the
@@ -598,6 +612,7 @@ static EFI_STATUS add_bootvars(VOID *bootimage, CHAR16 **cmdline16)
         return parse_text_buffer(bootvars, bvsize, parse_bootvars_line,
                                  cmdline16);
 }
+#endif
 
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
@@ -699,11 +714,11 @@ static EFI_STATUS setup_command_line(
                                    get_property_model());
         if (EFI_ERROR(ret))
                 goto out;
-#endif
 
         ret = add_bootvars(bootimage, &cmdline16);
         if (EFI_ERROR(ret))
                 goto out;
+#endif
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */
