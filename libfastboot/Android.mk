@@ -19,6 +19,10 @@ ifeq ($(TARGET_NO_DEVICE_UNLOCK),true)
     SHARED_CFLAGS += -DNO_DEVICE_UNLOCK
 endif
 
+ifeq ($(HAL_AUTODETECT),true)
+    SHARED_CFLAGS += -DHAL_AUTODETECT
+endif
+
 SHARED_SRC_FILES := \
 	fastboot.c \
 	fastboot_oem.c \
