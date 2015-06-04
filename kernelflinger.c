@@ -737,7 +737,7 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
 #define OEMVARS_MAGIC           "#OEMVARS\n"
 #define OEMVARS_MAGIC_SZ        9
 
-static EFI_STATUS set_image_oemvars(VOID *bootimage)
+static EFI_STATUS set_image_oemvars_nocheck(VOID *bootimage)
 {
         VOID *oemvars;
         UINT32 osz;
@@ -767,6 +767,18 @@ static EFI_STATUS set_image_oemvars(VOID *bootimage)
 #endif
 }
 
+static EFI_STATUS set_image_oemvars(VOID *bootimage)
+{
+        if (!get_oemvars_update()) {
+                debug(L"OEM vars should be up-to-date");
+                return EFI_SUCCESS;
+        }
+        debug(L"OEM vars may need to be updated");
+        set_oemvars_update(FALSE);
+
+        return set_image_oemvars_nocheck(bootimage);
+}
+
 static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                              enum boot_target boot_target)
 {
@@ -778,10 +790,6 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                         &boot_state, FALSE, TRUE);
-
-        ret = set_image_oemvars(bootimage);
-        if (EFI_ERROR(ret))
-                efi_perror(ret, L"Couldn't set oem vars");
 
         debug(L"chainloading boot image, boot state is %s",
                         boot_state_to_string(boot_state));
@@ -857,6 +865,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
          * Userfastboot can use it to validate flashed bootloader images */
         set_efi_variable(&fastboot_guid, OEM_KEY_VAR,
                          oem_key_size, oem_key, FALSE, TRUE);
+        set_oemvars_update(TRUE);
 
         if (!bootimage) {
                 ret = android_image_load_file(g_disk_device, FASTBOOT_PATH,
@@ -908,6 +917,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
+        set_oemvars_update(TRUE);
 
         for (;;) {
                 target = UNKNOWN_TARGET;
@@ -921,8 +931,10 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                 if (bootimage) {
                         /* 'fastboot boot' case, only allowed on unlocked devices.
                          * check just to make sure */
-                        if (device_is_unlocked())
+                        if (device_is_unlocked()) {
+                                set_image_oemvars_nocheck(bootimage);
                                 load_image(bootimage, BOOT_STATE_ORANGE, FALSE);
+                        }
                         FreePool(bootimage);
                         bootimage = NULL;
                         continue;
@@ -1228,6 +1240,24 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         pause(5);
                         halt_system();
                 }
+        }
+
+        switch (boot_target) {
+        case RECOVERY:
+        case ESP_BOOTIMAGE:
+                /* We're either about to do an OTA update, or doing a one-shot
+                 * boot into an alternate boot image from 'fastboot boot'.
+                 * Load the OEM vars in this new boot image, but ensure that
+                 * we'll read them again on the next normal boot */
+                set_image_oemvars_nocheck(bootimage);
+                set_oemvars_update(TRUE);
+                break;
+        case NORMAL_BOOT:
+        case CHARGER:
+                set_image_oemvars(bootimage);
+                break;
+        default:
+                break;
         }
 
         return load_image(bootimage, boot_state, boot_target);

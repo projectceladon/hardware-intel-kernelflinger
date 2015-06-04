@@ -46,6 +46,7 @@
 #define CRASH_EVENT_MENU_VAR	L"CrashEventMenu"
 #define WDT_COUNTER_VAR		L"WatchdogCounter"
 #define WDT_TIME_REF_VAR	L"WatchdogTimeReference"
+#define UPDATE_OEMVARS		L"UpdateOemVars"
 
 #define OEM_LOCK_UNLOCKED	(1 << 0)
 #define OEM_LOCK_VERIFIED	(1 << 1)
@@ -78,6 +79,7 @@ static struct state_display {
 
 static CHAR8 current_off_mode_charge[2];
 static CHAR8 current_crash_event_menu[2];
+static CHAR8 current_update_oemvars[2];
 
 CHAR16 *boot_state_to_string(UINT8 boot_state)
 {
@@ -150,6 +152,16 @@ BOOLEAN get_current_crash_event_menu(void)
 EFI_STATUS set_crash_event_menu(BOOLEAN enabled)
 {
 	return set_boolean_var(CRASH_EVENT_MENU_VAR, current_crash_event_menu, enabled);
+}
+
+BOOLEAN get_oemvars_update(void)
+{
+	return get_current_boolean_var(UPDATE_OEMVARS, current_update_oemvars);
+}
+
+EFI_STATUS set_oemvars_update(BOOLEAN enabled)
+{
+	return set_boolean_var(UPDATE_OEMVARS, current_update_oemvars, enabled);
 }
 
 enum device_state get_current_state()
