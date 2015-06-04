@@ -89,6 +89,8 @@ BOOLEAN get_current_off_mode_charge(void);
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled);
 BOOLEAN get_current_crash_event_menu(void);
 EFI_STATUS set_crash_event_menu(BOOLEAN enabled);
+BOOLEAN get_oemvars_update(void);
+EFI_STATUS set_oemvars_update(BOOLEAN updated);
 
 enum device_state {
 	UNKNOWN_STATE = -1,
