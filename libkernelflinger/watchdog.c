@@ -31,10 +31,27 @@
 #include <efi.h>
 #include <efilib.h>
 #include <log.h>
+#include <lib.h>
 #include "watchdog.h"
 #include "protocol/tco_protocol.h"
 
+#define TCO_OPT_DISABLED "iTCO_wdt.force_no_reboot=1"
+
 static EFI_GUID gEfiTcoResetProtocolGuid = EFI_TCO_RESET_PROTOCOL_GUID;
+
+BOOLEAN watchdog_disabled_from_cmdline(CHAR8 *cmdline)
+{
+        while (cmdline != NULL) {
+                if (!strncmp(cmdline, (CHAR8 *)TCO_OPT_DISABLED, strlen((CHAR8 *)TCO_OPT_DISABLED)))
+                        return TRUE;
+                /* get next option */
+                cmdline = strchr(cmdline, ' ');
+                if (cmdline)
+                        cmdline++;
+        }
+
+        return FALSE;
+}
 
 EFI_STATUS start_watchdog(UINT32 seconds)
 {
