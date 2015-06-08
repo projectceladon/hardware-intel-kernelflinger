@@ -35,6 +35,7 @@
 
 #define TCO_DEFAULT_TIMEOUT 60
 #define TCO_MIN_TIMEOUT 4
+#define TCO_OPT_DISABLED "iTCO_wdt.force_no_reboot=1"
 
 EFI_STATUS start_watchdog(UINT32 seconds);
 
