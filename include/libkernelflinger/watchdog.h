@@ -38,5 +38,6 @@
 #define TCO_OPT_DISABLED "iTCO_wdt.force_no_reboot=1"
 
 EFI_STATUS start_watchdog(UINT32 seconds);
+BOOLEAN watchdog_disabled_from_cmdline(CHAR8 *);
 
 #endif  /* _WATCHDOG_H_ */

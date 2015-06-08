@@ -807,9 +807,11 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
                 goto out;
 
 #ifdef USE_WATCHDOG
-        ret = start_watchdog(TCO_DEFAULT_TIMEOUT);
-        if (EFI_ERROR(ret))
-                efi_perror(ret, L"Failed to start watchdog");
+        if (!watchdog_disabled_from_cmdline((CHAR8 *)(UINTN)buf->hdr.cmd_line_ptr)) {
+                ret = start_watchdog(TCO_DEFAULT_TIMEOUT);
+                if (EFI_ERROR(ret))
+                        efi_perror(ret, L"Failed to start watchdog");
+        }
 #endif
 
         /* Free UI resources. */
