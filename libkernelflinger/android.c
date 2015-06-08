@@ -693,6 +693,14 @@ static EFI_STATUS setup_command_line(
         if (EFI_ERROR(ret))
                 goto out;
 
+#ifndef USER
+        if (get_disable_watchdog()) {
+                ret = prepend_command_line(&cmdline16, CONVERT_TO_WIDE(TCO_OPT_DISABLED));
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+#endif
+
         PCI_DEVICE_PATH *boot_device = get_boot_device();
         if (boot_device) {
                 ret = prepend_command_line(&cmdline16,
