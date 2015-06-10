@@ -348,7 +348,7 @@ static void free_commands(void)
 	current_command = 0;
 }
 
-static EFI_STATUS store_command(char *command)
+static EFI_STATUS store_command(char *command, VOID *context _unused)
 {
 	char **new_commands;
 
@@ -409,7 +409,7 @@ static void batch(__attribute__((__unused__)) INTN argc,
 	}
 	FreePool(filename);
 
-	ret = parse_text_buffer(data, size, store_command);
+	ret = parse_text_buffer(data, size, store_command, NULL);
 	FreePool(data);
 	if (EFI_ERROR(ret))
 		inst_perror(ret, "Failed to parse batch file");
@@ -525,7 +525,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	options = strchr(options, ' ');
 	skip_whitespace((char **)&options);
 
-	store_command(*options != '\0' ? (char *)options : (char *)DEFAULT_OPTIONS);
+	store_command(*options != '\0' ? (char *)options : (char *)DEFAULT_OPTIONS,
+		      NULL);
 
 	/* Run the fastboot library. */
 	ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target);

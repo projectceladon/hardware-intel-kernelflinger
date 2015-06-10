@@ -160,6 +160,14 @@ EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to get LUN for device");
 
+	/* First byte is used to identify well known logical units like Boot or RPMB.
+	 * Here we only want normal logical units so first byte must be 0
+	 * Second byte contains the LUN number.
+	 */
+	if ((target_lun & 0xFF) != 0)
+		return EFI_NOT_FOUND;
+	target_lun = (target_lun >> 8) & 0xFF;
+
 	return target_lun == lun ? EFI_SUCCESS : EFI_NOT_FOUND;
 }
 

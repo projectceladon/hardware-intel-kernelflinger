@@ -192,9 +192,7 @@ static int parse_oemvar_attributes(char **linep, uint32_t *attributesp, enum var
 	return 0;
 }
 
-static EFI_GUID curr_guid;
-
-static EFI_STATUS parse_line(char *line)
+static EFI_STATUS parse_line(char *line, VOID *context)
 {
 	EFI_STATUS ret;
 	uint32_t attributes;
@@ -202,18 +200,19 @@ static EFI_STATUS parse_line(char *line)
 	CHAR16 *varname;
 	UINTN vallen;
 	char  *var, *val, *p;
+	EFI_GUID *curr_guid = (EFI_GUID *)context;
 
 	/* Snip comments */
 	if ((p = (char *)strchr((CHAR8 *)line, '#')))
 		*p = 0;
 
 	/* GUID line syntax */
-	if (parse_oemvar_guid_line(line, &curr_guid)) {
-		if (!memcmp(&curr_guid, &fastboot_guid, sizeof(curr_guid))) {
+	if (parse_oemvar_guid_line(line, curr_guid)) {
+		if (!memcmp(curr_guid, &fastboot_guid, sizeof(*curr_guid))) {
 			error(L"fastboot GUID is reserved for Kernelflinger use");
 			return EFI_ACCESS_DENIED;
 		}
-		debug(L"current guid set to %g", &curr_guid);
+		debug(L"current guid set to %g", curr_guid);
 		return EFI_SUCCESS;
 	}
 
@@ -258,7 +257,7 @@ static EFI_STATUS parse_line(char *line)
 	}
 	debug(L"Setting oemvar: %a", var);
 	ret = uefi_call_wrapper(RT->SetVariable, 5, varname,
-				&curr_guid, attributes,
+				curr_guid, attributes,
 				vallen, val);
 	FreePool(varname);
 	if (EFI_ERROR(ret)) {
@@ -308,6 +307,5 @@ static EFI_STATUS parse_line(char *line)
 EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 {
 	debug(L"Parsing and setting values from oemvars file");
-	curr_guid = loader_guid;
-	return parse_text_buffer(data, size, parse_line);
+	return parse_text_buffer(data, size, parse_line, (void *)&loader_guid);
 }

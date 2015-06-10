@@ -2,7 +2,7 @@
  * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Jeremy Compostella <jeremy.compostella@Intel.com>
+ * Author: Andrew Boie <andrew.p.boie@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,61 +30,21 @@
  *
  */
 
-#include <lib.h>
+#ifndef KERNELFLINGER_VERSION_H
+#define KERNELFLINGER_VERSION_H
 
-#include "text_parser.h"
+#define WIDE_STR2(x) L ## x
+#define WIDE_STR(x) WIDE_STR2(x)
 
-void skip_whitespace(char **line)
-{
-	char *cur = *line;
-	while (*cur && isspace(*cur))
-		cur++;
-	*line = cur;
-}
+#if defined(USER)
+#define BUILD_VARIANT           ""
+#elif defined(USERDEBUG)
+#define BUILD_VARIANT           "-userdebug"
+#else
+#define BUILD_VARIANT           "-eng"
+#endif
 
-EFI_STATUS parse_text_buffer(VOID *data, UINTN size,
-			     EFI_STATUS (*parse_line)(char *line, VOID *ctx),
-			     VOID *context)
-{
-	EFI_STATUS ret = EFI_SUCCESS;
-	char *buf, *line, *eol, *p;
-	int lineno = 0;
+#define KERNELFLINGER_VERSION_8	"kernelflinger-02.15" BUILD_VARIANT
+#define KERNELFLINGER_VERSION   WIDE_STR(KERNELFLINGER_VERSION_8)
 
-	/* Extra byte so we can always terminate the last line. */
-	buf = AllocatePool(size + 1);
-	if (!buf) {
-		error(L"Failed to allocate text copy buffer");
-		return EFI_OUT_OF_RESOURCES;
-	}
-	memcpy(buf, data, size);
-	buf[size] = 0;
-
-	for (line = buf; line - buf < (ssize_t)size; line = eol + 1) {
-		lineno++;
-
-		/* Detect line and terminate. */
-		eol = (char *)strchr((CHAR8 *)line, '\n');
-		if (!eol)
-			eol = line + strlen((CHAR8 *)line);
-		*eol = 0;
-
-		/* Snip space character for sanity. */
-		p = line + strlen((CHAR8 *)line);
-		while (p > line && isspace(*(p-1)))
-			*(--p) = 0;
-
-		skip_whitespace(&line);
-		if (*line == '\0')
-			continue;
-
-		ret = parse_line(line, context);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed at line %d", lineno);
-			goto exit;
-		}
-	}
-
-exit:
-	FreePool(buf);
-	return ret;
-}
+#endif

@@ -50,16 +50,9 @@
 #include "unittest.h"
 #include "em.h"
 #include "storage.h"
-
-#if defined(USER)
-#define BUILD_VARIANT           L""
-#elif defined(USERDEBUG)
-#define BUILD_VARIANT           L"-userdebug"
-#else
-#define BUILD_VARIANT           L"-eng"
-#endif
-
-#define KERNELFLINGER_VERSION	L"kernelflinger-02.14" BUILD_VARIANT
+#include "version.h"
+#include "blobstore.h"
+#include "oemvars.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -739,6 +732,24 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
 }
 
 
+static EFI_STATUS set_image_oemvars(VOID *bootimage)
+{
+        VOID *oemvars;
+        UINT32 osz;
+        EFI_STATUS ret;
+
+        ret = get_bootimage_blob(bootimage, BLOB_TYPE_OEMVARS, &oemvars, &osz);
+        if (EFI_ERROR(ret)) {
+                if (ret == EFI_UNSUPPORTED || ret == EFI_NOT_FOUND) {
+                        debug(L"No blobstore in this boot image");
+                        return EFI_SUCCESS;
+                }
+                return ret;
+        }
+
+        return flash_oemvars(oemvars, osz);
+}
+
 static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                              enum boot_target boot_target)
 {
@@ -750,6 +761,10 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                         &boot_state, FALSE, TRUE);
+
+        ret = set_image_oemvars(bootimage);
+        if (EFI_ERROR(ret))
+                efi_perror(ret, L"Couldn't set oem vars");
 
         debug(L"chainloading boot image, boot state is %s",
                         boot_state_to_string(boot_state));
@@ -1070,6 +1085,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
         if (boot_target == POWER_OFF)
                 halt_system();
+
+        if (boot_target == CHARGER)
+                ux_display_empty_battery();
 
 #ifdef USERDEBUG
         debug(L"checking device state");

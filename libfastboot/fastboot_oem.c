@@ -450,7 +450,7 @@ static void cmd_oem_get_logs(__attribute__((__unused__)) INTN argc,
 		return;
 	}
 
-	ret = parse_text_buffer(buf, size, fastboot_info_long_string);
+	ret = parse_text_buffer(buf, size, fastboot_info_long_string, NULL);
 	FreePool(buf);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to parse log buffer, %r", ret);
