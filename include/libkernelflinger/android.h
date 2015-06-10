@@ -20,6 +20,7 @@
 #include "efilib.h"
 
 #include "targets.h"
+#include "blobstore.h"
 
 #define BOOT_MAGIC "ANDROID!"
 #define BOOT_MAGIC_SIZE 8
@@ -149,6 +150,19 @@ UINTN bootimage_size(struct boot_img_hdr *aosp_header);
 /* Return the blob_size aligned on hdr->page_size.  */
 UINT32 pagealign(struct boot_img_hdr *hdr, UINT32 blob_size);
 
+/* Get a particular blob type out of a boot image's blobstore, stored in
+ * the 'second stage' area.
+ *
+ * Return values:
+ * EFI_SUCCESS - Completed successfully. Do not free the blob pointer or
+ * modify its contents
+ * EFI_UNSUPPORTED - This boot image does not contain a blobstore
+ * EFI_INVALID_PARAMETER - Boot image corrupted, or 2ndstage data isn't a
+ * blobstore
+ * EFI_NOT_FOUND - Specified type not found
+ * EFI_OUT_OF_RESOURCES - Out of memory */
+EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
+                              UINT32 *blobsize);
 #endif
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

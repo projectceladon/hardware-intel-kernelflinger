@@ -456,7 +456,7 @@ void fastboot_ack_buffered(const char *code, const char *fmt, va_list ap)
 	fastboot_state = STATE_TX;
 }
 
-EFI_STATUS fastboot_info_long_string(char *str)
+EFI_STATUS fastboot_info_long_string(char *str, VOID *context _unused)
 {
 	char linebuf[INFO_PAYLOAD];
 	const UINTN max_len = sizeof(linebuf) - 1;
@@ -799,11 +799,11 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 		return;
 	}
 
+	fastboot_state = STATE_START_DOWNLOAD;
 	if (usb_write(response, strlen((CHAR8 *)response)) < 0) {
 		fastboot_state = STATE_ERROR;
 		return;
 	}
-	fastboot_state = STATE_START_DOWNLOAD;
 }
 
 static void worker_download(void)

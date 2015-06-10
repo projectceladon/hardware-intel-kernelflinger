@@ -109,6 +109,14 @@ EFI_STATUS reset_watchdog_status(VOID);
 EFI_STATUS set_watchdog_counter(UINT8 counter);
 EFI_STATUS set_watchdog_time_reference(EFI_TIME *time);
 char *get_serial_number(void);
+char *get_property_bootloader(void);
+#ifdef HAL_AUTODETECT
+char *get_property_device(void);
+char *get_property_brand(void);
+char *get_property_name(void);
+char *get_property_model(void);
+#endif
+char *get_device_id(void);
 CHAR16 *boot_state_to_string(UINT8 boot_state);
 #ifndef USER
 EFI_STATUS reprovision_state_vars(VOID);

@@ -44,6 +44,7 @@
 #include "targets.h"
 #include "gpt.h"
 #include "storage.h"
+#include "text_parser.h"
 
 struct setup_header {
         UINT8 setup_secs;        /* Sectors for setup code */
@@ -345,6 +346,7 @@ static CHAR16 *get_wake_reason(void)
                 reason = StrDuplicate(L"battery_reached_ia_threshold");
                 break;
         default:
+                debug(L"wake_source = 0x%02x", wake_source);
                 reason = NULL;
         }
 
@@ -378,6 +380,7 @@ static CHAR16 *get_reset_reason(void)
                 reason = StrDuplicate(L"security_initiated");
                 break;
         default:
+                debug(L"reset_source = 0x%02x", reset_source);
                 reason = NULL;
         }
 
@@ -400,6 +403,7 @@ static CHAR16 *get_boot_reason(void)
         bootreason = get_efi_variable_str(&loader_guid,
                                           L"LoaderEntryRebootReason");
         if (!bootreason) {
+                debug(L"Error while trying to get LoaderEntryRebootReason variable");
                 bootreason = StrDuplicate(L"unknown");
                 goto done;
         }
@@ -410,6 +414,7 @@ static CHAR16 *get_boot_reason(void)
                 if (!((*pos >= L'0' && *pos <= L'9') ||
                             (*pos >= L'a' && *pos <= L'z') ||
                             *pos == L'_')) {
+                        debug(L"Error, LoaderEntryRebootReason contains non-alphanumeric characters");
                         FreePool(bootreason);
                         bootreason = StrDuplicate(L"unknown");
                         break;
@@ -524,6 +529,76 @@ static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
 }
 
 
+EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
+                              UINT32 *blobsize)
+{
+        struct boot_img_hdr *bh;
+        UINT32 offset;
+        UINT8 *second;
+        struct blobstore *bs;
+        char *device_id;
+
+        device_id = get_device_id();
+        debug(L"Lookup blobstore data %a-%d", device_id, btype);
+
+        bh = get_bootimage_header(bootimage);
+        if (!bh)
+                return EFI_INVALID_PARAMETER;
+
+        /* Nothing to do? */
+        if (bh->second_size == 0)
+                return EFI_UNSUPPORTED;
+
+        offset = bh->page_size + pagealign(bh, bh->kernel_size) +
+                 pagealign(bh, bh->ramdisk_size);
+        second = (UINT8*)bootimage + offset;
+
+        bs = blobstore_get(second, bh->second_size);
+        if (!bs)
+                return EFI_UNSUPPORTED;
+
+        if (blobstore_get_item(bs, device_id, btype, blob, blobsize))
+                return EFI_NOT_FOUND;
+
+        return EFI_SUCCESS;
+}
+
+
+/* File format is a series of lines, which could be a blank line,
+ * #<comment> or <key>=<value>. We don't do sanity checking as the
+ * blobstore is covered by the verified boot signature and is hence
+ * trusted */
+static EFI_STATUS parse_bootvars_line(char *line, VOID *ctx)
+{
+        CHAR16 **cmdline16 = (CHAR16 **)ctx;
+
+        if (strlen((CHAR8 *)line) == 0 || line[0] == '#')
+                return EFI_SUCCESS;
+
+        return prepend_command_line(cmdline16, L"%a", line);
+}
+
+static EFI_STATUS add_bootvars(VOID *bootimage, CHAR16 **cmdline16)
+{
+        VOID *bootvars;
+        UINT32 bvsize;
+        EFI_STATUS ret;
+
+        ret = get_bootimage_blob(bootimage, BLOB_TYPE_BOOTVARS, &bootvars,
+                                 &bvsize);
+        if (EFI_ERROR(ret)) {
+                if (ret == EFI_UNSUPPORTED || ret == EFI_NOT_FOUND) {
+                        debug(L"Not setting bootvars: %r", ret);
+                        return EFI_SUCCESS;
+                }
+                efi_perror(ret, L"Couldn't get bootvars");
+                return ret;
+        }
+
+        return parse_text_buffer(bootvars, bvsize, parse_bootvars_line,
+                                 cmdline16);
+}
+
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
@@ -601,14 +676,34 @@ static EFI_STATUS setup_command_line(
                 goto out;
 
         PCI_DEVICE_PATH *boot_device = get_boot_device();
-        if (boot_device)
+        if (boot_device) {
                 ret = prepend_command_line(&cmdline16,
                                            L"androidboot.diskbus=%02x.%x",
                                            boot_device->Device,
                                            boot_device->Function);
-        else
+                if (EFI_ERROR(ret))
+                        goto out;
+        } else
                 error(L"Boot device not found, diskbus parameter not set in the commandline!");
 
+        ret = prepend_command_line(&cmdline16, L"androidboot.bootloader=%a",
+                                   get_property_bootloader());
+        if (EFI_ERROR(ret))
+                goto out;
+
+#ifdef HAL_AUTODETECT
+        ret = prepend_command_line(&cmdline16, L"androidboot.brand=%a "
+                                   "androidboot.name=%a androidboot.device=%a "
+                                   "androidboot.model=%a", get_property_brand(),
+                                   get_property_name(), get_property_device(),
+                                   get_property_model());
+        if (EFI_ERROR(ret))
+                goto out;
+#endif
+
+        ret = add_bootvars(bootimage, &cmdline16);
+        if (EFI_ERROR(ret))
+                goto out;
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */

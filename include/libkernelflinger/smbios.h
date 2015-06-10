@@ -33,6 +33,11 @@
 #ifndef _SMBIOS_H_
 #define _SMBIOS_H_
 
+#define TYPE_BIOS	0
+#define TYPE_PRODUCT	1
+#define TYPE_BOARD	2
+#define TYPE_CHASSIS	3
+
 extern char *SMBIOS_UNDEFINED;
 
 char *smbios_get_string(UINT8 type, UINT8 offset);

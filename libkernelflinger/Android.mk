@@ -67,6 +67,10 @@ ifneq ($(KERNELFLINGER_IGNORE_RSCI),true)
     LOCAL_CFLAGS += -DUSE_RSCI
 endif
 
+ifeq ($(HAL_AUTODETECT),true)
+    LOCAL_CFLAGS += -DHAL_AUTODETECT
+endif
+
 LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \
@@ -85,8 +89,6 @@ LOCAL_SRC_FILES := \
 	ui_confirm.c \
 	log.c \
 	blobstore.c \
-	arraylist.c \
-	dict.c \
 	em.c \
 	gpt.c \
 	storage.c \

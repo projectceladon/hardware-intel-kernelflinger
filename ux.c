@@ -119,6 +119,7 @@ static const ui_textline_t crash_event_message[] = {
 
 static const char *VENDOR_IMG_NAME = "splash_intel";
 static const char *LOW_BATTERY_IMG_NAME = "low_battery";
+static const char *EMPTY_BATTERY_IMG_NAME = "empty_battery";
 
 static UINTN swidth;
 static UINTN sheight;
@@ -410,7 +411,7 @@ error:
 }
 
 
-VOID ux_display_low_battery(UINTN delay) {
+VOID ux_display_img_battery(const char *battery_img_name, UINTN delay) {
 	ui_image_t *battery;
 	EFI_STATUS ret;
 
@@ -420,10 +421,10 @@ VOID ux_display_low_battery(UINTN delay) {
 
 	ui_clear_screen();
 
-	battery = ui_image_get(LOW_BATTERY_IMG_NAME);
+	battery = ui_image_get(battery_img_name);
 	if (!battery) {
 		efi_perror(EFI_NOT_FOUND, L"Failed to get '%a' image",
-			   LOW_BATTERY_IMG_NAME);
+			   battery_img_name);
 		return;
 	}
 
@@ -433,6 +434,14 @@ VOID ux_display_low_battery(UINTN delay) {
 		return;
 
 	pause(delay);
+}
+
+VOID ux_display_low_battery(UINTN delay) {
+	ux_display_img_battery(LOW_BATTERY_IMG_NAME, delay);
+}
+
+VOID ux_display_empty_battery(VOID) {
+	ux_display_img_battery(EMPTY_BATTERY_IMG_NAME, 0);
 }
 
 VOID ux_init(VOID) {
