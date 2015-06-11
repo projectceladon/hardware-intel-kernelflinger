@@ -370,11 +370,6 @@ EFI_STATUS set_watchdog_time_reference(EFI_TIME *time)
 				sizeof(*time), time, TRUE, FALSE);
 }
 
-VOID clear_provisioning_mode(void)
-{
-	provisioning_mode = FALSE;
-}
-
 static void CDD_clean_string(char *buf)
 {
 	char *c;

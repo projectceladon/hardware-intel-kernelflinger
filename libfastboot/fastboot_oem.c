@@ -117,7 +117,6 @@ static void change_device_state(enum device_state new_state)
 	}
 
 	fastboot_ui_refresh();
-	clear_provisioning_mode();
 	ret = fastboot_oem_publish();
 	if (EFI_ERROR(ret))
 		fastboot_fail("Failed to publish OEM variables");

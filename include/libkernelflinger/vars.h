@@ -103,7 +103,6 @@ enum device_state get_current_state();
 EFI_STATUS set_user_keystore(VOID *keystore, UINTN size);
 EFI_STATUS get_user_keystore(VOID **keystorep, UINTN *sizep);
 BOOLEAN device_is_provisioning(void);
-VOID clear_provisioning_mode(void);
 EFI_STATUS get_watchdog_status(UINT8 *counter, EFI_TIME *time);
 EFI_STATUS reset_watchdog_status(VOID);
 EFI_STATUS set_watchdog_counter(UINT8 counter);
