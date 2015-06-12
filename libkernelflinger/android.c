@@ -668,7 +668,7 @@ static EFI_STATUS setup_command_line(
         if (EFI_ERROR(ret))
                 goto out;
 
-        ret = prepend_command_line(&cmdline16, L"androidboot.state=%s",
+        ret = prepend_command_line(&cmdline16, L"androidboot.verifiedbootstate=%s",
                                    boot_state_to_string(boot_state));
         if (EFI_ERROR(ret))
                 goto out;
