@@ -67,10 +67,6 @@ ifneq ($(KERNELFLINGER_IGNORE_RSCI),true)
     LOCAL_CFLAGS += -DUSE_RSCI
 endif
 
-ifeq ($(HAL_AUTODETECT),true)
-    LOCAL_CFLAGS += -DHAL_AUTODETECT
-endif
-
 LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \
@@ -88,7 +84,6 @@ LOCAL_SRC_FILES := \
 	ui_boot_menu.c \
 	ui_confirm.c \
 	log.c \
-	blobstore.c \
 	em.c \
 	gpt.c \
 	storage.c \
@@ -99,6 +94,11 @@ LOCAL_SRC_FILES := \
 	smbios.c \
 	oemvars.c \
 	text_parser.c
+
+ifeq ($(HAL_AUTODETECT),true)
+    LOCAL_CFLAGS += -DHAL_AUTODETECT
+    LOCAL_SRC_FILES += blobstore.c
+endif
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(res_intermediates)

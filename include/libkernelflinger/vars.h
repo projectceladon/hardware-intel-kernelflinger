@@ -89,6 +89,8 @@ BOOLEAN get_current_off_mode_charge(void);
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled);
 BOOLEAN get_current_crash_event_menu(void);
 EFI_STATUS set_crash_event_menu(BOOLEAN enabled);
+BOOLEAN get_oemvars_update(void);
+EFI_STATUS set_oemvars_update(BOOLEAN updated);
 
 enum device_state {
 	UNKNOWN_STATE = -1,
@@ -103,7 +105,6 @@ enum device_state get_current_state();
 EFI_STATUS set_user_keystore(VOID *keystore, UINTN size);
 EFI_STATUS get_user_keystore(VOID **keystorep, UINTN *sizep);
 BOOLEAN device_is_provisioning(void);
-VOID clear_provisioning_mode(void);
 EFI_STATUS get_watchdog_status(UINT8 *counter, EFI_TIME *time);
 EFI_STATUS reset_watchdog_status(VOID);
 EFI_STATUS set_watchdog_counter(UINT8 counter);
