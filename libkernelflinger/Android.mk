@@ -90,7 +90,8 @@ LOCAL_SRC_FILES := \
 	oemvars.c \
 	text_parser.c \
 	watchdog.c \
-	slot.c
+	slot.c \
+	life_cycle.c
 
 ifeq ($(HAL_AUTODETECT),true)
     LOCAL_SRC_FILES += blobstore.c

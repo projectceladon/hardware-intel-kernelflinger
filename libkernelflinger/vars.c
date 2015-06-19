@@ -39,6 +39,7 @@
 #include "lib.h"
 #include "smbios.h"
 #include "version.h"
+#include "life_cycle.h"
 
 #define OFF_MODE_CHARGE		L"off-mode-charge"
 #define OEM_LOCK		L"OEMLock"
@@ -240,21 +241,46 @@ EFI_STATUS set_slot_fallback(BOOLEAN enabled)
 #endif
 }
 
+static void set_provisioning_mode(BOOLEAN provisioning)
+{
+	provisioning_mode = provisioning;
+	current_state = provisioning ? UNLOCKED : LOCKED;
+}
+
 enum device_state get_current_state()
 {
 	UINT8 *stored_state;
 	UINTN dsize;
 	EFI_STATUS ret;
 	UINT32 flags;
+	BOOLEAN enduser;
 
 	if (current_state == UNKNOWN_STATE) {
 		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK,
 				       &dsize, (void **)&stored_state, &flags);
-		/* If the variable does not exist, assume unlocked. */
 		if (ret == EFI_NOT_FOUND) {
-			provisioning_mode = TRUE;
-			current_state = UNLOCKED;
-			debug(L"OEMLock not set, device is in provisioning mode");
+			set_provisioning_mode(FALSE);
+
+			ret = life_cycle_is_enduser(&enduser);
+			if (EFI_ERROR(ret)) {
+				if (ret == EFI_UNSUPPORTED) {
+					debug(L"OEMLock not set, device is in provisioning mode");
+					set_provisioning_mode(TRUE);
+				}
+				goto exit;
+			}
+
+			if (!enduser) {
+				debug(L"Life Cycle state is not ENDUSER, allowing provisioning mode");
+				set_provisioning_mode(TRUE);
+				goto exit;
+			}
+
+#ifndef USER
+			debug(L"Life Cycle state is ENDUSER");
+			debug(L"Not a USER build, enforcing provisionning mode");
+			set_provisioning_mode(TRUE);
+#endif
 			goto exit;
 		}
 
