@@ -97,13 +97,13 @@ CHAR16 *boot_state_to_string(UINT8 boot_state)
 	}
 }
 
-BOOLEAN get_current_boolean_var(CHAR16 *varname, CHAR8 cache[2])
+BOOLEAN get_current_boolean_var(const EFI_GUID *guid, CHAR16 *varname, CHAR8 cache[2])
 {
 	UINTN size;
 	CHAR8 *data;
 
 	if (cache[0] == '\0') {
-		if (EFI_ERROR(get_efi_variable(&fastboot_guid, varname,
+		if (EFI_ERROR(get_efi_variable(guid, varname,
 					       &size, (VOID **)&data, NULL)))
 			return TRUE;
 
@@ -120,10 +120,10 @@ BOOLEAN get_current_boolean_var(CHAR16 *varname, CHAR8 cache[2])
 	return !strcmp(cache, (CHAR8 *)"1");
 }
 
-EFI_STATUS set_boolean_var(CHAR16 *varname, CHAR8 cache[2], BOOLEAN enabled)
+EFI_STATUS set_boolean_var(const EFI_GUID *guid, CHAR16 *varname, CHAR8 cache[2], BOOLEAN enabled)
 {
 	CHAR8 *val = (CHAR8 *)(enabled ? "1" : "0");
-	EFI_STATUS ret = set_efi_variable(&fastboot_guid, varname,
+	EFI_STATUS ret = set_efi_variable(guid, varname,
 					  2, val, TRUE, FALSE);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to set %s variable", varname);
@@ -136,32 +136,32 @@ EFI_STATUS set_boolean_var(CHAR16 *varname, CHAR8 cache[2], BOOLEAN enabled)
 
 BOOLEAN get_current_off_mode_charge(void)
 {
-	return get_current_boolean_var(OFF_MODE_CHARGE_VAR, current_off_mode_charge);
+	return get_current_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR, current_off_mode_charge);
 }
 
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
 {
-	return set_boolean_var(OFF_MODE_CHARGE_VAR, current_off_mode_charge, enabled);
+	return set_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR, current_off_mode_charge, enabled);
 }
 
 BOOLEAN get_current_crash_event_menu(void)
 {
-	return get_current_boolean_var(CRASH_EVENT_MENU_VAR, current_crash_event_menu);
+	return get_current_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR, current_crash_event_menu);
 }
 
 EFI_STATUS set_crash_event_menu(BOOLEAN enabled)
 {
-	return set_boolean_var(CRASH_EVENT_MENU_VAR, current_crash_event_menu, enabled);
+	return set_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR, current_crash_event_menu, enabled);
 }
 
 BOOLEAN get_oemvars_update(void)
 {
-	return get_current_boolean_var(UPDATE_OEMVARS, current_update_oemvars);
+	return get_current_boolean_var(&fastboot_guid, UPDATE_OEMVARS, current_update_oemvars);
 }
 
 EFI_STATUS set_oemvars_update(BOOLEAN enabled)
 {
-	return set_boolean_var(UPDATE_OEMVARS, current_update_oemvars, enabled);
+	return set_boolean_var(&fastboot_guid, UPDATE_OEMVARS, current_update_oemvars, enabled);
 }
 
 enum device_state get_current_state()
