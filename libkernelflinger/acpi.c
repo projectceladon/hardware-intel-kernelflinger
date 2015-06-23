@@ -35,6 +35,7 @@
 #include "efilinux.h"
 #include "lib.h"
 
+static struct FACP_TABLE *FACP_table = NULL;
 #ifdef USE_RSCI
 static struct RSCI_TABLE *RSCI_table = NULL;
 #endif
@@ -45,6 +46,10 @@ static struct OEM1_TABLE *OEM1_table = NULL;
 
 #ifndef ALLOW_UNSUPPORTED_ACPI_TABLE
 static const struct ACPI_DESC_HEADER SUPPORTED_TABLES[] = {
+	{ .signature = "FACP",
+	  .oem_id = "INTEL ",
+	  .oem_table_id = "EDK2    ",
+	  .revision = 5 },
 	{ .signature = "RSCI",
 	  .oem_id = "INTEL ",
 	  .oem_table_id = "BOOTSRC ",
@@ -74,17 +79,51 @@ static const struct ACPI_DESC_HEADER SUPPORTED_TABLES[] = {
 			(VOID **)&table##_table,		\
 			offsetof(struct table##_TABLE, field), sizeof(table##_table->field))
 
+static EFI_STATUS acpi_table_is_supported(struct ACPI_DESC_HEADER *t)
+{
+#ifdef ALLOW_UNSUPPORTED_ACPI_TABLE
+	(void)t; /* eliminate compiler warning */
+	debug(L"WARNING: skipping validation check on ACPI table %c%c%c%c",
+	      t->signature[0], t->signature[1], t->signature[2], t->signature[3]);
+	return EFI_SUCCESS;
+#else
+	const struct ACPI_DESC_HEADER *id = NULL;
+	UINTN i;
+
+	for (i = 0; i < ARRAY_SIZE(SUPPORTED_TABLES); i++)
+		if (!memcmp(SUPPORTED_TABLES[i].signature, t->signature, sizeof(t->signature))) {
+			id = &SUPPORTED_TABLES[i];
+			break;
+		}
+
+	if (id && !memcmp(id->oem_id, t->oem_id, sizeof(t->oem_id))
+	    && !memcmp(id->oem_table_id, t->oem_table_id, sizeof(t->oem_table_id))
+	    && id->revision == t->revision)
+		return EFI_SUCCESS;
+
+	return EFI_UNSUPPORTED;
+#endif
+}
+
 static UINT64 _get_acpi_field(CHAR8 *name, CHAR8 *fieldname _unused, VOID **var, UINTN offset, UINTN size)
 {
+	EFI_STATUS ret_supported;
+
 	if (size > sizeof(UINT64)) {
 		return -1;
 	}
 
 	if (!*var) {
-		EFI_STATUS ret = get_acpi_table((CHAR8 *)name, (VOID **)var);
+		EFI_STATUS ret = get_acpi_table((CHAR8 *)name, var);
 		if (EFI_ERROR(ret)) {
 			return -1;
 		}
+	}
+
+	ret_supported = acpi_table_is_supported((struct ACPI_DESC_HEADER *)*var);
+	if (EFI_ERROR(ret_supported)) {
+		error(L"Failed to match a supported ACPI table entry");
+		return -1;
 	}
 
 	UINT64 ret = 0;
@@ -117,32 +156,6 @@ out:
 	return ret;
 }
 
-static EFI_STATUS acpi_table_is_supported(struct ACPI_DESC_HEADER *t)
-{
-#ifdef ALLOW_UNSUPPORTED_ACPI_TABLE
-	(void)t; /* eliminate compiler warning */
-	debug(L"WARNING: skipping validation check on ACPI table %c%c%c%c",
-	      t->signature[0], t->signature[1], t->signature[2], t->signature[3]);
-	return EFI_SUCCESS;
-#else
-	const struct ACPI_DESC_HEADER *id = NULL;
-	UINTN i;
-
-	for (i = 0; i < ARRAY_SIZE(SUPPORTED_TABLES); i++)
-		if (!memcmp(SUPPORTED_TABLES[i].signature, t->signature, sizeof(t->signature))) {
-			id = &SUPPORTED_TABLES[i];
-			break;
-		}
-
-	if (id && !memcmp(id->oem_id, t->oem_id, sizeof(t->oem_id))
-	    && !memcmp(id->oem_table_id, t->oem_table_id, sizeof(t->oem_table_id))
-	    && id->revision == t->revision)
-		return EFI_SUCCESS;
-
-	return EFI_UNSUPPORTED;
-#endif
-}
-
 static UINTN acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
 {
 	UINT32 i;
@@ -161,9 +174,31 @@ EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table)
 	int nb_acpi_tables;
 	int i;
 
+	if (!strcmp((CHAR8 *)"DSDT", signature)) {
+		UINT32 dsdt = get_acpi_field(FACP, DSDT);
+		if (dsdt == (UINT32)-1)
+			return EFI_NOT_FOUND;
+		*table = (VOID *)(UINTN)dsdt;
+		ret = acpi_verify_checksum((struct ACPI_DESC_HEADER *)*table);
+		if (EFI_ERROR(ret))
+			error(L"Invalid checksum for DSDT table");
+		return ret;
+	}
+
 	ret = get_rsdt_table(&rsdt);
 	if (EFI_ERROR(ret))
 		goto out;
+
+	ret = acpi_verify_checksum((struct ACPI_DESC_HEADER *)rsdt);
+	if (EFI_ERROR(ret)) {
+		error(L"Invalid checksum for RSDT table");
+		goto out;
+	}
+
+	if (!strcmp((CHAR8 *)"RSDT", signature)) {
+		*table = rsdt;
+		goto out;
+	}
 
 	nb_acpi_tables = (rsdt->header.length - sizeof(rsdt->header)) / sizeof(rsdt->entry[1]);
 	ret = EFI_NOT_FOUND;
@@ -175,12 +210,6 @@ EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table)
 			if (EFI_ERROR(ret)) {
 				error(L"Invalid checksum for %c%c%c%c table", signature[0],
 				      signature[1], signature[2], signature[3]);
-				break;
-			}
-
-			ret = acpi_table_is_supported(header);
-			if (EFI_ERROR(ret)) {
-				error(L"Failed to match a supported ACPI table entry");
 				break;
 			}
 
