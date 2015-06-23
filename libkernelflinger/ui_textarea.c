@@ -195,11 +195,9 @@ EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
 	if (EFI_ERROR(ret))
 		return ret;
 
-	ui_textarea_draw_scale(&textarea, x, y, width, height);
-
+	ret = ui_textarea_draw_scale(&textarea, x, y, width, height);
 	FreePool(textarea.blt);
-
-	return EFI_SUCCESS;
+	return ret;
 }
 
 void ui_textarea_free(ui_textarea_t *textarea)
