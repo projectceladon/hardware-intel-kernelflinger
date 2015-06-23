@@ -35,7 +35,7 @@
 #include <efi.h>
 #include <efilib.h>
 #include <lib.h>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 
 #include "fastboot.h"
 #include "uefi_utils.h"
@@ -44,23 +44,63 @@
 #include "keystore.h"
 #include "security.h"
 
+static struct algorithm {
+	const CHAR8 *name;
+	const EVP_MD *(*get_md)(void);
+} const ALGORITHMS[] = {
+	{ (CHAR8*)"sha1", EVP_sha1 }, /* default algorithm */
+	{ (CHAR8*)"md5", EVP_md5 }
+};
+
+static const EVP_MD *selected_md;
+static unsigned int hash_len;
+
+EFI_STATUS set_hash_algorithm(const CHAR8 *algo)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	unsigned int i;
+
+	/* Use default algorithm */
+	if (!algo) {
+		selected_md = ALGORITHMS[0].get_md();
+		goto out;
+	}
+
+	selected_md = NULL;
+	for (i = 0; i < ARRAY_SIZE(ALGORITHMS); i++)
+		if (!strcmp(algo, ALGORITHMS[i].name))
+			selected_md = ALGORITHMS[i].get_md();
+
+	if (!selected_md)
+		return EFI_UNSUPPORTED;
+
+out:
+	hash_len = EVP_MD_size(selected_md);
+	return ret;
+}
+
 static void hash_buffer(CHAR8 *buffer, UINT64 len, CHAR8 *hash)
 {
-	SHA_CTX sha_ctx;
+	EVP_MD_CTX mdctx;
 
-	SHA1_Init(&sha_ctx);
-	SHA1_Update(&sha_ctx, buffer, len);
-	SHA1_Final(hash, &sha_ctx);
+	if (!selected_md)
+		set_hash_algorithm(NULL);
+
+	EVP_MD_CTX_init(&mdctx);
+	EVP_DigestInit_ex(&mdctx, selected_md, NULL);
+	EVP_DigestUpdate(&mdctx, buffer, len);
+	EVP_DigestFinal_ex(&mdctx, hash, NULL);
+	EVP_MD_CTX_cleanup(&mdctx);
 }
 
 static void report_hash(const CHAR16 *base, const CHAR16 *name, CHAR8 *hash)
 {
-	CHAR8 hashstr[SHA_DIGEST_LENGTH * 2 + 1];
+	CHAR8 hashstr[EVP_MAX_MD_SIZE * 2 + 1];
 	CHAR8 *pos;
 	CHAR8 hex;
-	int i;
+	unsigned int i;
 
-	for (i = 0, pos = hashstr; i < SHA_DIGEST_LENGTH * 2; i++) {
+	for (i = 0, pos = hashstr; i < hash_len * 2; i++) {
 		hex = ((i & 1) ? hash[i / 2] & 0xf : hash[i / 2] >> 4);
 		*pos++ = (hex > 9 ? (hex + 'a' - 10) : (hex + '0'));
 	}
@@ -114,7 +154,7 @@ EFI_STATUS get_boot_image_hash(CHAR16 *label)
 	CHAR8 *data;
 	UINT64 len;
 	UINT64 offset;
-	CHAR8 hash[SHA_DIGEST_LENGTH];
+	CHAR8 hash[EVP_MAX_MD_SIZE];
 	EFI_STATUS ret;
 
 	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
@@ -162,7 +202,7 @@ static void hash_file(EFI_FILE *dir, EFI_FILE_INFO *fi)
 {
 	EFI_FILE *file;
 	void *data;
-	CHAR8 hash[SHA_DIGEST_LENGTH];
+	CHAR8 hash[EVP_MAX_MD_SIZE];
 	EFI_STATUS ret;
 	UINTN size;
 
@@ -385,28 +425,33 @@ static EFI_STATUS read_partition(struct gpt_partition_interface *gparti, UINT64 
 #define MIN(a, b) ((a < b) ? (a) : (b))
 static EFI_STATUS hash_partition(struct gpt_partition_interface *gparti, UINT64 len, CHAR8 *hash)
 {
-	SHA_CTX sha_ctx;
+	EVP_MD_CTX mdctx;
 	CHAR8 *buffer;
 	UINT64 offset;
 	UINT64 chunklen;
 	EFI_STATUS ret;
 
-	SHA1_Init(&sha_ctx);
-
 	buffer = AllocatePool(CHUNK);
 	if (!buffer)
 		return EFI_OUT_OF_RESOURCES;
+
+	if (!selected_md)
+		set_hash_algorithm(NULL);
+
+	EVP_MD_CTX_init(&mdctx);
+	EVP_DigestInit_ex(&mdctx, selected_md, NULL);
 
 	for (offset = 0; offset < len; offset += CHUNK) {
 		chunklen = MIN(len - offset, CHUNK);
 		ret = read_partition(gparti, offset, chunklen, buffer);
 		if (EFI_ERROR(ret))
 			goto free;
-		SHA1_Update(&sha_ctx, buffer, chunklen);
+		EVP_DigestUpdate(&mdctx, buffer, chunklen);
 	}
-	SHA1_Final(hash, &sha_ctx);
+	EVP_DigestFinal_ex(&mdctx, hash, NULL);
 
 free:
+	EVP_MD_CTX_cleanup(&mdctx);
 	FreePool(buffer);
 	return ret;
 }
@@ -460,7 +505,7 @@ static EFI_STATUS check_verity_header(struct gpt_partition_interface *gparti, UI
 EFI_STATUS get_ext4_hash(CHAR16 *label)
 {
 	struct gpt_partition_interface gparti;
-	CHAR8 hash[SHA_DIGEST_LENGTH];
+	CHAR8 hash[EVP_MAX_MD_SIZE];
 	EFI_STATUS ret;
 	UINT64 ext4_len;
 
