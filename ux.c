@@ -373,6 +373,7 @@ enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID) {
 		goto error;
 
 	area_y += hmargin;
+	linesarea = sheight - area_y - hmargin;
 
 	ret = ui_display_texts(texts, area_x, area_y, linesarea, colsarea);
 	if (EFI_ERROR(ret))
