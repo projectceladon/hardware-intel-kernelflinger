@@ -42,10 +42,8 @@ enum vartype {
 
 static BOOLEAN parse_oemvar_guid_line(char *line, EFI_GUID *g)
 {
+	EFI_STATUS ret;
 	const CHAR8 *prefix = (CHAR8 *) "GUID";
-	char value[3] = { '\0', '\0', '\0' };
-	char *end;
-	UINTN i;
 
 	skip_whitespace(&line);
 
@@ -58,40 +56,9 @@ static BOOLEAN parse_oemvar_guid_line(char *line, EFI_GUID *g)
 		return FALSE;
 	skip_whitespace(&line);
 
-	g->Data1 = strtoul(line, &end, 16);
-	if (end - line != 8 || *end != '-')
+	ret = stra_to_guid(line, g);
+	if (EFI_ERROR(ret))
 		return FALSE;
-
-	line = end + 1;
-	g->Data2 = strtoul(line, &end, 16);
-	if (end - line != 4 || *end != '-')
-		return FALSE;
-
-	line = end + 1;
-	g->Data3 = strtoul(line, &end, 16);
-	if (end - line != 4 || *end != '-')
-		return FALSE;
-
-	line = end + 1;
-	for (i = 0 ; i < 2; i++, line += 2) {
-		value[0] = line[0];
-		value[1] = line[1];
-		g->Data4[i] = strtoul(value, &end, 16);
-		if (end != value + 2)
-			return FALSE;
-	}
-
-	if (*line != '-')
-		return FALSE;
-
-	line++;
-	for (i = 0 ; i < 6; i++, line += 2) {
-		value[0] = line[0];
-		value[1] = line[1];
-		g->Data4[i + 2] = strtoul(value, &end, 16);
-		if (end != value + 2)
-			return FALSE;
-	}
 
 	return TRUE;
 }
