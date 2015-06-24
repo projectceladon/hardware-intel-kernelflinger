@@ -1,28 +1,13 @@
 LOCAL_PATH := $(call my-dir)
 
 SHARED_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/../include/libfastboot
-SHARED_CFLAGS := -DKERNELFLINGER -Wall -Wextra -Werror \
+SHARED_CFLAGS := \
+	$(KERNELFLINGER_CFLAGS) \
 	-DTARGET_BOOTLOADER_BOARD_NAME=\"$(TARGET_BOOTLOADER_BOARD_NAME)\"
-SHARED_STATIC_LIBRARIES := libefi libgnuefi libopenssl-efi libcryptlib \
-	libkernelflinger-$(TARGET_BUILD_VARIANT)
 SHARED_C_INCLUDES := $(LOCAL_PATH)/../include/libfastboot
-
-ifeq ($(TARGET_BUILD_VARIANT),user)
-    SHARED_CFLAGS += -DUSER -DUSERDEBUG
-endif
-
-ifeq ($(TARGET_BUILD_VARIANT),userdebug)
-    SHARED_CFLAGS += -DUSERDEBUG
-endif
-
-ifeq ($(TARGET_NO_DEVICE_UNLOCK),true)
-    SHARED_CFLAGS += -DNO_DEVICE_UNLOCK
-endif
-
-ifeq ($(HAL_AUTODETECT),true)
-    SHARED_CFLAGS += -DHAL_AUTODETECT
-endif
-
+SHARED_STATIC_LIBRARIES := \
+	$(KERNELFLINGER_STATIC_LIBRARIES) \
+	libkernelflinger-$(TARGET_BUILD_VARIANT)
 SHARED_SRC_FILES := \
 	fastboot.c \
 	fastboot_oem.c \
