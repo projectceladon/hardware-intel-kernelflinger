@@ -93,7 +93,8 @@ LOCAL_SRC_FILES := \
 	targets.c \
 	smbios.c \
 	oemvars.c \
-	text_parser.c
+	text_parser.c \
+	watchdog.c
 
 ifeq ($(HAL_AUTODETECT),true)
     LOCAL_CFLAGS += -DHAL_AUTODETECT

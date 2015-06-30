@@ -238,17 +238,6 @@ static EFI_STATUS clear_text() {
 			     swidth, sheight - (sheight / 3) - hmargin);
 }
 
-static BOOLEAN ux_display_splash() {
-	UINT8 value;
-	EFI_STATUS ret;
-
-	ret = get_efi_variable_byte(&loader_guid, L"UIDisplaySplash", &value);
-	if (EFI_ERROR(ret) || value != 1)
-		return FALSE;
-
-	return TRUE;
-}
-
 static VOID ux_prompt_user(UINT32 code,
 			   EFI_GRAPHICS_OUTPUT_BLT_PIXEL *ecolor,
 			   const ui_textline_t *text1,
@@ -450,7 +439,7 @@ VOID ux_init(VOID) {
 			  EFI_WHITE | EFI_BACKGROUND_BLACK);
 	uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, FALSE);
 
-	if (ux_display_splash()) {
+	if (get_display_splash()) {
 		if (EFI_ERROR(ux_init_screen()))
 			return;
 		ui_display_vendor_splash();

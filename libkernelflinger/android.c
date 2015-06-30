@@ -45,6 +45,7 @@
 #include "gpt.h"
 #include "storage.h"
 #include "text_parser.h"
+#include "watchdog.h"
 #ifdef HAL_AUTODETECT
 #include "blobstore.h"
 #endif
@@ -794,6 +795,10 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
                              EFI_SIZE_TO_PAGES(16384), &boot_addr);
         if (EFI_ERROR(ret))
                 goto out;
+
+        ret = start_watchdog(TCO_DEFAULT_TIMEOUT);
+        if (EFI_ERROR(ret))
+                efi_perror(ret, L"Failed to start watchdog");
 
         /* Free UI resources. */
         ui_free();

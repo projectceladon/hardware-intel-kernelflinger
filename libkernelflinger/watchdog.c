@@ -1,8 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Author: Andrew Boie <andrew.p.boie@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,14 +28,31 @@
  *
  */
 
-#ifndef UNITTEST_H
-#define UNITTEST_H
+#include <efi.h>
+#include <efilib.h>
+#include <log.h>
+#include "watchdog.h"
+#include "protocol/tco_protocol.h"
 
-/*
- * This is the hardware second timeout value
- */
-#define TCO_SECOND_TIMEOUT 5
+static EFI_GUID gEfiTcoResetProtocolGuid = EFI_TCO_RESET_PROTOCOL_GUID;
 
-VOID unittest_main(CHAR16 *testname);
+EFI_STATUS start_watchdog(UINT32 seconds)
+{
+        EFI_TCO_RESET_PROTOCOL *tco;
+        EFI_STATUS ret;
 
-#endif
+        ret = LibLocateProtocol(&gEfiTcoResetProtocolGuid, (void **)&tco);
+        if (EFI_ERROR(ret)) {
+                if (ret == EFI_NOT_FOUND) {
+                        debug(L"WARNING: watchdog disabled and not started");
+                        return EFI_SUCCESS;
+                }
+                return ret;
+        }
+
+        if (seconds < TCO_MIN_TIMEOUT)
+                seconds = TCO_MIN_TIMEOUT;
+
+        debug(L"Starting watchdog for %d seconds", seconds);
+        return uefi_call_wrapper(tco->EnableTcoReset, 1, &seconds);
+}

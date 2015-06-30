@@ -1,8 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Author: Andrew Boie <andrew.p.boie@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,14 +28,31 @@
  *
  */
 
-#ifndef UNITTEST_H
-#define UNITTEST_H
+#ifndef _TCO_PROTOCOL_H_
+#define _TCO_PROTOCOL_H_
 
-/*
- * This is the hardware second timeout value
- */
-#define TCO_SECOND_TIMEOUT 5
+#include <efi.h>
 
-VOID unittest_main(CHAR16 *testname);
+#define EFI_TCO_RESET_PROTOCOL_GUID                                     \
+        {0xa6a79162, 0xe325, 0x4c30,{0xbc, 0xc3, 0x59, 0x37, 0x30, 0x64, 0xef, 0xb3}}
 
-#endif
+typedef struct _EFI_TCO_RESET_PROTOCOL EFI_TCO_RESET_PROTOCOL;
+
+typedef
+EFI_STATUS
+(EFIAPI *EFI_TCO_RESET_PROTOCOL_ENABLE_WATCHDOG) (
+        IN OUT UINT32 *RcrbGcsValue
+        );
+
+typedef
+EFI_STATUS
+(EFIAPI *EFI_TCO_RESET_PROTOCOL_DISABLE_WATCHDOG) (
+        IN UINT32 RcrbGcsValue
+        );
+
+struct _EFI_TCO_RESET_PROTOCOL {
+        EFI_TCO_RESET_PROTOCOL_ENABLE_WATCHDOG  EnableTcoReset;
+        EFI_TCO_RESET_PROTOCOL_DISABLE_WATCHDOG DisableTcoReset;
+};
+
+#endif	/* _TCO_PROTOCOL_H_ */
