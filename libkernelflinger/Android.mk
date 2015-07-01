@@ -75,6 +75,7 @@ LOCAL_SRC_FILES := \
 	em.c \
 	gpt.c \
 	storage.c \
+	pci.c \
 	mmc.c \
 	ufs.c \
 	uefi_utils.c \
