@@ -35,21 +35,11 @@
 #include "storage.h"
 #include "mmc.h"
 #include "ufs.h"
+#include "pci.h"
 
 static struct storage *storage;
 static PCI_DEVICE_PATH boot_device;
 static BOOLEAN initialized = FALSE;
-
-static PCI_DEVICE_PATH *get_pci_device_path(EFI_DEVICE_PATH *p)
-{
-	while (!IsDevicePathEndType(p)) {
-		if (DevicePathType(p) == HARDWARE_DEVICE_PATH
-		    && DevicePathSubType(p) == HW_PCI_DP)
-			return (PCI_DEVICE_PATH *)p;
-		p = NextDevicePathNode(p);
-	}
-	return NULL;
-}
 
 static BOOLEAN is_boot_device(EFI_DEVICE_PATH *p)
 {
