@@ -195,8 +195,7 @@ static void cmd_oem_verified(__attribute__((__unused__)) INTN argc,
 	change_device_state(VERIFIED);
 }
 
-static void cmd_oem_off_mode_charge(__attribute__((__unused__)) INTN argc,
-				    CHAR8 **argv)
+static void cmd_oem_off_mode_charge(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
 
@@ -224,8 +223,7 @@ static void cmd_oem_off_mode_charge(__attribute__((__unused__)) INTN argc,
 		fastboot_okay("");
 }
 
-static void cmd_oem_crash_event_menu(__attribute__((__unused__)) INTN argc,
-				    CHAR8 **argv)
+static void cmd_oem_crash_event_menu(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
 
@@ -346,8 +344,7 @@ static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)
 }
 
 #ifndef USER
-static void cmd_oem_set_storage(INTN argc,
-			        CHAR8 **argv)
+static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 {
 	enum storage_type type;
 	EFI_STATUS ret;
@@ -445,8 +442,7 @@ static void cmd_oem_rm(INTN argc, CHAR8 **argv)
 }
 #endif
 
-static void cmd_oem_get_logs(__attribute__((__unused__)) INTN argc,
-			     __attribute__((__unused__)) CHAR8 **argv)
+static void cmd_oem_get_logs(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
 {
 	EFI_STATUS ret;
 	UINT32 flags;
