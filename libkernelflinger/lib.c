@@ -124,6 +124,52 @@ CHAR16 *stra_to_str(CHAR8 *stra)
         return str;
 }
 
+EFI_STATUS stra_to_guid(char *str, EFI_GUID *g)
+{
+        char value[3] = { '\0', '\0', '\0' };
+        char *end;
+        UINTN i;
+
+        if (!str || !g)
+                return EFI_INVALID_PARAMETER;
+
+        g->Data1 = strtoul(str, &end, 16);
+        if (end - str != 8 || *end != '-')
+                return EFI_INVALID_PARAMETER;
+
+        str = end + 1;
+        g->Data2 = strtoul(str, &end, 16);
+        if (end - str != 4 || *end != '-')
+                return EFI_INVALID_PARAMETER;
+
+        str = end + 1;
+        g->Data3 = strtoul(str, &end, 16);
+        if (end - str != 4 || *end != '-')
+                return EFI_INVALID_PARAMETER;
+
+        str = end + 1;
+        for (i = 0 ; i < 2; i++, str += 2) {
+                value[0] = str[0];
+                value[1] = str[1];
+                g->Data4[i] = strtoul(value, &end, 16);
+                if (end != value + 2)
+                        return EFI_INVALID_PARAMETER;
+        }
+
+        if (*str != '-')
+                return EFI_INVALID_PARAMETER;
+
+        str++;
+        for (i = 0 ; i < 6; i++, str += 2) {
+                value[0] = str[0];
+                value[1] = str[1];
+                g->Data4[i + 2] = strtoul(value, &end, 16);
+                if (end != value + 2)
+                        return EFI_INVALID_PARAMETER;
+        }
+
+        return EFI_SUCCESS;
+}
 
 int vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
 {
