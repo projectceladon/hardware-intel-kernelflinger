@@ -33,11 +33,6 @@
 #ifndef UNITTEST_H
 #define UNITTEST_H
 
-/*
- * This is the hardware second timeout value
- */
-#define TCO_SECOND_TIMEOUT 5
-
 VOID unittest_main(CHAR16 *testname);
 
 #endif
