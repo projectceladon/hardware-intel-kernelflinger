@@ -629,6 +629,24 @@ out:
 }
 
 
+EFI_STATUS bytes_to_hex_stra(CHAR8 *bytes, UINTN length, CHAR8 *str, UINTN strsize)
+{
+        CHAR8 hex;
+        UINTN i;
+
+        if (!bytes || !str || strsize < length * 2 + 1)
+                return EFI_INVALID_PARAMETER;
+
+        for (i = 0; i < length * 2; i++) {
+                hex = ((i & 1) ? bytes[i / 2] & 0xf : bytes[i / 2] >> 4);
+                *str++ = (hex > 9 ? (hex + 'a' - 10) : (hex + '0'));
+        }
+        *str = '\0';
+
+        return EFI_SUCCESS;
+}
+
+
 VOID pause(UINTN seconds)
 {
         uefi_call_wrapper(BS->Stall, 1, seconds * 1000000);
