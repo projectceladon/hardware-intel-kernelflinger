@@ -698,6 +698,36 @@ EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
         return EFI_SUCCESS;
 }
 
+
+static BOOLEAN is_a_leap_year(INTN year)
+{
+        return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+}
+
+UINT64 efi_time_to_ctime(EFI_TIME *time)
+{
+        UINT8 DAY_OF_MONTH[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+        UINTN i;
+        UINTN days;
+
+        if (!time)
+                return 0;
+
+        days = time->Day - 1;
+
+        for (i = 1970; i < time->Year; i++)
+                days += is_a_leap_year(i) ? 366 : 365;
+
+        if (is_a_leap_year(time->Year))
+                DAY_OF_MONTH[1] = 29;
+
+        for (i = 0; i + 1 < time->Month; i++)
+                days += DAY_OF_MONTH[i];
+
+        return (days * 24 * 3600) + (time->Hour * 3600)
+                + (time->Minute * 60) + time->Second;
+}
+
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
 
