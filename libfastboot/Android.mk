@@ -12,6 +12,7 @@ SHARED_STATIC_LIBRARIES := \
 SHARED_SRC_FILES := \
 	fastboot.c \
 	fastboot_oem.c \
+	fastboot_flashing.c \
 	flash.c \
 	sparse.c \
 	info.c \

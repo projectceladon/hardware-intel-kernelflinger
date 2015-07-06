@@ -35,7 +35,7 @@
 #include <security.h>
 
 #include "authenticated_action.h"
-#include "fastboot_oem.h"
+#include "fastboot_flashing.h"
 
 #define NONCE_RANDOM_BYTE_LENGTH	16
 #define NONCE_EXPIRATION_SEC		5 * 60 * 60;

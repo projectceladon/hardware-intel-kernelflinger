@@ -1,10 +1,6 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
- *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,10 +28,15 @@
  *
  */
 
-#ifndef _FASTBOOT_OEM_H_
-#define _FASTBOOT_OEM_H_
+#ifndef _FASTBOOT_FLASHING_H_
+#define _FASTBOOT_FLASHING_H_
 
-EFI_STATUS fastboot_oem_init(void);
-void fastboot_oem_free();
+EFI_STATUS fastboot_flashing_init(void);
+void fastboot_flashing_free();
 
-#endif	/* _FASTBOOT_OEM_H_ */
+/* Change the current device state to NEW_STATE.  If INTERACTIVE is
+ * TRUE, UI confirmation is active and fastboot protocol response will
+ * be sent.  */
+EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive);
+
+#endif	/* _FASTBOOT_FLASHING_H_ */
