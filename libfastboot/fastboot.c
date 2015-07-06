@@ -46,6 +46,7 @@
 #include "fastboot.h"
 #include "flash.h"
 #include "fastboot_oem.h"
+#include "fastboot_flashing.h"
 #include "fastboot_ui.h"
 #include "smbios.h"
 #include "info.h"
@@ -976,6 +977,10 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
+	ret = fastboot_flashing_init();
+	if (EFI_ERROR(ret))
+		goto error;
+
 	ret = fastboot_ui_init();
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Fastboot UI initialization failed, continue anyway.");
@@ -1105,6 +1110,7 @@ void fastboot_free()
 	fastboot_unpublish_all();
 	fastboot_cmdlist_unregister(&cmdlist);
 	fastboot_oem_free();
+	fastboot_flashing_free();
 	fastboot_ui_destroy();
 	gpt_free_cache();
 }

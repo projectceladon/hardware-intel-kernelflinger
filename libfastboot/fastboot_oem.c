@@ -58,156 +58,11 @@ static EFI_STATUS fastboot_oem_publish(void)
 {
 	EFI_STATUS ret;
 
-	ret = fastboot_publish("secure", device_is_locked() ? "yes" : "no");
-	if (EFI_ERROR(ret))
-		return ret;
-
-	ret = fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
-	if (EFI_ERROR(ret))
-		return ret;
-
 	ret = fastboot_publish(OFF_MODE_CHARGE, get_current_off_mode_charge() ? "1" : "0");
 	if (EFI_ERROR(ret))
 		return ret;
 
 	return publish_intel_variables();
-}
-
-EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
-{
-	EFI_STATUS ret;
-
-	/* "Eng" builds skip all these security policies */
-#ifdef USERDEBUG
-	/* Data wipes and UI prompts are skipped if the device is in
-	 * provisioning mode to avoid unnecessary steps and user interaction
-	 * during provisioning */
-	if (!device_is_provisioning()) {
-		/* 'eng' or 'userdebug' bootloaders skip the prompts
-		 * to make CI automation easier */
-#ifdef USER
-		if (interactive && !fastboot_ui_confirm_for_state(new_state)) {
-			fastboot_fail("Refusing to change device state");
-			return EFI_ACCESS_DENIED;
-		}
-#endif
-		ui_print(L"Erasing userdata...");
-		ret = erase_by_label(L"data");
-		if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
-			if (interactive)
-				fastboot_fail("Failed to wipe data.");
-			return ret;
-		}
-
-		if (ret == EFI_NOT_FOUND)
-			ui_print(L"Not userdata partition to erase.");
-		else
-			ui_print(L"Erase done.");
-	}
-#endif
-
-	ret = set_current_state(new_state);
-	if (EFI_ERROR(ret)) {
-		if (interactive)
-			fastboot_fail("Failed to change the device state");
-		return ret;
-	}
-
-	fastboot_ui_refresh();
-	ret = fastboot_oem_publish();
-	if (EFI_ERROR(ret)) {
-		if (interactive)
-			fastboot_fail("Failed to publish OEM variables");
-		return ret;
-	}
-
-	if (interactive)
-		fastboot_okay("");
-	/* Ensure logs variable is deleted on a successful
-	   state transition.  */
-	del_efi_variable(&loader_guid, LOG_VAR);
-
-	return EFI_SUCCESS;
-}
-
-static BOOLEAN is_already_in_state(enum device_state state)
-{
-	if (get_current_state() == state && !device_is_provisioning()) {
-		error(L"Device is already in the required state.");
-		fastboot_okay("");
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
-static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
-			 __attribute__((__unused__)) CHAR8 **argv)
-{
-	if (!is_already_in_state(LOCKED))
-		change_device_state(LOCKED, TRUE);
-}
-
-static BOOLEAN frp_allows_unlock()
-{
-	UINT8 persist_byte;
-	struct gpt_partition_interface gparti;
-	EFI_STATUS ret;
-	UINT64 offset;
-
-	ret = gpt_get_partition_by_label(L"persistent", &gparti, LOGICAL_UNIT_USER);
-	if (EFI_ERROR(ret))
-		return TRUE;	/* Allow if the persistent partition
-				   does not exist */
-
-	/* We need to check the last byte of the partition. The gparti
-	 * .dio object is a handle to the beginning of the disk */
-	offset = ((gparti.part.ending_lba + 1) * gparti.bio->Media->BlockSize) - 1;
-	ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
-				gparti.bio->Media->MediaId, offset,
-				sizeof(persist_byte), &persist_byte);
-	if (EFI_ERROR(ret)) {
-		/* Pathological if this fails, GPT screwed up? */
-		efi_perror(ret, L"Couldn't read persistent partition");
-		return FALSE;
-	}
-
-	/* Per the specification, value of 1 means unlock is OK */
-	return persist_byte == 1;
-}
-
-static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
-			   __attribute__((__unused__)) CHAR8 **argv)
-{
-	BOOLEAN unlock_allowed;
-
-	if (is_already_in_state(UNLOCKED))
-		return;
-
-	/* Allow if device is in provisioning mode */
-	if (device_is_provisioning())
-		unlock_allowed = TRUE;
-	else
-		unlock_allowed = no_device_unlock() ? FALSE : frp_allows_unlock();
-
-	if (unlock_allowed == FALSE) {
-#ifdef USER
-		fastboot_fail("Unlocking device not allowed");
-#else
-		fastboot_info("Unlock protection is set");
-		fastboot_info("Unlocking anyway since this is not a User build");
-		change_device_state(UNLOCKED, TRUE);
-#endif
-	} else {
-		change_device_state(UNLOCKED, TRUE);
-	}
-}
-
-static void cmd_oem_verified(__attribute__((__unused__)) INTN argc,
-			     __attribute__((__unused__)) CHAR8 **argv)
-{
-	if (!is_already_in_state(VERIFIED))
-		change_device_state(VERIFIED, TRUE);
 }
 
 static void cmd_oem_off_mode_charge(INTN argc, CHAR8 **argv)
@@ -543,9 +398,6 @@ static void cmd_oem_get_action_nonce(INTN argc, __attribute__((__unused__)) CHAR
 #endif
 
 static struct fastboot_cmd COMMANDS[] = {
-	{ "lock",			LOCKED,		cmd_oem_lock },
-	{ "unlock",			LOCKED,		cmd_oem_unlock  },
-	{ "verified",			LOCKED,		cmd_oem_verified  },
 	{ OFF_MODE_CHARGE,		LOCKED,		cmd_oem_off_mode_charge  },
 	/* The following commands are not part of the Google
 	 * requirements.  They are provided for engineering and
