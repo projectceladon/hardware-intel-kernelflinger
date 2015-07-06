@@ -141,4 +141,6 @@ VOID reboot(CHAR16 *target) __attribute__ ((noreturn));
 
 EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
                          UINTN size, UINTN align);
+
+UINT64 efi_time_to_ctime(EFI_TIME *time);
 #endif

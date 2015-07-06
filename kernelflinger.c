@@ -314,30 +314,6 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         return ret;
 }
 
-static BOOLEAN is_a_leap_year(INTN year)
-{
-        return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-}
-
-static INTN efi_time_to_ctime(EFI_TIME *time)
-{
-        UINT8 DAY_OF_MONTH[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-        UINTN i;
-        INTN days = 0;
-
-        for (i = 1970; i < time->Year; i++)
-                days += is_a_leap_year(i) ? 365 : 366;
-
-        if (is_a_leap_year(time->Year))
-                DAY_OF_MONTH[1] = 29;
-
-        for (i = 0; i + 1 < time->Month; i++)
-                days += DAY_OF_MONTH[i];
-
-        return (days * 24 * 3600) + (time->Hour * 3600)
-                + (time->Minute * 60) + time->Second;
-}
-
 /* If more than WATCHDOG_COUNTER_MAX watchdog resets in a row happened
  * in less than WATCHDOG_DELAY seconds, the crash event menu is
  * displayed.  This menu informs the user of the situation and let him
@@ -348,7 +324,6 @@ static enum boot_target check_watchdog(VOID)
         enum reset_sources reset_source;
         UINT8 counter;
         EFI_TIME time_ref, now;
-        INTN time_diff;
 
         if (!get_current_crash_event_menu())
                 return NORMAL_BOOT;
@@ -380,8 +355,8 @@ static enum boot_target check_watchdog(VOID)
         }
 
         if (counter > 0) {
-                time_diff = efi_time_to_ctime(&now) - efi_time_to_ctime(&time_ref);
-                if (time_diff < 0 || time_diff > WATCHDOG_DELAY)
+                if (efi_time_to_ctime(&now) < efi_time_to_ctime(&time_ref) ||
+                    efi_time_to_ctime(&now) - efi_time_to_ctime(&time_ref) > WATCHDOG_DELAY)
                         counter = 0;
         }
 
