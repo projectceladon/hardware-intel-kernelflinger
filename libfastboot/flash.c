@@ -36,7 +36,6 @@
 #include <efilib.h>
 #include <lib.h>
 #include <fastboot.h>
-#include <openssl/rand.h>
 #include <android.h>
 
 #include "uefi_utils.h"
@@ -411,39 +410,6 @@ EFI_STATUS erase_by_label(CHAR16 *label)
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS generate_random_number_chunk(VOID *chunk, UINTN size)
-{
-	EFI_STATUS ret;
-	EFI_TIME time;
-	UINTN i;
-
-	/* Initialize OpenSSL Random number generator.  */
-#define ENTROPY_NEEDED 32
-	ret = uefi_call_wrapper(RT->GetTime, 2, &time, NULL);
-	if (ret != EFI_SUCCESS)
-		return ret;
-
-	UINT64 seed = ((UINT64)time.Year << 48) | ((UINT64)time.Month << 40) |
-		((UINT64)time.Day << 32) | ((UINT64)time.Hour << 24) |
-		((UINT64)time.Minute << 16) | ((UINT64)time.Second << 8) |
-		((UINT64)time.Daylight);
-
-	for (i = 0; i <= (ENTROPY_NEEDED / sizeof(seed)) + 1; i++)
-		RAND_seed(&seed, sizeof(seed));
-
-	if (RAND_status() != 1) {
-		error(L"OpenSSL Random number generator initialization failed");
-		return EFI_NOT_READY;
-	}
-
-	if (RAND_bytes(chunk, size) != 1) {
-		error(L"Failed to generate buffer of random numbers");
-		return EFI_UNSUPPORTED;
-	}
-
-	return EFI_SUCCESS;
-}
-
 EFI_STATUS garbage_disk(void)
 {
 	struct gpt_partition_interface gparti;
@@ -461,12 +427,13 @@ EFI_STATUS garbage_disk(void)
 	size = gparti.bio->Media->BlockSize * N_BLOCK;
 	ret = alloc_aligned(&chunk, &aligned_chunk, size, gparti.bio->Media->IoAlign);
 	if (EFI_ERROR(ret)) {
-		error(L"Unable to allocate the garbage chunk");
+		efi_perror(ret, L"Unable to allocate the garbage chunk");
 		return ret;
 	}
 
-	ret = generate_random_number_chunk(aligned_chunk, size);
+	ret = generate_random_numbers(aligned_chunk, size);
 	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to generate random numbers");
 		FreePool(chunk);
 		return ret;
 	}

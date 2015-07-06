@@ -143,4 +143,7 @@ EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
                          UINTN size, UINTN align);
 
 UINT64 efi_time_to_ctime(EFI_TIME *time);
+
+EFI_STATUS generate_random_numbers(CHAR8 *data, UINTN size);
+
 #endif

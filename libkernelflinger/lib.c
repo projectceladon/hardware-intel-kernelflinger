@@ -728,6 +728,49 @@ UINT64 efi_time_to_ctime(EFI_TIME *time)
                 + (time->Minute * 60) + time->Second;
 }
 
+static inline void cpuid(uint32_t op, uint32_t reg[4])
+{
+#if __LP64__
+        asm volatile("xchg{q}\t{%%}rbx, %q1\n\t"
+                     "cpuid\n\t"
+                     "xchg{q}\t{%%}rbx, %q1\n\t"
+                     : "=a" (reg[0]), "=&r" (reg[1]), "=c" (reg[2]), "=d" (reg[3])
+                     : "a" (op));
+#else
+        asm volatile("pushl %%ebx      \n\t" /* save %ebx */
+                     "cpuid            \n\t"
+                     "movl %%ebx, %1   \n\t" /* save what cpuid just put in %ebx */
+                     "popl %%ebx       \n\t" /* restore the old %ebx */
+                     : "=a"(reg[0]), "=r"(reg[1]), "=c"(reg[2]), "=d"(reg[3])
+                     : "a"(op)
+                     : "cc");
+#endif
+}
+
+EFI_STATUS generate_random_numbers(CHAR8 *data, UINTN size)
+{
+#define RDRAND_SUPPORT (1 << 30)
+        uint32_t reg[4];
+        int ret;
+        UINTN i, j;
+        unsigned int random;
+
+        cpuid(1, reg);
+        if (!(reg[2] & RDRAND_SUPPORT))
+                return EFI_UNSUPPORTED;
+
+        for (i = 0; i < size; ) {
+                ret = __builtin_ia32_rdrand32_step(&random);
+                if (ret != 1)
+                        return EFI_UNSUPPORTED;
+
+                for (j = 0; j < sizeof(random) && i < size; j++, i++)
+                        data[i] = ((unsigned char *)&random)[j];
+        }
+
+        return EFI_SUCCESS;
+}
+
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
 
