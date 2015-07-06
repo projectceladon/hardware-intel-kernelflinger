@@ -93,21 +93,21 @@ static void hash_buffer(CHAR8 *buffer, UINT64 len, CHAR8 *hash)
 	EVP_MD_CTX_cleanup(&mdctx);
 }
 
-static void report_hash(const CHAR16 *base, const CHAR16 *name, CHAR8 *hash)
+static EFI_STATUS report_hash(const CHAR16 *base, const CHAR16 *name, CHAR8 *hash)
 {
-	CHAR8 hashstr[EVP_MAX_MD_SIZE * 2 + 1];
-	CHAR8 *pos;
-	CHAR8 hex;
-	unsigned int i;
+	EFI_STATUS ret;
+	CHAR8 hashstr[hash_len * 2 + 1];
 
-	for (i = 0, pos = hashstr; i < hash_len * 2; i++) {
-		hex = ((i & 1) ? hash[i / 2] & 0xf : hash[i / 2] >> 4);
-		*pos++ = (hex > 9 ? (hex + 'a' - 10) : (hex + '0'));
+	ret = bytes_to_hex_stra(hash, hash_len, hashstr, sizeof(hashstr));
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to convert bytes to hexadecimal string");
+		return ret;
 	}
-	*pos = '\0';
 
 	fastboot_info("target: %s%s", base, name);
 	fastboot_info("hash: %a", hashstr);
+
+	return EFI_SUCCESS;
 }
 
 static UINTN get_bootimage_len(CHAR8 *buffer, UINTN buffer_len)
@@ -185,10 +185,10 @@ EFI_STATUS get_boot_image_hash(CHAR16 *label)
 	len = get_bootimage_len(data, len);
 	if (len) {
 		hash_buffer(data, len, hash);
-		report_hash(L"/", label, hash);
+		ret = report_hash(L"/", label, hash);
 	}
 	FreePool(data);
-	return EFI_SUCCESS;
+	return ret;
 }
 
 #define MAX_DIR 10
@@ -198,7 +198,7 @@ static CHAR16 *path;
 static CHAR16 *subname[MAX_DIR];
 static INTN subdir;
 
-static void hash_file(EFI_FILE *dir, EFI_FILE_INFO *fi)
+static EFI_STATUS hash_file(EFI_FILE *dir, EFI_FILE_INFO *fi)
 {
 	EFI_FILE *file;
 	void *data;
@@ -208,13 +208,12 @@ static void hash_file(EFI_FILE *dir, EFI_FILE_INFO *fi)
 
 	if (!fi->Size) {
 		hash_buffer(NULL, 0, hash);
-		report_hash(path, fi->FileName, hash);
-		return;
+		return report_hash(path, fi->FileName, hash);
 	}
 
 	ret = uefi_call_wrapper(dir->Open, 5, dir, &file, fi->FileName, EFI_FILE_MODE_READ, 0);
 	if (EFI_ERROR(ret))
-		return;
+		return ret;
 
 	size = fi->FileSize;
 
@@ -227,12 +226,13 @@ static void hash_file(EFI_FILE *dir, EFI_FILE_INFO *fi)
 		goto free;
 
 	hash_buffer(data, size, hash);
-	report_hash(path, fi->FileName, hash);
+	ret = report_hash(path, fi->FileName, hash);
 
 free:
 	FreePool(data);
 close:
 	uefi_call_wrapper(file->Close, 1, file);
+	return ret;
 }
 
 /*
@@ -246,6 +246,16 @@ close:
 		return;
 	StrCat(path, L"/bootloader/");
  }
+
+static void freepath(void)
+{
+	if (!path)
+		return;
+
+	FreePool(path);
+	path = NULL;
+	debug(L"Free path");
+}
 
 static void pushdir(CHAR16 *dir)
 {
@@ -270,9 +280,7 @@ static void popdir(void)
 		debug(L"Return to %s", path);
 		return;
 	}
-	FreePool(path);
-	path = NULL;
-	debug(L"Free path");
+	freepath();
 }
 
 EFI_STATUS get_esp_hash(void)
@@ -333,7 +341,11 @@ EFI_STATUS get_esp_hash(void)
 				subdir--;
 			}
 		} else {
-			hash_file(dirs[subdir], fi);
+			ret = hash_file(dirs[subdir], fi);
+			if (EFI_ERROR(ret)) {
+				freepath();
+				return ret;
+			}
 		}
 	} while (size || subdir >= 0);
 	return EFI_SUCCESS;
@@ -530,6 +542,5 @@ EFI_STATUS get_ext4_hash(CHAR16 *label)
 	ret = hash_partition(&gparti, ext4_len, hash);
 	if (EFI_ERROR(ret))
 		return ret;
-	report_hash(L"/", gparti.part.name, hash);
-	return EFI_SUCCESS;
+	return report_hash(L"/", gparti.part.name, hash);
 }
