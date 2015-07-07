@@ -93,8 +93,8 @@ static EFI_STATUS publish_boot_state(void)
 }
 
 /* "device-state": Indicates the device's lock state as per Google's
- * Verified Boot specification. Possible values are "unlocked",
- * "locked", "verified". */
+ * Verified Boot specification. Possible values are "unlocked" and
+ * "verified" */
 static EFI_STATUS publish_device_state(void)
 {
 	return fastboot_publish("device-state", get_current_state_string());

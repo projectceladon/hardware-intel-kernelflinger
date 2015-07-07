@@ -105,37 +105,10 @@ static enum fastboot_states next_state;
 static void *dlbuffer;
 static unsigned dlsize, bufsize;
 
-static const char *flash_verified_whitelist[] = {
-	"bootloader",
-	"boot",
-	"system",
-	"vendor",
-	"recovery",
-	/* Following three needed even though not specifically listed
-	 * since formatting a partition necessitates flashing a sparse
-	 * filesystem image */
-	"cache",
-	"data",
-	"userdata",
-	NULL
-};
-
 static const char *flash_locked_whitelist[] = {
 #ifdef BOOTLOADER_POLICY
 	ACTION_AUTHORIZATION,
 #endif
-	NULL
-};
-
-static const char *erase_verified_whitelist[] = {
-	"cache",
-	"data",
-	"userdata",
-	/* following three needed so we can flash them even though not
-	 * specifically listed, they all contain filesystems which can
-	 * be sent over as sparse images */
-	"system",
-	"vendor",
 	NULL
 };
 
@@ -549,22 +522,6 @@ EFI_STATUS refresh_partition_var(void)
 	return publish_partsize();
 }
 
-static BOOLEAN verify_access(CHAR8 *name, const char **verified_whitelist,
-			     const char **locked_whitelist)
-{
-	switch (get_current_state()) {
-	case LOCKED:
-		return is_in_white_list(name, locked_whitelist);
-
-	case VERIFIED:
-		return is_in_white_list(name, locked_whitelist)
-			|| is_in_white_list(name, verified_whitelist);
-
-	default:
-		return TRUE;
-	}
-}
-
 static void cmd_flash(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
@@ -575,7 +532,8 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 		return;
 	}
 
-	if (!verify_access(argv[1], flash_verified_whitelist, flash_locked_whitelist)) {
+	if (get_current_state() == LOCKED &&
+	    !is_in_white_list(argv[1], flash_locked_whitelist)) {
 		error(L"Flash %a is prohibited in %a state.", argv[1],
 		      get_current_state_string());
 		fastboot_fail("Prohibited command in %a state.", get_current_state_string());
@@ -622,13 +580,6 @@ static void cmd_erase(INTN argc, CHAR8 **argv)
 		return;
 	}
 
-	if (device_is_verified()
-	    && !is_in_white_list(argv[1], erase_verified_whitelist)) {
-		error(L"Erase %a is prohibited in verified state.", argv[1]);
-		fastboot_fail("Prohibited command in verified state.");
-		return;
-	}
-
 	label = stra_to_str((CHAR8*)argv[1]);
 	if (!label) {
 		error(L"Failed to get label %a", argv[1]);
@@ -651,12 +602,6 @@ static void cmd_boot(__attribute__((__unused__)) INTN argc,
 		     __attribute__((__unused__)) CHAR8 **argv)
 {
 	EFI_STATUS ret;
-
-	if (device_is_verified()) {
-		error(L"Boot command is prohibited in verified state.");
-		fastboot_fail("Prohibited command in verified state.");
-		return;
-	}
 
 	ret = fastboot_stop(dlbuffer, NULL, dlsize, UNKNOWN_TARGET);
 	if (EFI_ERROR(ret)) {
@@ -966,7 +911,7 @@ static void fastboot_start_callback(void)
 static struct fastboot_cmd COMMANDS[] = {
 	{ "download",		LOCKED,		cmd_download },
 	{ "flash",		LOCKED,		cmd_flash },
-	{ "erase",		VERIFIED,	cmd_erase },
+	{ "erase",		UNLOCKED,	cmd_erase },
 	{ "getvar",		LOCKED,		cmd_getvar },
 	{ "boot",		UNLOCKED,	cmd_boot },
 	{ "continue",		LOCKED,		cmd_continue },

@@ -64,26 +64,7 @@ static ui_textline_t locked_headers[] = {
 	{ &COLOR_WHITE,		"If you lock the bootloader, you will", 	FALSE },
 	{ &COLOR_WHITE,		"prevent the device from having any",		FALSE },
 	{ &COLOR_WHITE,		"custom software flashed until it is",		FALSE },
-	{ &COLOR_WHITE,		"again set to 'unlocked' or 'verified'",	FALSE },
-	{ &COLOR_WHITE,		"state.",					FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_WHITE,		"Changing device state will also delete",	FALSE },
-	{ &COLOR_WHITE,		"all personal data from your device",		FALSE },
-	{ &COLOR_WHITE,		"(a 'factory data reset').",			FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ NULL, NULL, FALSE }
-};
-
-static ui_textline_t verified_headers[] = {
-	{ &COLOR_WHITE,		"     Set bootloader to Verified?",		TRUE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_WHITE,		"If you set the loader to Verified state,",	FALSE },
-	{ &COLOR_WHITE,		"you may flash custom software to",		FALSE },
-	{ &COLOR_WHITE,		"the device and the loader will attempt",	FALSE },
-	{ &COLOR_WHITE,		"to verify these custom images against",	FALSE },
-	{ &COLOR_WHITE,		"either the OEM keystore or a keystore",	FALSE },
-	{ &COLOR_WHITE,		"supplied by you. Some, but not all",		FALSE },
-	{ &COLOR_WHITE,		"fastboot commands will be available.",		FALSE },
+	{ &COLOR_WHITE,		"again set to 'unlocked' state",		FALSE },
 	{ &COLOR_WHITE,		"",						FALSE },
 	{ &COLOR_WHITE,		"Changing device state will also delete",	FALSE },
 	{ &COLOR_WHITE,		"all personal data from your device",		FALSE },
@@ -97,8 +78,7 @@ static struct msg_for_state {
 	enum device_state state;
 } const FASTBOOT_UI_CONFIRM[] = {
 	{ unlocked_headers,	UNLOCKED },
-	{ locked_headers,	LOCKED },
-	{ verified_headers,	VERIFIED }
+	{ locked_headers,	LOCKED }
 };
 
 static const char *DROID_IMG_NAME = "droid_operation";

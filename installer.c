@@ -442,7 +442,7 @@ static struct replacements {
 } REPLACEMENTS[] = {
 	/* Fastboot changes. */
 	{ { "flash",	UNKNOWN_STATE,	installer_flash_cmd },	&fastboot_flash_cmd },
-	{ { "format",	VERIFIED,	installer_format    },	NULL },
+	{ { "format",	UNLOCKED,	installer_format    },	NULL },
 	/* Unsupported commands. */
 	{ { "update",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
 	{ { "flashall",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },

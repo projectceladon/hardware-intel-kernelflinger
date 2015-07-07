@@ -96,7 +96,6 @@ extern const CHAR16 *MISC_LABEL;
 
 BOOLEAN device_is_unlocked(void);
 BOOLEAN device_is_locked(void);
-BOOLEAN device_is_verified(void);
 BOOLEAN get_current_off_mode_charge(void);
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled);
 BOOLEAN get_current_crash_event_menu(void);
@@ -107,8 +106,7 @@ EFI_STATUS set_oemvars_update(BOOLEAN updated);
 enum device_state {
 	UNKNOWN_STATE = -1,
 	LOCKED = 0,
-	VERIFIED = 1,
-	UNLOCKED = 2
+	UNLOCKED = 1
 };
 char *get_current_state_string(void);
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color();
