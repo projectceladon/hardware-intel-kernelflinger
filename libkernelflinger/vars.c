@@ -59,7 +59,6 @@
 #endif
 
 #define OEM_LOCK_UNLOCKED	(1 << 0)
-#define OEM_LOCK_VERIFIED	(1 << 1)
 
 #define ANDROID_PROP_VALUE_MAX	92
 
@@ -92,7 +91,6 @@ static struct state_display {
 } STATE_DISPLAY[] = {
 	{ "unknown", &COLOR_RED },
 	{ "locked", &COLOR_WHITE },
-	{ "verified", &COLOR_WHITE },
 	{ "unlocked", &COLOR_RED }
 };
 
@@ -220,8 +218,6 @@ enum device_state get_current_state()
 		} else {
 			if (stored_state[0] & OEM_LOCK_UNLOCKED)
 				current_state = UNLOCKED;
-			else if (stored_state[0] & OEM_LOCK_VERIFIED)
-				current_state = VERIFIED;
 			else
 				current_state = LOCKED;
 
@@ -241,9 +237,6 @@ EFI_STATUS set_current_state(enum device_state state)
 	switch (state) {
 	case LOCKED:
 		stored_state = 0;
-		break;
-	case VERIFIED:
-		stored_state = OEM_LOCK_VERIFIED;
 		break;
 	case UNLOCKED:
 		stored_state = OEM_LOCK_UNLOCKED;
@@ -334,11 +327,6 @@ BOOLEAN device_is_unlocked()
 BOOLEAN device_is_locked()
 {
 	return get_current_state() == LOCKED;
-}
-
-BOOLEAN device_is_verified()
-{
-	return get_current_state() == VERIFIED;
 }
 
 BOOLEAN device_is_provisioning(void)

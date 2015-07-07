@@ -67,8 +67,7 @@ static const ui_textline_t bad_recovery[] = {
 static const ui_textline_t device_altered_unlocked[] = {
 	{ &COLOR_LIGHTGRAY, 	"Your device has been altered",		FALSE },
 	{ &COLOR_LIGHTGRAY, 	"from its factory configuration.",	FALSE },
-	{ &COLOR_LIGHTGRAY, 	"and is no longer in a locked or",	FALSE },
-	{ &COLOR_LIGHTGRAY, 	"verified state.",			FALSE },
+	{ &COLOR_LIGHTGRAY, 	"and is no longer in a locked state",	FALSE },
 	{ &COLOR_LIGHTGRAY, 	"",					FALSE },
 	{ &COLOR_LIGHTGRAY, 	"If you were not responsible for",	FALSE },
 	{ &COLOR_LIGHTGRAY, 	"these changes, the security of",	FALSE },
@@ -80,9 +79,9 @@ static const ui_textline_t device_altered_unlocked[] = {
 static const ui_textline_t secure_boot_off[] = {
 	{ &COLOR_LIGHTGRAY,	"Your device has been altered",		FALSE },
 	{ &COLOR_LIGHTGRAY,	"from its factory configuration.",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"and is no longer in a locked or",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"verified state due to UEFI Secure",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"Boot being disabled.",			FALSE },
+	{ &COLOR_LIGHTGRAY,	"and is no longer in a locked state",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"due to UEFI Secure Boot being",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"disabled",				FALSE },
 	{ &COLOR_LIGHTGRAY,	"",					FALSE },
 	{ &COLOR_LIGHTGRAY,	"If you were not responsible for",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"these changes, the security of",	FALSE },
