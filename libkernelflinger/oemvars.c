@@ -273,6 +273,8 @@ static EFI_STATUS parse_line(char *line, VOID *context)
  */
 EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 {
+	EFI_GUID curr_guid = loader_guid;
+
 	debug(L"Parsing and setting values from oemvars file");
-	return parse_text_buffer(data, size, parse_line, (void *)&loader_guid);
+	return parse_text_buffer(data, size, parse_line, &curr_guid);
 }
