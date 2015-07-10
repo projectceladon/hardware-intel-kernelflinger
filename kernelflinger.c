@@ -1103,9 +1103,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         }
         g_disk_device = g_loaded_image->DeviceHandle;
 
-        ret = storage_set_boot_device(g_disk_device);
-        if (EFI_ERROR(ret))
-                error(L"Failed to set boot device");
+        /* loaded from mass storage (not DnX) */
+        if (g_disk_device) {
+                ret = storage_set_boot_device(g_disk_device);
+                if (EFI_ERROR(ret))
+                        error(L"Failed to set boot device");
+        }
 
         oem_keystore = (UINT8 *)&oem_keystore_table +
                         oem_keystore_table.oem_keystore_offset;
