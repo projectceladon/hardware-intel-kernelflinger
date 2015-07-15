@@ -54,6 +54,7 @@ static BOOLEAN is_boot_device(EFI_DEVICE_PATH *p)
 
 extern struct storage STORAGE(STORAGE_EMMC);
 extern struct storage STORAGE(STORAGE_UFS);
+extern struct storage STORAGE(STORAGE_SDCARD);
 
 static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 				   enum storage_type filter)
@@ -61,7 +62,8 @@ static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 	enum storage_type st;
 	static struct storage *supported_storage[STORAGE_ALL] =  {
 		&STORAGE(STORAGE_EMMC),
-		&STORAGE(STORAGE_UFS)
+		&STORAGE(STORAGE_UFS),
+		&STORAGE(STORAGE_SDCARD)
 	};
 
 	for (st = STORAGE_EMMC; st < STORAGE_ALL; st++) {
@@ -213,7 +215,7 @@ EFI_STATUS storage_set_boot_device(EFI_HANDLE device)
 		return EFI_UNSUPPORTED;
 	}
 
-	ret = identify_storage((EFI_DEVICE_PATH*)pci, STORAGE_ALL);
+	ret = identify_storage(device_path, STORAGE_ALL);
 	if (EFI_ERROR(ret)) {
 		error(L"Boot device unsupported");
 		return ret;

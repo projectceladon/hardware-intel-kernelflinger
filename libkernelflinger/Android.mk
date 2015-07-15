@@ -78,6 +78,7 @@ LOCAL_SRC_FILES := \
 	pci.c \
 	mmc.c \
 	ufs.c \
+	sdcard.c \
 	uefi_utils.c \
 	targets.c \
 	smbios.c \
