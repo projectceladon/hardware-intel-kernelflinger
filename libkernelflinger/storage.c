@@ -55,6 +55,7 @@ static BOOLEAN is_boot_device(EFI_DEVICE_PATH *p)
 extern struct storage STORAGE(STORAGE_EMMC);
 extern struct storage STORAGE(STORAGE_UFS);
 extern struct storage STORAGE(STORAGE_SDCARD);
+extern struct storage STORAGE(STORAGE_SATA);
 
 static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 				   enum storage_type filter)
@@ -63,7 +64,8 @@ static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 	static struct storage *supported_storage[STORAGE_ALL] =  {
 		&STORAGE(STORAGE_EMMC),
 		&STORAGE(STORAGE_UFS),
-		&STORAGE(STORAGE_SDCARD)
+		&STORAGE(STORAGE_SDCARD),
+		&STORAGE(STORAGE_SATA)
 	};
 
 	for (st = STORAGE_EMMC; st < STORAGE_ALL; st++) {
