@@ -33,8 +33,6 @@
 #include <log.h>
 #include <lib.h>
 #include "storage.h"
-#include "mmc.h"
-#include "ufs.h"
 #include "pci.h"
 
 static struct storage *storage;
@@ -54,21 +52,25 @@ static BOOLEAN is_boot_device(EFI_DEVICE_PATH *p)
 		&& pci->Device == boot_device.Device;
 }
 
+extern struct storage STORAGE(STORAGE_EMMC);
+extern struct storage STORAGE(STORAGE_UFS);
+
 static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 				   enum storage_type filter)
 {
-	if ((filter == STORAGE_EMMC || filter == STORAGE_ALL)
-	    && is_emmc(device_path)) {
-		debug(L"eMMC storage identified");
-		storage = &storage_emmc;
-		return EFI_SUCCESS;
-	}
+	enum storage_type st;
+	static struct storage *supported_storage[STORAGE_ALL] =  {
+		&STORAGE(STORAGE_EMMC),
+		&STORAGE(STORAGE_UFS)
+	};
 
-	if ((filter == STORAGE_UFS || filter == STORAGE_ALL)
-	    && is_ufs(device_path)) {
-		debug(L"UFS storage identified");
-		storage = &storage_ufs;
-		return EFI_SUCCESS;
+	for (st = STORAGE_EMMC; st < STORAGE_ALL; st++) {
+		if ((filter == st || filter == STORAGE_ALL) &&
+		    supported_storage[st] && supported_storage[st]->probe(device_path)) {
+			debug(L"%s storage identified", supported_storage[st]->name);
+			storage = supported_storage[st];
+			return EFI_SUCCESS;
+		}
 	}
 
 	return EFI_UNSUPPORTED;

@@ -48,7 +48,11 @@ enum storage_type {
 struct storage {
 	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
 	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
+	BOOLEAN (*probe)(EFI_DEVICE_PATH *p);
+	const CHAR16 *name;
 };
+
+#define STORAGE(X) storage_##X
 
 EFI_STATUS identify_boot_device(enum storage_type type);
 PCI_DEVICE_PATH *get_boot_device(void);
