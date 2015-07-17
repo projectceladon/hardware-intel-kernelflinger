@@ -31,7 +31,7 @@
  */
 
 #include <lib.h>
-#include "mmc.h"
+#include "storage.h"
 #include "protocol/Mmc.h"
 #include "protocol/SdHostIo.h"
 
@@ -112,7 +112,7 @@ out:
 	return ret;
 }
 
-EFI_STATUS mmc_erase_blocks(__attribute__((unused)) EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+static EFI_STATUS mmc_erase_blocks(__attribute__((unused)) EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 {
 	EFI_SD_HOST_IO_PROTOCOL *sdio;
 	EFI_STATUS ret;
@@ -177,7 +177,7 @@ static UINT32 log_unit_to_mmc_ctrl(logical_unit_t log_unit)
 	}
 }
 
-EFI_STATUS mmc_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
+static EFI_STATUS mmc_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
 {
 	UINT32 ctrl = log_unit_to_mmc_ctrl(log_unit);
 
@@ -196,7 +196,7 @@ EFI_STATUS mmc_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
 	return EFI_NOT_FOUND;
 }
 
-BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
+static BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
 {
 	while (!IsDevicePathEndType(p)) {
 		if (DevicePathType(p) == HARDWARE_DEVICE_PATH
@@ -207,7 +207,9 @@ BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
 	return FALSE;
 }
 
-struct storage storage_emmc = {
-	mmc_erase_blocks,
-	mmc_check_logical_unit,
+struct storage STORAGE(STORAGE_EMMC) = {
+	.erase_blocks = mmc_erase_blocks,
+	.check_logical_unit = mmc_check_logical_unit,
+	.probe = is_emmc,
+	.name = L"eMMC"
 };
