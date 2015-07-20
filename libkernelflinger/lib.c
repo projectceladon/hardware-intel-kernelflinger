@@ -639,6 +639,7 @@ VOID halt_system(VOID)
 {
         uefi_call_wrapper(RT->ResetSystem, 4, EfiResetShutdown, EFI_SUCCESS,
                           0, NULL);
+        error(L"Failed to halt the device ... looping forever");
         while (1) { }
 }
 
@@ -659,6 +660,7 @@ VOID reboot(CHAR16 *target)
 
         uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS,
                           0, NULL);
+        error(L"Failed to reboot the device ... looping forever");
         while (1) { }
 }
 
