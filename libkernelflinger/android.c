@@ -293,6 +293,8 @@ static CHAR16 *get_serial_port(void)
                 data[size - 1] = '\0';
                 val = stra_to_str(data);
                 FreePool(data);
+                if (!val)
+                        goto error;
         } else {
                 if (size % 2 == 0) {
                         data[size - 1] = '\0';
