@@ -320,13 +320,28 @@ static void cmd_oem_garbage_disk(__attribute__((__unused__)) INTN argc,
 		fastboot_fail("Garbage disk failed, %r", ret);
 }
 
-static void cmd_oem_gethashes(__attribute__((__unused__)) INTN argc,
-			      __attribute__((__unused__)) CHAR8 **argv)
+static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)
 {
-	get_boot_image_hash(L"boot");
-	get_boot_image_hash(L"recovery");
-	get_esp_hash();
-	get_ext4_hash(L"system");
+	EFI_STATUS ret = EFI_SUCCESS;
+
+	if (argc == 2) {
+		ret = set_hash_algorithm(argv[1]);
+		if (EFI_ERROR(ret)) {
+			fastboot_fail("Fail to set the algorithm, %r", ret);
+			return;
+		}
+	}
+
+	ret |= get_boot_image_hash(L"boot");
+	ret |= get_boot_image_hash(L"recovery");
+	ret |= get_esp_hash();
+	ret |= get_ext4_hash(L"system");
+
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Fail to get hash for system image, %r", ret);
+		return;
+	}
+
 	fastboot_okay("");
 }
 

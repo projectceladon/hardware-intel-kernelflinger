@@ -152,7 +152,6 @@ static enum boot_target check_magic_key(VOID)
 #endif
         unsigned long wait_ms = EFI_RESET_WAIT_MS;
 
-        debug(L"checking for magic key");
         uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
 
         /* Some systems require a short stall before we can be sure there
@@ -217,7 +216,6 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
         CHAR16 *target = NULL;
         enum boot_target t;
 
-        debug(L"checking bootloader control block");
         *oneshot = FALSE;
         *target_path = NULL;
 
@@ -302,12 +300,15 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         if (!target)
                 return NORMAL_BOOT;
 
+        debug(L"target = %s", target);
         ret = name_to_boot_target(target);
         if (ret == UNKNOWN_TARGET) {
                 error(L"Unknown oneshot boot target: '%s'", target);
                 ret = NORMAL_BOOT;
-        } else if (ret == CHARGER && !get_current_off_mode_charge())
+        } else if (ret == CHARGER && !get_current_off_mode_charge()) {
+                debug(L"Off mode charge is not set, powering off.");
                 ret = POWER_OFF;
+        }
 
         FreePool(target);
         return ret;
@@ -370,6 +371,7 @@ static enum boot_target check_watchdog(VOID)
                 }
                 return NORMAL_BOOT;
         }
+        debug(L"Reset source = %d", reset_source);
 
         ret = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
         if (EFI_ERROR(ret)) {
@@ -393,6 +395,8 @@ static enum boot_target check_watchdog(VOID)
         }
 
         counter++;
+        debug(L"Reset source = %d : incrementing watchdog counter (%d)", reset_source, counter);
+
         if (counter <= WATCHDOG_COUNTER_MAX) {
                         ret = set_watchdog_counter(counter);
                         if (EFI_ERROR(ret))
@@ -418,8 +422,6 @@ static enum boot_target check_command_line(VOID **address)
 
         *address = NULL;
         bt = NORMAL_BOOT;
-
-        debug(L"checking loader command line");
 
         if (EFI_ERROR(get_argv(g_loaded_image, &argc, &argv)))
                 return NORMAL_BOOT;
@@ -495,16 +497,22 @@ static enum boot_target check_charge_mode()
 
         wake_source = rsci_get_wake_source();
         if ((wake_source == WAKE_USB_CHARGER_INSERTED) ||
-            (wake_source == WAKE_ACDC_CHARGER_INSERTED))
+            (wake_source == WAKE_ACDC_CHARGER_INSERTED)) {
+                debug(L"Wake source = %d", wake_source);
                 return CHARGER;
+        }
 
         return NORMAL_BOOT;
 }
 
 enum boot_target check_battery()
 {
-        if (is_battery_below_boot_OS_threshold())
-                return is_charger_plugged_in() ? CHARGER : POWER_OFF;
+        if (is_battery_below_boot_OS_threshold()) {
+                BOOLEAN charger_plugged = is_charger_plugged_in();
+                debug(L"Battery is below boot OS threshold");
+                debug(L"Charger is%s plugged", charger_plugged ? L"" : L" not");
+                return charger_plugged ? CHARGER : POWER_OFF;
+        }
 
         return NORMAL_BOOT;
 }
@@ -542,42 +550,57 @@ static enum boot_target choose_boot_target(VOID **target_address,
         *target_address = NULL;
         *oneshot = TRUE;
 
+        debug(L"Bootlogic: Choosing boot target");
+
+        debug(L"Bootlogic: Check watchdog...");
         ret = check_watchdog();
         if (ret != NORMAL_BOOT)
-                return ret;
+                goto out;
 
+        debug(L"Bootlogic: Check osloader command line...");
         ret = check_command_line(target_address);
         if (ret != NORMAL_BOOT)
-                return ret;
+                goto out;
 
+        debug(L"Bootlogic: Check fastboot sentinel...");
         ret = check_fastboot_sentinel();
         if (ret != NORMAL_BOOT) {
-                return ret;
+                goto out;
         }
 
+        debug(L"Bootlogic: Check magic key...");
         ret = check_magic_key();
         if (ret != NORMAL_BOOT)
-                return ret;
+                goto out;
 
+        debug(L"Bootlogic: Check battery insertion...");
         ret = check_battery_inserted();
         if (ret != NORMAL_BOOT)
-                return ret;
+                goto out;
 
+        debug(L"Bootlogic: Check BCB...");
         ret = check_bcb(target_path, oneshot);
         if (ret != NORMAL_BOOT)
-                return ret;
+                goto out;
 
+        debug(L"Bootlogic: Check reboot target...");
         ret = check_loader_entry_one_shot();
         if (ret != NORMAL_BOOT)
-                return ret;
+                goto out;
 
+        debug(L"Bootlogic: Check battery level...");
         ret = check_battery();
         if (ret == POWER_OFF)
                 ux_display_low_battery(3);
         if (ret != NORMAL_BOOT)
-                return ret;
+                goto out;
 
-        return check_charge_mode();
+        debug(L"Bootlogic: Check charger insertion...");
+        ret = check_charge_mode();
+
+out:
+        debug(L"Bootlogic: selected '%s'",  boot_target_description(ret));
+        return ret;
 }
 
 /* Validate an image against a keystore.
@@ -1080,9 +1103,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         }
         g_disk_device = g_loaded_image->DeviceHandle;
 
-        ret = storage_set_boot_device(g_disk_device);
-        if (EFI_ERROR(ret))
-                error(L"Failed to set boot device");
+        /* loaded from mass storage (not DnX) */
+        if (g_disk_device) {
+                ret = storage_set_boot_device(g_disk_device);
+                if (EFI_ERROR(ret))
+                        error(L"Failed to set boot device");
+        }
 
         oem_keystore = (UINT8 *)&oem_keystore_table +
                         oem_keystore_table.oem_keystore_offset;
@@ -1103,14 +1129,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                                 NULL);
         }
 
-        debug(L"choosing a boot target");
         /* No UX prompts before this point, do not want to interfere
          * with magic key detection */
         boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
         if (boot_target == EXIT_SHELL)
                 return EFI_SUCCESS;
-
-        debug(L"selected '%s'",  boot_target_description(boot_target));
 
         if (boot_target == POWER_OFF)
                 halt_system();

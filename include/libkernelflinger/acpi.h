@@ -65,6 +65,14 @@ struct RSDT_TABLE {
 	UINT32 entry[1];		/* Table Entries */
 };
 
+/* Minimal definition of the FACP to get the DSDT memory address. */
+struct FACP_TABLE {
+	struct ACPI_DESC_HEADER header;
+	UINT32 firmware_ctrl;		/* Physical memory address of the FACS. */
+	UINT32 DSDT;			/* Physical memory address (0-4 GB) of the DSDT. */
+					/* [...] */
+};
+
 struct RSCI_TABLE {
 	struct ACPI_DESC_HEADER header;	/* System Description Table Header */
 	CHAR8 wake_source;		/* How system woken up from S4 or S5 */
