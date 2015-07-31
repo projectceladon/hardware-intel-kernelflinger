@@ -429,7 +429,7 @@ static EFI_STATUS hash_partition(struct gpt_partition_interface *gparti, UINT64 
 	CHAR8 *buffer;
 	UINT64 offset;
 	UINT64 chunklen;
-	EFI_STATUS ret;
+	EFI_STATUS ret = EFI_INVALID_PARAMETER;
 
 	buffer = AllocatePool(CHUNK);
 	if (!buffer)
