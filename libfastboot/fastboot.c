@@ -49,6 +49,7 @@
 #include "fastboot_ui.h"
 #include "smbios.h"
 #include "info.h"
+#include "authenticated_action.h"
 
 #define MAGIC_LENGTH 64
 /* size of "INFO" "OKAY" or "FAIL" */
@@ -111,6 +112,13 @@ static const char *flash_verified_whitelist[] = {
 	"cache",
 	"data",
 	"userdata",
+	NULL
+};
+
+static const char *flash_locked_whitelist[] = {
+#ifdef BOOTLOADER_POLICY
+	ACTION_AUTHORIZATION,
+#endif
 	NULL
 };
 
@@ -537,6 +545,22 @@ EFI_STATUS refresh_partition_var(void)
 	return publish_partsize();
 }
 
+static BOOLEAN verify_access(CHAR8 *name, const char **verified_whitelist,
+			     const char **locked_whitelist)
+{
+	switch (get_current_state()) {
+	case LOCKED:
+		return is_in_white_list(name, locked_whitelist);
+
+	case VERIFIED:
+		return is_in_white_list(name, locked_whitelist)
+			|| is_in_white_list(name, verified_whitelist);
+
+	default:
+		return TRUE;
+	}
+}
+
 static void cmd_flash(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
@@ -547,10 +571,10 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 		return;
 	}
 
-	if (device_is_verified()
-	    && !is_in_white_list(argv[1], flash_verified_whitelist)) {
-		error(L"Flash %a is prohibited in verified state.", argv[1]);
-		fastboot_fail("Prohibited command in verified state.");
+	if (!verify_access(argv[1], flash_verified_whitelist, flash_locked_whitelist)) {
+		error(L"Flash %a is prohibited in %a state.", argv[1],
+		      get_current_state_string());
+		fastboot_fail("Prohibited command in %a state.", get_current_state_string());
 		return;
 	}
 
@@ -925,8 +949,8 @@ static void fastboot_start_callback(void)
 }
 
 static struct fastboot_cmd COMMANDS[] = {
-	{ "download",		VERIFIED,	cmd_download },
-	{ "flash",		VERIFIED,	cmd_flash },
+	{ "download",		LOCKED,		cmd_download },
+	{ "flash",		LOCKED,		cmd_flash },
 	{ "erase",		VERIFIED,	cmd_erase },
 	{ "getvar",		LOCKED,		cmd_getvar },
 	{ "boot",		UNLOCKED,	cmd_boot },

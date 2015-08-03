@@ -588,8 +588,6 @@ char *get_device_id(void)
 }
 #endif
 
-#define SERIALNO_MIN_SIZE	6
-#define SERIALNO_MAX_SIZE	20
 /* Per Android CDD, the value must be 7-bit ASCII and match the regex
  * ^[a-zA-Z0-9](6,20)$  */
 char *get_serial_number(void)
@@ -653,6 +651,27 @@ bad:
 }
 
 #ifdef BOOTLOADER_POLICY
+BOOLEAN blpolicy_is_flashed(VOID)
+{
+	EFI_STATUS ret;
+	UINTN size, i;
+	UINT32 flags;
+	VOID *data;
+
+	for (i = 0; i < FASTBOOT_SECURED_VARS_SIZE; i++) {
+		ret = get_efi_variable(&fastboot_guid, (CHAR16 *)FASTBOOT_SECURED_VARS[i],
+				       &size, (VOID **)&data, &flags);
+		if (EFI_ERROR(ret))
+			return FALSE;
+
+		FreePool(data);
+		if (!(flags & EFI_VARIABLE_TIME_BASED_AUTHENTICATED_WRITE_ACCESS))
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
 BOOLEAN device_is_class_A(VOID)
 {
 	EFI_STATUS ret;
@@ -677,5 +696,28 @@ BOOLEAN device_is_class_A(VOID)
 
 out:
 	return (bpm & CLASS_A_DEVICE) != 0;
+}
+
+EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size)
+{
+	EFI_STATUS ret;
+	UINT32 flags;
+	VOID *data;
+
+	ret = get_efi_variable(&fastboot_guid, OAK_VARNAME,
+			       size, (VOID **)&data, &flags);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read OAK EFI variable");
+		return ret;
+	}
+
+	if (!(flags & EFI_VARIABLE_TIME_BASED_AUTHENTICATED_WRITE_ACCESS)) {
+		FreePool(data);
+		return EFI_SECURITY_VIOLATION;
+	}
+
+	*data_p = data;
+
+	return EFI_SUCCESS;
 }
 #endif
