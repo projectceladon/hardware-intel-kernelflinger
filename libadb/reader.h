@@ -1,9 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Andrew Boie <andrew.p.boie@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,31 +30,20 @@
  *
  */
 
-#ifndef _TARGETS_H_
-#define _TARGETS_H_
+#ifndef _READER_H_
+#define _READER_H_
 
-#include <efi.h>
-#include <efilib.h>
+#include <gpt.h>
 
-enum boot_target {
-        UNKNOWN_TARGET = -1,
-        NORMAL_BOOT,
-        RECOVERY,
-        FASTBOOT,
-        ESP_BOOTIMAGE,
-        ESP_EFI_BINARY,
-        MEMORY,
-        CHARGER,
-        POWER_OFF,
-        EXIT_SHELL,
-        TDOS,
-        DNX,
-        CRASHMODE
-};
+typedef struct reader_context {
+	struct reader *reader;
+	UINT64 cur;
+	UINT64 len;
+	void *private;
+} reader_ctx_t;
 
-const CHAR16 *boot_target_name(enum boot_target bt);
-const CHAR16 *boot_target_description(enum boot_target bt);
-enum boot_target name_to_boot_target(const CHAR16 *str);
-EFI_STATUS reboot_to_target(enum boot_target bt);
+EFI_STATUS reader_open(reader_ctx_t *reader, char *args);
+EFI_STATUS reader_read(reader_ctx_t *reader, unsigned char **buf, UINTN *len);
+void reader_close(reader_ctx_t *reader);
 
-#endif	/* _TARGETS_H_ */
+#endif	/* _READER_H_ */

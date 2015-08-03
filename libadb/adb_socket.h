@@ -1,9 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Andrew Boie <andrew.p.boie@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,31 +30,34 @@
  *
  */
 
-#ifndef _TARGETS_H_
-#define _TARGETS_H_
+#ifndef _ADB_SOCKET_H_
+#define _ADB_SOCKET_H_
 
 #include <efi.h>
 #include <efilib.h>
 
-enum boot_target {
-        UNKNOWN_TARGET = -1,
-        NORMAL_BOOT,
-        RECOVERY,
-        FASTBOOT,
-        ESP_BOOTIMAGE,
-        ESP_EFI_BINARY,
-        MEMORY,
-        CHARGER,
-        POWER_OFF,
-        EXIT_SHELL,
-        TDOS,
-        DNX,
-        CRASHMODE
-};
+#include "adb.h"
 
-const CHAR16 *boot_target_name(enum boot_target bt);
-const CHAR16 *boot_target_description(enum boot_target bt);
-enum boot_target name_to_boot_target(const CHAR16 *str);
-EFI_STATUS reboot_to_target(enum boot_target bt);
+typedef struct asock * asock_t;
 
-#endif	/* _TARGETS_H_ */
+struct service;
+
+#define MAX_ADB_SOCKET 5
+
+/* Host to device */
+EFI_STATUS asock_open(UINT32 remote, struct service *service, char *arg);
+EFI_STATUS asock_close(asock_t s);
+EFI_STATUS asock_okay(asock_t s);
+EFI_STATUS asock_read(asock_t s, unsigned char *data, UINT32 length);
+
+/* Device to host */
+EFI_STATUS asock_write(asock_t s, unsigned char *data, UINT32 length);
+EFI_STATUS asock_send_okay(asock_t s);
+EFI_STATUS asock_send_close(asock_t s);
+
+/* Tools */
+void *asock_context(asock_t s);
+asock_t asock_find(UINT32 local, UINT32 remote);
+void asock_close_all();
+
+#endif	/* _ADB_SOCKET_H_ */

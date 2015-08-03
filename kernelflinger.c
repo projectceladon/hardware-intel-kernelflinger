@@ -381,7 +381,7 @@ static enum boot_target check_watchdog(VOID)
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Failed to reset the watchdog status");
 
-        return ux_crash_event_prompt_user_for_boot_target();
+        return ux_prompt_user_for_boot_target(TRUE);
 
 error:
         return NORMAL_BOOT;
@@ -953,6 +953,14 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                         continue;
                 }
 
+                /* Offer a fast path between crashmode and fastboot
+                   mode to keep the RAM state.  */
+                if (target == CRASHMODE) {
+                        target = ux_prompt_user_for_boot_target(FALSE);
+                        if (target == FASTBOOT)
+                                continue;
+                }
+
                 if (target != UNKNOWN_TARGET)
                         reboot_to_target(target);
         }
@@ -1107,12 +1115,17 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
         if (boot_target == EXIT_SHELL)
                 return EFI_SUCCESS;
+        if (boot_target == CRASHMODE)
+                boot_target = ux_prompt_user_for_boot_target(FALSE);
 
         if (boot_target == POWER_OFF)
                 halt_system();
 
         if (boot_target == CHARGER)
                 ux_display_empty_battery();
+
+        if (boot_target == DNX || boot_target == CRASHMODE)
+                reboot_to_target(boot_target);
 
 #ifdef USERDEBUG
         debug(L"checking device state");

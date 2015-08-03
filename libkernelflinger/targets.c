@@ -46,6 +46,11 @@ static struct target {
         { CHARGER,        L"charging",   L"Charger mode" },
         { TDOS,           L"tdos",       L"Theft deterrent OS" },
         { DNX,            L"dnx",        L"Download and Execute mode" },
+#ifdef CRASHMODE_USE_ADB
+        { CRASHMODE,      L"crashmode",  L"Crashmode" },
+#else
+        { CRASHMODE,      NULL,          L"Crashmode" },
+#endif
         /* Internal only */
         { ESP_BOOTIMAGE,  NULL,          L"ESP bootimage" },
         { ESP_EFI_BINARY, NULL,          L"ESP efi binary" },

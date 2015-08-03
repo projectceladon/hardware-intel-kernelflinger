@@ -111,6 +111,9 @@ static ui_boot_action_t BOOT_ACTIONS[] = {
 	{ "recoverymode",	NULL,	RECOVERY },
 	{ "reboot",		NULL,	NORMAL_BOOT },
 	{ "power_off",		NULL,	POWER_OFF },
+#ifdef CRASHMODE_USE_ADB
+	{ "crashmode",		NULL,	CRASHMODE },
+#endif
 	{ NULL,			NULL,	UNKNOWN_TARGET }
 };
 
