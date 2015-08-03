@@ -111,7 +111,7 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 	void *read_ptr;
 	INTN nb_chunks;
 	EFI_FILE *file;
-	__le32 blk_count;
+	UINT32 blk_count;
 
 	ret = uefi_open_file(file_io_interface, filename, &file);
 	if (EFI_ERROR(ret)) {

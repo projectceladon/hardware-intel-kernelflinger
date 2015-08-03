@@ -35,6 +35,9 @@
 #include "lib.h"
 #include "ux.h"
 #include "vars.h"
+#ifdef CRASHMODE_USE_ADB
+#include "adb.h"
+#endif
 
 #define TIMEOUT_SECS	5
 #define PENDING_TIMEOUT_NO_UNLOCK	"Your device will power off in 5 seconds."
@@ -113,6 +116,22 @@ static const ui_textline_t crash_event_message[] = {
 	{ &COLOR_LIGHTGRAY,	"contact the technical assistance.",	FALSE },
 	{ NULL, NULL, FALSE }
 };
+#ifdef CRASHMODE_USE_ADB
+static const ui_textline_t adb_message[] = {
+	{ &COLOR_LIGHTGRAY,	"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"A minimal implementation of adb is",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"running and allows reboot [TARGET]", 	FALSE },
+	{ &COLOR_LIGHTGRAY,	"and pull commands:",			FALSE },
+	{ &COLOR_LIGHTGRAY,	"- ram:[:START[:LENGTH]]",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"- part:PART_NAME[:START[:LENGTH]]",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"- acpi:TABLE_NAME",			FALSE },
+	{ &COLOR_LIGHTGRAY,	"- efivar:VAR_NAME[:GUID]",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"START and LENGTH are hexadecimal",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"strings without \"0x\" prefix. 'ram'",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"output file is a sparse file.",	FALSE },
+	{ NULL, NULL, FALSE }
+};
+#endif
 
 static const char *VENDOR_IMG_NAME = "splash_intel";
 static const char *LOW_BATTERY_IMG_NAME = "low_battery";
@@ -311,14 +330,40 @@ static ui_boot_action_t BOOT_ACTIONS[] = {
 	{ NULL,			NULL,	UNKNOWN_TARGET }
 };
 
-enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID) {
+enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash) {
 	ui_image_t *img;
 	ui_boot_menu_t *menu = NULL;
 	UINTN width, height, img_x, img_y, area_x, area_y, colsarea, linesarea;
 	EFI_STATUS ret = EFI_SUCCESS;
 	enum boot_target target;
+#ifdef CRASHMODE_USE_ADB
+#ifdef USER
+#error "adb in crashmode MUST be disabled on a USER build"
+#endif
+
+	BOOLEAN adb_initialized = FALSE;
+	ui_textline_t *texts[4];
+	ui_textline_t crashmode_text[] = {
+		{ &COLOR_RED, "CRASHMODE", TRUE },
+		{ &COLOR_WHITE, "", FALSE },
+		{ NULL, NULL, FALSE }
+	};
+
+	if (due_to_crash) {
+		texts[0] = build_error_code_text(&COLOR_LIGHTRED, CRASH_EVENT_CODE);
+		texts[1] = (ui_textline_t *)crash_event_message;
+		texts[2] = (ui_textline_t *)adb_message;
+		texts[3] = NULL;
+	} else {
+		texts[0] = crashmode_text;
+		texts[1] = (ui_textline_t *)adb_message;
+		texts[2] = NULL;
+	}
+#else
+	(void)due_to_crash;	/* Unused parameter.  */
 	const ui_textline_t *texts[] = { build_error_code_text(&COLOR_LIGHTRED, CRASH_EVENT_CODE),
 					 crash_event_message, NULL };
+#endif
 
 	ret = ux_init_screen();
 	if (EFI_ERROR(ret))
@@ -378,18 +423,52 @@ enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID) {
 	area_y += hmargin;
 	linesarea = sheight - area_y - hmargin;
 
-	ret = ui_display_texts(texts, area_x, area_y, linesarea, colsarea);
+	ret = ui_display_texts((const ui_textline_t **)texts, area_x, area_y, linesarea, colsarea);
 	if (EFI_ERROR(ret))
 		goto error;
 
+	/* In case user still holding it from answering a UX prompt
+	 * or magic key */
+	ui_wait_for_key_release();
+
+#ifdef CRASHMODE_USE_ADB
+	ret = adb_init();
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to initialize adb, continue without adb support");
+	else {
+		debug(L"adb implementation is initialized");
+		adb_initialized = TRUE;
+	}
+#endif
+
 	while (1) {
-		target = ui_boot_menu_event_handler(menu,
-						    ui_wait_for_input(TIMEOUT_SECS));
-		if (target != UNKNOWN_TARGET) {
-			ui_boot_menu_free(menu);
-			ui_clear_screen();
-			return target;
+#ifdef CRASHMODE_USE_ADB
+		if (adb_initialized) {
+			ret = adb_run();
+			if (EFI_ERROR(ret))
+				break;
+
+			target = adb_get_boot_target();
+			if (target != UNKNOWN_TARGET)
+				break;
 		}
+
+		target = ui_boot_menu_event_handler(menu, ui_read_input());
+#else
+		target = ui_boot_menu_event_handler(menu, ui_wait_for_input(TIMEOUT_SECS));
+#endif
+		if (target != UNKNOWN_TARGET)
+			break;
+	}
+
+#ifdef CRASHMODE_USE_ADB
+	if (adb_initialized)
+		adb_exit();
+#endif
+	if (target != UNKNOWN_TARGET) {
+		ui_boot_menu_free(menu);
+		ui_clear_screen();
+		return target;
 	}
 
 	halt_system();		/* Timer expired, turn-off the device. */

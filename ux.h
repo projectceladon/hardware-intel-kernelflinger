@@ -44,9 +44,12 @@ VOID ux_prompt_user_bootimage_unverified(VOID);
 VOID ux_prompt_user_device_unlocked(VOID);
 VOID ux_prompt_user_secure_boot_off(VOID);
 
-/* Inform the user about the multiple crash events and let him choose
- * a boot target */
-enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID);
+/* If due_to_crash is TRUE, it informs the user about the multiple
+ * crash events and let him choose a boot target.  If the build is a
+ * USERDEBUG or ENG variant, it offers a minimal adb implementation to
+ * dump data from memory and partition.  In that case, the boot_target
+ * can also be provided using the adb reboot [TARGET].  */
+enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash);
 
 /* Display a low_battery image during DELAY seconds and exit.  */
 VOID ux_display_low_battery(UINTN delay);

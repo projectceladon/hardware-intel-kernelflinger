@@ -94,7 +94,8 @@ static VOID test_ux(VOID)
         ux_prompt_user_device_unlocked();
         ux_prompt_user_secure_boot_off();
         ux_prompt_user_keystore_unverified(fake_hash);
-        ux_crash_event_prompt_user_for_boot_target();
+        ux_prompt_user_for_boot_target(TRUE);
+        ux_prompt_user_for_boot_target(FALSE);
         ux_display_low_battery(3);
 }
 

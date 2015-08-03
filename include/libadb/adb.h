@@ -1,9 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Andrew Boie <andrew.p.boie@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,31 +30,45 @@
  *
  */
 
-#ifndef _TARGETS_H_
-#define _TARGETS_H_
+#ifndef _ADB_H_
+#define _ADB_H_
 
 #include <efi.h>
 #include <efilib.h>
 
-enum boot_target {
-        UNKNOWN_TARGET = -1,
-        NORMAL_BOOT,
-        RECOVERY,
-        FASTBOOT,
-        ESP_BOOTIMAGE,
-        ESP_EFI_BINARY,
-        MEMORY,
-        CHARGER,
-        POWER_OFF,
-        EXIT_SHELL,
-        TDOS,
-        DNX,
-        CRASHMODE
-};
+#define MKID(a,b,c,d) ((a) | ((b) << 8) | ((c) << 16) | ((d) << 24))
 
-const CHAR16 *boot_target_name(enum boot_target bt);
-const CHAR16 *boot_target_description(enum boot_target bt);
-enum boot_target name_to_boot_target(const CHAR16 *str);
-EFI_STATUS reboot_to_target(enum boot_target bt);
+/* ADB protocol types */
+#define A_SYNC MKID('S','Y','N','C')
+#define A_CNXN MKID('C','N','X','N')
+#define A_OPEN MKID('O','P','E','N')
+#define A_OKAY MKID('O','K','A','Y')
+#define A_CLSE MKID('C','L','S','E')
+#define A_WRTE MKID('W','R','T','E')
+#define A_AUTH MKID('A','U','T','H')
 
-#endif	/* _TARGETS_H_ */
+typedef struct adb_msg {
+	UINT32 command;		/* command identifier constant      */
+	UINT32 arg0;		/* first argument                   */
+	UINT32 arg1;		/* second argument                  */
+	UINT32 data_length;	/* length of payload (0 is allowed) */
+	UINT32 data_check;	/* checksum of data payload         */
+	UINT32 magic;		/* command ^ 0xffffffff             */
+} adb_msg_t;
+
+#define ADB_MAX_PAYLOAD 4096
+
+typedef struct adb_pkt {
+	adb_msg_t msg;
+	unsigned char *data;
+} adb_pkt_t;
+
+EFI_STATUS adb_init();
+EFI_STATUS adb_run();
+EFI_STATUS adb_exit();
+enum boot_target adb_get_boot_target(void);
+void adb_set_boot_target(enum boot_target bt);
+
+EFI_STATUS adb_send_pkt(adb_pkt_t *pkt, UINT32 command, UINT32 arg0, UINT32 arg1);
+
+#endif	/* _ADB_H_ */
