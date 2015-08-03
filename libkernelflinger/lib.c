@@ -647,6 +647,43 @@ EFI_STATUS bytes_to_hex_stra(CHAR8 *bytes, UINTN length, CHAR8 *str, UINTN strsi
 }
 
 
+static inline BOOLEAN is_in_char_set(char c, const char *set)
+{
+        UINTN i, len;
+
+        for (i = 0, len = strlen((CHAR8 *)set); i < len; i++)
+                if (c == set[i])
+                        return TRUE;
+
+        return FALSE;
+}
+
+char *strtok_r(char *str, const char *delim, char **saveptr)
+{
+        char *p, *res;
+
+        if (!delim || !saveptr || (!str && !*saveptr))
+                return NULL;
+
+        if (str)
+                *saveptr = str;
+
+        if (**saveptr == '\0')
+                return NULL;
+
+        res = *saveptr;
+        for (p = *saveptr; *p != '\0' && !is_in_char_set(*p, delim); p++)
+                ;
+
+        for (; *p != '\0' && is_in_char_set(*p, delim); p++)
+                *p = '\0';
+
+        *saveptr = p;
+
+        return res;
+}
+
+
 VOID pause(UINTN seconds)
 {
         uefi_call_wrapper(BS->Stall, 1, seconds * 1000000);
