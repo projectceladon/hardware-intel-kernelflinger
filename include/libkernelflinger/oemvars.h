@@ -36,5 +36,6 @@
 #include <efi.h>
 
 EFI_STATUS flash_oemvars(VOID *data, UINTN size);
+EFI_STATUS flash_oemvars_silent_write_error(VOID *data, UINTN size);
 
 #endif	/* __OEMVARS_H__ */

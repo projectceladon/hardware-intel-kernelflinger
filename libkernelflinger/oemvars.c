@@ -40,6 +40,11 @@ enum vartype {
 	VAR_TYPE_BLOB
 };
 
+typedef struct oemvars_ctx {
+	EFI_GUID guid;
+	BOOLEAN silent_write_error;
+} oemvars_ctx_t;
+
 static BOOLEAN parse_oemvar_guid_line(char *line, EFI_GUID *g)
 {
 	EFI_STATUS ret;
@@ -167,15 +172,15 @@ static EFI_STATUS parse_line(char *line, VOID *context)
 	CHAR16 *varname;
 	UINTN vallen;
 	char  *var, *val, *p;
-	EFI_GUID *curr_guid = (EFI_GUID *)context;
+	oemvars_ctx_t *ctx = (oemvars_ctx_t *)context;
 
 	/* Snip comments */
 	if ((p = (char *)strchr((CHAR8 *)line, '#')))
 		*p = 0;
 
 	/* GUID line syntax */
-	if (parse_oemvar_guid_line(line, curr_guid)) {
-		debug(L"current guid set to %g", curr_guid);
+	if (parse_oemvar_guid_line(line, &ctx->guid)) {
+		debug(L"current guid set to %g", &ctx->guid);
 		return EFI_SUCCESS;
 	}
 
@@ -219,7 +224,7 @@ static EFI_STATUS parse_line(char *line, VOID *context)
 		return EFI_INVALID_PARAMETER;
 	}
 
-	if (!memcmp(curr_guid, &fastboot_guid, sizeof(*curr_guid))) {
+	if (!memcmp(&ctx->guid, &fastboot_guid, sizeof(ctx->guid))) {
 #ifdef BOOTLOADER_POLICY
 		UINTN i;
 
@@ -242,12 +247,16 @@ static EFI_STATUS parse_line(char *line, VOID *context)
 
 	debug(L"Setting oemvar: %a", var);
 	ret = uefi_call_wrapper(RT->SetVariable, 5, varname,
-				curr_guid, attributes,
+				&ctx->guid, attributes,
 				vallen, val);
 	FreePool(varname);
 	if (EFI_ERROR(ret)) {
-		error(L"EFI variable setting failed");
-		return ret;
+		if (!ctx->silent_write_error) {
+			efi_perror(ret, L"EFI variable setting failed");
+			return ret;
+		}
+		debug(L"EFI variable setting failed: %r", ret);
+		debug(L"silent error is on, continue anyway");
 	}
 
 	return EFI_SUCCESS;
@@ -289,10 +298,23 @@ static EFI_STATUS parse_line(char *line, VOID *context)
  *
  * will change the GUID used for subsequent lines.
  */
-EFI_STATUS flash_oemvars(VOID *data, UINTN size)
+static EFI_STATUS _flash_oemvars(VOID *data, UINTN size, BOOLEAN silent_error)
 {
-	EFI_GUID curr_guid = loader_guid;
+	oemvars_ctx_t ctx = {
+		.guid = loader_guid,
+		.silent_write_error = silent_error
+	};
 
 	debug(L"Parsing and setting values from oemvars file");
-	return parse_text_buffer(data, size, parse_line, &curr_guid);
+	return parse_text_buffer(data, size, parse_line, &ctx);
+}
+
+EFI_STATUS flash_oemvars_silent_write_error(VOID *data, UINTN size)
+{
+	return _flash_oemvars(data, size, TRUE);
+}
+
+EFI_STATUS flash_oemvars(VOID *data, UINTN size)
+{
+	return _flash_oemvars(data, size, FALSE);
 }
