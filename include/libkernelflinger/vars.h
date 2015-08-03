@@ -86,6 +86,9 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define CMDLINE_REPLACE_VAR     L"ReplaceCmdline"
 #endif
 
+#define SERIALNO_MIN_SIZE	6
+#define SERIALNO_MAX_SIZE	20
+
 /* Various interesting partition labels */
 extern const CHAR16 *BOOT_LABEL;
 extern const CHAR16 *RECOVERY_LABEL;
@@ -134,7 +137,9 @@ CHAR16 *boot_state_to_string(UINT8 boot_state);
 EFI_STATUS reprovision_state_vars(VOID);
 #endif
 #ifdef BOOTLOADER_POLICY
+BOOLEAN blpolicy_is_flashed(VOID);
 BOOLEAN device_is_class_A(VOID);
+EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size);
 #endif
 #endif /* _VARS_H_ */
 

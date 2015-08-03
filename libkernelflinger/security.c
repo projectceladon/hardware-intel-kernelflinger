@@ -4,6 +4,7 @@
  *
  * Author: Matt Wood <matthew.d.wood@intel.com>
  * Author: Andrew Boie <andrew.p.boie@intel.com>
+ * Author: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -430,6 +431,134 @@ BOOLEAN is_efi_secure_boot_enabled(VOID)
                 return FALSE;
 
         return value == 1;
+}
+
+static X509 *find_cert_in_pkcs7(PKCS7 *p7, const unsigned char *cert_sha256)
+{
+        STACK_OF(X509) *certs = NULL;
+        X509 *x509;
+        int id;
+        unsigned int size;
+        unsigned char digest[SHA256_DIGEST_LENGTH];
+        const EVP_MD *fdig = EVP_sha256();
+        int i;
+
+        id = OBJ_obj2nid(p7->type);
+        switch (id) {
+        case NID_pkcs7_signed:
+                certs = p7->d.sign->cert;
+                break;
+        case NID_pkcs7_signedAndEnveloped:
+                certs = p7->d.signed_and_enveloped->cert;
+                break;
+        default:
+                break;
+        }
+
+        if (!certs)
+                return NULL;
+
+        for (i = 0; i < sk_X509_num(certs); i++) {
+                x509 = sk_X509_value(certs, i);
+                if (!X509_digest(x509, fdig, digest, &size)) {
+                        error(L"Failed to compute X509 digest");
+                        return NULL;
+                }
+                if (size != sizeof(digest))
+                        continue;
+                if (!memcmp(cert_sha256, digest, sizeof(digest)))
+                        return x509;
+        }
+
+        return NULL;
+}
+
+EFI_STATUS verify_pkcs7(const unsigned char *cert_sha256, UINTN cert_size,
+                        const VOID *pkcs7, UINTN pkcs7_size,
+                        VOID **data_p, int *size)
+{
+        X509 *x509;
+        PKCS7 *p7 = NULL;
+        X509_STORE *store = NULL;
+        BIO *p7_bio = NULL, *data_bio = NULL;
+        VOID *payload = NULL;
+        char *tmp;
+        int ret;
+
+        if (cert_size != SHA256_DIGEST_LENGTH) {
+                error(L"Invalid SHA256 length for trusted certificate");
+                goto done;
+        }
+
+        p7_bio = BIO_new_mem_buf((void *)pkcs7, pkcs7_size);
+        if (!p7_bio) {
+                error(L"Failed to create PKCS7 BIO");
+                goto done;
+        }
+
+        p7 = d2i_PKCS7_bio(p7_bio, NULL);
+        if (!p7) {
+                error(L"Failed to read PKCS7");
+                goto done;
+        }
+
+        x509 = find_cert_in_pkcs7(p7, cert_sha256);
+        if (!x509) {
+                error(L"Could not find the root certificate");
+                goto done;
+        }
+
+        store = X509_STORE_new();
+        if (!store) {
+                error(L"Failed to create x509 store");
+                goto done;
+        }
+
+        ret = X509_STORE_add_cert(store, x509);
+        if (ret != 1) {
+                error(L"Failed to add trusted certificate to store");
+                goto done;
+        }
+
+        data_bio = BIO_new(BIO_s_mem());
+        if (!data_bio) {
+                error(L"Failed to create data BIO");
+                goto done;
+        }
+
+        EVP_add_digest(EVP_sha256());
+        ret = PKCS7_verify(p7, NULL, store, NULL, data_bio, 0);
+        if (ret != 1) {
+                error(L"PKCS7 verification failed");
+                goto done;
+        }
+
+        *size = BIO_get_mem_data(data_bio, &tmp);
+        if (*size == -1) {
+                error(L"Failed to get PKCS7 data");
+                goto done;
+        }
+
+        payload = AllocatePool(*size);
+        if (!payload) {
+                error(L"Failed to allocate data buffer");
+                goto done;
+        }
+
+        memcpy(payload, tmp, *size);
+        *data_p = payload;
+
+done:
+        if (p7_bio)
+                BIO_free(p7_bio);
+        if (p7)
+                PKCS7_free(p7);
+        if (store)
+                X509_STORE_free(store);
+        if (data_bio)
+                BIO_free(data_bio);
+
+        return payload ? EFI_SUCCESS : EFI_INVALID_PARAMETER;
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

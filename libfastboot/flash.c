@@ -47,6 +47,7 @@
 #include "oemvars.h"
 #include "vars.h"
 #include "bootloader.h"
+#include "authenticated_action.h"
 
 static struct gpt_partition_interface gparti;
 static UINT64 cur_offset;
@@ -322,7 +323,10 @@ static struct label_exception {
 	{ L"ifwi", flash_ifwi },
 	{ L"oemvars", flash_oemvars },
 	{ L"zimage", flash_zimage },
-	{ BOOTLOADER_PART, flash_bootloader }
+	{ BOOTLOADER_PART, flash_bootloader },
+#ifdef BOOTLOADER_POLICY
+	{ CONVERT_TO_WIDE(ACTION_AUTHORIZATION), authenticated_action }
+#endif
 };
 
 EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)

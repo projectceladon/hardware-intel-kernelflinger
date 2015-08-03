@@ -19,6 +19,10 @@ SHARED_SRC_FILES := \
 	hashes.c \
 	bootloader.c
 
+ifneq ($(strip $(TARGET_BOOTLOADER_POLICY)),)
+    SHARED_SRC_FILES += authenticated_action.c
+endif
+
 include $(CLEAR_VARS)
 
 LOCAL_MODULE := libfastboot-$(TARGET_BUILD_VARIANT)

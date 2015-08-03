@@ -1,10 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Author: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,15 +30,12 @@
  *
  */
 
-#ifndef _FASTBOOT_OEM_H_
-#define _FASTBOOT_OEM_H_
+#ifndef _AUTHENTICATED_ACTION_H_
+#define _AUTHENTICATED_ACTION_H_
 
-EFI_STATUS fastboot_oem_init(void);
-void fastboot_oem_free();
+#define ACTION_AUTHORIZATION "action-authorization"
 
-/* Change the current device state to NEW_STATE.  If INTERACTIVE is
- * TRUE, UI confirmation is active and fastboot protocol response will
- * be sent.  */
-EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive);
+char *authenticated_action_new_nonce(char *action_name);
+EFI_STATUS authenticated_action(void *data, UINTN size);
 
-#endif	/* _FASTBOOT_OEM_H_ */
+#endif	/* _AUTHENTICATED_ACTION_H_ */

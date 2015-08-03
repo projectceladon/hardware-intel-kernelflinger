@@ -43,6 +43,7 @@
 #include "fastboot.h"
 #include "fastboot_ui.h"
 #include "gpt.h"
+#include "authenticated_action.h"
 
 #include "fastboot_oem.h"
 #include "intel_variables.h"
@@ -72,14 +73,15 @@ static EFI_STATUS fastboot_oem_publish(void)
 	return publish_intel_variables();
 }
 
-static void change_device_state(enum device_state new_state)
+EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
 {
 	EFI_STATUS ret;
 
 	if (get_current_state() == new_state && !device_is_provisioning()) {
 		error(L"Device is already in the required state.");
-		fastboot_okay("");
-		return;
+		if (interactive)
+			fastboot_okay("");
+		return EFI_SUCCESS;
 	}
 
 	/* "Eng" builds skip all these security policies */
@@ -91,16 +93,17 @@ static void change_device_state(enum device_state new_state)
 		/* 'eng' or 'userdebug' bootloaders skip the prompts
 		 * to make CI automation easier */
 #ifdef USER
-		if (!fastboot_ui_confirm_for_state(new_state)) {
+		if (interactive && !fastboot_ui_confirm_for_state(new_state)) {
 			fastboot_fail("Refusing to change device state");
-			return;
+			return EFI_ACCESS_DENIED;
 		}
 #endif
 		ui_print(L"Erasing userdata...");
 		ret = erase_by_label(L"data");
 		if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
-			fastboot_fail("Failed to wipe data.\n");
-			return;
+			if (interactive)
+				fastboot_fail("Failed to wipe data.");
+			return ret;
 		}
 
 		if (ret == EFI_NOT_FOUND)
@@ -112,26 +115,32 @@ static void change_device_state(enum device_state new_state)
 
 	ret = set_current_state(new_state);
 	if (EFI_ERROR(ret)) {
-		fastboot_fail("Failed to change the device state\n");
-		return;
+		if (interactive)
+			fastboot_fail("Failed to change the device state");
+		return ret;
 	}
 
 	fastboot_ui_refresh();
 	ret = fastboot_oem_publish();
-	if (EFI_ERROR(ret))
-		fastboot_fail("Failed to publish OEM variables");
-	else {
-		fastboot_okay("");
-		/* Ensure logs variable is deleted on a successful
-		   state transition.  */
-		del_efi_variable(&loader_guid, LOG_VAR);
+	if (EFI_ERROR(ret)) {
+		if (interactive)
+			fastboot_fail("Failed to publish OEM variables");
+		return ret;
 	}
+
+	if (interactive)
+		fastboot_okay("");
+	/* Ensure logs variable is deleted on a successful
+	   state transition.  */
+	del_efi_variable(&loader_guid, LOG_VAR);
+
+	return EFI_SUCCESS;
 }
 
 static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
 			 __attribute__((__unused__)) CHAR8 **argv)
 {
-	change_device_state(LOCKED);
+	change_device_state(LOCKED, TRUE);
 }
 
 static BOOLEAN frp_allows_unlock()
@@ -179,17 +188,17 @@ static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
 #else
 		fastboot_info("Unlock protection is set");
 		fastboot_info("Unlocking anyway since this is not a User build");
-		change_device_state(UNLOCKED);
+		change_device_state(UNLOCKED, TRUE);
 #endif
 	} else {
-		change_device_state(UNLOCKED);
+		change_device_state(UNLOCKED, TRUE);
 	}
 }
 
 static void cmd_oem_verified(__attribute__((__unused__)) INTN argc,
 			     __attribute__((__unused__)) CHAR8 **argv)
 {
-	change_device_state(VERIFIED);
+	change_device_state(VERIFIED, TRUE);
 }
 
 static void cmd_oem_off_mode_charge(INTN argc, CHAR8 **argv)
@@ -477,6 +486,27 @@ static void cmd_oem(INTN argc, CHAR8 **argv)
 	fastboot_run_cmd(cmdlist, (char *)argv[1], argc - 1, argv + 1);
 }
 
+#ifdef BOOTLOADER_POLICY
+static void cmd_oem_get_action_nonce(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
+{
+	char *nonce;
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	nonce = authenticated_action_new_nonce((char *)argv[1]);
+	if (!nonce) {
+		fastboot_fail("Failed to generate new nonce");
+		return;
+	}
+
+	fastboot_info_long_string(nonce, NULL);
+	fastboot_okay("");
+}
+#endif
+
 static struct fastboot_cmd COMMANDS[] = {
 	{ "lock",			LOCKED,		cmd_oem_lock },
 	{ "unlock",			LOCKED,		cmd_oem_unlock  },
@@ -495,7 +525,10 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "rm",				LOCKED,		cmd_oem_rm },
 #endif
 	{ "get-hashes",			LOCKED,		cmd_oem_gethashes  },
-	{ "get-provisioning-logs",	LOCKED,		cmd_oem_get_logs }
+	{ "get-provisioning-logs",	LOCKED,		cmd_oem_get_logs },
+#ifdef BOOTLOADER_POLICY
+	{ "get-action-nonce",		LOCKED,		cmd_oem_get_action_nonce }
+#endif
 };
 
 static struct fastboot_cmd oem = { "oem", LOCKED, cmd_oem };
