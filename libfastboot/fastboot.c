@@ -868,33 +868,44 @@ static void fastboot_process_tx(__attribute__((__unused__)) void *buf,
 	}
 }
 
-#define MAX_ARGS 64
-
-static void split_args(CHAR8 *str, INTN *argc, CHAR8 *argv[])
+static EFI_STATUS get_command_buffer_argv(INTN *argc, CHAR8 *argv[], UINTN max_argc)
 {
-	argv[0] = str;
-	while (*str != ' ' && *str != ':' && *str != '\0')
-		str++;
+	char *saveptr, *token;
 
-	*argc = 1;
-	while (*str != '\0' && *argc < MAX_ARGS) {
-		*str++ = '\0';
-		argv[(*argc)++] = str;
-		while (*str != '\0' && *str != ' ')
-			str++;
+	argv[0] = (CHAR8 *)strtok_r((char *)command_buffer, ": ", &saveptr);
+	if (!argv[0])
+		return EFI_INVALID_PARAMETER;
+
+	for (*argc = 1; (UINTN)*argc < max_argc; (*argc)++) {
+		token = strtok_r(NULL, " ", &saveptr);
+		if (!token)
+			break;
+		argv[*argc] = (CHAR8 *)token;
 	}
+
+	if (token && strtok_r(NULL, " ", &saveptr))
+		return EFI_INVALID_PARAMETER;
+
+	return EFI_SUCCESS;
 }
 
 static unsigned received_len;
 static void fastboot_run_command()
 {
+#define MAX_ARGS 16
+	EFI_STATUS ret;
 	CHAR8 *argv[MAX_ARGS];
 	INTN argc;
 
 	if (fastboot_state != STATE_COMMAND)
 		return;
 
-	split_args((CHAR8 *)command_buffer, &argc, argv);
+	ret = get_command_buffer_argv(&argc, argv, MAX_ARGS);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to split fastboot command line");
+		return;
+	}
+
 	fastboot_run_root_cmd((char *)argv[0], argc, argv);
 	received_len = 0;
 

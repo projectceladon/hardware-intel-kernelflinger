@@ -128,6 +128,8 @@ char *strdup(const char *s);
 EFI_STATUS bytes_to_hex_stra(CHAR8 *bytes, UINTN length,
                              CHAR8 *str, UINTN str_size);
 
+char *strtok_r(char *str, const char *delim, char **saveptr);
+
 /*
  * misc
  */
