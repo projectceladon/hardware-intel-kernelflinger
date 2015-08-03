@@ -743,8 +743,8 @@ static EFI_STATUS set_image_oemvars_nocheck(VOID *bootimage)
         if (ret == EFI_SUCCESS && osz > OEMVARS_MAGIC_SZ &&
             !memcmp(oemvars, OEMVARS_MAGIC, OEMVARS_MAGIC_SZ)) {
                 debug(L"secondstage contains raw oemvars");
-                return flash_oemvars((CHAR8*)oemvars + OEMVARS_MAGIC_SZ,
-                                osz - OEMVARS_MAGIC_SZ);
+                return flash_oemvars_silent_write_error((CHAR8*)oemvars + OEMVARS_MAGIC_SZ,
+                                                        osz - OEMVARS_MAGIC_SZ);
         }
 
 #ifdef HAL_AUTODETECT
@@ -1168,6 +1168,24 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 FreePool(target_path);
                 reboot(NULL);
         }
+
+#ifdef BOOTLOADER_POLICY
+        /* Ensure that the bootloader policy is set.  If not flash the
+           OEMVARS that include the default policy.  */
+        if (!device_is_provisioning() && !blpolicy_is_flashed()) {
+                ret = load_boot_image(NORMAL_BOOT, selected_keystore,
+                                      selected_keystore_size, NULL,
+                                      &bootimage, FALSE);
+                if (EFI_ERROR(ret))
+                        efi_perror(ret, L"Failed to load boot image to get bootloader policy");
+                else
+                        set_image_oemvars(bootimage);
+                FreePool(bootimage);
+                bootimage = NULL;
+                if (!blpolicy_is_flashed())
+                        error(L"Bootloader Policy EFI variables are not flashed");
+        }
+#endif
 
         /* Fastboot is always validated by the OEM keystore baked into
          * the kernelflinger binary */
