@@ -175,10 +175,6 @@ static EFI_STATUS parse_line(char *line, VOID *context)
 
 	/* GUID line syntax */
 	if (parse_oemvar_guid_line(line, curr_guid)) {
-		if (!memcmp(curr_guid, &fastboot_guid, sizeof(*curr_guid))) {
-			error(L"fastboot GUID is reserved for Kernelflinger use");
-			return EFI_ACCESS_DENIED;
-		}
 		debug(L"current guid set to %g", curr_guid);
 		return EFI_SUCCESS;
 	}
@@ -222,6 +218,28 @@ static EFI_STATUS parse_line(char *line, VOID *context)
 		error(L"Failed to convert varname string.");
 		return EFI_INVALID_PARAMETER;
 	}
+
+	if (!memcmp(curr_guid, &fastboot_guid, sizeof(*curr_guid))) {
+#ifdef BOOTLOADER_POLICY
+		UINTN i;
+
+		for (i = 0; i < FASTBOOT_SECURED_VARS_SIZE; i++)
+			if (!StrCmp((CHAR16 *)FASTBOOT_SECURED_VARS[i], varname))
+				break;
+
+		if (i == FASTBOOT_SECURED_VARS_SIZE) {
+			error(L"fastboot GUID is reserved for Kernelflinger use");
+			return EFI_ACCESS_DENIED;
+		}
+
+		if (!(attributes & EFI_VARIABLE_TIME_BASED_AUTHENTICATED_WRITE_ACCESS))
+			return EFI_ACCESS_DENIED;
+#else
+		error(L"fastboot GUID is reserved for Kernelflinger use");
+		return EFI_ACCESS_DENIED;
+#endif
+	}
+
 	debug(L"Setting oemvar: %a", var);
 	ret = uefi_call_wrapper(RT->SetVariable, 5, varname,
 				curr_guid, attributes,

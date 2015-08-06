@@ -146,4 +146,6 @@ UINT64 efi_time_to_ctime(EFI_TIME *time);
 
 EFI_STATUS generate_random_numbers(CHAR8 *data, UINTN size);
 
+BOOLEAN no_device_unlock();
+
 #endif

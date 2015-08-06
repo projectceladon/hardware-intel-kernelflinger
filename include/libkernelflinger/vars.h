@@ -41,6 +41,15 @@ extern const EFI_GUID loader_guid;
 
 extern const EFI_GUID fastboot_guid;
 
+#ifdef BOOTLOADER_POLICY
+/* FASTBOOT GUID is reserved to internal use only.  However, the
+ * following array of EFI variables is the exception and these
+ * variables can be flashed using the flash oemvars fastboot command.
+ * These variables are time-based authenticated EFI variables.  */
+extern const CHAR16 *FASTBOOT_SECURED_VARS[];
+extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
+#endif
+
 /* TODO get rid of the rest of these _VAR definitions here and write
  * accessor functions for them */
 
@@ -123,6 +132,9 @@ char *get_device_id(void);
 CHAR16 *boot_state_to_string(UINT8 boot_state);
 #ifndef USER
 EFI_STATUS reprovision_state_vars(VOID);
+#endif
+#ifdef BOOTLOADER_POLICY
+BOOLEAN device_is_class_A(VOID);
 #endif
 #endif /* _VARS_H_ */
 

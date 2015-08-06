@@ -134,47 +134,44 @@ static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
 	change_device_state(LOCKED);
 }
 
+static BOOLEAN frp_allows_unlock()
+{
+	UINT8 persist_byte;
+	struct gpt_partition_interface gparti;
+	EFI_STATUS ret;
+	UINT64 offset;
+
+	ret = gpt_get_partition_by_label(L"persistent", &gparti, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret))
+		return TRUE;	/* Allow if the persistent partition
+				   does not exist */
+
+	/* We need to check the last byte of the partition. The gparti
+	 * .dio object is a handle to the beginning of the disk */
+	offset = ((gparti.part.ending_lba + 1) * gparti.bio->Media->BlockSize) - 1;
+	ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
+				gparti.bio->Media->MediaId, offset,
+				sizeof(persist_byte), &persist_byte);
+	if (EFI_ERROR(ret)) {
+		/* Pathological if this fails, GPT screwed up? */
+		efi_perror(ret, L"Couldn't read persistent partition");
+		return FALSE;
+	}
+
+	/* Per the specification, value of 1 means unlock is OK */
+	return persist_byte == 1;
+}
+
 static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
 			   __attribute__((__unused__)) CHAR8 **argv)
 {
-	UINT8 persist_byte;
 	BOOLEAN unlock_allowed;
 
-	/* Enforce if we're not in provisioning mode and the persistent
-	 * partition exists */
-	if (!device_is_provisioning()) {
-#ifdef NO_DEVICE_UNLOCK
-		unlock_allowed = FALSE;
-#else
-		struct gpt_partition_interface gparti;
-		EFI_STATUS ret;
-		UINT64 offset;
-
-		if (!EFI_ERROR(gpt_get_partition_by_label(L"persistent", &gparti,
-					                  LOGICAL_UNIT_USER))) {
-			/* We need to check the last byte of the partition. The gparti
-			 * .dio object is a handle to the beginning of the disk */
-			offset = ((gparti.part.ending_lba + 1)
-				  * gparti.bio->Media->BlockSize) - 1;
-			ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
-						gparti.bio->Media->MediaId, offset, 1,
-						&persist_byte);
-			if (EFI_ERROR(ret)) {
-				/* Pathological if this fails, GPT screwed up? */
-				efi_perror(ret, L"Couldn't read persistent partition");
-				unlock_allowed = FALSE;
-			} else {
-				/* Per the specification, value of 1 means
-				 * unlock is OK */
-				unlock_allowed = (persist_byte == 1);
-			}
-		} else {
-			unlock_allowed = TRUE;
-		}
-#endif
-	} else {
+	/* Allow if device is in provisioning mode */
+	if (device_is_provisioning())
 		unlock_allowed = TRUE;
-	}
+	else
+		unlock_allowed = no_device_unlock() ? FALSE : frp_allows_unlock();
 
 	if (unlock_allowed == FALSE) {
 #ifdef USER

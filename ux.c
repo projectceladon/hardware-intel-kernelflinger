@@ -37,13 +37,10 @@
 #include "vars.h"
 
 #define TIMEOUT_SECS	5
-#ifdef NO_DEVICE_UNLOCK
-#define	PENDING_TIMEOUT		"Your device will power off in 5 seconds."
-#define NO_TIMEOUT		"Press Volume Up to power off."
-#else
-#define	PENDING_TIMEOUT		"Your device will boot in 5 seconds."
-#define NO_TIMEOUT		"Press Volume Up to continue."
-#endif
+#define PENDING_TIMEOUT_NO_UNLOCK	"Your device will power off in 5 seconds."
+#define NO_TIMEOUT_NO_UNLOCK		"Press Volume Up to power off."
+#define PENDING_TIMEOUT			"Your device will boot in 5 seconds."
+#define NO_TIMEOUT			"Press Volume Up to continue."
 
 
 #define RED_STATE_CODE		1
@@ -153,9 +150,15 @@ static ui_textline_t *build_footer_text(BOOLEAN timeout)
 		{ &COLOR_GREEN, buf, TRUE },
 		{ NULL, NULL, FALSE }
 	};
+	char *str;
 
-	strncpy((CHAR8 *)buf, (CHAR8 *)(timeout ? PENDING_TIMEOUT : NO_TIMEOUT),
-		sizeof(buf));
+	if (timeout)
+		str = no_device_unlock() ? PENDING_TIMEOUT_NO_UNLOCK : PENDING_TIMEOUT;
+	else
+		str = no_device_unlock() ? NO_TIMEOUT_NO_UNLOCK : NO_TIMEOUT;
+
+	strncpy((CHAR8 *)buf, (CHAR8 *)str, sizeof(buf));
+
 	return footer_text;
 }
 

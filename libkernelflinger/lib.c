@@ -771,6 +771,19 @@ EFI_STATUS generate_random_numbers(CHAR8 *data, UINTN size)
         return EFI_SUCCESS;
 }
 
+BOOLEAN no_device_unlock()
+{
+#ifdef NO_DEVICE_UNLOCK
+	return TRUE;
+#else
+#ifdef BOOTLOADER_POLICY
+	if (device_is_class_A())
+                return TRUE;
+#endif
+	return FALSE;
+#endif
+}
+
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
 
