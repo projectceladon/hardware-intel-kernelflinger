@@ -49,6 +49,13 @@
 #define DISABLE_WDT_VAR		L"DisableWatchdog"
 #define UPDATE_OEMVARS		L"UpdateOemVars"
 #define UI_DISPLAY_SPLASH_VAR	L"UIDisplaySplash"
+#ifdef BOOTLOADER_POLICY
+#define OAK_VARNAME		L"OAK"
+#define BPM_VARNAME		L"BPM"
+
+#define CLASS_A_DEVICE		1U
+#define DEFAULT_BLPOLICY	0U
+#endif
 
 #define OEM_LOCK_UNLOCKED	(1 << 0)
 #define OEM_LOCK_VERIFIED	(1 << 1)
@@ -65,6 +72,11 @@ const EFI_GUID loader_guid = { 0x4a67b082, 0x0a4c, 0x41cf,
 const CHAR16 *BOOT_LABEL = L"boot";
 const CHAR16 *RECOVERY_LABEL = L"recovery";
 const CHAR16 *MISC_LABEL = L"misc";
+
+#ifdef BOOTLOADER_POLICY
+const CHAR16 *FASTBOOT_SECURED_VARS[] = { OAK_VARNAME, BPM_VARNAME };
+const UINTN FASTBOOT_SECURED_VARS_SIZE = ARRAY_SIZE(FASTBOOT_SECURED_VARS);
+#endif
 
 static BOOLEAN provisioning_mode = FALSE;
 static enum device_state current_state = UNKNOWN_STATE;
@@ -640,3 +652,30 @@ bad:
 	return serialno;
 }
 
+#ifdef BOOTLOADER_POLICY
+BOOLEAN device_is_class_A(VOID)
+{
+	EFI_STATUS ret;
+	UINTN size;
+	UINT32 flags;
+	UINT64 *bpm_data;
+	UINT64 bpm = DEFAULT_BLPOLICY;
+
+	ret = get_efi_variable(&fastboot_guid, BPM_VARNAME,
+			       &size, (VOID **)&bpm_data, &flags);
+	if (EFI_ERROR(ret))
+		goto out;
+
+	if (size != sizeof(bpm) ||
+	    !(flags & EFI_VARIABLE_TIME_BASED_AUTHENTICATED_WRITE_ACCESS)) {
+		FreePool(bpm_data);
+		goto out;
+	}
+
+	bpm = *bpm_data;
+	FreePool(bpm_data);
+
+out:
+	return (bpm & CLASS_A_DEVICE) != 0;
+}
+#endif

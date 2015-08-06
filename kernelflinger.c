@@ -1128,11 +1128,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                  * or run EFI binaries. Set lock_prompted to true so
                  * we don't ask again later */
                 ux_prompt_user_secure_boot_off();
-#ifdef NO_DEVICE_UNLOCK
-                halt_system();
-#else
+                if (no_device_unlock())
+                        halt_system();
                 debug(L"User accepted UEFI secure boot disabled warning");
-#endif
         } else  if (device_is_unlocked()) {
                 boot_state = BOOT_STATE_ORANGE;
                 debug(L"Device is unlocked");
@@ -1193,11 +1191,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
          * fastboot */
         if (boot_state == BOOT_STATE_YELLOW) {
                 ux_prompt_user_keystore_unverified(hash);
-#ifdef NO_DEVICE_UNLOCK
-                halt_system();
-#else
+                if (no_device_unlock())
+                        halt_system();
                 debug(L"User accepted unverified keystore warning");
-#endif
         }
 
         /* If the device is unlocked the only way to re-lock it is
@@ -1205,11 +1201,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
          * about EFI secure boot being turned off */
         if (boot_state == BOOT_STATE_ORANGE && !lock_prompted) {
                 ux_prompt_user_device_unlocked();
-#ifdef NO_DEVICE_UNLOCK
-                halt_system();
-#else
+                if (no_device_unlock())
+                        halt_system();
                 debug(L"User accepted unlocked device warning");
-#endif
         }
 
         debug(L"loading boot image");
@@ -1227,11 +1221,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 else
                         ux_prompt_user_bootimage_unverified();
 
-#ifdef NO_DEVICE_UNLOCK
-                halt_system();
-#else
+                if (no_device_unlock())
+                        halt_system();
                 debug(L"User accepted bad boot image warning");
-#endif
 
                 if (bootimage == NULL) {
                         error(L"Unable to load boot image at all; stop.");
