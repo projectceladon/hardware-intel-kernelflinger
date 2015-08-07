@@ -26,22 +26,50 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This file defines bootlogic data structures, try to keep it without
- * any external definitions in order to ease export of it.
  */
 
-#ifndef _MMC_H_
-#define _MMC_H_
-
 #include <efi.h>
-#include <stdbool.h>
-#include "gpt.h"
-#include "storage.h"
+#include <efilib.h>
+#include <log.h>
+#include <lib.h>
+#include "watchdog.h"
+#include "protocol/tco_protocol.h"
 
-extern struct storage storage_emmc;
+#define TCO_OPT_DISABLED "iTCO_wdt.force_no_reboot=1"
 
-EFI_STATUS mmc_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-EFI_STATUS mmc_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-BOOLEAN is_emmc(EFI_DEVICE_PATH *p);
+static EFI_GUID gEfiTcoResetProtocolGuid = EFI_TCO_RESET_PROTOCOL_GUID;
 
-#endif	/* _MMC_H_ */
+BOOLEAN watchdog_disabled_from_cmdline(CHAR8 *cmdline)
+{
+        while (cmdline != NULL) {
+                if (!strncmp(cmdline, (CHAR8 *)TCO_OPT_DISABLED, strlen((CHAR8 *)TCO_OPT_DISABLED)))
+                        return TRUE;
+                /* get next option */
+                cmdline = strchr(cmdline, ' ');
+                if (cmdline)
+                        cmdline++;
+        }
+
+        return FALSE;
+}
+
+EFI_STATUS start_watchdog(UINT32 seconds)
+{
+        EFI_TCO_RESET_PROTOCOL *tco;
+        EFI_STATUS ret;
+
+        ret = LibLocateProtocol(&gEfiTcoResetProtocolGuid, (void **)&tco);
+        if (EFI_ERROR(ret)) {
+                if (ret == EFI_NOT_FOUND) {
+                        debug(L"WARNING: watchdog disabled and not started");
+                        return EFI_SUCCESS;
+                }
+                return ret;
+        }
+
+        if (seconds < TCO_MIN_TIMEOUT)
+                seconds = TCO_MIN_TIMEOUT;
+
+        debug(L"Starting watchdog for %d seconds", seconds);
+        return uefi_call_wrapper(tco->EnableTcoReset, 1, &seconds);
+}

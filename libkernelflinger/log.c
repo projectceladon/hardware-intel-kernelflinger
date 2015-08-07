@@ -60,6 +60,11 @@ EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 	CHAR8 *buf, *cur;
 	UINTN size = sizeof(log_buf);
 
+#ifdef USER
+	if (!device_is_provisioning())
+		return EFI_SUCCESS;
+#endif
+
 	if (last_pos) {		/* Manage roll-over */
 		size = last_pos < pos ? pos : last_pos;
 
@@ -137,8 +142,7 @@ void log(const CHAR16 *fmt, ...)
 	if (EFI_ERROR(uefi_call_wrapper(serial->Write, 3, serial, &length, buf8)))
 		goto exit;
 
-	if (device_is_provisioning())
-		log_append_to_buffer(buf8, length);
+	log_append_to_buffer(buf8, length);
 
 exit:
 	va_end(args);

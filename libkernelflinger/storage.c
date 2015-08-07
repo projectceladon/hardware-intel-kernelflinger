@@ -33,23 +33,11 @@
 #include <log.h>
 #include <lib.h>
 #include "storage.h"
-#include "mmc.h"
-#include "ufs.h"
+#include "pci.h"
 
 static struct storage *storage;
 static PCI_DEVICE_PATH boot_device;
 static BOOLEAN initialized = FALSE;
-
-static PCI_DEVICE_PATH *get_pci_device_path(EFI_DEVICE_PATH *p)
-{
-	while (!IsDevicePathEndType(p)) {
-		if (DevicePathType(p) == HARDWARE_DEVICE_PATH
-		    && DevicePathSubType(p) == HW_PCI_DP)
-			return (PCI_DEVICE_PATH *)p;
-		p = NextDevicePathNode(p);
-	}
-	return NULL;
-}
 
 static BOOLEAN is_boot_device(EFI_DEVICE_PATH *p)
 {
@@ -64,21 +52,29 @@ static BOOLEAN is_boot_device(EFI_DEVICE_PATH *p)
 		&& pci->Device == boot_device.Device;
 }
 
+extern struct storage STORAGE(STORAGE_EMMC);
+extern struct storage STORAGE(STORAGE_UFS);
+extern struct storage STORAGE(STORAGE_SDCARD);
+extern struct storage STORAGE(STORAGE_SATA);
+
 static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 				   enum storage_type filter)
 {
-	if ((filter == STORAGE_EMMC || filter == STORAGE_ALL)
-	    && is_emmc(device_path)) {
-		debug(L"eMMC storage identified");
-		storage = &storage_emmc;
-		return EFI_SUCCESS;
-	}
+	enum storage_type st;
+	static struct storage *supported_storage[STORAGE_ALL] =  {
+		&STORAGE(STORAGE_EMMC),
+		&STORAGE(STORAGE_UFS),
+		&STORAGE(STORAGE_SDCARD),
+		&STORAGE(STORAGE_SATA)
+	};
 
-	if ((filter == STORAGE_UFS || filter == STORAGE_ALL)
-	    && is_ufs(device_path)) {
-		debug(L"UFS storage identified");
-		storage = &storage_ufs;
-		return EFI_SUCCESS;
+	for (st = STORAGE_EMMC; st < STORAGE_ALL; st++) {
+		if ((filter == st || filter == STORAGE_ALL) &&
+		    supported_storage[st] && supported_storage[st]->probe(device_path)) {
+			debug(L"%s storage identified", supported_storage[st]->name);
+			storage = supported_storage[st];
+			return EFI_SUCCESS;
+		}
 	}
 
 	return EFI_UNSUPPORTED;
@@ -221,7 +217,7 @@ EFI_STATUS storage_set_boot_device(EFI_HANDLE device)
 		return EFI_UNSUPPORTED;
 	}
 
-	ret = identify_storage((EFI_DEVICE_PATH*)pci, STORAGE_ALL);
+	ret = identify_storage(device_path, STORAGE_ALL);
 	if (EFI_ERROR(ret)) {
 		error(L"Boot device unsupported");
 		return ret;

@@ -286,16 +286,20 @@ static EFI_STATUS check_keystore(VOID *hash, UINTN hash_sz, struct keystore *ks,
 {
         EFI_STATUS ret = EFI_ACCESS_DENIED;
         EVP_PKEY *pkey = NULL;
+        RSA *rsa;
         UINTN rsa_ret;
 
         pkey = get_pkey(key, key_size);
         if (!pkey)
                 goto out;
 
+        rsa = EVP_PKEY_get1_RSA(pkey);
+        if (!rsa)
+                goto out;
+
         rsa_ret = RSA_verify(get_rsa_verify_nid(ks->sig.id.nid),
-                        hash, hash_sz,
-                        ks->sig.signature, ks->sig.signature_len,
-                        EVP_PKEY_get1_RSA(pkey));
+                             hash, hash_sz, ks->sig.signature,
+                             ks->sig.signature_len, rsa);
         if (rsa_ret == 1)
                 ret = EFI_SUCCESS;
         else
@@ -352,6 +356,11 @@ EFI_STATUS verify_android_boot_image(IN VOID *bootimage, IN VOID *keystore,
         ret = check_bootimage(bootimage, imgsize, sig, ks);
 
         target_tmp = stra_to_str((CHAR8*)sig->attributes.target);
+        if (!target_tmp) {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto out;
+        }
+
         StrNCpy(target, target_tmp, BOOT_TARGET_SIZE);
         FreePool(target_tmp);
 out:
@@ -391,7 +400,8 @@ EFI_STATUS verify_android_keystore(IN VOID *keystore, IN UINTN keystore_size,
         debug(L"verifying keystore data");
         ret = check_keystore(hash, hash_sz, ks, key, key_size);
 out:
-        free(hash);
+        if (hash)
+                free(hash);
         free_keystore(ks);
         return ret;
 }
