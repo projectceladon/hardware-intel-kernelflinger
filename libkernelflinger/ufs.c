@@ -31,7 +31,7 @@
  */
 
 #include <lib.h>
-#include "ufs.h"
+#include "storage.h"
 #include "protocol/ufs.h"
 #include "protocol/ScsiPassThruExt.h"
 
@@ -44,7 +44,7 @@ static EFI_DEVICE_PATH *get_scsi_device_path(EFI_DEVICE_PATH *p)
 	return NULL;
 }
 
-EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+static EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 {
 	EFI_STATUS ret;
 	EFI_GUID ScsiPassThruProtocolGuid = EFI_EXT_SCSI_PASS_THRU_PROTOCOL_GUID;
@@ -132,7 +132,7 @@ static UINT64 log_unit_to_ufs_lun(logical_unit_t log_unit)
 	}
 }
 
-EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
+static EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
 {
 	EFI_GUID ScsiPassThruProtocolGuid = EFI_EXT_SCSI_PASS_THRU_PROTOCOL_GUID;
 	EFI_EXT_SCSI_PASS_THRU_PROTOCOL *scsi;
@@ -171,12 +171,14 @@ EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
 	return target_lun == lun ? EFI_SUCCESS : EFI_NOT_FOUND;
 }
 
-BOOLEAN is_ufs(EFI_DEVICE_PATH *p)
+static BOOLEAN is_ufs(EFI_DEVICE_PATH *p)
 {
 	return get_scsi_device_path(p) != NULL;
 }
 
-struct storage storage_ufs = {
-	ufs_erase_blocks,
-	ufs_check_logical_unit,
+struct storage STORAGE(STORAGE_UFS) = {
+	.erase_blocks = ufs_erase_blocks,
+	.check_logical_unit = ufs_check_logical_unit,
+	.probe = is_ufs,
+	.name = L"UFS"
 };

@@ -148,7 +148,7 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 		graphic.mode = mode;
 	}
 
-	if (!last_succeed || !graphic.output)
+	if (!last_succeed)
 		return EFI_UNSUPPORTED;
 
 	if (!ui_font_get_default()) {
