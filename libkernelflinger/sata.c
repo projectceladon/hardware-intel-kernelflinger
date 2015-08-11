@@ -30,39 +30,38 @@
  * any external definitions in order to ease export of it.
  */
 
-#ifndef _STORAGE_H_
-#define _STORAGE_H_
+#include <lib.h>
+#include "storage.h"
 
-#include <efi.h>
-#include "gpt.h"
+static EFI_STATUS sata_erase_blocks(__attribute__((unused)) EFI_HANDLE handle,
+				    __attribute__((unused)) EFI_BLOCK_IO *bio,
+				    __attribute__((unused)) UINT64 start,
+				    __attribute__((unused)) UINT64 end)
+{
+	return EFI_UNSUPPORTED;
+}
 
-enum storage_type {
-	STORAGE_EMMC,
-	STORAGE_UFS,
-	STORAGE_SDCARD,
-	STORAGE_SATA,
-	STORAGE_ALL,
+static EFI_STATUS sata_check_logical_unit(__attribute__((unused)) EFI_DEVICE_PATH *p,
+					  logical_unit_t log_unit)
+{
+	return log_unit == LOGICAL_UNIT_USER ? EFI_SUCCESS : EFI_UNSUPPORTED;
+}
+
+static BOOLEAN is_sata(EFI_DEVICE_PATH *p)
+{
+	while (!IsDevicePathEndType(p)) {
+		if (DevicePathType(p) == MESSAGING_DEVICE_PATH
+		    && DevicePathSubType(p) == MSG_SATA_DP)
+			return TRUE;
+		p = NextDevicePathNode(p);
+	}
+	return FALSE;
+}
+
+struct storage STORAGE(STORAGE_SATA) = {
+	.erase_blocks = sata_erase_blocks,
+	.check_logical_unit = sata_check_logical_unit,
+	.probe = is_sata,
+	.name = L"SATA"
 };
 
-/* It is faster to erase multiple block at once */
-#define N_BLOCK (4096)
-
-struct storage {
-	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-	BOOLEAN (*probe)(EFI_DEVICE_PATH *p);
-	const CHAR16 *name;
-};
-
-#define STORAGE(X) storage_##X
-
-EFI_STATUS identify_boot_device(enum storage_type type);
-PCI_DEVICE_PATH *get_boot_device(void);
-EFI_STATUS storage_set_boot_device(EFI_HANDLE device);
-EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
-		     VOID *pattern, UINTN pattern_blocks);
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-
-#endif	/* _STORAGE_H_ */

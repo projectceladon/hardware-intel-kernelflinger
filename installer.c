@@ -382,8 +382,7 @@ static char *next_command()
 	return commands[current_command++];
 }
 
-static void batch(__attribute__((__unused__)) INTN argc,
-		  __attribute__((__unused__)) CHAR8 **argv)
+static void batch(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
 	void *data;

@@ -46,6 +46,7 @@
 #define CRASH_EVENT_MENU_VAR	L"CrashEventMenu"
 #define WDT_COUNTER_VAR		L"WatchdogCounter"
 #define WDT_TIME_REF_VAR	L"WatchdogTimeReference"
+#define DISABLE_WDT_VAR		L"DisableWatchdog"
 #define UPDATE_OEMVARS		L"UpdateOemVars"
 #define UI_DISPLAY_SPLASH_VAR	L"UIDisplaySplash"
 
@@ -80,6 +81,7 @@ static struct state_display {
 
 static CHAR8 current_off_mode_charge[2];
 static CHAR8 current_crash_event_menu[2];
+static CHAR8 disable_wdt[2];
 static CHAR8 current_update_oemvars[2];
 static CHAR8 ui_display_splash[2];
 
@@ -386,6 +388,11 @@ EFI_STATUS set_watchdog_time_reference(EFI_TIME *time)
 
 	return set_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR,
 				sizeof(*time), time, TRUE, FALSE);
+}
+
+BOOLEAN get_disable_watchdog()
+{
+	return get_current_boolean_var(&loader_guid, DISABLE_WDT_VAR, disable_wdt);
 }
 
 static void CDD_clean_string(char *buf)

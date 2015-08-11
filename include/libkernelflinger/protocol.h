@@ -72,4 +72,21 @@ locate_handle(EFI_LOCATE_SEARCH_TYPE type, EFI_GUID *protocol, void *key,
 				 key, size, buffer);
 }
 
+/**
+ * locate_device_path - Locate the @handle to a device on @device_path that
+ * supports the specified protocol.
+ * @protocol: the protocol to search for
+ * @device_path: on input a pointer to a pointer to the device path, on output
+ *               the device path pointer is modified to point to the remaining
+ *               part of the device path
+ * @handle: pointer to the returned device handle
+ */
+static inline EFI_STATUS
+locate_device_path(EFI_GUID *protocol, EFI_DEVICE_PATH **device_path,
+		   EFI_HANDLE *handle)
+{
+	return uefi_call_wrapper(BS->LocateDevicePath, 3, protocol, device_path,
+				 handle);
+}
+
 #endif /* __PROTOCOL_H__ */
