@@ -26,21 +26,47 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This file defines bootlogic data structures, try to keep it without
- * any external definitions in order to ease export of it.
  */
 
-#ifndef _UFS_H_
-#define _UFS_H_
-
 #include <efi.h>
-#include "gpt.h"
-#include "storage.h"
+#include "log.h"
+#include "pci.h"
+#include "protocol.h"
 
-extern struct storage storage_ufs;
+PCI_DEVICE_PATH* get_pci_device_path(EFI_DEVICE_PATH *p)
+{
+	while (!IsDevicePathEndType(p)) {
+		if (DevicePathType(p) == HARDWARE_DEVICE_PATH
+		    && DevicePathSubType(p) == HW_PCI_DP)
+			return (PCI_DEVICE_PATH *)p;
+		p = NextDevicePathNode(p);
+	}
+	return NULL;
+}
 
-EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-BOOLEAN is_ufs(EFI_DEVICE_PATH *p);
+EFI_STATUS get_pci_device(IN EFI_DEVICE_PATH *p, OUT EFI_PCI_IO **p_pciio)
+{
+	EFI_STATUS ret;
+	EFI_HANDLE pci_handle;
+	EFI_DEVICE_PATH *tmp_path = p;
 
-#endif	/* _UFS_H_ */
+	ret = locate_device_path(&PciIoProtocol, &tmp_path, &pci_handle);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to locate handle for EFI_PCI_IO_PROTOCOL");
+		return ret;
+	}
+
+	ret = handle_protocol(pci_handle, &PciIoProtocol, (void**)p_pciio);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to open PciIoProtocol");
+		return ret;
+	}
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS get_pci_ids(IN EFI_PCI_IO *pciio, OUT pci_device_ids_t *ids)
+{
+	return uefi_call_wrapper(pciio->Pci.Read, 5, pciio, EfiPciIoWidthUint16,
+				 0, 2, ids);
+}
