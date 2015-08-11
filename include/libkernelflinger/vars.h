@@ -109,6 +109,7 @@ EFI_STATUS get_watchdog_status(UINT8 *counter, EFI_TIME *time);
 EFI_STATUS reset_watchdog_status(VOID);
 EFI_STATUS set_watchdog_counter(UINT8 counter);
 EFI_STATUS set_watchdog_time_reference(EFI_TIME *time);
+BOOLEAN get_disable_watchdog(void);
 char *get_serial_number(void);
 BOOLEAN get_display_splash(void);
 char *get_property_bootloader(void);

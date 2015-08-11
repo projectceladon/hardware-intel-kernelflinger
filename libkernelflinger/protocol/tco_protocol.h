@@ -26,43 +26,33 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This file defines bootlogic data structures, try to keep it without
- * any external definitions in order to ease export of it.
  */
 
-#ifndef _STORAGE_H_
-#define _STORAGE_H_
+#ifndef _TCO_PROTOCOL_H_
+#define _TCO_PROTOCOL_H_
 
 #include <efi.h>
-#include "gpt.h"
 
-enum storage_type {
-	STORAGE_EMMC,
-	STORAGE_UFS,
-	STORAGE_SDCARD,
-	STORAGE_SATA,
-	STORAGE_ALL,
+#define EFI_TCO_RESET_PROTOCOL_GUID                                     \
+        {0xa6a79162, 0xe325, 0x4c30,{0xbc, 0xc3, 0x59, 0x37, 0x30, 0x64, 0xef, 0xb3}}
+
+typedef struct _EFI_TCO_RESET_PROTOCOL EFI_TCO_RESET_PROTOCOL;
+
+typedef
+EFI_STATUS
+(EFIAPI *EFI_TCO_RESET_PROTOCOL_ENABLE_WATCHDOG) (
+        IN OUT UINT32 *RcrbGcsValue
+        );
+
+typedef
+EFI_STATUS
+(EFIAPI *EFI_TCO_RESET_PROTOCOL_DISABLE_WATCHDOG) (
+        IN UINT32 RcrbGcsValue
+        );
+
+struct _EFI_TCO_RESET_PROTOCOL {
+        EFI_TCO_RESET_PROTOCOL_ENABLE_WATCHDOG  EnableTcoReset;
+        EFI_TCO_RESET_PROTOCOL_DISABLE_WATCHDOG DisableTcoReset;
 };
 
-/* It is faster to erase multiple block at once */
-#define N_BLOCK (4096)
-
-struct storage {
-	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-	BOOLEAN (*probe)(EFI_DEVICE_PATH *p);
-	const CHAR16 *name;
-};
-
-#define STORAGE(X) storage_##X
-
-EFI_STATUS identify_boot_device(enum storage_type type);
-PCI_DEVICE_PATH *get_boot_device(void);
-EFI_STATUS storage_set_boot_device(EFI_HANDLE device);
-EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
-		     VOID *pattern, UINTN pattern_blocks);
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-
-#endif	/* _STORAGE_H_ */
+#endif	/* _TCO_PROTOCOL_H_ */

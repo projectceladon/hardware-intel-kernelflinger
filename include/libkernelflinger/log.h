@@ -59,13 +59,12 @@ void log(const CHAR16 *fmt, ...);
 #endif
 
 #define error(x, ...) do { \
+  log(x "\n", ##__VA_ARGS__); \
   if (ui_is_ready()) { \
-    log(x "\n", ##__VA_ARGS__); \
     ui_error(x, ##__VA_ARGS__); \
   } else \
     Print(x "\n", ##__VA_ARGS__); \
-  if (device_is_provisioning()) \
-    log_flush_to_var(TRUE); \
+  log_flush_to_var(TRUE); \
 } while(0)
 
 #define efi_perror(ret, x, ...) do { \
