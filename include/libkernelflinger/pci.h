@@ -30,39 +30,57 @@
  * any external definitions in order to ease export of it.
  */
 
-#ifndef _STORAGE_H_
-#define _STORAGE_H_
+#ifndef _PCI_H_
+#define _PCI_H_
 
 #include <efi.h>
-#include "gpt.h"
+#include <efilib.h>
 
-enum storage_type {
-	STORAGE_EMMC,
-	STORAGE_UFS,
-	STORAGE_SDCARD,
-	STORAGE_SATA,
-	STORAGE_ALL,
-};
+#define PCI_DEVICE_ID_ANY 0xFFFF
 
-/* It is faster to erase multiple block at once */
-#define N_BLOCK (4096)
+typedef struct _pci_device_ids
+{
+	UINT16 vendor_id;
+	UINT16 device_id;
+} pci_device_ids_t;
 
-struct storage {
-	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-	BOOLEAN (*probe)(EFI_DEVICE_PATH *p);
-	const CHAR16 *name;
-};
+/**
+ * get_pci_device_path:
+ * @p - Pointer to a EFI_DEVICE_PATH structure
+ *
+ * Checks if the Device Path given as parameter contains a PCI Device Node
+ *
+ * Returns:
+ * a pointer to a PCI_DEVICE_PATH structure
+ * NULL if the device path given as parameter doesn't contain a PCI Device Node
+ */
+PCI_DEVICE_PATH *get_pci_device_path(EFI_DEVICE_PATH *p);
 
-#define STORAGE(X) storage_##X
+/**
+ * get_pci_device:
+ * @p - Pointer to a EFI_DEVICE_PATH structure
+ * @p_pciio - A corresponding EFI_PCI_IO_PROTOCOL handle if a PCI device was
+ *            found in the Device Path parameter
+ *
+ * Queries a Device Path to check if support the PciIoProtocol
+ *
+ * Returns:
+ * EFI_SUCCESS if the input path contains a PCI device
+ * an EFI error protocol handle could not be opened
+ */
+EFI_STATUS get_pci_device(IN EFI_DEVICE_PATH *p, OUT EFI_PCI_IO **p_pciio);
 
-EFI_STATUS identify_boot_device(enum storage_type type);
-PCI_DEVICE_PATH *get_boot_device(void);
-EFI_STATUS storage_set_boot_device(EFI_HANDLE device);
-EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
-		     VOID *pattern, UINTN pattern_blocks);
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
+/**
+ * get_pci_ids:
+ * @pciio - The EFI_PCI_IO_PROTOCOL handle for a device
+ * @ids - Vendor and Device Ids
+ *
+ * Reads the Vendor and Device IDs from the PCI configuration space
+ *
+ * Returns:
+ * EFI_SUCCESS - The operation succeeded
+ * an EFI Error if the values could not be read
+ */
+EFI_STATUS get_pci_ids(IN EFI_PCI_IO *pciio, OUT pci_device_ids_t *ids);
 
-#endif	/* _STORAGE_H_ */
+#endif	/* _PCI_H_ */

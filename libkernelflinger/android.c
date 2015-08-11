@@ -45,6 +45,7 @@
 #include "gpt.h"
 #include "storage.h"
 #include "text_parser.h"
+#include "watchdog.h"
 #ifdef HAL_AUTODETECT
 #include "blobstore.h"
 #endif
@@ -293,6 +294,8 @@ static CHAR16 *get_serial_port(void)
                 data[size - 1] = '\0';
                 val = stra_to_str(data);
                 FreePool(data);
+                if (!val)
+                        goto error;
         } else {
                 if (size % 2 == 0) {
                         data[size - 1] = '\0';
@@ -690,6 +693,14 @@ static EFI_STATUS setup_command_line(
         if (EFI_ERROR(ret))
                 goto out;
 
+#ifndef USER
+        if (get_disable_watchdog()) {
+                ret = prepend_command_line(&cmdline16, CONVERT_TO_WIDE(TCO_OPT_DISABLED));
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+#endif
+
         PCI_DEVICE_PATH *boot_device = get_boot_device();
         if (boot_device) {
                 ret = prepend_command_line(&cmdline16,
@@ -795,12 +806,18 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         if (EFI_ERROR(ret))
                 goto out;
 
+#ifdef USE_WATCHDOG
+        if (!watchdog_disabled_from_cmdline((CHAR8 *)(UINTN)buf->hdr.cmd_line_ptr)) {
+                ret = start_watchdog(TCO_DEFAULT_TIMEOUT);
+                if (EFI_ERROR(ret))
+                        efi_perror(ret, L"Failed to start watchdog");
+        }
+#endif
+
         /* Free UI resources. */
         ui_free();
 
-#ifndef USER
         log_flush_to_var(FALSE);
-#endif
 
         boot_params = (struct boot_params *)(UINTN)boot_addr;
         memset(boot_params, 0x0, 16384);
