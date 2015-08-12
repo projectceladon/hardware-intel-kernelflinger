@@ -332,8 +332,6 @@ EFI_STATUS fastboot_ui_init(void)
 
 	fastboot_ui_refresh();
 
-	uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
-
 	return ret;
 }
 
