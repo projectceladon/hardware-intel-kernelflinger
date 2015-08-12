@@ -152,8 +152,6 @@ static enum boot_target check_magic_key(VOID)
 #endif
         unsigned long wait_ms = EFI_RESET_WAIT_MS;
 
-        uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
-
         /* Some systems require a short stall before we can be sure there
          * wasn't a keypress at boot. Read the EFI variable which determines
          * that time for this platform */

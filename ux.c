@@ -382,8 +382,6 @@ enum boot_target ux_crash_event_prompt_user_for_boot_target(VOID) {
 	if (EFI_ERROR(ret))
 		goto error;
 
-	uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
-
 	while (1) {
 		target = ui_boot_menu_event_handler(menu,
 						    ui_wait_for_input(TIMEOUT_SECS));
@@ -442,6 +440,7 @@ VOID ux_init(VOID) {
         uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
 			  EFI_WHITE | EFI_BACKGROUND_BLACK);
 	uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, FALSE);
+        uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
 
 	if (get_display_splash()) {
 		if (EFI_ERROR(ux_init_screen()))
