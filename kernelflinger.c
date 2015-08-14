@@ -87,12 +87,9 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 #define FWUPDATE_FILE             L"\\BIOSUPDATE.fv"
 
 /* Crash event menu settings:
- * - Maximum number of watchdog resets in a row before the crash event
- *   menu is displayed. */
-#define WATCHDOG_COUNTER_MAX 2
-/* - Maximum time between the first and the last watchdog reset.  If
- *   the current difference exceeds this constant, the watchdog
- *   counter is reset to zero. */
+ * Maximum time between the first and the last watchdog reset.  If the
+ * current difference exceeds this constant, the watchdog counter is
+ * reset to zero. */
 #define WATCHDOG_DELAY       (10 * 60)
 
 static EFI_HANDLE g_disk_device;
@@ -312,10 +309,10 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         return ret;
 }
 
-/* If more than WATCHDOG_COUNTER_MAX watchdog resets in a row happened
- * in less than WATCHDOG_DELAY seconds, the crash event menu is
- * displayed.  This menu informs the user of the situation and let him
- * choose which boot target he wants. */
+/* If more than get_watchdog_counter_max() watchdog resets in a row
+ * happened in less than WATCHDOG_DELAY seconds, the crash event menu
+ * is displayed.  This menu informs the user of the situation and let
+ * him choose which boot target he wants. */
 static enum boot_target check_watchdog(VOID)
 {
         EFI_STATUS ret;
@@ -370,11 +367,11 @@ static enum boot_target check_watchdog(VOID)
         counter++;
         debug(L"Reset source = %d : incrementing watchdog counter (%d)", reset_source, counter);
 
-        if (counter <= WATCHDOG_COUNTER_MAX) {
-                        ret = set_watchdog_counter(counter);
-                        if (EFI_ERROR(ret))
-                                efi_perror(ret, L"Failed to set the watchdog counter");
-                        goto error;
+        if (counter <= get_watchdog_counter_max()) {
+                ret = set_watchdog_counter(counter);
+                if (EFI_ERROR(ret))
+                        efi_perror(ret, L"Failed to set the watchdog counter");
+                goto error;
         }
 
         ret = reset_watchdog_status();

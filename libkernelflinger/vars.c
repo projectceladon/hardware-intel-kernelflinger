@@ -45,6 +45,7 @@
 #define KEYSTORE_VAR		L"KeyStore"
 #define CRASH_EVENT_MENU_VAR	L"CrashEventMenu"
 #define WDT_COUNTER_VAR		L"WatchdogCounter"
+#define WDT_COUNTER_MAX_VAR	L"WatchdogCounterMax"
 #define WDT_TIME_REF_VAR	L"WatchdogTimeReference"
 #define DISABLE_WDT_VAR		L"DisableWatchdog"
 #define UPDATE_OEMVARS		L"UpdateOemVars"
@@ -61,6 +62,10 @@
 #define OEM_LOCK_VERIFIED	(1 << 1)
 
 #define ANDROID_PROP_VALUE_MAX	92
+
+/* Default maximum number of watchdog resets in a row before the crash
+ * event menu is displayed. */
+#define WATCHDOG_COUNTER_MAX 2
 
 const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
 	{0x9a, 0x99, 0xde, 0xbe, 0xb4, 0x31, 0xfc, 0xc1} };
@@ -400,6 +405,25 @@ EFI_STATUS set_watchdog_time_reference(EFI_TIME *time)
 
 	return set_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR,
 				sizeof(*time), time, TRUE, FALSE);
+}
+
+UINT8 get_watchdog_counter_max(VOID)
+{
+#ifndef USER
+	EFI_STATUS ret;
+	UINT8 max;
+
+	ret = get_efi_variable_byte(&fastboot_guid, WDT_COUNTER_MAX_VAR, &max);
+	return EFI_ERROR(ret) ? WATCHDOG_COUNTER_MAX : max;
+#else
+	return WATCHDOG_COUNTER_MAX;
+#endif
+}
+
+EFI_STATUS set_watchdog_counter_max(UINT8 max)
+{
+	return set_efi_variable(&fastboot_guid, WDT_COUNTER_MAX_VAR,
+				sizeof(max), &max, TRUE, FALSE);
 }
 
 BOOLEAN get_disable_watchdog()
