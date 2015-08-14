@@ -105,6 +105,7 @@ static const ui_textline_t device_altered_keystore[] = {
 };
 
 #define CRASH_EVENT_CODE	6
+#define CRASHMODE_TIMEOUT_SECS	(5 * 60)
 static const ui_textline_t crash_event_message[] = {
 	{ &COLOR_LIGHTRED,	"WARNING:",				TRUE },
 	{ &COLOR_LIGHTGRAY,	"Multiple crash events have been",	FALSE },
@@ -114,6 +115,11 @@ static const ui_textline_t crash_event_message[] = {
 	{ &COLOR_LIGHTGRAY,	"the next boot option.",		FALSE },
 	{ &COLOR_LIGHTGRAY,	"If the problem persists, please",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"contact the technical assistance.",	FALSE },
+#ifndef CRASHMODE_USE_ADB
+	{ &COLOR_LIGHTGRAY,	"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"The device will power off in 5",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"minutes.",				FALSE },
+#endif
 	{ NULL, NULL, FALSE }
 };
 #ifdef CRASHMODE_USE_ADB
@@ -431,6 +437,13 @@ enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash) {
 	 * or magic key */
 	ui_wait_for_key_release();
 
+	/* Prevent the device to reboot because of another watchdog */
+	ret = uefi_call_wrapper(BS->SetWatchdogTimer, 4, 0, 0, 0, NULL);
+	if (EFI_ERROR(ret) && ret != EFI_UNSUPPORTED) {
+		efi_perror(ret, L"Couldn't disable watchdog timer");
+		/* Might as well continue even though this failed ... */
+	}
+
 #ifdef CRASHMODE_USE_ADB
 	ret = adb_init();
 	if (EFI_ERROR(ret))
@@ -455,10 +468,13 @@ enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash) {
 
 		target = ui_boot_menu_event_handler(menu, ui_read_input());
 #else
-		target = ui_boot_menu_event_handler(menu, ui_wait_for_input(TIMEOUT_SECS));
+		target = ui_boot_menu_event_handler(menu, ui_wait_for_input(CRASHMODE_TIMEOUT_SECS));
 #endif
 		if (target != UNKNOWN_TARGET)
 			break;
+#ifndef CRASHMODE_USE_ADB
+		halt_system();
+#endif
 	}
 
 #ifdef CRASHMODE_USE_ADB
