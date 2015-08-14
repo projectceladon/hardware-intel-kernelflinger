@@ -446,6 +446,32 @@ static void cmd_oem_rm(INTN argc, CHAR8 **argv)
 
 	fastboot_okay("");
 }
+
+static void cmd_oem_set_watchdog_counter_max(INTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	unsigned long value;
+	char *endptr;
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	value = strtoul((char *)argv[1], &endptr, 10);
+	if (*endptr != '\0' || value > (UINT8)-1) {
+		fastboot_fail("Invalid value");
+		return;
+	}
+
+	ret = set_watchdog_counter_max(value);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to set watchdog counter max, %r", ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
 #endif
 
 static void cmd_oem_get_logs(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
@@ -523,6 +549,7 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "set-storage",		LOCKED,		cmd_oem_set_storage  },
 	{ "reprovision",		LOCKED,		cmd_oem_reprovision  },
 	{ "rm",				LOCKED,		cmd_oem_rm },
+	{ "set-watchdog-counter-max",	LOCKED,		cmd_oem_set_watchdog_counter_max },
 #endif
 	{ "get-hashes",			LOCKED,		cmd_oem_gethashes  },
 	{ "get-provisioning-logs",	LOCKED,		cmd_oem_get_logs },
