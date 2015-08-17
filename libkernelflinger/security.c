@@ -63,40 +63,35 @@ static VOID pr_error_openssl(void)
 }
 
 
-static EVP_PKEY *get_pkey(CONST UINT8 *cert, UINTN certsize)
+static EVP_PKEY *get_rsa_pubkey(X509 *cert)
 {
-        BIO *bio;
-        X509 *x509 = NULL;
-        EVP_PKEY *pkey = NULL;
-
-        /* BIO is the OpenSSL input/output abstraction. Instantiate
-         * one using a memory buffer containing the certificate */
-        bio = BIO_new_mem_buf((void *)cert, certsize);
-        if (!bio) {
-                goto done;
-        }
-
-        /* Obtain an x509 structure from the DER cert data */
-        x509 = d2i_X509_bio(bio, NULL);
-        if (!x509) {
-                goto done;
-        }
-
-        /* And finally get the public key out of the certificate */
-        pkey = X509_get_pubkey(x509);
-        if (!pkey) {
-                goto done;
-        }
+        EVP_PKEY *pkey = X509_get_pubkey(cert);
+        if (!pkey)
+                return NULL;
 
         if (EVP_PKEY_RSA != EVP_PKEY_type(pkey->type)) {
                 EVP_PKEY_free(pkey);
-                pkey = NULL;
+                return NULL;
         }
-done:
-        BIO_free(bio);
-        if (x509 != NULL)
-                X509_free(x509);
         return pkey;
+}
+
+
+static X509 *der_to_x509(CONST UINT8 *der, UINTN size)
+{
+        BIO *bio;
+        X509 *x509;
+
+        /* BIO is the OpenSSL input/output abstraction. Instantiate
+         * one using a memory buffer containing the certificate */
+        bio = BIO_new_mem_buf((void *)der, size);
+        if (!bio)
+                return NULL;
+
+        /* Obtain an x509 structure from the DER cert data */
+        x509 = d2i_X509_bio(bio, NULL);
+        BIO_free(bio);
+        return x509;
 }
 
 
@@ -122,42 +117,6 @@ static EFI_STATUS get_hash_buffer(UINTN nid, VOID **hash, UINTN *hashsz)
         return EFI_SUCCESS;
 }
 
-
-
-static EFI_STATUS hash_keystore(struct keystore *ks,
-                VOID **hash, UINTN *hashsz)
-{
-        int nid = ks->sig.id.nid;
-        unsigned char *buf;
-        EFI_STATUS ret;
-
-        ret = get_hash_buffer(nid, hash, hashsz);
-        if (EFI_ERROR(ret))
-                return ret;
-
-        switch (nid) {
-        case NID_sha1WithRSAEncryption:
-                buf = SHA1((const unsigned char *)ks->inner_data,
-                                ks->inner_sz, *hash);
-                break;
-        case NID_sha256WithRSAEncryption:
-                buf = SHA256((const unsigned char *)ks->inner_data,
-                                ks->inner_sz, *hash);
-                break;
-        case NID_sha512WithRSAEncryption:
-                buf = SHA512((const unsigned char *)ks->inner_data,
-                                ks->inner_sz, *hash);
-                break;
-        default:
-                buf = NULL;
-        }
-
-        if (buf == NULL) {
-                free(*hash);
-                return EFI_INVALID_PARAMETER;
-        }
-        return EFI_SUCCESS;
-}
 
 
 static EFI_STATUS hash_bootimage(struct boot_signature *bs,
@@ -242,104 +201,63 @@ static int get_rsa_verify_nid(int nid)
 
 
 static EFI_STATUS check_bootimage(CHAR8 *bootimage, UINTN imgsize,
-                struct boot_signature *sig, struct keystore *ks)
+                                  struct boot_signature *sig, X509 *cert)
 {
         VOID *hash;
         UINTN hash_sz;
         EFI_STATUS ret;
-        struct keybag *kb;
+        int rsa_ret;
+        EVP_PKEY *pkey = NULL;
+        RSA *rsa;
 
         ret = hash_bootimage(sig, bootimage, imgsize, &hash, &hash_sz);
         if (EFI_ERROR(ret))
                 return EFI_ACCESS_DENIED;
 
         ret = EFI_ACCESS_DENIED;
-        kb = ks->bag;
-        while (kb) {
-                int rsa_ret;
+        pkey = get_rsa_pubkey(cert);
+        if (!pkey)
+                goto free_hash;
 
-                if (sig->id.nid != kb->info.id.nid) {
-                        debug(L"algorithm mismatch (signature %d, keystore %d)",
-                                        sig->id.nid, kb->info.id.nid);
-                        kb = kb->next;
-                        continue;
-                }
+        rsa = EVP_PKEY_get1_RSA(pkey);
+        if (!rsa)
+                goto free_pkey;
 
-                rsa_ret = RSA_verify(get_rsa_verify_nid(sig->id.nid),
-                                hash, hash_sz, sig->signature,
-                                sig->signature_len, kb->info.key_material);
-                if (rsa_ret == 1) {
-                        ret = EFI_SUCCESS;
-                        break;
-                } else {
-                        pr_error_openssl();
-                }
-                kb = kb->next;
-        }
+        rsa_ret = RSA_verify(get_rsa_verify_nid(sig->id.nid),
+                             hash, hash_sz, sig->signature,
+                             sig->signature_len, rsa);
+        if (rsa_ret == 1)
+                ret = EFI_SUCCESS;
+        else
+                pr_error_openssl();
 
+free_pkey:
+        EVP_PKEY_free(pkey);
+free_hash:
         free(hash);
         return ret;
 }
 
 
-static EFI_STATUS check_keystore(VOID *hash, UINTN hash_sz, struct keystore *ks,
-                VOID *key, UINTN key_size)
-{
-        EFI_STATUS ret = EFI_ACCESS_DENIED;
-        EVP_PKEY *pkey = NULL;
-        RSA *rsa;
-        UINTN rsa_ret;
-
-        pkey = get_pkey(key, key_size);
-        if (!pkey)
-                goto out;
-
-        rsa = EVP_PKEY_get1_RSA(pkey);
-        if (!rsa)
-                goto out;
-
-        rsa_ret = RSA_verify(get_rsa_verify_nid(ks->sig.id.nid),
-                             hash, hash_sz, ks->sig.signature,
-                             ks->sig.signature_len, rsa);
-        if (rsa_ret == 1)
-                ret = EFI_SUCCESS;
-        else
-                pr_error_openssl();
-out:
-        EVP_PKEY_free(pkey);
-        return ret;
-}
-
-
-EFI_STATUS verify_android_boot_image(IN VOID *bootimage, IN VOID *keystore,
-                IN UINTN keystore_size, OUT CHAR16 *target)
+UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
+                                IN UINTN cert_size, OUT CHAR16 *target,
+                                OUT UINT8 *hash)
 {
         struct boot_signature *sig = NULL;
-        struct keystore *ks = NULL;
         struct boot_img_hdr *hdr;
         UINT8 *signature_data;
         UINTN imgsize;
-        EFI_STATUS ret;
+        UINT8 verify_state = BOOT_STATE_RED;
         CHAR16 *target_tmp;
+        EFI_STATUS ret;
 
-        if (!bootimage || !keystore || !target) {
-                ret = EFI_INVALID_PARAMETER;
+        if (!bootimage || !der_cert || !target)
                 goto out;
-        }
-
-        debug(L"decoding keystore data");
-        ks = get_keystore(keystore, keystore_size);
-        if (!ks) {
-                debug(L"bad keystore");
-                ret = EFI_INVALID_PARAMETER;
-                goto out;
-        }
 
         debug(L"get boot image header");
         hdr = get_bootimage_header(bootimage);
         if (!hdr) {
                 debug(L"bad boot image data");
-                ret = EFI_INVALID_PARAMETER;
                 goto out;
         }
 
@@ -349,62 +267,47 @@ EFI_STATUS verify_android_boot_image(IN VOID *bootimage, IN VOID *keystore,
         sig = get_boot_signature(signature_data, BOOT_SIGNATURE_MAX_SIZE);
         if (!sig) {
                 debug(L"boot image signature invalid or missing");
-                ret = EFI_ACCESS_DENIED;
                 goto out;
         }
 
+        X509 *cert = der_to_x509(der_cert, cert_size);
+        if (!cert) {
+                debug(L"Failed to get OEM certificate");
+                goto free_sig;
+        }
+
+        verify_state = BOOT_STATE_GREEN;
         debug(L"verifying boot image");
-        ret = check_bootimage(bootimage, imgsize, sig, ks);
+        ret = check_bootimage(bootimage, imgsize, sig, cert);
+        if (hash)
+                X509_digest(cert, EVP_sha1(), hash, NULL);
+        X509_free(cert);
+        if (ret == EFI_ACCESS_DENIED && sig->certificate) {
+                /* Try to verify with embedded certificate */
+                debug(L"Bootimage does not verify against the OEM key, trying included certificate");
+                verify_state = BOOT_STATE_YELLOW;
+                if (hash)
+                        X509_digest(sig->certificate, EVP_sha1(), hash, NULL);
+                ret = check_bootimage(bootimage, imgsize, sig, sig->certificate);
+        }
+        if (EFI_ERROR(ret)) {
+                debug(L"Bootimage verification failure");
+                verify_state = BOOT_STATE_RED;
+        }
 
         target_tmp = stra_to_str((CHAR8*)sig->attributes.target);
         if (!target_tmp) {
-                ret = EFI_OUT_OF_RESOURCES;
-                goto out;
+                verify_state = BOOT_STATE_RED;
+                goto free_sig;
         }
 
         StrNCpy(target, target_tmp, BOOT_TARGET_SIZE);
         FreePool(target_tmp);
-out:
-        free_keystore(ks);
+free_sig:
         free_boot_signature(sig);
-
-        return ret;
-}
-
-EFI_STATUS verify_android_keystore(IN VOID *keystore, IN UINTN keystore_size,
-                IN VOID *key, IN UINTN key_size, OUT VOID *keystore_hash)
-{
-        struct keystore *ks = NULL;
-        UINTN hash_sz;
-        CHAR8 *hash = NULL;
-        EFI_STATUS ret = EFI_INVALID_PARAMETER;
-
-        if (!keystore || !key || !keystore_hash)
-                goto out;
-
-        memset(keystore_hash, 0xFF, KEYSTORE_HASH_SIZE);
-        debug(L"decoding keystore data");
-        ks = get_keystore(keystore, keystore_size);
-        if (!ks)
-                goto out;
-
-        debug(L"hashing keystore data");
-        ret = hash_keystore(ks, (VOID **)&hash, &hash_sz);
-        if (EFI_ERROR(ret))
-                goto out;
-
-        debug(L"keystore hash is %02x%02x-%02x%02x-%02x%02x",
-                        hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
-
-        memcpy(keystore_hash, hash, KEYSTORE_HASH_SIZE);
-
-        debug(L"verifying keystore data");
-        ret = check_keystore(hash, hash_sz, ks, key, key_size);
 out:
-        if (hash)
-                free(hash);
-        free_keystore(ks);
-        return ret;
+
+        return verify_state;
 }
 
 /* UEFI specification 2.4. Section 3.3

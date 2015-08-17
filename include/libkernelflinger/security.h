@@ -41,30 +41,33 @@
 #define BOOT_SIGNATURE_MAX_SIZE  4096
 
 /* Given an Android boot image, test if it is signed with the provided
- * keystore
+ * certificate or the embedded one
  *
  * Parameters:
  * bootimage - data pointer to an Android boot image which may or may not
  *             be signed. This code may seek up to BOOT_SIGNATURE_MAX_SIZE
  *             past the end of the boot image size as reported by its header
  *             to search for the ASN.1 AndroidVerifiedBootSignature message.
- * keystore - data pointer to DER-encoded ASN.1 keystore per Google spec
- *            keystore_size - size of the keystore data
- * target - Pointer to buffer of BOOT_TARGET_SIZE, which will be filled in
- *          with AuthenticatedAttributes 'target' field iff the image is
- *          verified. Caller should only check this on EFI_SUCCESS.
+ * der_cert  - DER certificate to validate image with
+ * cert_size - Size of DER certificate
+ * target    - Pointer to buffer of BOOT_TARGET_SIZE, which will be filled in
+ *             with AuthenticatedAttributes 'target' field iff the image is
+ *             verified. Caller should only check this on EFI_SUCCESS.
+ * hash      - Pointer to buffer of SHA_DIGEST_LENGTH, which will be filled
+ *             in with SHA1 of certificate used to validate the image.
+ *             Can be NULL
  *
  * Return values:
- * EFI_SUCCESS: Boot image is validated
- * EFI_INVALID_PARAMETER - Boot image and/or keystore are not well-formed
- * EFI_ACCESS_DENIED - Boot image or AuthenticatedAttributes is not verifiable
- *                     or boot image is unsigned
+ * BOOT_STATE_GREEN  - Boot image is validated against provided certificate
+ * BOOT_STATE_YELLOW - Boot image is validated against embedded certificate
+ * BOOT_STATE_RED    - Boot image is not validated
  */
-EFI_STATUS verify_android_boot_image(
+UINT8 verify_android_boot_image(
         IN VOID *bootimage,
-        IN VOID *keystore,
-        IN UINTN keystore_size,
-        OUT CHAR16 *target);
+        IN VOID *der_cert,
+        IN UINTN cert_size,
+        OUT CHAR16 *target,
+        OUT UINT8 *hash);
 
 #define KEYSTORE_HASH_SIZE        6
 

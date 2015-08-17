@@ -42,6 +42,7 @@
  *
  *   AndroidVerifiedBootSignature ::= SEQUENCE {
  *       formatVersion INTEGER,
+ *       certificate ::= Certificate OPTIONAL
  *       algorithmId AlgorithmIdentifier,
  *       attributes AuthenticatedAttributes,
  *       signature OCTET STRING
@@ -92,6 +93,7 @@ struct keybag {
 
 struct boot_signature {
 	long format_version;
+	X509 *certificate;
 	struct algorithm_identifier id;
 	struct auth_attributes attributes;
 	void *signature;

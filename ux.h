@@ -38,7 +38,7 @@
 
 #include "targets.h"
 
-VOID ux_prompt_user_keystore_unverified(UINT8 *hash);
+VOID ux_prompt_user_untrusted_bootimage(UINT8 *hash);
 VOID ux_warn_user_unverified_recovery(VOID);
 VOID ux_prompt_user_bootimage_unverified(VOID);
 VOID ux_prompt_user_device_unlocked(VOID);
