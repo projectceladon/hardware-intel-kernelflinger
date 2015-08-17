@@ -17,6 +17,7 @@
 
 #include <openssl/asn1.h>
 #include <openssl/err.h>
+#include <openssl/x509.h>
 #include <openssl/objects.h>
 
 #include "keystore.h"
@@ -63,6 +64,8 @@ void free_boot_signature(struct boot_signature *bs)
 
 	free(bs->signature);
 	free(bs->id.parameters);
+	if (bs->certificate)
+		X509_free(bs->certificate);
 	free(bs);
 }
 
@@ -173,12 +176,21 @@ static int decode_boot_signature(const unsigned char **datap, long *sizep,
 	case 0:
 		break;
 	case 1:
-		/* Skip over the "certificate" field introduced in version 1,
-		 * we don't need it at all since we must verify against the
-		 * selected keystore */
-		if (skip_sequence(datap, &seq_size))
+	{
+		BIO *bio;
+		bio = BIO_new_mem_buf((void *)*datap, seq_size);
+		if (!bio) {
+			pr_error("Failed to allocate BIO ressources\n");
 			return -1;
+		}
+		bs->certificate = d2i_X509_bio(bio, NULL);
+		if (bs->certificate) {
+			seq_size -= BIO_number_read(bio);
+			*datap += BIO_number_read(bio);
+		}
+		BIO_free(bio);
 		break;
+	}
 	default:
 		pr_error("unsupported boot signature format %ld\n",
 			 bs->format_version);

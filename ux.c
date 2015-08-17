@@ -89,17 +89,14 @@ static const ui_textline_t secure_boot_off[] = {
 	{ NULL, NULL, FALSE }
 };
 
-#define KEYSTORE_ALTERED_CODE	5
-static const ui_textline_t device_altered_keystore[] = {
+#define BOOTIMAGE_UNTRUSTED_CODE	5
+static const ui_textline_t device_untrusted_bootimage[] = {
 	{ &COLOR_LIGHTGRAY,	"Your device has loaded a different",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"operating system.",			FALSE },
 	{ &COLOR_LIGHTGRAY,	"",					FALSE },
-	{ &COLOR_LIGHTGRAY,	"If you were not responsible for",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"these changes, the security of",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"your device may be at risk.",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"To learn more, visit:",		FALSE },
+	{ &COLOR_YELLOW,	"g.co/placeholder",			FALSE },
 	{ &COLOR_LIGHTGRAY,	"",					FALSE },
-	{ &COLOR_LIGHTGRAY,	"The device was unable to verify",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"the keystore with ID:",		FALSE },
 	{ NULL, NULL, FALSE }
 };
 
@@ -288,19 +285,19 @@ static VOID ux_prompt_user(UINT32 code,
 	clear_text();
 }
 
-VOID ux_prompt_user_keystore_unverified(UINT8 *hash) {
-	char buf[15];
+VOID ux_prompt_user_untrusted_bootimage(UINT8 *hash) {
+	char buf[19];
 	const ui_textline_t hash_text[] = {
-		{ &COLOR_WHITE, buf, FALSE },
+		{ &COLOR_LIGHTGRAY, buf, FALSE },
 		{ NULL, NULL, FALSE }
 	};
 
 	snprintf((CHAR8 *)buf, sizeof(buf),
-		 (CHAR8 *)"%02x%02x-%02x%02x-%02x%02x",
+		 (CHAR8 *)"ID: %02x%02x-%02x%02x-%02x%02x",
 		 hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
 
-	ux_prompt_user(KEYSTORE_ALTERED_CODE, &COLOR_YELLOW,
-		       device_altered_keystore, hash_text);
+	ux_prompt_user(BOOTIMAGE_UNTRUSTED_CODE, &COLOR_YELLOW,
+		       device_untrusted_bootimage, hash_text);
 }
 
 static const ui_textline_t empty_text[] = {
