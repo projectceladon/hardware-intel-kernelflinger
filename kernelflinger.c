@@ -309,6 +309,28 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         return ret;
 }
 
+static BOOLEAN reset_is_due_to_watchdog()
+{
+        static enum reset_sources WATCHDOG_RESET_SOURCES[] = {
+                RESET_KERNEL_WATCHDOG,
+                RESET_SECURITY_WATCHDOG,
+                RESET_PMC_WATCHDOG,
+                RESET_EC_WATCHDOG,
+                RESET_PLATFORM_WATCHDOG
+        };
+        enum reset_sources reset_source;
+        UINTN i;
+
+        reset_source = rsci_get_reset_source();
+        for (i = 0; i < ARRAY_SIZE(WATCHDOG_RESET_SOURCES); i++)
+                if (reset_source == WATCHDOG_RESET_SOURCES[i]) {
+                        debug(L"Watchdog reset source = %d", reset_source);
+                        return TRUE;
+                }
+
+        return FALSE;
+}
+
 /* If more than get_watchdog_counter_max() watchdog resets in a row
  * happened in less than WATCHDOG_DELAY seconds, the crash event menu
  * is displayed.  This menu informs the user of the situation and let
@@ -316,7 +338,6 @@ static enum boot_target check_loader_entry_one_shot(VOID)
 static enum boot_target check_watchdog(VOID)
 {
         EFI_STATUS ret;
-        enum reset_sources reset_source;
         UINT8 counter;
         EFI_TIME time_ref, now;
 
@@ -329,9 +350,7 @@ static enum boot_target check_watchdog(VOID)
                 return NORMAL_BOOT;
         }
 
-        reset_source = rsci_get_reset_source();
-        if (reset_source != RESET_KERNEL_WATCHDOG
-            && reset_source != RESET_SECURITY_WATCHDOG) {
+        if (!reset_is_due_to_watchdog()) {
                 if (counter != 0) {
                         ret = reset_watchdog_status();
                         if (EFI_ERROR(ret)) {
@@ -341,7 +360,6 @@ static enum boot_target check_watchdog(VOID)
                 }
                 return NORMAL_BOOT;
         }
-        debug(L"Reset source = %d", reset_source);
 
         ret = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
         if (EFI_ERROR(ret)) {
@@ -365,7 +383,7 @@ static enum boot_target check_watchdog(VOID)
         }
 
         counter++;
-        debug(L"Reset source = %d : incrementing watchdog counter (%d)", reset_source, counter);
+        debug(L"Incrementing watchdog counter (%d)", counter);
 
         if (counter <= get_watchdog_counter_max()) {
                 ret = set_watchdog_counter(counter);
