@@ -77,13 +77,6 @@ EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
 {
 	EFI_STATUS ret;
 
-	if (get_current_state() == new_state && !device_is_provisioning()) {
-		error(L"Device is already in the required state.");
-		if (interactive)
-			fastboot_okay("");
-		return EFI_SUCCESS;
-	}
-
 	/* "Eng" builds skip all these security policies */
 #ifdef USERDEBUG
 	/* Data wipes and UI prompts are skipped if the device is in
@@ -137,10 +130,22 @@ EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
 	return EFI_SUCCESS;
 }
 
+static BOOLEAN is_already_in_state(enum device_state state)
+{
+	if (get_current_state() == state && !device_is_provisioning()) {
+		error(L"Device is already in the required state.");
+		fastboot_okay("");
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
 			 __attribute__((__unused__)) CHAR8 **argv)
 {
-	change_device_state(LOCKED, TRUE);
+	if (!is_already_in_state(LOCKED))
+		change_device_state(LOCKED, TRUE);
 }
 
 static BOOLEAN frp_allows_unlock()
@@ -176,6 +181,9 @@ static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
 {
 	BOOLEAN unlock_allowed;
 
+	if (is_already_in_state(UNLOCKED))
+		return;
+
 	/* Allow if device is in provisioning mode */
 	if (device_is_provisioning())
 		unlock_allowed = TRUE;
@@ -198,7 +206,8 @@ static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
 static void cmd_oem_verified(__attribute__((__unused__)) INTN argc,
 			     __attribute__((__unused__)) CHAR8 **argv)
 {
-	change_device_state(VERIFIED, TRUE);
+	if (!is_already_in_state(VERIFIED))
+		change_device_state(VERIFIED, TRUE);
 }
 
 static void cmd_oem_off_mode_charge(INTN argc, CHAR8 **argv)
