@@ -148,7 +148,7 @@ static UINTN get_bootimage_len(CHAR8 *buffer, UINTN buffer_len)
 	return len;
 }
 
-EFI_STATUS get_boot_image_hash(CHAR16 *label)
+EFI_STATUS get_boot_image_hash(const CHAR16 *label)
 {
 	struct gpt_partition_interface gparti;
 	CHAR8 *data;
@@ -283,7 +283,7 @@ static void popdir(void)
 	freepath();
 }
 
-EFI_STATUS get_esp_hash(void)
+EFI_STATUS get_esp_hash(__attribute__((__unused__)) const CHAR16 *label)
 {
 	EFI_STATUS ret;
 	EFI_FILE_IO_INTERFACE *io;
@@ -410,7 +410,7 @@ static UINT64 verity_tree_size(UINT64 data_size)
 	} while (level_blocks > 1);
 
 	tree_size = verity_blocks * EXT4_BLOCK_SIZE;
-	debug(L"verity tree size %lld\n", tree_size);
+	debug(L"verity tree size %lld", tree_size);
 	return tree_size;
 }
 
@@ -514,7 +514,7 @@ static EFI_STATUS check_verity_header(struct gpt_partition_interface *gparti, UI
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS get_ext4_hash(CHAR16 *label)
+EFI_STATUS get_ext4_hash(const CHAR16 *label)
 {
 	struct gpt_partition_interface gparti;
 	CHAR8 hash[EVP_MAX_MD_SIZE];
@@ -523,7 +523,7 @@ EFI_STATUS get_ext4_hash(CHAR16 *label)
 
 	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get partition %s", label);
+		debug(L"partition %s not found", label);
 		return ret;
 	}
 
@@ -537,7 +537,7 @@ EFI_STATUS get_ext4_hash(CHAR16 *label)
 
 	ext4_len += verity_tree_size(ext4_len) + VERITY_METADATA_SIZE;
 
-	debug(L"filesystem size %lld\n", ext4_len);
+	debug(L"filesystem size %lld", ext4_len);
 
 	ret = hash_partition(&gparti, ext4_len, hash);
 	if (EFI_ERROR(ret))

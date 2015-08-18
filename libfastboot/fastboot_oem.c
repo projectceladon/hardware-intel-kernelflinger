@@ -188,9 +188,22 @@ static void cmd_oem_garbage_disk(__attribute__((__unused__)) INTN argc,
 		fastboot_fail("Garbage disk failed, %r", ret);
 }
 
+static struct oem_hash {
+	const CHAR16 *name;
+	EFI_STATUS (*hash)(const CHAR16 *name);
+	BOOLEAN fail_if_missing;
+} OEM_HASH[] = {
+	{ L"boot",		get_boot_image_hash,	TRUE },
+	{ L"recovery",		get_boot_image_hash,	TRUE },
+	{ L"bootloader",	get_esp_hash,		TRUE },
+	{ L"system",		get_ext4_hash,		TRUE },
+	{ L"vendor",		get_ext4_hash,		FALSE }
+};
+
 static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)
 {
-	EFI_STATUS ret = EFI_SUCCESS;
+	EFI_STATUS ret;
+	UINTN i;
 
 	if (argc == 2) {
 		ret = set_hash_algorithm(argv[1]);
@@ -200,14 +213,14 @@ static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)
 		}
 	}
 
-	ret |= get_boot_image_hash(L"boot");
-	ret |= get_boot_image_hash(L"recovery");
-	ret |= get_esp_hash();
-	ret |= get_ext4_hash(L"system");
-
-	if (EFI_ERROR(ret)) {
-		fastboot_fail("Fail to get hash for system image, %r", ret);
-		return;
+	for (i = 0; i < ARRAY_SIZE(OEM_HASH); i++) {
+		ret = OEM_HASH[i].hash(OEM_HASH[i].name);
+		if (EFI_ERROR(ret)
+		    && (ret != EFI_NOT_FOUND || OEM_HASH[i].fail_if_missing)) {
+			fastboot_fail("Failed to get hash for %s, %r",
+				      OEM_HASH[i].name, ret);
+			return;
+		}
 	}
 
 	fastboot_okay("");
