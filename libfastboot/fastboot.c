@@ -531,10 +531,9 @@ static void flush_tx_buffer(void)
 
 static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
 {
-	do {
+	for (; *white_list; white_list++)
 		if (!strcmp(key, (CHAR8 *)*white_list))
 			return TRUE;
-	} while (*++white_list);
 
 	return FALSE;
 }
