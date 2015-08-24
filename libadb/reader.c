@@ -36,8 +36,16 @@
 #include "acpi.h"
 #include "sparse_format.h"
 
-/* RAM reader */
-struct ram_priv {
+/* RAM reader avoid dynamic memory allocation to avoid RAM corruption
+   during the dump.  */
+#define MAX_MEMORY_REGION_NB 256
+
+static struct ram_priv {
+	BOOLEAN is_in_used;
+
+	/* Memory map */
+	UINT8 memmap[MAX_MEMORY_REGION_NB * sizeof(EFI_MEMORY_DESCRIPTOR)];
+
 	/* Boundaries */
 	EFI_PHYSICAL_ADDRESS start;
 	EFI_PHYSICAL_ADDRESS end;
@@ -50,8 +58,8 @@ struct ram_priv {
 	UINTN chunk_nb;
 	UINTN cur_chunk;
 	struct sparse_header sheader;
-	struct chunk_header *chunks;
-};
+	struct chunk_header chunks[MAX_MEMORY_REGION_NB];
+} ram_priv;
 
 static VOID sort_memory_map(CHAR8 *entries, UINTN nr_entries, UINTN entry_sz)
 {
@@ -83,24 +91,15 @@ static EFI_STATUS ram_add_chunk(reader_ctx_t *ctx, struct ram_priv *priv, UINT16
 
 	if (size % EFI_PAGE_SIZE) {
 		error(L"chunk size must be multiple of %d bytes", EFI_PAGE_SIZE);
-		if (priv->chunks)
-			FreePool(priv->chunks);
 		return EFI_INVALID_PARAMETER;
 	}
 
-	if (!priv->chunks) {
-		cur = priv->chunks = AllocatePool(sizeof(*cur));
-		if (!cur)
-			goto out_of_resources;
-		priv->chunk_nb = 1;
-	} else {
-		priv->chunks = ReallocatePool(priv->chunks, priv->chunk_nb * sizeof(*cur),
-					      (priv->chunk_nb + 1) * sizeof(*cur));
-		if (!priv->chunks)
-			goto out_of_resources;
-
-		cur = &priv->chunks[priv->chunk_nb++];
+	if (priv->chunk_nb == MAX_MEMORY_REGION_NB) {
+		error(L"Failed to allocate a new chunk");
+		return EFI_OUT_OF_RESOURCES;
 	}
+
+	cur = &priv->chunks[priv->chunk_nb++];
 
 	cur->chunk_type = type;
 	cur->chunk_sz = size / EFI_PAGE_SIZE;
@@ -115,14 +114,10 @@ static EFI_STATUS ram_add_chunk(reader_ctx_t *ctx, struct ram_priv *priv, UINT16
 	priv->sheader.total_blks += cur->chunk_sz;
 
 	return EFI_SUCCESS;
-
-out_of_resources:
-	error(L"Failed to allocate a new chunk");
-	return EFI_OUT_OF_RESOURCES;
 }
 
 static EFI_STATUS ram_build_chunks(reader_ctx_t *ctx, struct ram_priv *priv,
-				   CHAR8 *entries, UINTN nr_entries, UINTN entry_sz)
+				   UINTN nr_entries, UINTN entry_sz)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
 	UINT16 type;
@@ -130,6 +125,7 @@ static EFI_STATUS ram_build_chunks(reader_ctx_t *ctx, struct ram_priv *priv,
 	EFI_MEMORY_DESCRIPTOR *entry;
 	UINT64 entry_len, length;
 	EFI_PHYSICAL_ADDRESS entry_end, prev_end;
+	CHAR8 *entries = priv->memmap;
 
 	prev_end = ctx->cur = ctx->len = 0;
 
@@ -212,16 +208,19 @@ static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	struct ram_priv *priv;
 	char *endptr;
 	CHAR8 *entries = NULL;
-	UINT32 entry_ver;
-	UINTN nr_entries, entry_sz, key;
+	UINT32 descr_ver;
+	UINTN descr_sz, key, memmap_sz, nr_descr;
 	UINT64 length;
 
 	if (argc > 2)
 		return EFI_INVALID_PARAMETER;
 
-	ctx->private = priv = AllocateZeroPool(sizeof(*priv));
-	if (!priv)
-		return EFI_OUT_OF_RESOURCES;
+	if (ram_priv.is_in_used)
+		return EFI_UNSUPPORTED;
+
+	ctx->private = priv = &ram_priv;
+	memset(priv, 0, sizeof(*priv));
+	priv->is_in_used = TRUE;
 
 	/* Parse argv  */
 	if (argc > 0) {
@@ -251,14 +250,18 @@ static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	priv->sheader.chunk_hdr_sz = sizeof(*priv->chunks);
 	priv->sheader.blk_sz = EFI_PAGE_SIZE;
 
-	entries = (CHAR8 *)LibMemoryMap(&nr_entries, &key, &entry_sz, &entry_ver);
-	if (!entries) {
-		ret = EFI_OUT_OF_RESOURCES;
+	memmap_sz = sizeof(priv->memmap);
+	ret = uefi_call_wrapper(BS->GetMemoryMap, 5, &memmap_sz,
+				(EFI_MEMORY_DESCRIPTOR *)priv->memmap,
+				&key, &descr_sz, &descr_ver);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get the current memory map");
 		goto err;
 	}
-	sort_memory_map(entries, nr_entries, entry_sz);
+	nr_descr = memmap_sz / descr_sz;
+	sort_memory_map(priv->memmap, nr_descr, descr_sz);
 
-	ret = ram_build_chunks(ctx, priv, entries, nr_entries, entry_sz);
+	ret = ram_build_chunks(ctx, priv, nr_descr, descr_sz);
 	FreePool(entries);
 	if (EFI_ERROR(ret))
 		goto err;
@@ -268,9 +271,7 @@ static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	return EFI_SUCCESS;
 
 err:
-	if (priv)
-		FreePool(priv);
-
+	priv->is_in_used = FALSE;
 	return EFI_ERROR(ret) ? ret : EFI_INVALID_PARAMETER;
 }
 
@@ -317,7 +318,7 @@ static void ram_close(reader_ctx_t *ctx)
 	struct ram_priv *priv = ctx->private;
 
 	FreePool(priv->chunks);
-	FreePool(priv);
+	priv->is_in_used = FALSE;
 }
 
 /* Partition reader */
