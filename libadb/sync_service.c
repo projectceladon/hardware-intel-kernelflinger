@@ -206,7 +206,7 @@ static EFI_STATUS sync_service_reader_open(sync_ctx_t *ctx, unsigned char *data,
 	return reader_open(&ctx->reader_ctx, path);
 }
 
-#define BLOCK_DEVICE_STAT_MODE 0x00006180
+#define REGULAR_FILE_STAT_MODE 0x000081b6
 
 static EFI_STATUS sync_service_stat(asock_t s, sync_ctx_t *ctx, unsigned char *data, UINT32 length)
 {
@@ -227,7 +227,7 @@ static EFI_STATUS sync_service_stat(asock_t s, sync_ctx_t *ctx, unsigned char *d
 
 	reader_close(&ctx->reader_ctx);
 
-	msg.stat.mode = BLOCK_DEVICE_STAT_MODE;
+	msg.stat.mode = REGULAR_FILE_STAT_MODE;
 
 	ret = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
         if (EFI_ERROR(ret)) {
