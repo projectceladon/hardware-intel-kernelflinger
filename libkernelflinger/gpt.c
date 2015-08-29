@@ -43,24 +43,6 @@
 #define PROTECTIVE_MBR 0xEE
 #define GPT_SIGNATURE "EFI PART"
 
-struct gpt_header {
-	char signature[8];
-	UINT32 revision;
-	UINT32 size;
-	UINT32 header_crc32;
-	UINT32 reserved_zero;
-	UINT64 my_lba;
-	UINT64 alternate_lba;
-	UINT64 first_usable_lba;
-	UINT64 last_usable_lba;
-	EFI_GUID disk_uuid;
-	UINT64 entries_lba;
-	UINT32 number_of_entries;
-	UINT32 size_of_entry;
-	UINT32 entries_crc32;
-	/* Remainder of sector is reserved and should be 0 */
-} __attribute__((packed));
-
 struct legacy_partition {
 	UINT8	status;
 	UINT8	f_head;
@@ -343,10 +325,6 @@ static EFI_STATUS gpt_cache_partition(logical_unit_t log_unit)
 		ret = EFI_NOT_FOUND;
 		goto free_handles;
 	}
-
-	/* only system's gpt partitions will be flashed through fastboot */
-	if (log_unit != LOGICAL_UNIT_USER)
-		return EFI_SUCCESS;
 
 	ret = gpt_list_partition_on_disk(&sdisk);
 	/* ignore if there are no gpt partition on the system disk */
@@ -840,4 +818,46 @@ EFI_STATUS gpt_get_partition_handle(const CHAR16 *label,
 
 	FreePool(handles);
 	return *handle ? EFI_SUCCESS : EFI_NOT_FOUND;
+}
+
+EFI_STATUS gpt_get_header(struct gpt_header **header, UINTN *size, logical_unit_t log_unit)
+{
+	EFI_STATUS ret;
+
+	if (!header || !size)
+		return EFI_INVALID_PARAMETER;
+
+	ret = gpt_cache_partition(log_unit);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	*size = sizeof(*header);
+	*header = AllocatePool(*size);
+	if (!*header)
+		return EFI_OUT_OF_RESOURCES;
+
+	memcpy(*header, &sdisk.gpt_hd, *size);
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS gpt_get_partitions(struct gpt_partition **partitions, UINTN *size, logical_unit_t log_unit)
+{
+	EFI_STATUS ret;
+
+	if (!partitions || !size)
+		return EFI_INVALID_PARAMETER;
+
+	ret = gpt_cache_partition(log_unit);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	*size = sdisk.gpt_hd.number_of_entries * sizeof(*sdisk.partitions);
+	*partitions = AllocatePool(*size);
+	if (!*partitions)
+		return EFI_OUT_OF_RESOURCES;
+
+	memcpy(*partitions, sdisk.partitions, *size);
+
+	return EFI_SUCCESS;
 }

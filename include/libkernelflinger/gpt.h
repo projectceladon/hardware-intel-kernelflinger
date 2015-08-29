@@ -38,7 +38,26 @@
 #include <efi.h>
 #include "gpt_bin.h"
 
+#define MBR_CODE_SIZE	440
 #define BOOTLOADER_PART L"bootloader"
+
+struct gpt_header {
+	char signature[8];
+	UINT32 revision;
+	UINT32 size;
+	UINT32 header_crc32;
+	UINT32 reserved_zero;
+	UINT64 my_lba;
+	UINT64 alternate_lba;
+	UINT64 first_usable_lba;
+	UINT64 last_usable_lba;
+	EFI_GUID disk_uuid;
+	UINT64 entries_lba;
+	UINT32 number_of_entries;
+	UINT32 size_of_entry;
+	UINT32 entries_crc32;
+	/* Remainder of sector is reserved and should be 0 */
+} __attribute__((packed));
 
 struct gpt_partition {
 	EFI_GUID type;
@@ -78,5 +97,7 @@ EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, logical_unit_t 
 EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, logical_unit_t log_unit);
 EFI_STATUS gpt_sync(void);
 EFI_STATUS gpt_get_partition_handle(const CHAR16 *label, logical_unit_t log_unit, EFI_HANDLE *handle);
+EFI_STATUS gpt_get_header(struct gpt_header **header, UINTN *size, logical_unit_t log_unit);
+EFI_STATUS gpt_get_partitions(struct gpt_partition **partitions, UINTN *size, logical_unit_t log_unit);
 
 #endif	/* _GPT_H_ */

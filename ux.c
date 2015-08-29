@@ -120,17 +120,21 @@ static const ui_textline_t crash_event_message[] = {
 };
 #ifdef CRASHMODE_USE_ADB
 static const ui_textline_t adb_message[] = {
-	{ &COLOR_LIGHTGRAY,	"",					FALSE },
-	{ &COLOR_LIGHTGRAY,	"A minimal implementation of adb is",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"running and allows reboot [TARGET]", 	FALSE },
-	{ &COLOR_LIGHTGRAY,	"and pull commands:",			FALSE },
-	{ &COLOR_LIGHTGRAY,	"- ram:[:START[:LENGTH]]",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"- part:PART_NAME[:START[:LENGTH]]",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"- acpi:TABLE_NAME",			FALSE },
-	{ &COLOR_LIGHTGRAY,	"- efivar:VAR_NAME[:GUID]",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"START and LENGTH are hexadecimal",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"strings without \"0x\" prefix. 'ram'",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"output file is a sparse file.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"",						FALSE },
+	{ &COLOR_LIGHTGRAY,	"A minimal implementation of adb is running",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"and allows reboot [TARGET] and pull commands:",FALSE },
+	{ &COLOR_LIGHTGRAY,	"- ram:[:START[:LENGTH]]",			FALSE },
+	{ &COLOR_LIGHTGRAY,	"- acpi:TABLE_NAME",				FALSE },
+	{ &COLOR_LIGHTGRAY,	"- part:PART_NAME[:START[:LENGTH]]",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"- factory-part:PART_NAME[:START[:LENGTH]]",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"- mbr",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"- gpt-header",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"- gpt-parts",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"- gpt-factory-header",				FALSE },
+	{ &COLOR_LIGHTGRAY,	"- gpt-factory-parts",				FALSE },
+	{ &COLOR_LIGHTGRAY,	"- efivar:VAR_NAME[:GUID]",			FALSE },
+	{ &COLOR_LIGHTGRAY,	"START and LENGTH are hexadecimal strings.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"'ram' output file is an Android sparse file.",	FALSE },
 	{ NULL, NULL, FALSE }
 };
 #endif
