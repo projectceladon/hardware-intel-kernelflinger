@@ -333,7 +333,7 @@ struct part_priv {
 	UINT64 offset;
 };
 
-static EFI_STATUS part_open(reader_ctx_t *ctx, UINTN argc, char **argv)
+static EFI_STATUS _part_open(reader_ctx_t *ctx, UINTN argc, char **argv, logical_unit_t log_unit)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
 	struct gpt_partition_interface *gparti;
@@ -356,7 +356,7 @@ static EFI_STATUS part_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	}
 
 	gparti = &priv->gparti;
-	ret = gpt_get_partition_by_label(partname, gparti, LOGICAL_UNIT_USER);
+	ret = gpt_get_partition_by_label(partname, gparti, log_unit);
 	FreePool(partname);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Cannot access partition '%a'", argv[0]);
@@ -391,6 +391,16 @@ static EFI_STATUS part_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 err:
 	FreePool(priv);
 	return EFI_ERROR(ret) ? ret : EFI_INVALID_PARAMETER;
+}
+
+static EFI_STATUS part_open(reader_ctx_t *ctx, UINTN argc, char **argv)
+{
+	return _part_open(ctx, argc, argv, LOGICAL_UNIT_USER);
+}
+
+static EFI_STATUS factory_part_open(reader_ctx_t *ctx, UINTN argc, char **argv)
+{
+	return _part_open(ctx, argc, argv, LOGICAL_UNIT_FACTORY);
 }
 
 static EFI_STATUS part_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
@@ -549,6 +559,116 @@ exit:
 	return ret;
 }
 
+/* MBR */
+static EFI_STATUS mbr_open(reader_ctx_t *ctx, UINTN argc,
+			   __attribute__((__unused__)) char **argv)
+{
+	struct gpt_partition_interface gparti;
+	EFI_STATUS ret;
+
+	if (argc != 0)
+		return EFI_INVALID_PARAMETER;
+
+	ret = gpt_get_root_disk(&gparti, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get disk information");
+		return ret;
+	}
+
+	ctx->private = AllocatePool(MBR_CODE_SIZE);
+	if (!ctx->private) {
+		error(L"Failed to allocate MBR buffer");
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
+				gparti.bio->Media->MediaId,
+				0, MBR_CODE_SIZE, ctx->private);
+	if (EFI_ERROR(ret)) {
+		FreePool(ctx->private);
+		efi_perror(ret, L"Failed to read partition");
+		return ret;
+	}
+
+	ctx->len = MBR_CODE_SIZE;
+	ctx->cur = 0;
+
+	return EFI_SUCCESS;
+}
+
+/* GPT-HEADER and GPT-FACTORY-HEADER */
+static EFI_STATUS _gpt_header_open(reader_ctx_t *ctx, logical_unit_t log_unit)
+{
+	UINTN size;
+	EFI_STATUS ret;
+
+	ret = gpt_get_header((struct gpt_header **)&ctx->private, &size, log_unit);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get GPT header");
+		return ret;
+	}
+
+	ctx->len = size;
+	ctx->cur = 0;
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS gpt_header_open(reader_ctx_t *ctx, UINTN argc,
+				  __attribute__((__unused__)) char **argv)
+{
+	if (argc != 0)
+		return EFI_INVALID_PARAMETER;
+
+	return _gpt_header_open(ctx, LOGICAL_UNIT_USER);
+}
+
+static EFI_STATUS gpt_factory_header_open(reader_ctx_t *ctx, UINTN argc,
+					  __attribute__((__unused__)) char **argv)
+{
+	if (argc != 0)
+		return EFI_INVALID_PARAMETER;
+
+	return _gpt_header_open(ctx, LOGICAL_UNIT_FACTORY);
+}
+
+/* GPT-PARTS and GPT-FACTORY-PARTS */
+static EFI_STATUS _gpt_parts_open(reader_ctx_t *ctx, logical_unit_t log_unit)
+{
+	UINTN size;
+	EFI_STATUS ret;
+
+	ret = gpt_get_partitions((struct gpt_partition **)&ctx->private,
+				 &size, log_unit);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get GPT partition table");
+		return ret;
+	}
+
+	ctx->len = size;
+	ctx->cur = 0;
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS gpt_parts_open(reader_ctx_t *ctx, UINTN argc,
+				 __attribute__((__unused__)) char **argv)
+{
+	if (argc != 0)
+		return EFI_INVALID_PARAMETER;
+
+	return _gpt_parts_open(ctx, LOGICAL_UNIT_USER);
+}
+
+static EFI_STATUS gpt_factory_parts_open(reader_ctx_t *ctx, UINTN argc,
+					 __attribute__((__unused__)) char **argv)
+{
+	if (argc != 0)
+		return EFI_INVALID_PARAMETER;
+
+	return _gpt_parts_open(ctx, LOGICAL_UNIT_FACTORY);
+}
+
 /* Interface */
 static EFI_STATUS read_from_private(reader_ctx_t *ctx, unsigned char **buf,
 				    __attribute__((__unused__)) UINTN *len)
@@ -568,10 +688,16 @@ struct reader {
 	EFI_STATUS (*read)(reader_ctx_t *ctx, unsigned char **buf, UINTN *len);
 	void (*close)(reader_ctx_t *ctx);
 } READERS[] = {
-	{ "ram",	ram_open,	ram_read,		ram_close },
-	{ "acpi",	acpi_open,	read_from_private,	NULL },
-	{ "part",	part_open,	part_read,		free_private },
-	{ "efivar",	efivar_open,	read_from_private,	free_private }
+	{ "ram",		ram_open,			ram_read,		ram_close },
+	{ "acpi",		acpi_open,			read_from_private,	NULL },
+	{ "part",		part_open,			part_read,		free_private },
+	{ "factory-part",	factory_part_open,		part_read,		free_private },
+	{ "efivar",		efivar_open,			read_from_private,	free_private },
+	{ "mbr",		mbr_open,			read_from_private,	free_private },
+	{ "gpt-header",		gpt_header_open,		read_from_private,	free_private },
+	{ "gpt-parts",		gpt_parts_open,			read_from_private,	free_private },
+	{ "gpt-factory-header",	gpt_factory_header_open,	read_from_private,	free_private },
+	{ "gpt-factory-parts",	gpt_factory_parts_open,		read_from_private,	free_private }
 };
 
 #define MAX_ARGS		8

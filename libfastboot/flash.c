@@ -140,12 +140,15 @@ static EFI_STATUS _flash_gpt(VOID *data, UINTN size, logical_unit_t log_unit)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	return (EFI_SUCCESS | REFRESH_PARTITION_VAR);
+	return EFI_SUCCESS;
 }
 
 static EFI_STATUS flash_gpt(VOID *data, UINTN size)
 {
-	return _flash_gpt(data, size, LOGICAL_UNIT_USER);
+	EFI_STATUS ret;
+
+	ret = _flash_gpt(data, size, LOGICAL_UNIT_USER);
+	return EFI_ERROR(ret) ? ret : EFI_SUCCESS | REFRESH_PARTITION_VAR;
 }
 
 static EFI_STATUS flash_gpt_gpp1(VOID *data, UINTN size)
@@ -159,7 +162,6 @@ static EFI_STATUS flash_efirun(VOID *data, UINTN size)
 	return fastboot_stop(NULL, data, size, UNKNOWN_TARGET);
 }
 
-#define MBR_CODE_SIZE	440
 static EFI_STATUS flash_mbr(VOID *data, UINTN size)
 {
 	struct gpt_partition_interface gparti;
