@@ -153,17 +153,6 @@ static EFI_STATUS flash_gpt_gpp1(VOID *data, UINTN size)
 	return _flash_gpt(data, size, LOGICAL_UNIT_FACTORY);
 }
 
-static EFI_STATUS flash_keystore(VOID *data, UINTN size)
-{
-	EFI_STATUS ret;
-
-	ret = set_user_keystore(data, size);
-	if (ret)
-		efi_perror(ret, L"Coudn't modify KeyStore");
-
-	return ret;
-}
-
 #ifndef USER
 static EFI_STATUS flash_efirun(VOID *data, UINTN size)
 {
@@ -314,7 +303,6 @@ static struct label_exception {
 } LABEL_EXCEPTIONS[] = {
 	{ L"gpt", flash_gpt },
 	{ L"gpt-gpp1", flash_gpt_gpp1 },
-	{ L"keystore", flash_keystore },
 #ifndef USER
 	{ L"efirun", flash_efirun },
 	{ L"mbr", flash_mbr },
@@ -394,9 +382,6 @@ EFI_STATUS erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT
 EFI_STATUS erase_by_label(CHAR16 *label)
 {
 	EFI_STATUS ret;
-
-	if (!StrCmp(L"keystore", label))
-		return set_user_keystore(NULL, 0);
 
 	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {

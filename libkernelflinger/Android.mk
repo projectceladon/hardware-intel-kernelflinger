@@ -67,7 +67,7 @@ LOCAL_SRC_FILES := \
 	options.c \
 	security.c \
 	asn1.c \
-	keystore.c \
+	signature.c \
 	vars.c \
 	ui.c \
 	ui_font.c \

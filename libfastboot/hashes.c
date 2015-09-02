@@ -41,7 +41,7 @@
 #include "uefi_utils.h"
 #include "gpt.h"
 #include "android.h"
-#include "keystore.h"
+#include "signature.h"
 #include "security.h"
 
 static struct algorithm {

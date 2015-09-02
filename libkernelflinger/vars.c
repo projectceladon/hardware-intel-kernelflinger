@@ -33,7 +33,7 @@
 #include <efi.h>
 #include <efiapi.h>
 
-#include "keystore.h"
+#include "signature.h"
 #include "vars.h"
 #include "ui.h"
 #include "lib.h"
@@ -42,7 +42,6 @@
 
 #define OFF_MODE_CHARGE_VAR	L"off-mode-charge"
 #define OEM_LOCK_VAR		L"OEMLock"
-#define KEYSTORE_VAR		L"KeyStore"
 #define CRASH_EVENT_MENU_VAR	L"CrashEventMenu"
 #define WDT_COUNTER_VAR		L"WatchdogCounter"
 #define WDT_COUNTER_MAX_VAR	L"WatchdogCounterMax"
@@ -264,50 +263,6 @@ EFI_STATUS reprovision_state_vars(VOID)
 	return del_efi_variable(&fastboot_guid, OEM_LOCK_VAR);
 }
 #endif
-
-EFI_STATUS get_user_keystore(VOID **keystorep, UINTN *sizep)
-{
-	UINT32 flags;
-	VOID *keystore;
-	UINTN size;
-	EFI_STATUS ret;
-
-	ret = get_efi_variable(&fastboot_guid, KEYSTORE_VAR,
-			       &size, &keystore, &flags);
-
-	if (EFI_ERROR(ret) || size == 0) {
-		debug(L"user keystore not set: %r", ret);
-		return EFI_NOT_FOUND;
-	}
-
-#ifndef USERFASTBOOT
-	if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
-		debug(L"user keystore has bad attributes");
-		FreePool(keystore);
-		return EFI_NOT_FOUND;
-	}
-#endif
-	*sizep = size;
-	*keystorep = keystore;
-	return EFI_SUCCESS;
-}
-
-EFI_STATUS set_user_keystore(VOID *data, UINTN size)
-{
-	if (size) {
-		struct keystore *ks = get_keystore(data, size);
-
-		if (!ks) {
-			error(L"keystore data is invalid");
-			return EFI_INVALID_PARAMETER;
-		}
-
-		free_keystore(ks);
-	}
-
-	return set_efi_variable(&fastboot_guid, KEYSTORE_VAR,
-			       size, data, TRUE, FALSE);
-}
 
 char *get_current_state_string()
 {
