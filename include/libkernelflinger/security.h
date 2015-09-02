@@ -69,32 +69,6 @@ UINT8 verify_android_boot_image(
         OUT CHAR16 *target,
         OUT UINT8 *hash);
 
-#define KEYSTORE_HASH_SIZE        6
-
-/* Given a keystore, return EFI_SUCCESS if it is signed with the supplied key.
- *
- * Parameters:
- * keystore - data pointer to DER-encoded ASN.1 keystore per Google spec
- * keystore_size - size of the keystore data
- * key - public key data to verify the keystore with. The specifics of this
- *       data depend on the chosen algorithm in the keystore message
- * key_size - Size of the public key data
- * keystore_hash - pointer to a buffer of KEYSTORE_HASH_SIZE. Will be filled
- *                 in with a partial hash of the keystore data even if the
- *                 verification fails so that it can be reported to UX
- *
- * Return values:
- * EFI_SUCCESS - Keystore is validated by the OEM key
- * EFI_ACCESS_DENIED - Keystore is not validated
- * EFI_INVALID_PARAMETER - Keystore data is not well-formed
- */
-EFI_STATUS verify_android_keystore(
-        IN VOID *keystore,
-        IN UINTN keystore_size,
-        IN VOID *key,
-        IN UINTN key_size,
-        OUT VOID *keystore_hash);
-
 /* Determines if UEFI Secure Boot is enabled or not. */
 BOOLEAN is_efi_secure_boot_enabled(VOID);
 

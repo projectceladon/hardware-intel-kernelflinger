@@ -43,7 +43,7 @@
 
 #include "security.h"
 #include "android.h"
-#include "keystore.h"
+#include "signature.h"
 #include "lib.h"
 #include "vars.h"
 
