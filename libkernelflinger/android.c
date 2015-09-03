@@ -406,10 +406,9 @@ static CHAR16 *get_boot_reason(void)
         if (bootreason)
                 goto done;
 
-        bootreason = get_efi_variable_str(&loader_guid,
-                                          L"LoaderEntryRebootReason");
+        bootreason = get_reboot_reason();
         if (!bootreason) {
-                debug(L"Error while trying to get LoaderEntryRebootReason variable");
+                debug(L"Error while trying to read the reboot reason");
                 bootreason = StrDuplicate(L"unknown");
                 goto done;
         }
@@ -420,7 +419,7 @@ static CHAR16 *get_boot_reason(void)
                 if (!((*pos >= L'0' && *pos <= L'9') ||
                             (*pos >= L'a' && *pos <= L'z') ||
                             *pos == L'_')) {
-                        debug(L"Error, LoaderEntryRebootReason contains non-alphanumeric characters");
+                        debug(L"Error, reboot reason contains non-alphanumeric characters");
                         FreePool(bootreason);
                         bootreason = StrDuplicate(L"unknown");
                         break;
@@ -428,7 +427,7 @@ static CHAR16 *get_boot_reason(void)
                 pos++;
         }
 done:
-        del_efi_variable(&loader_guid, L"LoaderEntryRebootReason");
+        del_reboot_reason();
         return bootreason;
 }
 

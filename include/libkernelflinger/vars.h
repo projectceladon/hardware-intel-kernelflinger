@@ -134,6 +134,8 @@ CHAR16 *boot_state_to_string(UINT8 boot_state);
 #ifndef USER
 EFI_STATUS reprovision_state_vars(VOID);
 #endif
+CHAR16 *get_reboot_reason();
+VOID del_reboot_reason();
 #ifdef BOOTLOADER_POLICY
 BOOLEAN blpolicy_is_flashed(VOID);
 BOOLEAN device_is_class_A(VOID);
