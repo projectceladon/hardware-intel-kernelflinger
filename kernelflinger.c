@@ -280,7 +280,7 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         return ret;
 }
 
-static BOOLEAN reset_is_due_to_watchdog()
+static BOOLEAN reset_is_due_to_watchdog_or_panic()
 {
         static enum reset_sources WATCHDOG_RESET_SOURCES[] = {
                 RESET_KERNEL_WATCHDOG,
@@ -290,6 +290,7 @@ static BOOLEAN reset_is_due_to_watchdog()
                 RESET_PLATFORM_WATCHDOG
         };
         enum reset_sources reset_source;
+        CHAR16 *reboot_reason;
         UINTN i;
 
         reset_source = rsci_get_reset_source();
@@ -299,13 +300,23 @@ static BOOLEAN reset_is_due_to_watchdog()
                         return TRUE;
                 }
 
+        reboot_reason = get_reboot_reason();
+        if (reboot_reason) {
+                if (!StrCmp(reboot_reason, L"kernel_panic") ||
+                    !StrCmp(reboot_reason, L"watchdog")) {
+                        FreePool(reboot_reason);
+                        return TRUE;
+                }
+                FreePool(reboot_reason);
+        }
+
         return FALSE;
 }
 
-/* If more than get_watchdog_counter_max() watchdog resets in a row
- * happened in less than WATCHDOG_DELAY seconds, the crash event menu
- * is displayed.  This menu informs the user of the situation and let
- * him choose which boot target he wants. */
+/* If more than get_watchdog_counter_max() watchdog (or kernel panic)
+ * resets in a row happened in less than WATCHDOG_DELAY seconds, the
+ * crash event menu is displayed.  This menu informs the user of the
+ * situation and let him choose which boot target he wants. */
 static enum boot_target check_watchdog(VOID)
 {
         EFI_STATUS ret;
@@ -321,7 +332,7 @@ static enum boot_target check_watchdog(VOID)
                 return NORMAL_BOOT;
         }
 
-        if (!reset_is_due_to_watchdog()) {
+        if (!reset_is_due_to_watchdog_or_panic()) {
                 if (counter != 0) {
                         ret = reset_watchdog_status();
                         if (EFI_ERROR(ret)) {

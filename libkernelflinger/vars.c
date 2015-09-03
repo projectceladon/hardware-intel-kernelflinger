@@ -49,6 +49,7 @@
 #define DISABLE_WDT_VAR		L"DisableWatchdog"
 #define UPDATE_OEMVARS		L"UpdateOemVars"
 #define UI_DISPLAY_SPLASH_VAR	L"UIDisplaySplash"
+#define REBOOT_REASON		L"LoaderEntryRebootReason"
 #ifdef BOOTLOADER_POLICY
 #define OAK_VARNAME		L"OAK"
 #define BPM_VARNAME		L"BPM"
@@ -615,6 +616,16 @@ bad:
 	strncpy((CHAR8 *)serialno, (CHAR8 *)"00badbios00badbios00",
 		SERIALNO_MAX_SIZE);
 	return serialno;
+}
+
+CHAR16 *get_reboot_reason()
+{
+	return get_efi_variable_str(&loader_guid, REBOOT_REASON);
+}
+
+VOID del_reboot_reason()
+{
+	del_efi_variable(&loader_guid, REBOOT_REASON);
 }
 
 #ifdef BOOTLOADER_POLICY
