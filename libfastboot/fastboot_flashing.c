@@ -38,6 +38,7 @@
 #include "flash.h"
 #include "fastboot_ui.h"
 #include "gpt.h"
+#include "intel_variables.h"
 
 static cmdlist_t cmdlist;
 
@@ -49,7 +50,11 @@ static EFI_STATUS fastboot_flashing_publish(void)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	return fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
+	ret = fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
+	if (EFI_ERROR(ret))
+		return ret;
+
+	return publish_intel_variables();
 }
 
 EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
