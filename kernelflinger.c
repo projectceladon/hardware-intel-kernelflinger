@@ -101,6 +101,22 @@ extern char _binary_oemcert_end;
 #define oem_cert (&_binary_oemcert_start)
 #define oem_cert_size (&_binary_oemcert_end - &_binary_oemcert_start)
 
+#if DEBUG_MESSAGES
+static VOID print_rsci_values(VOID)
+{
+        enum reset_sources raw_reset_source = rsci_get_reset_source();
+        enum reset_types raw_reset_type = rsci_get_reset_type();
+
+        debug(L"reset_source = %s (0x%02hhx)",
+              reset_source_string(raw_reset_source),
+              raw_reset_source);
+        debug(L"reset_type = %s (0x%02hhx)",
+              reset_type_string(raw_reset_type),
+              raw_reset_type);
+}
+#endif
+
+
 static enum boot_target check_fastboot_sentinel(VOID)
 {
         debug(L"checking ESP for %s", FASTBOOT_SENTINEL);
@@ -520,6 +536,9 @@ static enum boot_target choose_boot_target(VOID **target_address,
         *target_address = NULL;
         *oneshot = TRUE;
 
+#if DEBUG_MESSAGES
+        print_rsci_values();
+#endif
         debug(L"Bootlogic: Choosing boot target");
 
         debug(L"Bootlogic: Check watchdog...");
