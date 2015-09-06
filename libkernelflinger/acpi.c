@@ -232,6 +232,11 @@ enum reset_sources rsci_get_reset_source(void)
 {
 	return get_acpi_field(RSCI, reset_source);
 }
+
+enum reset_types rsci_get_reset_type(void)
+{
+	return get_acpi_field(RSCI, reset_type);
+}
 #else
 enum wake_sources rsci_get_wake_source(void)
 {
@@ -241,6 +246,11 @@ enum wake_sources rsci_get_wake_source(void)
 enum reset_sources rsci_get_reset_source(void)
 {
 	return RESET_NOT_APPLICABLE;
+}
+
+enum reset_types rsci_get_reset_type(void)
+{
+	return NOT_APPLICABLE;
 }
 #endif /* USE_RSCI */
 
@@ -258,3 +268,49 @@ UINT16 oem1_get_ia_apps_run(void)
 {
 	return get_acpi_field(OEM1, ia_apps_run);
 }
+
+#if DEBUG_MESSAGES
+CHAR16 *reset_type_string(enum reset_types rt)
+{
+	switch (rt) {
+	case NOT_APPLICABLE:
+		return L"Not Applicable";
+	case WARM_RESET:
+		return L"Warm Reset";
+	case COLD_RESET:
+		return L"Cold Reset";
+	case GLOBAL_RESET:
+		return L"Global Reset";
+	}
+	return L"Invalid Reset Type";
+}
+
+CHAR16 *reset_source_string(enum reset_sources rs)
+{
+	switch (rs) {
+	case RESET_NOT_APPLICABLE:
+		return L"Not Applicable";
+	case RESET_OS_INITIATED:
+		return L"OS Initiated";
+	case RESET_FORCED:
+		return L"Forced";
+	case RESET_FW_UPDATE:
+		return L"FW Update";
+	case RESET_KERNEL_WATCHDOG:
+		return L"Kernel Watchdog";
+	case RESET_SECURITY_WATCHDOG:
+		return L"Security Watchdog";
+	case RESET_SECURITY_INITIATED:
+		return L"Security Initiated";
+	case RESET_PMC_WATCHDOG:
+		return L"PMC Watchdog";
+	case RESET_EC_WATCHDOG:
+		return L"EC Watchdog";
+	case RESET_PLATFORM_WATCHDOG:
+		return L"Platform Watchdog";
+	case RESET_ERROR:
+		return L"Error";
+	}
+	return L"Invalid Reset Source";
+}
+#endif

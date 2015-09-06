@@ -61,8 +61,22 @@ enum reset_sources {
 	RESET_ERROR = -1,
 };
 
+enum reset_types {
+	NOT_APPLICABLE,
+	WARM_RESET,
+	COLD_RESET,
+	GLOBAL_RESET = 7
+};
+
 enum wake_sources rsci_get_wake_source(void);
 
 enum reset_sources rsci_get_reset_source(void);
+
+enum reset_types rsci_get_reset_type(void);
+
+#if DEBUG_MESSAGES
+CHAR16 *reset_source_string(enum reset_sources rs);
+CHAR16 *reset_type_string(enum reset_types rt);
+#endif
 
 #endif /* _POWER_H_ */
