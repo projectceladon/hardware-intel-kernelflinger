@@ -40,13 +40,12 @@
 #endif
 
 #define TIMEOUT_SECS	5
-#define PENDING_TIMEOUT_NO_UNLOCK	"Your device will power off in 5 seconds."
-#define NO_TIMEOUT_NO_UNLOCK		"Press Volume Up to power off."
-#define PENDING_TIMEOUT			"Your device will boot in 5 seconds."
-#define NO_TIMEOUT			"Press Volume Up to continue."
+#define PENDING_TIMEOUT_POWER_OFF	"Your device will power off in 5 seconds."
+#define NO_TIMEOUT_POWER_OFF		"Press Volume Up to power off."
+#define PENDING_TIMEOUT_CONTINUE	"Your device will boot in 5 seconds."
+#define NO_TIMEOUT_CONTINUE		"Press Volume Up to continue."
 
 
-#define RED_STATE_CODE		1
 static const ui_textline_t red_state[] = {
 	{ &COLOR_LIGHTGRAY,	"Your device may not work correctly",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"because the boot image has",		FALSE },
@@ -54,7 +53,6 @@ static const ui_textline_t red_state[] = {
 	{ NULL, NULL, FALSE}
 };
 
-#define BAD_RECOVERY_CODE	2
 static const ui_textline_t bad_recovery[] = {
 	{ &COLOR_LIGHTGRAY,	"Your device may not work correctly",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"because the Recovery Console",		FALSE },
@@ -63,7 +61,6 @@ static const ui_textline_t bad_recovery[] = {
 	{ NULL, NULL, FALSE }
 };
 
-#define DEVICE_UNLOCKED_CODE	3
 static const ui_textline_t device_altered_unlocked[] = {
 	{ &COLOR_LIGHTGRAY, 	"Your device has been altered",		FALSE },
 	{ &COLOR_LIGHTGRAY, 	"from its factory configuration.",	FALSE },
@@ -75,7 +72,6 @@ static const ui_textline_t device_altered_unlocked[] = {
 	{ NULL, NULL, FALSE }
 };
 
-#define SECURE_BOOT_CODE	4
 static const ui_textline_t secure_boot_off[] = {
 	{ &COLOR_LIGHTGRAY,	"Your device has been altered",		FALSE },
 	{ &COLOR_LIGHTGRAY,	"from its factory configuration.",	FALSE },
@@ -89,14 +85,12 @@ static const ui_textline_t secure_boot_off[] = {
 	{ NULL, NULL, FALSE }
 };
 
-#define BOOTIMAGE_UNTRUSTED_CODE	5
 static const ui_textline_t device_untrusted_bootimage[] = {
 	{ &COLOR_LIGHTGRAY,	"Your device has loaded a different",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"operating system.",			FALSE },
 	{ NULL, NULL, FALSE }
 };
 
-#define CRASH_EVENT_CODE	6
 #define CRASHMODE_TIMEOUT_SECS	(5 * 60)
 static const ui_textline_t crash_event_message[] = {
 	{ &COLOR_LIGHTRED,	"WARNING:",				TRUE },
@@ -135,6 +129,18 @@ static const ui_textline_t adb_message[] = {
 };
 #endif
 
+static const struct ux_prompt {
+	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color;
+	const ui_textline_t *text;
+} UX_PROMPT[MAX_ERROR_CODE] = {
+	[RED_STATE_CODE]		=	{ &COLOR_RED,		red_state },
+	[BAD_RECOVERY_CODE]		=	{ &COLOR_RED,		bad_recovery },
+	[DEVICE_UNLOCKED_CODE]		=	{ &COLOR_ORANGE,	device_altered_unlocked },
+	[SECURE_BOOT_CODE]		=	{ &COLOR_ORANGE,	secure_boot_off },
+	[BOOTIMAGE_UNTRUSTED_CODE]	=	{ &COLOR_LIGHTGRAY,	device_untrusted_bootimage},
+	[CRASH_EVENT_CODE]		=	{ &COLOR_LIGHTRED,	crash_event_message}
+};
+
 static const char *VENDOR_IMG_NAME = "splash_intel";
 static const char *LOW_BATTERY_IMG_NAME = "low_battery";
 static const char *EMPTY_BATTERY_IMG_NAME = "empty_battery";
@@ -160,29 +166,6 @@ static EFI_STATUS ux_init_screen() {
 	return EFI_SUCCESS;
 }
 
-static ui_textline_t *build_footer_text(BOOLEAN timeout)
-{
-	static char buf[60];
-	static ui_textline_t footer_text[] = {
-		{ &COLOR_WHITE, "", FALSE },
-		{ &COLOR_LIGHTGRAY, "Please contact customer support",	FALSE },
-		{ &COLOR_LIGHTGRAY, "from your device's manufacturer.",	FALSE },
-		{ &COLOR_WHITE, "", FALSE },
-		{ &COLOR_GREEN, buf, TRUE },
-		{ NULL, NULL, FALSE }
-	};
-	char *str;
-
-	if (timeout)
-		str = no_device_unlock() ? PENDING_TIMEOUT_NO_UNLOCK : PENDING_TIMEOUT;
-	else
-		str = no_device_unlock() ? NO_TIMEOUT_NO_UNLOCK : NO_TIMEOUT;
-
-	strncpy((CHAR8 *)buf, (CHAR8 *)str, sizeof(buf));
-
-	return footer_text;
-}
-
 static ui_textline_t *build_error_code_text(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *ecolor,
 					    UINT32 error_code)
 {
@@ -204,15 +187,14 @@ static EFI_STATUS display_text(UINT32 error_code,
 			       EFI_GRAPHICS_OUTPUT_BLT_PIXEL *ecolor,
 			       const ui_textline_t *text1,
 			       const ui_textline_t *text2,
-			       BOOLEAN show_timeout_message)
+			       const ui_textline_t *text3)
 {
 	UINTN width, height, x, y, linesarea, colsarea;
 	ui_image_t *vendor;
 	EFI_STATUS ret;
 	const ui_textline_t *texts[] =
 		{ build_error_code_text(ecolor, error_code),
-		  text1, text2,
-		  build_footer_text(show_timeout_message),
+		  text1, text2, text3,
 		  NULL };
 
 	ui_clear_screen();
@@ -262,33 +244,10 @@ static EFI_STATUS clear_text() {
 			     swidth, sheight - (sheight / 3) - hmargin);
 }
 
-static VOID ux_prompt_user(UINT32 code,
-			   EFI_GRAPHICS_OUTPUT_BLT_PIXEL *ecolor,
-			   const ui_textline_t *text1,
-			   const ui_textline_t *text2)
-{
-	BOOLEAN timeout = TRUE;
-	UINTN timeout_secs = TIMEOUT_SECS;
-
-	if (EFI_ERROR(ux_init_screen()))
-		return;
-
-	while (1) {
-		display_text(code, ecolor, text1, text2, timeout);
-		if (ui_input_to_bool(timeout_secs, TRUE))
-			break;
-
-		timeout_secs = 0;
-		timeout = FALSE;
-	}
-
-	clear_text();
-}
-
-VOID ux_prompt_user_untrusted_bootimage(UINT8 *hash) {
-	char buf[19];
-	const ui_textline_t hash_text[] = {
-		{ &COLOR_LIGHTGRAY, buf, FALSE },
+static const ui_textline_t *format_hash(UINT8 *hash) {
+	static char buf[19];
+	static const ui_textline_t hash_text[] = {
+		{ &COLOR_WHITE, buf, FALSE },
 		{ NULL, NULL, FALSE }
 	};
 
@@ -296,30 +255,49 @@ VOID ux_prompt_user_untrusted_bootimage(UINT8 *hash) {
 		 (CHAR8 *)"ID: %02x%02x-%02x%02x-%02x%02x",
 		 hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
 
-	ux_prompt_user(BOOTIMAGE_UNTRUSTED_CODE, &COLOR_YELLOW,
-		       device_untrusted_bootimage, hash_text);
+	return hash_text;
 }
 
 static const ui_textline_t empty_text[] = {
 	{ NULL, NULL, FALSE }
 };
 
-VOID ux_warn_user_unverified_recovery(VOID) {
-	ux_prompt_user(BAD_RECOVERY_CODE, &COLOR_RED, bad_recovery, empty_text);
-}
+VOID ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT8 *hash)
+{
+	ui_textline_t footer_text[] = {
+		{ &COLOR_WHITE, "", FALSE },
+		{ &COLOR_LIGHTGRAY, "Please contact customer support",	FALSE },
+		{ &COLOR_LIGHTGRAY, "from your device's manufacturer.",	FALSE },
+		{ &COLOR_WHITE, "", FALSE },
+		{ &COLOR_GREEN, NULL, TRUE },
+		{ NULL, NULL, FALSE }
+	};
+	ui_textline_t *footer_line = &footer_text[4];
+	UINTN timeout_secs = TIMEOUT_SECS;
+	const ui_textline_t *text;
+	const struct ux_prompt *prompt;
 
-VOID ux_prompt_user_bootimage_unverified(VOID) {
-	ux_prompt_user(RED_STATE_CODE, &COLOR_RED, red_state, empty_text);
-}
+	if (code <= MIN_ERROR_CODE || code >= MAX_ERROR_CODE)
+		return;
 
-VOID ux_prompt_user_secure_boot_off(VOID) {
-	ux_prompt_user(SECURE_BOOT_CODE, &COLOR_ORANGE, secure_boot_off,
-		       empty_text);
-}
+	prompt = &UX_PROMPT[code];
 
-VOID ux_prompt_user_device_unlocked(VOID) {
-	ux_prompt_user(DEVICE_UNLOCKED_CODE, &COLOR_ORANGE,
-		       device_altered_unlocked, empty_text);
+	if (EFI_ERROR(ux_init_screen()))
+		return;
+
+	footer_line->str = power_off ? PENDING_TIMEOUT_POWER_OFF : PENDING_TIMEOUT_CONTINUE;
+
+	text = hash ? format_hash(hash) : empty_text;
+	while (1) {
+		display_text(code, prompt->color, prompt->text, text, footer_text);
+		if (ui_input_to_bool(timeout_secs, TRUE))
+			break;
+
+		footer_line->str = power_off ? NO_TIMEOUT_POWER_OFF : NO_TIMEOUT_CONTINUE;
+		timeout_secs = 0;
+	}
+
+	clear_text();
 }
 
 static const char *CRASH_IMG_NAME = "crash_event";
@@ -352,8 +330,9 @@ enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash) {
 	};
 
 	if (due_to_crash) {
-		texts[0] = build_error_code_text(&COLOR_LIGHTRED, CRASH_EVENT_CODE);
-		texts[1] = (ui_textline_t *)crash_event_message;
+		texts[0] = build_error_code_text(UX_PROMPT[CRASH_EVENT_CODE].color,
+						 CRASH_EVENT_CODE);
+		texts[1] = (ui_textline_t *)UX_PROMPT[CRASH_EVENT_CODE].text;
 		texts[2] = (ui_textline_t *)adb_message;
 		texts[3] = NULL;
 	} else {
@@ -364,7 +343,7 @@ enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash) {
 #else
 	(void)due_to_crash;	/* Unused parameter.  */
 	const ui_textline_t *texts[] = { build_error_code_text(&COLOR_LIGHTRED, CRASH_EVENT_CODE),
-					 crash_event_message, NULL };
+					 UX_PROMPT[CRASH_EVENT_CODE].text, NULL };
 #endif
 
 	ret = ux_init_screen();
