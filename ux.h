@@ -38,11 +38,23 @@
 
 #include "targets.h"
 
-VOID ux_prompt_user_untrusted_bootimage(UINT8 *hash);
-VOID ux_warn_user_unverified_recovery(VOID);
-VOID ux_prompt_user_bootimage_unverified(VOID);
-VOID ux_prompt_user_device_unlocked(VOID);
-VOID ux_prompt_user_secure_boot_off(VOID);
+enum ux_error_code {
+        MIN_ERROR_CODE = 0,
+        RED_STATE_CODE,
+        BAD_RECOVERY_CODE,
+        DEVICE_UNLOCKED_CODE,
+        SECURE_BOOT_CODE,
+        BOOTIMAGE_UNTRUSTED_CODE,
+        CRASH_EVENT_CODE,
+        MAX_ERROR_CODE
+};
+
+/* Prompt the user with the appropriate message accordingly to the
+ * error_code.  Depending on the POWER_OFF the user will be informed
+ * that device will power-off or continue to boot.  Optionally, the
+ * supplied GVB hash will be included.  */
+VOID ux_prompt_user(enum ux_error_code error_code, BOOLEAN power_off,
+                    UINT8 *hash);
 
 /* If due_to_crash is TRUE, it informs the user about the multiple
  * crash events and let him choose a boot target.  If the build is a
