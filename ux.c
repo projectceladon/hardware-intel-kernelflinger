@@ -39,11 +39,13 @@
 #include "adb.h"
 #endif
 
-#define TIMEOUT_SECS	5
-#define PENDING_TIMEOUT_POWER_OFF	"Your device will power off in 5 seconds."
-#define NO_TIMEOUT_POWER_OFF		"Press Volume Up to power off."
-#define PENDING_TIMEOUT_CONTINUE	"Your device will boot in 5 seconds."
-#define NO_TIMEOUT_CONTINUE		"Press Volume Up to continue."
+#define FIRST_TIMEOUT_SECS	5
+#define SECOND_TIMEOUT_SECS	30
+
+#define PENDING_TIMEOUT_POWER_OFF_FMT	"Your device will power off in %d seconds."
+#define VOLUP_TO_POWER_OFF		"Press Volume Up to power off."
+#define VOLUP_TO_POWER_OFF_NOW		"Press Volume Up to power off now."
+#define PENDING_TIMEOUT_CONTINUE_FMT	"Your device will boot in %d seconds."
 
 
 static const ui_textline_t red_state[] = {
@@ -262,42 +264,58 @@ static const ui_textline_t empty_text[] = {
 	{ NULL, NULL, FALSE }
 };
 
-VOID ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT8 *hash)
+enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT8 *hash)
 {
+	CHAR8 msg[max(sizeof(PENDING_TIMEOUT_POWER_OFF_FMT),
+		      sizeof(PENDING_TIMEOUT_CONTINUE_FMT)) + 10];
 	ui_textline_t footer_text[] = {
 		{ &COLOR_WHITE, "", FALSE },
 		{ &COLOR_LIGHTGRAY, "Please contact customer support",	FALSE },
 		{ &COLOR_LIGHTGRAY, "from your device's manufacturer.",	FALSE },
 		{ &COLOR_WHITE, "", FALSE },
+		{ &COLOR_GREEN, (char *)msg, TRUE },
 		{ &COLOR_GREEN, NULL, TRUE },
 		{ NULL, NULL, FALSE }
 	};
-	ui_textline_t *footer_line = &footer_text[4];
-	UINTN timeout_secs = TIMEOUT_SECS;
+	CHAR8 *fmt;
 	const ui_textline_t *text;
 	const struct ux_prompt *prompt;
+	enum boot_target bt = power_off ? POWER_OFF : NORMAL_BOOT;
 
 	if (code <= MIN_ERROR_CODE || code >= MAX_ERROR_CODE)
-		return;
+		return bt;
 
 	prompt = &UX_PROMPT[code];
 
 	if (EFI_ERROR(ux_init_screen()))
-		return;
-
-	footer_line->str = power_off ? PENDING_TIMEOUT_POWER_OFF : PENDING_TIMEOUT_CONTINUE;
+		return bt;
 
 	text = hash ? format_hash(hash) : empty_text;
-	while (1) {
-		display_text(code, prompt->color, prompt->text, text, footer_text);
-		if (ui_input_to_bool(timeout_secs, TRUE))
-			break;
 
-		footer_line->str = power_off ? NO_TIMEOUT_POWER_OFF : NO_TIMEOUT_CONTINUE;
-		timeout_secs = 0;
-	}
+	if (power_off)
+		fmt = (CHAR8 *)PENDING_TIMEOUT_POWER_OFF_FMT;
+	else
+		fmt = (CHAR8 *)PENDING_TIMEOUT_CONTINUE_FMT;
 
+	snprintf((CHAR8 *)msg, sizeof(msg), fmt, FIRST_TIMEOUT_SECS);
+
+	display_text(code, prompt->color, prompt->text, text, footer_text);
+	if (ui_wait_for_input(FIRST_TIMEOUT_SECS) == EV_TIMEOUT)
+		goto out;
+
+	snprintf((CHAR8 *)msg, sizeof(msg), fmt, SECOND_TIMEOUT_SECS);
+	if (power_off)
+		footer_text[5].str = VOLUP_TO_POWER_OFF_NOW;
+	else
+		footer_text[5].str = VOLUP_TO_POWER_OFF;
+
+	display_text(code, prompt->color, prompt->text, text, footer_text);
+	if (ui_wait_for_event(SECOND_TIMEOUT_SECS, EV_UP) == EV_UP)
+		bt = POWER_OFF;
+
+out:
 	clear_text();
+	return bt;
 }
 
 static const char *CRASH_IMG_NAME = "crash_event";
