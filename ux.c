@@ -93,10 +93,6 @@ static const ui_textline_t secure_boot_off[] = {
 static const ui_textline_t device_untrusted_bootimage[] = {
 	{ &COLOR_LIGHTGRAY,	"Your device has loaded a different",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"operating system.",			FALSE },
-	{ &COLOR_LIGHTGRAY,	"",					FALSE },
-	{ &COLOR_LIGHTGRAY,	"To learn more, visit:",		FALSE },
-	{ &COLOR_YELLOW,	"g.co/placeholder",			FALSE },
-	{ &COLOR_LIGHTGRAY,	"",					FALSE },
 	{ NULL, NULL, FALSE }
 };
 
