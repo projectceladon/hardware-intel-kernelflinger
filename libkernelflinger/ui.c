@@ -459,7 +459,7 @@ void ui_wait_for_key_release(void)
 	while (test_key(FALSE, 0)) { }
 }
 
-ui_events_t ui_wait_for_input(UINTN timeout_secs)
+ui_events_t ui_wait_for_event(UINTN timeout_secs, ui_events_t expected)
 {
 	UINT64 timeout_left;
 
@@ -468,7 +468,8 @@ ui_events_t ui_wait_for_input(UINTN timeout_secs)
 	ui_wait_for_key_release();
 	do {
 		ui_events_t event = ui_read_input();
-		if (event != EV_NONE)
+		if (event != EV_NONE &&
+		    (expected == EV_ANY || event == expected))
 			return event;
 
 		/* If we get here, either we had EFI_NOT_READY indicating
@@ -479,6 +480,11 @@ ui_events_t ui_wait_for_input(UINTN timeout_secs)
 	} while (timeout_left || timeout_secs == 0);
 
 	return EV_TIMEOUT;
+}
+
+ui_events_t ui_wait_for_input(UINTN timeout_secs)
+{
+	return ui_wait_for_event(timeout_secs, EV_ANY);
 }
 
 BOOLEAN ui_input_to_bool(UINTN timeout_secs, BOOLEAN timeout_true)

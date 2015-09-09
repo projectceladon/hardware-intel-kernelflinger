@@ -1064,6 +1064,7 @@ static EFI_STATUS push_capsule(
 static VOID boot_error(enum ux_error_code error_code, UINT8 *hash)
 {
         BOOLEAN power_off = FALSE;
+        enum boot_target bt;
 
         if (no_device_unlock()) {
 #ifndef USER
@@ -1074,9 +1075,9 @@ static VOID boot_error(enum ux_error_code error_code, UINT8 *hash)
 #endif
         }
 
-        ux_prompt_user(error_code, power_off, hash);
+        bt = ux_prompt_user(error_code, power_off, hash);
 
-        if (power_off)
+        if (power_off || bt == POWER_OFF)
                 halt_system();
 }
 
