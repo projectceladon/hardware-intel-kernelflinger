@@ -71,7 +71,8 @@ $(OEMCERT_OBJ): $(PADDED_VERITY_CERT)
 	$(EFI_OBJCOPY) --input binary --output $(ELF_OUTPUT) --binary-architecture i386 $< $@ && \
 	$(EFI_OBJCOPY) --redefine-sym $(sym_binary)_start=_binary_oemcert_start \
                        --redefine-sym $(sym_binary)_end=_binary_oemcert_end \
-                       --redefine-sym $(sym_binary)_size=_binary_oemcert_size $@ $@
+                       --redefine-sym $(sym_binary)_size=_binary_oemcert_size \
+                       --rename-section .data=.oemkeys $@ $@
 
 LOCAL_GENERATED_SOURCES := $(OEMCERT_OBJ)
 LOCAL_SRC_FILES := \
@@ -93,6 +94,7 @@ endif
 
 LOCAL_MODULE := kernelflinger-$(TARGET_BUILD_VARIANT)
 LOCAL_CFLAGS := $(SHARED_CFLAGS)
+LOCAL_OBJCOPY_FLAGS := -j .oemkeys
 LOCAL_STATIC_LIBRARIES += $(SHARED_STATIC_LIBRARIES)
 LOCAL_MODULE_STEM := kernelflinger
 
