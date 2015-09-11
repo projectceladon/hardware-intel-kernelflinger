@@ -160,21 +160,30 @@ static BOOLEAN frp_allows_unlock()
 	return persist_byte == 1;
 }
 
+enum unlock_ability {
+	UNLOCK_ALLOWED,
+	NO_UNLOCK_FRP,
+	NO_UNLOCK_CLASS_A
+};
+
+static enum unlock_ability get_unlock_ability(void)
+{
+	if (device_is_provisioning())
+		return UNLOCK_ALLOWED;
+
+	if (no_device_unlock())
+		return NO_UNLOCK_CLASS_A;
+
+	return frp_allows_unlock() ? UNLOCK_ALLOWED : NO_UNLOCK_FRP;
+}
+
 static void cmd_unlock(__attribute__((__unused__)) INTN argc,
 		       __attribute__((__unused__)) CHAR8 **argv)
 {
-	BOOLEAN unlock_allowed;
-
 	if (is_already_in_state(UNLOCKED))
 		return;
 
-	/* Allow if device is in provisioning mode */
-	if (device_is_provisioning())
-		unlock_allowed = TRUE;
-	else
-		unlock_allowed = no_device_unlock() ? FALSE : frp_allows_unlock();
-
-	if (unlock_allowed == FALSE) {
+	if (get_unlock_ability() == UNLOCK_ALLOWED) {
 #ifdef USER
 		fastboot_fail("Unlocking device not allowed");
 #else
@@ -185,6 +194,25 @@ static void cmd_unlock(__attribute__((__unused__)) INTN argc,
 	} else {
 		change_device_state(UNLOCKED, TRUE);
 	}
+}
+
+static void cmd_get_unlock_ability(__attribute__((__unused__)) INTN argc,
+				   __attribute__((__unused__)) CHAR8 **argv)
+{
+	switch (get_unlock_ability()) {
+	case UNLOCK_ALLOWED:
+		fastboot_info("The device can be unlocked.");
+		break;
+	case NO_UNLOCK_FRP:
+		fastboot_info("Unlock is disabled.");
+		fastboot_info("To enable it, go in the Android Developer Options menu");
+		fastboot_info("and activate 'Enable OEM Unlock'.");
+		break;
+	case NO_UNLOCK_CLASS_A:
+		fastboot_info("The device class does not permit to unlock it.");
+		break;
+	}
+	fastboot_okay("");
 }
 
 static void cmd_flashing(INTN argc, CHAR8 **argv)
@@ -198,8 +226,9 @@ static void cmd_flashing(INTN argc, CHAR8 **argv)
 }
 
 static struct fastboot_cmd COMMANDS[] = {
-	{ "lock",	LOCKED,	cmd_lock },
-	{ "unlock",	LOCKED,	cmd_unlock }
+	{ "lock",		LOCKED,	cmd_lock },
+	{ "unlock",		LOCKED,	cmd_unlock },
+	{ "get_unlock_ability",	LOCKED,	cmd_get_unlock_ability }
 };
 
 static struct fastboot_cmd flashing = { "flashing", LOCKED, cmd_flashing };
