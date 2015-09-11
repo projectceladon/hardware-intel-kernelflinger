@@ -239,6 +239,32 @@ free_hash:
 }
 
 
+static EFI_STATUS add_digest(X509_ALGOR *algo)
+{
+        int nid = OBJ_obj2nid(algo->algorithm);
+        const EVP_MD *md;
+        int ret;
+
+        switch (nid) {
+        case NID_sha256WithRSAEncryption:
+                md = EVP_sha256();
+                break;
+        case NID_sha512WithRSAEncryption:
+                md = EVP_sha512();
+                break;
+        default:
+                error(L"Unsupported digest algorithm: %a", OBJ_nid2sn(nid));
+                return EFI_UNSUPPORTED;
+        }
+
+        ret = EVP_add_digest(md);
+        if (ret == 0)
+                error(L"Failed to add digest %a", OBJ_nid2sn(nid));
+
+        return ret != 0 ? EFI_SUCCESS : EFI_UNSUPPORTED;
+}
+
+
 UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
                                 IN UINTN cert_size, OUT CHAR16 *target,
                                 OUT UINT8 *hash)
@@ -281,7 +307,6 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
         ret = check_bootimage(bootimage, imgsize, sig, cert);
         if (hash)
                 X509_digest(cert, EVP_sha1(), hash, NULL);
-        X509_free(cert);
         if (ret == EFI_ACCESS_DENIED && sig->certificate) {
                 /* Try to verify with embedded certificate */
                 debug(L"Bootimage does not verify against the OEM key, trying included certificate");
@@ -289,11 +314,21 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
                 if (hash)
                         X509_digest(sig->certificate, EVP_sha1(), hash, NULL);
                 ret = check_bootimage(bootimage, imgsize, sig, sig->certificate);
+                if (!EFI_ERROR(ret)) {
+                        EVP_PKEY *oemkey = get_rsa_pubkey(cert);
+                        if (!EFI_ERROR(add_digest(sig->certificate->sig_alg)) &&
+                            X509_verify(sig->certificate, oemkey) == 1) {
+                                debug(L"Embedded certificate verified by OEM key");
+                                verify_state = BOOT_STATE_GREEN;
+                        }
+                        EVP_PKEY_free(oemkey);
+                }
         }
         if (EFI_ERROR(ret)) {
                 debug(L"Bootimage verification failure");
                 verify_state = BOOT_STATE_RED;
         }
+        X509_free(cert);
 
         target_tmp = stra_to_str((CHAR8*)sig->attributes.target);
         if (!target_tmp) {
