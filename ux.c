@@ -139,7 +139,7 @@ static const struct ux_prompt {
 	[BAD_RECOVERY_CODE]		=	{ &COLOR_RED,		bad_recovery },
 	[DEVICE_UNLOCKED_CODE]		=	{ &COLOR_ORANGE,	device_altered_unlocked },
 	[SECURE_BOOT_CODE]		=	{ &COLOR_ORANGE,	secure_boot_off },
-	[BOOTIMAGE_UNTRUSTED_CODE]	=	{ &COLOR_LIGHTGRAY,	device_untrusted_bootimage},
+	[BOOTIMAGE_UNTRUSTED_CODE]	=	{ &COLOR_YELLOW,	device_untrusted_bootimage},
 	[CRASH_EVENT_CODE]		=	{ &COLOR_LIGHTRED,	crash_event_message}
 };
 
