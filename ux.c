@@ -49,28 +49,21 @@
 
 
 static const ui_textline_t red_state[] = {
-	{ &COLOR_LIGHTGRAY,	"Your device may not work correctly",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"because the boot image has",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"failed to verify or is corrupted.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"Your device has failed verification",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"and may not work properly.",		FALSE },
 	{ NULL, NULL, FALSE}
 };
 
 static const ui_textline_t bad_recovery[] = {
-	{ &COLOR_LIGHTGRAY,	"Your device may not work correctly",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"because the Recovery Console",		FALSE },
-	{ &COLOR_LIGHTGRAY,	"image has failed to verify or is",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"corrupted.",				FALSE },
+	{ &COLOR_LIGHTGRAY,	"Your device has failed verification",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"of Recovery Console and may not",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"work properly.",			FALSE },
 	{ NULL, NULL, FALSE }
 };
 
 static const ui_textline_t device_altered_unlocked[] = {
-	{ &COLOR_LIGHTGRAY, 	"Your device has been altered",		FALSE },
-	{ &COLOR_LIGHTGRAY, 	"from its factory configuration.",	FALSE },
-	{ &COLOR_LIGHTGRAY, 	"and is no longer in a locked state",	FALSE },
-	{ &COLOR_LIGHTGRAY, 	"",					FALSE },
-	{ &COLOR_LIGHTGRAY, 	"If you were not responsible for",	FALSE },
-	{ &COLOR_LIGHTGRAY, 	"these changes, the security of",	FALSE },
-	{ &COLOR_LIGHTGRAY, 	"your device may be at risk.",		FALSE },
+	{ &COLOR_LIGHTGRAY, 	"Your device has been unlocked and",	FALSE },
+	{ &COLOR_LIGHTGRAY, 	"can't be trusted.",			FALSE },
 	{ NULL, NULL, FALSE }
 };
 
