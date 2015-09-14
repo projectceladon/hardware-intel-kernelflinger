@@ -60,6 +60,12 @@ static const action_t ACTIONS[] = {
 	{ 0, "force-unlock", force_unlock }
 };
 
+static void clear_nonce(void)
+{
+	expiration_ctime = 0;
+	memset(current_nonce, 0, sizeof(current_nonce));
+}
+
 char *authenticated_action_new_nonce(char *action_name)
 {
 	CHAR8 random[NONCE_RANDOM_BYTE_LENGTH];
@@ -69,7 +75,7 @@ char *authenticated_action_new_nonce(char *action_name)
 	EFI_TIME now;
 	UINTN i;
 
-	expiration_ctime = 0;
+	clear_nonce();
 
 	for (i = 0; i < ARRAY_SIZE(ACTIONS); i++)
 		if (!strcmp((CHAR8 *)ACTIONS[i].name, (CHAR8 *)action_name)) {
@@ -137,21 +143,22 @@ static BOOLEAN nonce_is_expired()
 	EFI_STATUS ret;
 	EFI_TIME now;
 
-	if (expiration_ctime == 0)
-		return TRUE;
-
 	ret = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get the current time");
-		return TRUE;
+		goto expired;
 	}
 
 	if (efi_time_to_ctime(&now) >= expiration_ctime) {
 		error(L"Nonce is expired");
-		return TRUE;
+		goto expired;
 	}
 
 	return FALSE;
+
+expired:
+	clear_nonce();
+	return TRUE;
 }
 
 static EFI_STATUS verify_token(void *data, UINTN size)
@@ -190,14 +197,19 @@ EFI_STATUS authenticated_action(void *data, UINTN size)
 {
 	EFI_STATUS ret;
 
-	if (nonce_is_expired())
+	if (!data)
+		return EFI_INVALID_PARAMETER;
+
+	if (nonce_is_expired()) {
+		memset(data, 0, size);
 		return EFI_TIMEOUT;
+	}
 
 	ret = verify_token(data, size);
+	clear_nonce();
+	memset(data, 0, size);
 	if (EFI_ERROR(ret))
 		return ret;
-
-	expiration_ctime = 0;
 
 	return current_action->do_it();
 }
