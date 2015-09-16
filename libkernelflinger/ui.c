@@ -411,7 +411,7 @@ ui_events_t ui_read_input(void)
 	return ui_keycode_to_event(key.ScanCode);
 }
 
-static BOOLEAN test_key(BOOLEAN check_code, UINT16 ScanCode)
+static BOOLEAN test_key(BOOLEAN check_code, ui_events_t event)
 {
 	EFI_INPUT_KEY key;
 	EFI_STATUS ret = EFI_SUCCESS;
@@ -427,7 +427,7 @@ static BOOLEAN test_key(BOOLEAN check_code, UINT16 ScanCode)
 	}
 
 	if (check_code)
-		result = (key.ScanCode == ScanCode);
+		result = (ui_keycode_to_event(key.ScanCode) == event);
 
 	/* flush any stacked up key events in the queue before
 	 * we sleep again */
@@ -439,14 +439,14 @@ static BOOLEAN test_key(BOOLEAN check_code, UINT16 ScanCode)
 	return result;
 }
 
-BOOLEAN ui_enforce_key_held(UINT32 milliseconds, UINT16 ScanCode)
+BOOLEAN ui_enforce_key_held(UINT32 milliseconds, ui_events_t event)
 {
 	BOOLEAN ret = TRUE;
 	UINT32 i;
 	int stall_time = get_hold_key_stall_time();
 
 	for (i = 0; i < (milliseconds / stall_time); i++) {
-		ret = test_key(TRUE, ScanCode);
+		ret = test_key(TRUE, event);
 		if (!ret) {
 			break;
 		}
