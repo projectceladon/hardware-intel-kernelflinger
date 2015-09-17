@@ -184,6 +184,8 @@ static void cmd_unlock(__attribute__((__unused__)) INTN argc,
 		return;
 
 	if (get_unlock_ability() == UNLOCK_ALLOWED) {
+		change_device_state(UNLOCKED, TRUE);
+	} else {
 #ifdef USER
 		fastboot_fail("Unlocking device not allowed");
 #else
@@ -191,8 +193,6 @@ static void cmd_unlock(__attribute__((__unused__)) INTN argc,
 		fastboot_info("Unlocking anyway since this is not a User build");
 		change_device_state(UNLOCKED, TRUE);
 #endif
-	} else {
-		change_device_state(UNLOCKED, TRUE);
 	}
 }
 
