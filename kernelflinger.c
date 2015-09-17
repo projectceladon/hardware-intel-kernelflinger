@@ -598,28 +598,29 @@ out:
  * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
  *                and ESP_BOOTIMAGE (for 'fastboot boot')
  * bootimage    - Bootimage to validate
- * verify_state - Return the verification status of the image (green, yellow, red)
  * hash         - Return the sha1 hash of the certificate used to validate the image
  *
  * Return values:
- * EFI_ACCESS_DENIED - Validation failed against supplied key
+ * BOOT_STATE_GREEN  - Boot image is valid against provided certificate
+ * BOOT_STATE_YELLOW - Boot image is valid against embedded certificate
+ * BOOT_STATE_RED    - Boot image is not valid
  */
-static EFI_STATUS validate_bootimage(
+static UINT8 validate_bootimage(
                 IN enum boot_target boot_target,
                 IN VOID *bootimage,
-                OUT UINT8 *verify_state,
                 OUT UINT8 *hash)
 {
         CHAR16 target[BOOT_TARGET_SIZE];
         CHAR16 *expected;
         CHAR16 *expected2 = NULL;
+        UINT8 boot_state;
 
-        *verify_state = verify_android_boot_image(bootimage, oem_cert,
-                                                  oem_cert_size, target, hash);
+        boot_state = verify_android_boot_image(bootimage, oem_cert,
+                                               oem_cert_size, target, hash);
 
-        if (*verify_state == BOOT_STATE_RED) {
+        if (boot_state == BOOT_STATE_RED) {
                 debug(L"boot image doesn't verify");
-                return EFI_ACCESS_DENIED;
+                return boot_state;
         }
 
         switch (boot_target) {
@@ -649,13 +650,13 @@ static EFI_STATUS validate_bootimage(
         if ((!expected || StrCmp(expected, target)) &&
                         (!expected2 || StrCmp(expected2, target))) {
                 debug(L"boot image has unexpected target name");
-                return EFI_ACCESS_DENIED;
+                return BOOT_STATE_RED;
         }
 
-        return EFI_SUCCESS;
+        return boot_state;
 }
 
-/* Load a boot image into RAM and validate it.
+/* Load a boot image into RAM.
  *
  * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
  *                and ESP_BOOTIMAGE (for 'fastboot boot')
@@ -664,8 +665,6 @@ static EFI_STATUS validate_bootimage(
  * bootimage    - Returned allocated pointer value for the loaded boot image.
  * oneshot      - For ESP_BOOTIMAGE case, flag indicating that the image should
  *                be deleted.
- * verify_state - Return the verification status of the image (green, yellow, red)
- * hash         - Return the sha1 hash of the certificate used to verify the image
  *
  * Return values:
  * EFI_INVALID_PARAMETER - Unsupported boot target type, key is not well-formed,
@@ -677,9 +676,7 @@ static EFI_STATUS load_boot_image(
                 IN enum boot_target boot_target,
                 IN CHAR16 *target_path,
                 OUT VOID **bootimage,
-                IN BOOLEAN oneshot,
-                OUT UINT8 *verify_state,
-                OUT UINT8 *hash)
+                IN BOOLEAN oneshot)
 {
         EFI_STATUS ret;
 
@@ -701,11 +698,10 @@ static EFI_STATUS load_boot_image(
                 return EFI_INVALID_PARAMETER;
         }
 
-        if (EFI_ERROR(ret))
-                return ret;
+        if (!EFI_ERROR(ret))
+                debug(L"boot image loaded");
 
-        debug(L"boot image loaded");
-        return validate_bootimage(boot_target, *bootimage, verify_state, hash);
+        return ret;
 }
 
 
@@ -1081,6 +1077,36 @@ static VOID boot_error(enum ux_error_code error_code, UINT8 *hash)
                 halt_system();
 }
 
+#ifdef BOOTLOADER_POLICY
+/* Flash the OEMVARS that include the bootloader policy.  */
+static void flash_bootloader_policy(void)
+{
+        UINT8 verify_state;
+        VOID *bootimage;
+        EFI_STATUS ret;
+
+        debug(L"Loading bootloader policy");
+        ret = load_boot_image(NORMAL_BOOT, NULL, &bootimage, FALSE);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to load the boot image to get bootloader policy");
+                return;
+        }
+
+        verify_state = validate_bootimage(NORMAL_BOOT, bootimage, NULL);
+        if (EFI_ERROR(ret) || verify_state != BOOT_STATE_GREEN) {
+                efi_perror(ret, L"Failed to verify the boot image to get bootloader policy");
+                goto out;
+        }
+
+        set_image_oemvars(bootimage);
+
+        if (!blpolicy_is_flashed())
+                error(L"Bootloader Policy EFI variables are not flashed");
+out:
+        FreePool(bootimage);
+}
+#endif
+
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
         EFI_STATUS ret;
@@ -1193,21 +1219,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         }
 
 #ifdef BOOTLOADER_POLICY
-        /* Ensure that the bootloader policy is set.  If not flash the
-           OEMVARS that include the default policy.  */
-        if (!device_is_provisioning() && !blpolicy_is_flashed()) {
-                UINT8 verify_state;
-                ret = load_boot_image(NORMAL_BOOT, NULL, &bootimage, FALSE,
-                                      &verify_state, NULL);
-                if (EFI_ERROR(ret) || verify_state != BOOT_STATE_GREEN)
-                        efi_perror(ret, L"Failed to load boot image to get bootloader policy");
-                else
-                        set_image_oemvars(bootimage);
-                FreePool(bootimage);
-                bootimage = NULL;
-                if (!blpolicy_is_flashed())
-                        error(L"Bootloader Policy EFI variables are not flashed");
-        }
+        /* Ensure that the bootloader policy is set. */
+        if (!device_is_provisioning() && !blpolicy_is_flashed())
+                flash_bootloader_policy();
 #endif
 
         /* Fastboot is always validated by the OEM key baked into
@@ -1230,15 +1244,15 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 debug(L"User accepted unlocked device warning");
         }
 
-        debug(L"loading boot image");
-        UINT8 verify_state;
-        ret = load_boot_image(boot_target, target_path, &bootimage, oneshot,
-                              &verify_state, hash);
+        debug(L"Loading boot image");
+        ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
         FreePool(target_path);
-        if (boot_state == BOOT_STATE_GREEN)
-                boot_state = verify_state;
-        if (EFI_ERROR(ret))
+        if (EFI_ERROR(ret)) {
                 boot_state = BOOT_STATE_RED;
+        } else if (boot_state != BOOT_STATE_ORANGE) {
+                debug(L"Validating boot image");
+                boot_state = validate_bootimage(boot_target, bootimage, hash);
+        }
 
         if (boot_state == BOOT_STATE_YELLOW) {
                 boot_error(BOOTIMAGE_UNTRUSTED_CODE, NULL);
