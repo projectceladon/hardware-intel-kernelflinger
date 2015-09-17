@@ -764,7 +764,7 @@ static EFI_STATUS set_image_oemvars_nocheck(VOID *bootimage)
                 return ret;
         }
 
-        return flash_oemvars(oemvars, osz);
+        return flash_oemvars_silent_write_error(oemvars, osz);
 #else
         return EFI_NOT_FOUND;
 #endif
