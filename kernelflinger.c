@@ -574,7 +574,7 @@ static enum boot_target choose_boot_target(VOID **target_address,
 
         debug(L"Bootlogic: Check reboot target...");
         ret = check_loader_entry_one_shot();
-        if (ret != NORMAL_BOOT)
+        if (ret != DNX && ret != NORMAL_BOOT)
                 goto out;
 
         debug(L"Bootlogic: Check battery level...");
