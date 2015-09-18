@@ -42,6 +42,7 @@ enum vartype {
 
 typedef struct oemvars_ctx {
 	EFI_GUID guid;
+	const EFI_GUID *restricted_guid;
 	BOOLEAN silent_write_error;
 } oemvars_ctx_t;
 
@@ -184,6 +185,10 @@ static EFI_STATUS parse_line(char *line, VOID *context)
 		return EFI_SUCCESS;
 	}
 
+	if (ctx->restricted_guid &&
+	    memcmp(&ctx->guid, ctx->restricted_guid, sizeof(ctx->guid)))
+		return EFI_SUCCESS;
+
 	if (parse_oemvar_attributes(&line, &attributes, &type)) {
 		error(L"Invalid attribute specification");
 		return EFI_INVALID_PARAMETER;
@@ -298,10 +303,13 @@ static EFI_STATUS parse_line(char *line, VOID *context)
  *
  * will change the GUID used for subsequent lines.
  */
-static EFI_STATUS _flash_oemvars(VOID *data, UINTN size, BOOLEAN silent_error)
+static EFI_STATUS _flash_oemvars(VOID *data, UINTN size,
+				 const EFI_GUID *restricted_guid,
+				 BOOLEAN silent_error)
 {
 	oemvars_ctx_t ctx = {
 		.guid = loader_guid,
+		.restricted_guid = restricted_guid,
 		.silent_write_error = silent_error
 	};
 
@@ -309,12 +317,13 @@ static EFI_STATUS _flash_oemvars(VOID *data, UINTN size, BOOLEAN silent_error)
 	return parse_text_buffer(data, size, parse_line, &ctx);
 }
 
-EFI_STATUS flash_oemvars_silent_write_error(VOID *data, UINTN size)
+EFI_STATUS flash_oemvars_silent_write_error(VOID *data, UINTN size,
+					    const EFI_GUID *restricted_guid)
 {
-	return _flash_oemvars(data, size, TRUE);
+	return _flash_oemvars(data, size, restricted_guid, TRUE);
 }
 
 EFI_STATUS flash_oemvars(VOID *data, UINTN size)
 {
-	return _flash_oemvars(data, size, FALSE);
+	return _flash_oemvars(data, size, NULL, FALSE);
 }
