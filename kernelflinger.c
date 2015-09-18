@@ -740,7 +740,8 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
 #define OEMVARS_MAGIC           "#OEMVARS\n"
 #define OEMVARS_MAGIC_SZ        9
 
-static EFI_STATUS set_image_oemvars_nocheck(VOID *bootimage)
+static EFI_STATUS set_image_oemvars_nocheck(VOID *bootimage,
+                                            const EFI_GUID *restricted_guid)
 {
         VOID *oemvars;
         UINT32 osz;
@@ -751,7 +752,8 @@ static EFI_STATUS set_image_oemvars_nocheck(VOID *bootimage)
             !memcmp(oemvars, OEMVARS_MAGIC, OEMVARS_MAGIC_SZ)) {
                 debug(L"secondstage contains raw oemvars");
                 return flash_oemvars_silent_write_error((CHAR8*)oemvars + OEMVARS_MAGIC_SZ,
-                                                        osz - OEMVARS_MAGIC_SZ);
+                                                        osz - OEMVARS_MAGIC_SZ,
+                                                        restricted_guid);
         }
 
 #ifdef HAL_AUTODETECT
@@ -764,7 +766,7 @@ static EFI_STATUS set_image_oemvars_nocheck(VOID *bootimage)
                 return ret;
         }
 
-        return flash_oemvars_silent_write_error(oemvars, osz);
+        return flash_oemvars_silent_write_error(oemvars, osz, restricted_guid);
 #else
         return EFI_NOT_FOUND;
 #endif
@@ -779,7 +781,7 @@ static EFI_STATUS set_image_oemvars(VOID *bootimage)
         debug(L"OEM vars may need to be updated");
         set_oemvars_update(FALSE);
 
-        return set_image_oemvars_nocheck(bootimage);
+        return set_image_oemvars_nocheck(bootimage, NULL);
 }
 
 static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
@@ -937,7 +939,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                         /* 'fastboot boot' case, only allowed on unlocked devices.
                          * check just to make sure */
                         if (device_is_unlocked()) {
-                                set_image_oemvars_nocheck(bootimage);
+                                set_image_oemvars_nocheck(bootimage, NULL);
                                 load_image(bootimage, BOOT_STATE_ORANGE, FALSE);
                         }
                         FreePool(bootimage);
@@ -1098,10 +1100,15 @@ static void flash_bootloader_policy(void)
                 goto out;
         }
 
-        set_image_oemvars(bootimage);
+        /* The bootloader policy EFI variables are using the
+           FASTBOOT_GUID. */
+        set_image_oemvars_nocheck(bootimage, &fastboot_guid);
 
+        /* It might not be an error.  Some devices have a buggy BIOS
+           that does not allowed secured EFI variables to be
+           flashed.  */
         if (!blpolicy_is_flashed())
-                error(L"Bootloader Policy EFI variables are not flashed");
+                debug(L"Bootloader Policy EFI variables are not flashed");
 out:
         FreePool(bootimage);
 }
@@ -1283,7 +1290,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                  * boot into an alternate boot image from 'fastboot boot'.
                  * Load the OEM vars in this new boot image, but ensure that
                  * we'll read them again on the next normal boot */
-                set_image_oemvars_nocheck(bootimage);
+                set_image_oemvars_nocheck(bootimage, NULL);
                 set_oemvars_update(TRUE);
                 break;
         case NORMAL_BOOT:
