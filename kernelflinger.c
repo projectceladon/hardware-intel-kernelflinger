@@ -467,6 +467,9 @@ static enum boot_target check_battery_inserted()
 {
         enum wake_sources wake_source;
 
+        if (!get_current_off_mode_charge())
+                return NORMAL_BOOT;
+
         wake_source = rsci_get_wake_source();
         if (wake_source == WAKE_BATTERY_INSERTED)
                 return POWER_OFF;
@@ -493,6 +496,9 @@ static enum boot_target check_charge_mode()
 
 enum boot_target check_battery()
 {
+        if (!get_current_off_mode_charge())
+                return NORMAL_BOOT;
+
         if (is_battery_below_boot_OS_threshold()) {
                 BOOLEAN charger_plugged = is_charger_plugged_in();
                 debug(L"Battery is below boot OS threshold");
