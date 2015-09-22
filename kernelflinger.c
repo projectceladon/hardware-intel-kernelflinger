@@ -548,11 +548,6 @@ static enum boot_target choose_boot_target(VOID **target_address,
 #endif
         debug(L"Bootlogic: Choosing boot target");
 
-        debug(L"Bootlogic: Check watchdog...");
-        ret = check_watchdog();
-        if (ret != NORMAL_BOOT)
-                goto out;
-
         debug(L"Bootlogic: Check osloader command line...");
         ret = check_command_line(target_address);
         if (ret != NORMAL_BOOT)
@@ -566,6 +561,11 @@ static enum boot_target choose_boot_target(VOID **target_address,
 
         debug(L"Bootlogic: Check magic key...");
         ret = check_magic_key();
+        if (ret != NORMAL_BOOT)
+                goto out;
+
+        debug(L"Bootlogic: Check watchdog...");
+        ret = check_watchdog();
         if (ret != NORMAL_BOOT)
                 goto out;
 
