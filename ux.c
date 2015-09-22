@@ -453,13 +453,19 @@ enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash) {
 		}
 
 		target = ui_boot_menu_event_handler(menu, ui_read_input());
-#else
-		target = ui_boot_menu_event_handler(menu, ui_wait_for_input(CRASHMODE_TIMEOUT_SECS));
-#endif
 		if (target != UNKNOWN_TARGET)
 			break;
-#ifndef CRASHMODE_USE_ADB
-		halt_system();
+#else
+		UINTN timeout = CRASHMODE_TIMEOUT_SECS;
+		for (;;) {
+			target = ui_boot_menu_event_handler(menu, ui_read_input());
+			if (target != UNKNOWN_TARGET)
+				break;
+			uefi_call_wrapper(BS->Stall, 1, 1000000);
+			timeout--;
+			if (timeout == 0)
+				halt_system();
+		}
 #endif
 	}
 
