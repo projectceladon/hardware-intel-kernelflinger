@@ -59,6 +59,10 @@ ifneq ($(KERNELFLINGER_IGNORE_RSCI),true)
     LOCAL_CFLAGS += -DUSE_RSCI
 endif
 
+ifeq ($(KERNELFLINGER_IGNORE_NOT_APPLICABLE_RESET),true)
+    LOCAL_CFLAGS += -DIGNORE_NOT_APPLICABLE_RESET
+endif
+
 LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \

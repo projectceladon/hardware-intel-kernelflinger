@@ -53,7 +53,7 @@ static const struct ACPI_DESC_HEADER SUPPORTED_TABLES[] = {
 	{ .signature = "RSCI",
 	  .oem_id = "INTEL ",
 	  .oem_table_id = "BOOTSRC ",
-	  .revision = 1 },
+	  .revision = 2 },
 	{ .signature = "OEM1",
 	  .oem_id = "INTEL ",
 	  .oem_table_id = "ENRGYMGT",
@@ -98,7 +98,7 @@ static EFI_STATUS acpi_table_is_supported(struct ACPI_DESC_HEADER *t)
 
 	if (id && !memcmp(id->oem_id, t->oem_id, sizeof(t->oem_id))
 	    && !memcmp(id->oem_table_id, t->oem_table_id, sizeof(t->oem_table_id))
-	    && id->revision == t->revision)
+	    && id->revision >= t->revision)
 		return EFI_SUCCESS;
 
 	return EFI_UNSUPPORTED;
@@ -108,6 +108,7 @@ static EFI_STATUS acpi_table_is_supported(struct ACPI_DESC_HEADER *t)
 static UINT64 _get_acpi_field(CHAR8 *name, CHAR8 *fieldname _unused, VOID **var, UINTN offset, UINTN size)
 {
 	EFI_STATUS ret_supported;
+	struct ACPI_DESC_HEADER *acpi_desc_hdr = NULL;
 
 	if (size > sizeof(UINT64)) {
 		return -1;
@@ -120,11 +121,16 @@ static UINT64 _get_acpi_field(CHAR8 *name, CHAR8 *fieldname _unused, VOID **var,
 		}
 	}
 
-	ret_supported = acpi_table_is_supported((struct ACPI_DESC_HEADER *)*var);
+	acpi_desc_hdr = *var;
+	ret_supported = acpi_table_is_supported(acpi_desc_hdr);
 	if (EFI_ERROR(ret_supported)) {
 		error(L"Failed to match a supported ACPI table entry");
 		return -1;
 	}
+
+	/* verify that (offset + size) of element is within the ACPI table */
+	if (offset + size > acpi_desc_hdr->length)
+		return -1;
 
 	UINT64 ret = 0;
 	CopyMem((CHAR8 *)&ret, (CHAR8 *)*var + offset, size);
@@ -237,6 +243,11 @@ enum reset_types rsci_get_reset_type(void)
 {
 	return get_acpi_field(RSCI, reset_type);
 }
+
+UINT32 rsci_get_reset_extra_info(void)
+{
+	return get_acpi_field(RSCI, reset_extra_info);
+}
 #else
 enum wake_sources rsci_get_wake_source(void)
 {
@@ -251,6 +262,11 @@ enum reset_sources rsci_get_reset_source(void)
 enum reset_types rsci_get_reset_type(void)
 {
 	return NOT_APPLICABLE;
+}
+
+UINT32 rsci_get_reset_extra_info(void)
+{
+	return -1;
 }
 #endif /* USE_RSCI */
 
@@ -302,12 +318,16 @@ CHAR16 *reset_source_string(enum reset_sources rs)
 		return L"Security Watchdog";
 	case RESET_SECURITY_INITIATED:
 		return L"Security Initiated";
-	case RESET_PMC_WATCHDOG:
-		return L"PMC Watchdog";
 	case RESET_EC_WATCHDOG:
 		return L"EC Watchdog";
-	case RESET_PLATFORM_WATCHDOG:
-		return L"Platform Watchdog";
+	case RESET_PMIC_WATCHDOG:
+		return L"PMIC Watchdog";
+	case RESET_SHORT_POWER_LOSS:
+		return L"Short power loss";
+	case RESET_PLATFORM_SPECIFIC:
+		return L"Platform Specific";
+	case RESET_UNKNOWN:
+		return L"Unknown";
 	case RESET_ERROR:
 		return L"Error";
 	}
