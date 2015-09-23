@@ -80,6 +80,7 @@ struct RSCI_TABLE {
 	CHAR8 reset_type;		/* Identify type of reset */
 	CHAR8 shutdown_source;		/* How system was last shutdown */
 	UINT32 indicators;		/* Bitmap with additional info */
+	UINT32 reset_extra_info;	/* Reports system specific reset sources */
 };
 
 enum {

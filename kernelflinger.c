@@ -113,6 +113,8 @@ static VOID print_rsci_values(VOID)
         debug(L"reset_type = %s (0x%02hhx)",
               reset_type_string(raw_reset_type),
               raw_reset_type);
+        if (raw_reset_source == RESET_PLATFORM_SPECIFIC)
+                debug(L"reset_extra_info = 0x%08hhx", rsci_get_reset_extra_info());
 }
 #endif
 
@@ -301,9 +303,8 @@ static BOOLEAN reset_is_due_to_watchdog_or_panic()
         static enum reset_sources WATCHDOG_RESET_SOURCES[] = {
                 RESET_KERNEL_WATCHDOG,
                 RESET_SECURITY_WATCHDOG,
-                RESET_PMC_WATCHDOG,
-                RESET_EC_WATCHDOG,
-                RESET_PLATFORM_WATCHDOG
+                RESET_PMIC_WATCHDOG,
+                RESET_EC_WATCHDOG
         };
         enum reset_sources reset_source;
         CHAR16 *reboot_reason;

@@ -55,9 +55,11 @@ enum reset_sources {
 	RESET_KERNEL_WATCHDOG,
 	RESET_SECURITY_WATCHDOG,
 	RESET_SECURITY_INITIATED,
-	RESET_PMC_WATCHDOG,
-	RESET_EC_WATCHDOG,
-	RESET_PLATFORM_WATCHDOG,
+	RESET_EC_WATCHDOG = 8,
+	RESET_PMIC_WATCHDOG,
+	RESET_SHORT_POWER_LOSS = 11,
+	RESET_PLATFORM_SPECIFIC,
+	RESET_UNKNOWN = 0xFF,
 	RESET_ERROR = -1,
 };
 
@@ -73,6 +75,8 @@ enum wake_sources rsci_get_wake_source(void);
 enum reset_sources rsci_get_reset_source(void);
 
 enum reset_types rsci_get_reset_type(void);
+
+UINT32 rsci_get_reset_extra_info(void);
 
 #if DEBUG_MESSAGES
 CHAR16 *reset_source_string(enum reset_sources rs);

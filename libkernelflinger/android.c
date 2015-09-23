@@ -50,6 +50,8 @@
 #include "blobstore.h"
 #endif
 
+#define OS_INITIATED L"os_initiated"
+
 struct setup_header {
         UINT8 setup_secs;        /* Sectors for setup code */
         UINT16 root_flags;
@@ -367,23 +369,43 @@ static CHAR16 *get_reset_reason(void)
 
         reset_source = rsci_get_reset_source();
         switch (reset_source) {
+#ifndef IGNORE_NOT_APPLICABLE_RESET
+        case RESET_NOT_APPLICABLE:
+                reason = StrDuplicate(L"not_applicable");
+                break;
+#endif
+        case RESET_OS_INITIATED:
+                reason = StrDuplicate(OS_INITIATED);
+                break;
+        case RESET_FORCED:
+                reason = StrDuplicate(L"forced");
+                break;
+        case RESET_FW_UPDATE:
+                reason = StrDuplicate(L"firmware_update");
+                break;
         case RESET_KERNEL_WATCHDOG:
                 reason = StrDuplicate(L"watchdog");
                 break;
         case RESET_SECURITY_WATCHDOG:
                 reason = StrDuplicate(L"security_watchdog");
                 break;
-        case RESET_PMC_WATCHDOG:
-                reason = StrDuplicate(L"pmc_watchdog");
+        case RESET_SECURITY_INITIATED:
+                reason = StrDuplicate(L"security_initiated");
                 break;
         case RESET_EC_WATCHDOG:
                 reason = StrDuplicate(L"ec_watchdog");
                 break;
-        case RESET_PLATFORM_WATCHDOG:
-                reason = StrDuplicate(L"platform_watchdog");
+        case RESET_PMIC_WATCHDOG:
+                reason = StrDuplicate(L"pmic_watchdog");
                 break;
-        case RESET_SECURITY_INITIATED:
-                reason = StrDuplicate(L"security_initiated");
+        case RESET_SHORT_POWER_LOSS:
+                reason = StrDuplicate(L"short_power_loss");
+                break;
+        case RESET_PLATFORM_SPECIFIC:
+                reason = StrDuplicate(L"platform_specific");
+                break;
+        case RESET_UNKNOWN:
+                reason = StrDuplicate(L"unknown");
                 break;
         default:
                 debug(L"reset_source = 0x%02x", reset_source);
@@ -403,9 +425,10 @@ static CHAR16 *get_boot_reason(void)
                 goto done;
 
         bootreason = get_reset_reason();
-        if (bootreason)
+        if (bootreason && StrCmp(bootreason, OS_INITIATED))
                 goto done;
 
+        /* in case of an OS initiated reboot => get reason from efi var */
         bootreason = get_reboot_reason();
         if (!bootreason) {
                 debug(L"Error while trying to read the reboot reason");
