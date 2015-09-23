@@ -35,6 +35,8 @@
 #include <efiapi.h>
 #include <efilib.h>
 
+#include <openssl/sha.h>
+
 #ifndef USERFASTBOOT
 #include <fastboot.h>
 #endif
@@ -55,7 +57,7 @@
 #include "blobstore.h"
 #endif
 #include "oemvars.h"
-#include <openssl/sha.h>
+#include "txe.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -821,6 +823,16 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
         return ret;
 }
 
+static VOID die(VOID) __attribute__ ((noreturn));
+
+static VOID die(VOID)
+{
+        /* Allow plenty of time for the error to be visible before the
+         * screen goes blank */
+        pause(30);
+        halt_system();
+}
+
 static VOID enter_tdos(UINT8 boot_state) __attribute__ ((noreturn));
 
 static VOID enter_tdos(UINT8 boot_state)
@@ -832,7 +844,7 @@ static VOID enter_tdos(UINT8 boot_state)
                         FALSE, &bootimage);
         if (EFI_ERROR(ret)) {
                 error(L"Couldn't load TDOS image");
-                goto die;
+                die();
         }
 
 #ifdef USERDEBUG
@@ -843,21 +855,17 @@ static VOID enter_tdos(UINT8 boot_state)
                                                  oem_cert_size, target, NULL);
         if (verify_state != BOOT_STATE_GREEN) {
                 error(L"tdos image not verified");
-                goto die;
+                die();
         }
 
         if (StrCmp(target, L"/tdos")) {
                 error(L"This does not appear to be a tdos image");
-                goto die;
+                die();
         }
 #endif
         load_image(bootimage, boot_state, TDOS);
         error(L"Couldn't chainload TDOS image");
-die:
-        /* Allow plenty of time for the error to be visible before the
-         * screen goes blank */
-        pause(30);
-        halt_system();
+        die();
 }
 
 static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
@@ -893,7 +901,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                                 FALSE, &bootimage);
                 if (EFI_ERROR(ret)) {
                         error(L"Couldn't load Fastboot image");
-                        goto die;
+                        die();
                 }
         }
 
@@ -905,23 +913,19 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                                                  oem_cert_size, target, NULL);
         if (verify_state != BOOT_STATE_GREEN) {
                 error(L"Fastboot image not verified");
-                goto die;
+                die();
         }
 
         if (StrCmp(target, L"/fastboot")) {
                 error(L"This does not appear to be a Fastboot image");
-                goto die;
+                die();
         }
 #endif
         debug(L"chainloading fastboot, boot state is %s",
                         boot_state_to_string(boot_state));
         load_image(bootimage, boot_state, FASTBOOT);
         error(L"Couldn't chainload Fastboot image");
-die:
-        /* Allow plenty of time for the error to be visible before the
-         * screen goes blank */
-        pause(30);
-        halt_system();
+        die();
 }
 
 #else
@@ -1276,6 +1280,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
         FreePool(target_path);
         if (EFI_ERROR(ret)) {
+                debug(L"issue loading boot image: %r", ret);
                 boot_state = BOOT_STATE_RED;
         } else if (boot_state != BOOT_STATE_ORANGE) {
                 debug(L"Validating boot image");
@@ -1283,15 +1288,23 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                                                 &verifier_cert);
         }
 
+        ret = compute_rot_bitstream_hash(verifier_cert, &hash, &hash_size);
+        if (verifier_cert)
+                X509_free(verifier_cert);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to generate Root Of Trust bitstream hash");
+#ifdef USE_TXE
+                /* Will not be able to bind the Root of Trust */
+                die();
+#endif
+        }
+
         if (boot_state == BOOT_STATE_YELLOW) {
-                compute_rot_bitstream_hash(verifier_cert, &hash, &hash_size);
                 boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, hash, hash_size);
                 debug(L"User accepted untrusted bootimage warning");
         }
 
         if (boot_state == BOOT_STATE_RED) {
-                debug(L"issue loading boot image: %r", ret);
-
                 if (boot_target == RECOVERY)
                         boot_error(BAD_RECOVERY_CODE, boot_state, NULL, 0);
                 else
@@ -1324,8 +1337,14 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 break;
         }
 
-        if (verifier_cert)
-                X509_free(verifier_cert);
+#ifdef USE_TXE
+        ret = txe_bind_root_of_trust(hash, hash_size);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to bind the Root of Trust");
+                die();
+        }
+#endif
+
         return load_image(bootimage, boot_state, boot_target);
 }
 
