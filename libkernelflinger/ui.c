@@ -268,7 +268,7 @@ EFI_STATUS ui_display_texts(const ui_textline_t **texts, UINTN x, UINTN y,
 	UINTN i, j, pos;
 
 	for (i = 0; texts[i]; i++)
-		for (j = 0; texts[i][j].color; j++)
+		for (j = 0; texts[i][j].color && texts[i][j].str; j++)
 			line_nb++;
 	lines = AllocateZeroPool((line_nb + 1) * sizeof(ui_textline_t));
 	if (!lines) {
