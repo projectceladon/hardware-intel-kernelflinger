@@ -275,6 +275,8 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
         UINTN imgsize;
         UINT8 verify_state = BOOT_STATE_RED;
         CHAR16 *target_tmp;
+        X509 *verifier_cert = NULL;
+        EVP_PKEY *oemkey = NULL;
         EFI_STATUS ret;
 
         if (!bootimage || !der_cert || !target)
@@ -302,34 +304,42 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
                 goto free_sig;
         }
 
-        verify_state = BOOT_STATE_GREEN;
         debug(L"verifying boot image");
         ret = check_bootimage(bootimage, imgsize, sig, cert);
-        if (hash)
-                X509_digest(cert, EVP_sha1(), hash, NULL);
-        if (ret == EFI_ACCESS_DENIED && sig->certificate) {
-                /* Try to verify with embedded certificate */
-                debug(L"Bootimage does not verify against the OEM key, trying included certificate");
-                verify_state = BOOT_STATE_YELLOW;
-                if (hash)
-                        X509_digest(sig->certificate, EVP_sha1(), hash, NULL);
-                ret = check_bootimage(bootimage, imgsize, sig, sig->certificate);
-                if (!EFI_ERROR(ret)) {
-                        EVP_PKEY *oemkey = get_rsa_pubkey(cert);
-                        if (!EFI_ERROR(add_digest(sig->certificate->sig_alg)) &&
-                            X509_verify(sig->certificate, oemkey) == 1) {
-                                debug(L"Embedded certificate verified by OEM key");
-                                verify_state = BOOT_STATE_GREEN;
-                        }
-                        EVP_PKEY_free(oemkey);
-                }
+        if (!EFI_ERROR(ret)) {
+                verify_state = BOOT_STATE_GREEN;
+                verifier_cert = cert;
+                goto done;
         }
-        if (EFI_ERROR(ret)) {
-                debug(L"Bootimage verification failure");
-                verify_state = BOOT_STATE_RED;
-        }
-        X509_free(cert);
 
+        if (ret != EFI_ACCESS_DENIED || !sig->certificate) {
+                debug(L"Bootimage verification failure");
+                goto done;
+        }
+
+        debug(L"Bootimage does not verify against the OEM key, trying included certificate");
+        ret = check_bootimage(bootimage, imgsize, sig, sig->certificate);
+        if (EFI_ERROR(ret))
+                goto done;
+
+        verifier_cert = sig->certificate;
+        oemkey = get_rsa_pubkey(cert);
+        if (!oemkey ||
+            EFI_ERROR(add_digest(sig->certificate->sig_alg)) ||
+            X509_verify(sig->certificate, oemkey) != 1) {
+                verify_state = BOOT_STATE_YELLOW;
+                goto done;
+        }
+
+        debug(L"Embedded certificate verified by OEM key");
+        verify_state = BOOT_STATE_GREEN;
+
+done:
+        if (hash && verifier_cert)
+                X509_digest(verifier_cert, EVP_sha1(), hash, NULL);
+        if (oemkey)
+                EVP_PKEY_free(oemkey);
+        X509_free(cert);
         target_tmp = stra_to_str((CHAR8*)sig->attributes.target);
         if (!target_tmp) {
                 verify_state = BOOT_STATE_RED;
