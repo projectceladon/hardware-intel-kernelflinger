@@ -33,12 +33,21 @@
 
 #include <efi.h>
 #include <efilib.h>
+#include <openssl/x509.h>
 
 #ifndef _SECURITY_H_
 #define _SECURITY_H_
 
 #define BOOT_TARGET_SIZE         32
 #define BOOT_SIGNATURE_MAX_SIZE  4096
+
+/* Compute the Root Of Trust bistream and returns its SHA256 hash.
+ * The RoT bitstream consists of the device State value (1 for locked
+ * and 0 for unlocked) followed by the public key value of CERT.  CERT
+ * must be the certificate that has been used to validate the
+ * bootimage.  */
+EFI_STATUS compute_rot_bitstream_hash(X509 *cert, UINT8 **hash_p,
+				      UINTN *hash_size);
 
 /* Given an Android boot image, test if it is signed with the provided
  * certificate or the embedded one
@@ -53,9 +62,7 @@
  * target    - Pointer to buffer of BOOT_TARGET_SIZE, which will be filled in
  *             with AuthenticatedAttributes 'target' field iff the image is
  *             verified. Caller should only check this on EFI_SUCCESS.
- * hash      - Pointer to buffer of SHA_DIGEST_LENGTH, which will be filled
- *             in with SHA1 of certificate used to validate the image.
- *             Can be NULL
+ * verifier_cert  - Return the certificate that validated the boot image
  *
  * Return values:
  * BOOT_STATE_GREEN  - Boot image is validated against provided certificate
@@ -67,7 +74,7 @@ UINT8 verify_android_boot_image(
         IN VOID *der_cert,
         IN UINTN cert_size,
         OUT CHAR16 *target,
-        OUT UINT8 *hash);
+        OUT X509 **verifier_cert);
 
 /* Determines if UEFI Secure Boot is enabled or not. */
 BOOLEAN is_efi_secure_boot_enabled(VOID);

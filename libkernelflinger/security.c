@@ -38,7 +38,6 @@
 #include <openssl/obj_mac.h>
 #include <openssl/rsa.h>
 #include <openssl/bio.h>
-#include <openssl/x509.h>
 #include <openssl/evp.h>
 
 #include "security.h"
@@ -265,9 +264,82 @@ static EFI_STATUS add_digest(X509_ALGOR *algo)
 }
 
 
+EFI_STATUS compute_rot_bitstream_hash(X509 *cert, UINT8 **hash_p, UINTN *hash_size)
+{
+        static UINT8 hash[SHA256_DIGEST_LENGTH];
+        EFI_STATUS fun_ret = EFI_INVALID_PARAMETER;
+        BIO *rot_bio = NULL;
+        UINT8 device_state;
+        EVP_PKEY *pkey = NULL;
+        RSA *rsa;
+        int ret;
+        int size;
+        char *rot_bitstream;
+
+        if (!hash_p || !hash_size)
+                return EFI_INVALID_PARAMETER;
+
+        rot_bio = BIO_new(BIO_s_mem());
+        if (!rot_bio) {
+                error(L"Failed to allocate the RoT bitstream BIO");
+                return EFI_OUT_OF_RESOURCES;
+        }
+
+        device_state = device_is_locked() ? 1 : 0;
+        ret = BIO_write(rot_bio, &device_state, sizeof(device_state));
+        if (ret != sizeof(device_state)) {
+                error(L"Failed to write the device state to the RoT bitstream BIO");
+                goto out;
+        }
+
+        if (cert) {
+                pkey = get_rsa_pubkey(cert);
+                if (!pkey) {
+                        error(L"Failed to get the public key from the certificate");
+                        goto out;
+                }
+
+                rsa = EVP_PKEY_get1_RSA(pkey);
+                if (!rsa) {
+                        error(L"Failed to get the RSA key from the public key");
+                        goto out;
+                }
+
+                ret = i2d_RSAPublicKey_bio(rot_bio, rsa);
+                if (ret <= 0) {
+                        error(L"Failed to write the RSA key to RoT bitstream BIO");
+                        goto out;
+                }
+        }
+
+        size = BIO_get_mem_data(rot_bio, &rot_bitstream);
+        if (size == -1) {
+                error(L"Failed to get the RoT bitstream BIO content");
+                goto out;
+        }
+
+        ret = EVP_Digest(rot_bitstream, size, hash, NULL, EVP_sha256(), NULL);
+        if (ret == 0) {
+                error(L"Failed to hash the RoT bitstream");
+                goto out;
+        }
+
+        *hash_p = hash;
+        *hash_size = sizeof(hash);
+        fun_ret = EFI_SUCCESS;
+
+out:
+        if (pkey)
+                EVP_PKEY_free(pkey);
+        if (rot_bio)
+                BIO_free(rot_bio);
+        return fun_ret;
+}
+
+
 UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
                                 IN UINTN cert_size, OUT CHAR16 *target,
-                                OUT UINT8 *hash)
+                                OUT X509 **verifier_cert)
 {
         struct boot_signature *sig = NULL;
         struct boot_img_hdr *hdr;
@@ -275,12 +347,14 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
         UINTN imgsize;
         UINT8 verify_state = BOOT_STATE_RED;
         CHAR16 *target_tmp;
-        X509 *verifier_cert = NULL;
         EVP_PKEY *oemkey = NULL;
         EFI_STATUS ret;
 
         if (!bootimage || !der_cert || !target)
                 goto out;
+
+        if (verifier_cert)
+                *verifier_cert = NULL;
 
         debug(L"get boot image header");
         hdr = get_bootimage_header(bootimage);
@@ -308,7 +382,7 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
         ret = check_bootimage(bootimage, imgsize, sig, cert);
         if (!EFI_ERROR(ret)) {
                 verify_state = BOOT_STATE_GREEN;
-                verifier_cert = cert;
+                *verifier_cert = X509_dup(cert);
                 goto done;
         }
 
@@ -322,7 +396,7 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
         if (EFI_ERROR(ret))
                 goto done;
 
-        verifier_cert = sig->certificate;
+        *verifier_cert = X509_dup(sig->certificate);
         oemkey = get_rsa_pubkey(cert);
         if (!oemkey ||
             EFI_ERROR(add_digest(sig->certificate->sig_alg)) ||
@@ -335,8 +409,6 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
         verify_state = BOOT_STATE_GREEN;
 
 done:
-        if (hash && verifier_cert)
-                X509_digest(verifier_cert, EVP_sha1(), hash, NULL);
         if (oemkey)
                 EVP_PKEY_free(oemkey);
         X509_free(cert);

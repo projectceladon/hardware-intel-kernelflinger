@@ -609,10 +609,10 @@ out:
 /* Validate an image.
  *
  * Parameters:
- * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
- *                and ESP_BOOTIMAGE (for 'fastboot boot')
- * bootimage    - Bootimage to validate
- * hash         - Return the sha1 hash of the certificate used to validate the image
+ * boot_target    - Boot image to load. Values supported are NORMAL_BOOT,
+ *                  RECOVERY, and ESP_BOOTIMAGE (for 'fastboot boot')
+ * bootimage      - Bootimage to validate
+ * verifier_cert  - Return the certificate that validated the boot image
  *
  * Return values:
  * BOOT_STATE_GREEN  - Boot image is valid against provided certificate
@@ -622,7 +622,7 @@ out:
 static UINT8 validate_bootimage(
                 IN enum boot_target boot_target,
                 IN VOID *bootimage,
-                OUT UINT8 *hash)
+                OUT X509 **verifier_cert)
 {
         CHAR16 target[BOOT_TARGET_SIZE];
         CHAR16 *expected;
@@ -630,7 +630,8 @@ static UINT8 validate_bootimage(
         UINT8 boot_state;
 
         boot_state = verify_android_boot_image(bootimage, oem_cert,
-                                               oem_cert_size, target, hash);
+                                               oem_cert_size, target,
+                                               verifier_cert);
 
         if (boot_state == BOOT_STATE_RED) {
                 debug(L"boot image doesn't verify");
@@ -1143,7 +1144,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         enum boot_target boot_target = NORMAL_BOOT;
         UINT8 boot_state = BOOT_STATE_GREEN;
         CHAR16 *loader_version = KERNELFLINGER_VERSION;
-        UINT8 hash[SHA_DIGEST_LENGTH];
+        UINT8 *hash = NULL;
+        UINTN hash_size;
+        X509 *verifier_cert = NULL;
         CHAR16 *name = NULL;
         EFI_RESET_TYPE resetType;
 
@@ -1276,11 +1279,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 boot_state = BOOT_STATE_RED;
         } else if (boot_state != BOOT_STATE_ORANGE) {
                 debug(L"Validating boot image");
-                boot_state = validate_bootimage(boot_target, bootimage, hash);
+                boot_state = validate_bootimage(boot_target, bootimage,
+                                                &verifier_cert);
         }
 
         if (boot_state == BOOT_STATE_YELLOW) {
-                boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, hash, sizeof(hash));
+                compute_rot_bitstream_hash(verifier_cert, &hash, &hash_size);
+                boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, hash, hash_size);
                 debug(L"User accepted untrusted bootimage warning");
         }
 
@@ -1319,6 +1324,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 break;
         }
 
+        if (verifier_cert)
+                X509_free(verifier_cert);
         return load_image(bootimage, boot_state, boot_target);
 }
 
