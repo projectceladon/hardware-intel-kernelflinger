@@ -54,7 +54,14 @@
 #define OAK_VARNAME		L"OAK"
 #define BPM_VARNAME		L"BPM"
 
-#define CLASS_A_DEVICE		1U
+typedef union {
+	struct {
+		unsigned class_A : 1;
+		unsigned min_boot_state : 2;
+	};
+	UINT64 raw;
+} bpm_t;
+
 #define DEFAULT_BLPOLICY	0U
 #endif
 
@@ -650,13 +657,13 @@ BOOLEAN blpolicy_is_flashed(VOID)
 	return TRUE;
 }
 
-BOOLEAN device_is_class_A(VOID)
+static bpm_t get_bpm()
 {
 	EFI_STATUS ret;
 	UINTN size;
 	UINT32 flags;
 	UINT64 *bpm_data;
-	UINT64 bpm = DEFAULT_BLPOLICY;
+	bpm_t bpm = { .raw = DEFAULT_BLPOLICY };
 
 	ret = get_efi_variable(&fastboot_guid, BPM_VARNAME,
 			       &size, (VOID **)&bpm_data, &flags);
@@ -669,11 +676,30 @@ BOOLEAN device_is_class_A(VOID)
 		goto out;
 	}
 
-	bpm = *bpm_data;
+	bpm.raw = *bpm_data;
 	FreePool(bpm_data);
 
 out:
-	return (bpm & CLASS_A_DEVICE) != 0;
+	return bpm;
+}
+
+BOOLEAN device_is_class_A(VOID)
+{
+	return get_bpm().class_A != 0;
+}
+
+UINT8 min_boot_state_policy()
+{
+	switch (get_bpm().min_boot_state) {
+	case 0:
+		return BOOT_STATE_RED;
+	case 1:
+		return BOOT_STATE_ORANGE;
+	case 2:
+		return BOOT_STATE_YELLOW;
+	case 3:
+		return BOOT_STATE_GREEN;
+	}
 }
 
 EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size)

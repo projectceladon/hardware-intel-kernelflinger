@@ -139,6 +139,7 @@ VOID del_reboot_reason();
 #ifdef BOOTLOADER_POLICY
 BOOLEAN blpolicy_is_flashed(VOID);
 BOOLEAN device_is_class_A(VOID);
+UINT8 min_boot_state_policy();
 EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size);
 #endif
 #endif /* _VARS_H_ */

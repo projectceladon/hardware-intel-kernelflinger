@@ -1066,17 +1066,20 @@ static EFI_STATUS push_capsule(
         return ret;
 }
 
-static VOID boot_error(enum ux_error_code error_code, UINT8 *hash)
+static VOID boot_error(enum ux_error_code error_code, UINT8 boot_state, UINT8 *hash)
 {
         BOOLEAN power_off = FALSE;
         enum boot_target bt;
 
-        if (no_device_unlock()) {
-#ifndef USER
-                error(L"Bootloader policy: Device is class A");
-                error(L"Not a user build, let the device continue anyway");
-#else
+        if (boot_state > min_boot_state()) {
                 power_off = TRUE;
+
+#ifndef USER
+#ifdef NO_DEVICE_UNLOCK
+                error(L"NO_DEVICE_UNLOCK set, device should power off");
+                error(L"Not a user build, continue anyway");
+                power_off = FALSE;
+#endif
 #endif
         }
 
@@ -1200,7 +1203,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 /* Need to warn early, before we even enter Fastboot
                  * or run EFI binaries. Set lock_prompted to true so
                  * we don't ask again later */
-                boot_error(SECURE_BOOT_CODE, NULL);
+                boot_error(SECURE_BOOT_CODE, boot_state, NULL);
                 debug(L"User accepted UEFI secure boot disabled warning");
         } else  if (device_is_unlocked()) {
                 boot_state = BOOT_STATE_ORANGE;
@@ -1254,7 +1257,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
          * via fastboot. Skip this UX if we already prompted earlier
          * about EFI secure boot being turned off */
         if (boot_state == BOOT_STATE_ORANGE && !lock_prompted) {
-                boot_error(DEVICE_UNLOCKED_CODE, NULL);
+                boot_error(DEVICE_UNLOCKED_CODE, boot_state, NULL);
                 debug(L"User accepted unlocked device warning");
         }
 
@@ -1269,7 +1272,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         }
 
         if (boot_state == BOOT_STATE_YELLOW) {
-                boot_error(BOOTIMAGE_UNTRUSTED_CODE, NULL);
+                boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, NULL);
                 debug(L"User accepted untrusted bootimage warning");
         }
 
@@ -1277,9 +1280,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 debug(L"issue loading boot image: %r", ret);
 
                 if (boot_target == RECOVERY)
-                        boot_error(BAD_RECOVERY_CODE, NULL);
+                        boot_error(BAD_RECOVERY_CODE, boot_state, NULL);
                 else
-                        boot_error(RED_STATE_CODE, NULL);
+                        boot_error(RED_STATE_CODE, boot_state, NULL);
 
                 debug(L"User accepted bad boot image warning");
 
