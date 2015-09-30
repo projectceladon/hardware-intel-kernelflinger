@@ -150,4 +150,6 @@ EFI_STATUS generate_random_numbers(CHAR8 *data, UINTN size);
 
 BOOLEAN no_device_unlock();
 
+UINT8 min_boot_state();
+
 #endif
