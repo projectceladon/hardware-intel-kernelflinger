@@ -547,7 +547,7 @@ EFI_STATUS string_to_guid(
 }
 
 
-EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN len)
+EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN max_len)
 {
         UINTN i;
 
@@ -555,7 +555,7 @@ EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN len)
          * going to hope that nobody's putting non-ASCII characters in
          * the source string! We'll at least abort with an error
          * if we see any funny stuff */
-        for (i = 0; i < len; i++) {
+        for (i = 0; i < max_len; i++) {
                 if (src[i] > 0x7F)
                         return EFI_INVALID_PARAMETER;
 
@@ -563,7 +563,7 @@ EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN len)
                 if (!src[i])
                         break;
         }
-        dst[len - 1] = '\0';
+        dst[max_len - 1] = '\0';
         return EFI_SUCCESS;
 }
 
@@ -683,6 +683,41 @@ char *strtok_r(char *str, const char *delim, char **saveptr)
         return res;
 }
 
+static inline BOOLEAN is_in_char16_set(CHAR16 c, const CHAR16 *set)
+{
+        UINTN i, len;
+
+        for (i = 0, len = StrLen(set); i < len; i++)
+                if (c == set[i])
+                        return TRUE;
+
+        return FALSE;
+}
+
+CHAR16 *str16tok_r(CHAR16 *str, const CHAR16 *delim, CHAR16 **saveptr)
+{
+        CHAR16 *p, *res;
+
+        if (!delim || !saveptr || (!str && !*saveptr))
+                return NULL;
+
+        if (str)
+                *saveptr = str;
+
+        if (**saveptr == L'\0')
+                return NULL;
+
+        res = *saveptr;
+        for (p = *saveptr; *p != L'\0' && !is_in_char16_set(*p, delim); p++)
+                ;
+
+        for (; *p != L'\0' && is_in_char16_set(*p, delim); p++)
+                *p = L'\0';
+
+        *saveptr = p;
+
+        return res;
+}
 
 VOID pause(UINTN seconds)
 {

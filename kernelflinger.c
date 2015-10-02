@@ -350,6 +350,12 @@ static enum boot_target check_watchdog(VOID)
         UINT8 counter;
         EFI_TIME time_ref, now;
 
+#ifdef USER
+        if(!StrCmp(get_reboot_reason(), L"shutdown")) {
+                del_reboot_reason();
+                return POWER_OFF;
+        }
+#endif
         if (!get_current_crash_event_menu())
                 return NORMAL_BOOT;
 
