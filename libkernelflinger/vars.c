@@ -629,7 +629,19 @@ bad:
 
 CHAR16 *get_reboot_reason()
 {
-	return get_efi_variable_str(&loader_guid, REBOOT_REASON);
+	CHAR16 *reboot_reason, *reason, *saveptr;
+
+	reboot_reason = get_efi_variable_str(&loader_guid, REBOOT_REASON);
+	if (!reboot_reason)
+		return NULL;
+
+	reason = str16tok_r(reboot_reason, L" ", &saveptr);
+#ifndef USER
+	CHAR16 *extra_reason = str16tok_r(NULL, L" ", &saveptr);
+	if (extra_reason)
+		return extra_reason;
+#endif
+	return reason;
 }
 
 VOID del_reboot_reason()

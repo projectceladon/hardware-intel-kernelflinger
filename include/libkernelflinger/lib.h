@@ -130,6 +130,8 @@ EFI_STATUS bytes_to_hex_stra(CHAR8 *bytes, UINTN length,
 
 char *strtok_r(char *str, const char *delim, char **saveptr);
 
+CHAR16 *str16tok_r(CHAR16 *str, const CHAR16 *delim, CHAR16 **saveptr);
+
 /*
  * misc
  */
