@@ -1102,7 +1102,7 @@ static VOID boot_error(enum ux_error_code error_code, UINT8 boot_state,
                 halt_system();
 }
 
-#ifdef BOOTLOADER_POLICY
+#ifdef BOOTLOADER_POLICY_EFI_VAR
 /* Flash the OEMVARS that include the bootloader policy.  */
 static void flash_bootloader_policy(void)
 {
@@ -1250,7 +1250,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 reboot(NULL);
         }
 
-#ifdef BOOTLOADER_POLICY
+#ifdef BOOTLOADER_POLICY_EFI_VAR
         /* Ensure that the bootloader policy is set. */
         if (!device_is_provisioning() && !blpolicy_is_flashed())
                 flash_bootloader_policy();

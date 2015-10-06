@@ -28,7 +28,12 @@ endif
 endif
 
 ifneq ($(strip $(TARGET_BOOTLOADER_POLICY)),)
-    KERNELFLINGER_CFLAGS += -DBOOTLOADER_POLICY
+    KERNELFLINGER_CFLAGS += -DBOOTLOADER_POLICY=$(TARGET_BOOTLOADER_POLICY)
+    # Double negation to enforce the use of the EFI variable storage
+    # as the default behavior.
+    ifneq ($(strip $(TARGET_BOOTLOADER_POLICY_USE_EFI_VAR)),False)
+        KERNELFLINGER_CFLAGS += -DBOOTLOADER_POLICY_EFI_VAR
+    endif
 endif
 
 ifeq ($(KERNELFLINGER_TXE_BIND_ROOT_TRUST),true)

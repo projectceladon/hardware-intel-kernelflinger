@@ -230,7 +230,7 @@ static EFI_STATUS parse_line(char *line, VOID *context)
 	}
 
 	if (!memcmp(&ctx->guid, &fastboot_guid, sizeof(ctx->guid))) {
-#ifdef BOOTLOADER_POLICY
+#ifdef BOOTLOADER_POLICY_EFI_VAR
 		UINTN i;
 
 		for (i = 0; i < FASTBOOT_SECURED_VARS_SIZE; i++)

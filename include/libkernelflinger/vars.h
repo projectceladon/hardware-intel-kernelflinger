@@ -41,7 +41,7 @@ extern const EFI_GUID loader_guid;
 
 extern const EFI_GUID fastboot_guid;
 
-#ifdef BOOTLOADER_POLICY
+#ifdef BOOTLOADER_POLICY_EFI_VAR
 /* FASTBOOT GUID is reserved to internal use only.  However, the
  * following array of EFI variables is the exception and these
  * variables can be flashed using the flash oemvars fastboot command.
