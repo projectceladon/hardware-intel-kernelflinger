@@ -390,6 +390,9 @@ static void cmd_oem(INTN argc, CHAR8 **argv)
 }
 
 #ifdef BOOTLOADER_POLICY
+#ifndef BOOTLOADER_POLICY_EFI_VAR
+#error "Fastboot EFI does not support Bootloader policy without EFI variables."
+#endif
 static void cmd_oem_get_action_nonce(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
 {
 	char *nonce;

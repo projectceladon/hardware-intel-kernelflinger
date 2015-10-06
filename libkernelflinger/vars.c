@@ -50,10 +50,12 @@
 #define UPDATE_OEMVARS		L"UpdateOemVars"
 #define UI_DISPLAY_SPLASH_VAR	L"UIDisplaySplash"
 #define REBOOT_REASON		L"LoaderEntryRebootReason"
-#ifdef BOOTLOADER_POLICY
+#ifdef BOOTLOADER_POLICY_EFI_VAR
 #define OAK_VARNAME		L"OAK"
 #define BPM_VARNAME		L"BPM"
+#endif
 
+#ifdef BOOTLOADER_POLICY
 typedef union {
 	struct {
 		unsigned class_A : 1;
@@ -84,7 +86,7 @@ const CHAR16 *BOOT_LABEL = L"boot";
 const CHAR16 *RECOVERY_LABEL = L"recovery";
 const CHAR16 *MISC_LABEL = L"misc";
 
-#ifdef BOOTLOADER_POLICY
+#ifdef BOOTLOADER_POLICY_EFI_VAR
 const CHAR16 *FASTBOOT_SECURED_VARS[] = { OAK_VARNAME, BPM_VARNAME };
 const UINTN FASTBOOT_SECURED_VARS_SIZE = ARRAY_SIZE(FASTBOOT_SECURED_VARS);
 #endif
@@ -636,6 +638,7 @@ VOID del_reboot_reason()
 }
 
 #ifdef BOOTLOADER_POLICY
+#ifdef BOOTLOADER_POLICY_EFI_VAR
 BOOLEAN blpolicy_is_flashed(VOID)
 {
 	EFI_STATUS ret;
@@ -683,25 +686,6 @@ out:
 	return bpm;
 }
 
-BOOLEAN device_is_class_A(VOID)
-{
-	return get_bpm().class_A != 0;
-}
-
-UINT8 min_boot_state_policy()
-{
-	switch (get_bpm().min_boot_state) {
-	case 0:
-		return BOOT_STATE_RED;
-	case 1:
-		return BOOT_STATE_ORANGE;
-	case 2:
-		return BOOT_STATE_YELLOW;
-	case 3:
-		return BOOT_STATE_GREEN;
-	}
-}
-
 EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size)
 {
 	EFI_STATUS ret;
@@ -724,4 +708,30 @@ EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size)
 
 	return EFI_SUCCESS;
 }
-#endif
+#else
+static bpm_t get_bpm()
+{
+	bpm_t bpm = { .raw = BOOTLOADER_POLICY };
+	return bpm;
+}
+#endif	/* BOOTLOADER_POLICY_EFI_VAR */
+
+BOOLEAN device_is_class_A(VOID)
+{
+	return get_bpm().class_A != 0;
+}
+
+UINT8 min_boot_state_policy()
+{
+	switch (get_bpm().min_boot_state) {
+	case 0:
+		return BOOT_STATE_RED;
+	case 1:
+		return BOOT_STATE_ORANGE;
+	case 2:
+		return BOOT_STATE_YELLOW;
+	case 3:
+		return BOOT_STATE_GREEN;
+	}
+}
+#endif	/* BOOTLOADER_POLICY */
