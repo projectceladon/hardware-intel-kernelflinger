@@ -262,7 +262,10 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
         if (t != UNKNOWN_TARGET)
                 goto out;
 
-        error(L"Unknown boot target in BCB: '%s'", target);
+        if (!StrCmp(target, L"dm-verity device corrupted"))
+                debug(L"Reboot was triggered by dm-verity module because partition is corrupted");
+        else
+                error(L"Unknown boot target in BCB: '%s'", target);
         t = NORMAL_BOOT;
 
 out:
