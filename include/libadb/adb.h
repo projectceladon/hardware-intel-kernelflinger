@@ -56,7 +56,11 @@ typedef struct adb_msg {
 	UINT32 magic;		/* command ^ 0xffffffff             */
 } adb_msg_t;
 
-#define ADB_MAX_PAYLOAD 4096
+#define ADB_MIN_PAYLOAD 4096
+#define ADB_MAX_PAYLOAD 262144
+
+/* Negociated (CONNECT hand-shake) maximum buffer size */
+extern UINT32 adb_max_payload;
 
 typedef struct adb_pkt {
 	adb_msg_t msg;

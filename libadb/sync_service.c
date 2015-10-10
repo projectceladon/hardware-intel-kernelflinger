@@ -165,7 +165,7 @@ static EFI_STATUS send_more_data(asock_t s, sync_ctx_t *ctx)
 		return asock_write(s, (unsigned char *)&msg, sizeof(msg.data));
 	}
 
-	sent = min((UINTN)ADB_MAX_PAYLOAD, ctx->buf_len - ctx->buf_cur);
+	sent = min((UINTN)adb_max_payload, ctx->buf_len - ctx->buf_cur);
 	ret = asock_write(s, ctx->buf + ctx->buf_cur, sent);
 	if (EFI_ERROR(ret))
 		return ret;

@@ -58,6 +58,12 @@ typedef enum adb_state {
 static service_t *SERVICES[] = { &reboot_service, &sync_service };
 static adb_state_t adb_state;
 static adb_pkt_t adb_pkt_in;
+/* This buffer size is set to the minimum to avoid the waste of memory
+ * resource.  If new adb commands support is added that requires a
+ * bigger input buffer, feel free to increase this size.  */
+unsigned char in_buf[ADB_MIN_PAYLOAD];
+
+UINT32 adb_max_payload;
 
 static UINT32 adb_pkt_sum(adb_pkt_t *pkt)
 {
@@ -138,16 +144,14 @@ static void cmd_connect(adb_pkt_t *pkt)
 		return;
 	}
 
-	if (pkt->msg.arg1 != ADB_MAX_PAYLOAD) {
-		error(L"Unsupported payload size %d bytes", pkt->msg.arg1);
-		return;
-	}
+	adb_max_payload = min((UINT32)ADB_MAX_PAYLOAD, pkt->msg.arg1);
+	debug(L"Negociated payload size is %d bytes", adb_max_payload);
 
 	out_pkt.data = (unsigned char *)SYSTEM_TYPE "::";
 	out_pkt.msg.data_length = strlen(out_pkt.data);
 
 	ret = adb_send_pkt(&out_pkt, pkt->msg.command, pkt->msg.arg0,
-			   pkt->msg.arg1);
+			   adb_max_payload);
 	if (EFI_ERROR(ret))
 		error(L"Failed to send connection packet");
 }
@@ -253,6 +257,11 @@ static void adb_process_rx(void *buf, unsigned len)
 			return;
 		}
 
+		if (msg->data_length > sizeof(in_buf)) {
+			error(L"internal read buffer is too small");
+			return;
+		}
+
 		if (msg->data_length) {
 			adb_read_msg_payload();
 			return;
@@ -312,7 +321,6 @@ void adb_set_boot_target(enum boot_target bt)
 
 EFI_STATUS adb_init()
 {
-	static unsigned char in_buf[ADB_MAX_PAYLOAD];
 	adb_pkt_in.data = in_buf;
 	exit_bt = UNKNOWN_TARGET;
 
