@@ -145,7 +145,7 @@ EFI_STATUS asock_read(asock_t s, unsigned char *data, UINT32 length)
 /* Device to host */
 EFI_STATUS asock_write(asock_t s, unsigned char *data, UINT32 length)
 {
-	if (!s || length > sizeof(s->data))
+	if (!s || length > adb_max_payload)
 		return EFI_INVALID_PARAMETER;
 
 	memcpy(s->data, data, length);
