@@ -239,15 +239,21 @@ static EFI_STATUS clear_text() {
 			     swidth, sheight - (sheight / 3) - hmargin);
 }
 
-static const ui_textline_t *format_hash(UINT8 *hash) {
+#define HASH_FORMAT	"%02x%02x-%02x%02x-%02x%02x"
+#define MIN_HASH_SIZE	6
+
+static const ui_textline_t *format_hash(UINT8 *hash, UINTN hash_size) {
 	static char buf[19];
 	static const ui_textline_t hash_text[] = {
 		{ &COLOR_WHITE, buf, FALSE },
 		{ NULL, NULL, FALSE }
 	};
 
+	if (hash_size < MIN_HASH_SIZE)
+		return NULL;
+
 	snprintf((CHAR8 *)buf, sizeof(buf),
-		 (CHAR8 *)"ID: %02x%02x-%02x%02x-%02x%02x",
+		 (CHAR8 *)"ID: " HASH_FORMAT,
 		 hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
 
 	return hash_text;
@@ -257,7 +263,8 @@ static const ui_textline_t empty_text[] = {
 	{ NULL, NULL, FALSE }
 };
 
-enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT8 *hash)
+enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off,
+				UINT8 *hash, UINTN hash_size)
 {
 	CHAR8 msg[max(sizeof(PENDING_TIMEOUT_POWER_OFF_FMT),
 		      sizeof(PENDING_TIMEOUT_CONTINUE_FMT)) + 10];
@@ -271,7 +278,7 @@ enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT
 		{ NULL, NULL, FALSE }
 	};
 	CHAR8 *fmt;
-	const ui_textline_t *text;
+	const ui_textline_t *text = empty_text;
 	const struct ux_prompt *prompt;
 	enum boot_target bt = power_off ? POWER_OFF : NORMAL_BOOT;
 
@@ -283,7 +290,13 @@ enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT
 	if (EFI_ERROR(ux_init_screen()))
 		return bt;
 
-	text = hash ? format_hash(hash) : empty_text;
+	if (hash) {
+		text = format_hash(hash, hash_size);
+		if (!text) {
+			error(L"Failed to format hash");
+			text = empty_text;
+		}
+	}
 
 	if (power_off)
 		fmt = (CHAR8 *)PENDING_TIMEOUT_POWER_OFF_FMT;

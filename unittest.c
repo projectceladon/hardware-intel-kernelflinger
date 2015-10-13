@@ -89,16 +89,16 @@ static UINT8 fake_hash[] = {0x12, 0x34, 0x56, 0x78, 0x90, 0xAB};
 static VOID test_ux(VOID)
 {
         /* TODO: some method of programmatically verifying that these work */
-        ux_prompt_user(RED_STATE_CODE, TRUE, NULL);
-        ux_prompt_user(RED_STATE_CODE, FALSE, NULL);
-        ux_prompt_user(BAD_RECOVERY_CODE, TRUE, NULL);
-        ux_prompt_user(BAD_RECOVERY_CODE, FALSE, NULL);
-        ux_prompt_user(DEVICE_UNLOCKED_CODE, TRUE, NULL);
-        ux_prompt_user(DEVICE_UNLOCKED_CODE, FALSE, NULL);
-        ux_prompt_user(SECURE_BOOT_CODE, TRUE, NULL);
-        ux_prompt_user(SECURE_BOOT_CODE, FALSE, NULL);
-        ux_prompt_user(BOOTIMAGE_UNTRUSTED_CODE, TRUE, fake_hash);
-        ux_prompt_user(BOOTIMAGE_UNTRUSTED_CODE, FALSE, fake_hash);
+        ux_prompt_user(RED_STATE_CODE, TRUE, NULL, 0);
+        ux_prompt_user(RED_STATE_CODE, FALSE, NULL, 0);
+        ux_prompt_user(BAD_RECOVERY_CODE, TRUE, NULL, 0);
+        ux_prompt_user(BAD_RECOVERY_CODE, FALSE, NULL, 0);
+        ux_prompt_user(DEVICE_UNLOCKED_CODE, TRUE, NULL, 0);
+        ux_prompt_user(DEVICE_UNLOCKED_CODE, FALSE, NULL, 0);
+        ux_prompt_user(SECURE_BOOT_CODE, TRUE, NULL, 0);
+        ux_prompt_user(SECURE_BOOT_CODE, FALSE, NULL, 0);
+        ux_prompt_user(BOOTIMAGE_UNTRUSTED_CODE, TRUE, fake_hash, sizeof(fake_hash));
+        ux_prompt_user(BOOTIMAGE_UNTRUSTED_CODE, FALSE, fake_hash, sizeof(fake_hash));
         ux_prompt_user_for_boot_target(TRUE);
         ux_prompt_user_for_boot_target(FALSE);
         ux_display_low_battery(3);
