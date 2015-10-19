@@ -286,7 +286,30 @@ UINT16 oem1_get_ia_apps_run(void)
 }
 
 #if DEBUG_MESSAGES
-CHAR16 *reset_type_string(enum reset_types rt)
+const CHAR16 *wake_source_string(enum wake_sources ws)
+{
+	switch (ws) {
+	case WAKE_NOT_APPLICABLE:
+		return L"Not applicable";
+	case WAKE_BATTERY_INSERTED:
+		return L"Battery inserted";
+	case WAKE_USB_CHARGER_INSERTED:
+		return L"USB charger";
+	case WAKE_ACDC_CHARGER_INSERTED:
+		return L"ACDC charger";
+	case WAKE_POWER_BUTTON_PRESSED:
+		return L"Power button";
+	case WAKE_RTC_TIMER:
+		return L"RTC timer";
+	case WAKE_BATTERY_REACHED_IA_THRESHOLD:
+		return L"Battery reached IA_THRESHOLD";
+	case WAKE_ERROR:
+		return L"Error";
+	}
+	return L"Invalid wake source";
+}
+
+const CHAR16 *reset_type_string(enum reset_types rt)
 {
 	switch (rt) {
 	case NOT_APPLICABLE:
@@ -301,7 +324,7 @@ CHAR16 *reset_type_string(enum reset_types rt)
 	return L"Invalid Reset Type";
 }
 
-CHAR16 *reset_source_string(enum reset_sources rs)
+const CHAR16 *reset_source_string(enum reset_sources rs)
 {
 	switch (rs) {
 	case RESET_NOT_APPLICABLE:

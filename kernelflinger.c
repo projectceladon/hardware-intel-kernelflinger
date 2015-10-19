@@ -104,9 +104,13 @@ extern char _binary_oemcert_end;
 #if DEBUG_MESSAGES
 static VOID print_rsci_values(VOID)
 {
+        enum wake_sources raw_wake_source = rsci_get_wake_source();
         enum reset_sources raw_reset_source = rsci_get_reset_source();
         enum reset_types raw_reset_type = rsci_get_reset_type();
 
+        debug(L"wake_source = %s (0x%02hhx)",
+              wake_source_string(raw_wake_source),
+              raw_wake_source);
         debug(L"reset_source = %s (0x%02hhx)",
               reset_source_string(raw_reset_source),
               raw_reset_source);

@@ -79,8 +79,9 @@ enum reset_types rsci_get_reset_type(void);
 UINT32 rsci_get_reset_extra_info(void);
 
 #if DEBUG_MESSAGES
-CHAR16 *reset_source_string(enum reset_sources rs);
-CHAR16 *reset_type_string(enum reset_types rt);
+const CHAR16 *wake_source_string(enum wake_sources ws);
+const CHAR16 *reset_source_string(enum reset_sources rs);
+const CHAR16 *reset_type_string(enum reset_types rt);
 #endif
 
 #endif /* _POWER_H_ */
