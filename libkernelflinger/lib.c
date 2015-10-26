@@ -761,7 +761,7 @@ UINT64 efi_time_to_ctime(EFI_TIME *time)
         for (i = 0; i + 1 < time->Month; i++)
                 days += DAY_OF_MONTH[i];
 
-        return (days * 24 * 3600) + (time->Hour * 3600)
+        return (days * 24 * 3600) + ((time->Hour - 1) * 3600)
                 + (time->Minute * 60) + time->Second;
 }
 
