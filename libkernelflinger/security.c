@@ -493,6 +493,59 @@ static X509 *find_cert_in_pkcs7(PKCS7 *p7, const unsigned char *cert_sha256)
         return NULL;
 }
 
+static UINT64 get_signing_time(PKCS7 *p7)
+{
+        ASN1_TYPE *stime = NULL;
+        STACK_OF(PKCS7_SIGNER_INFO) *sinfos;
+        PKCS7_SIGNER_INFO *sinfo;
+        int i;
+        EFI_TIME t;
+        unsigned char *str;
+
+        sinfos = PKCS7_get_signer_info(p7);
+        if (!sinfos) {
+                error(L"Failed to get signer info");
+                return 0;
+        }
+
+        for (i = 0; i < SKM_sk_num(PKCS7_SIGNER_INFO, sinfos); i++) {
+                sinfo = SKM_sk_value(PKCS7_SIGNER_INFO, sinfos, i);
+                stime = PKCS7_get_signed_attribute(sinfo, NID_pkcs9_signingTime);
+                if (stime)
+                        break;
+        }
+
+        if (!stime) {
+                error(L"Could not find signing time");
+                return 0;
+        }
+
+        if (stime->type != V_ASN1_UTCTIME) {
+                error(L"Unsupported signing time type %d", stime->type);
+                return 0;
+        }
+
+        str = stime->value.utctime->data;
+        memset(&t, 0, sizeof(t));
+
+        /* ASN1_UTCTIME format is "YYmmddHHMMSS" */
+        t.Year = 1900 + (str[0] - '0') * 10 + (str[1] - '0');
+        if (t.Year < 1970)
+                t.Year += 100;
+
+        t.Month  = (str[2] - '0') * 10 + (str[3] - '0');
+        t.Day = (str[4] - '0') * 10 + (str[5] - '0');
+        t.Hour = (str[6] - '0') * 10 + (str[7] - '0');
+        t.Minute  = (str[8] - '0') * 10 + (str[9] - '0');
+        t.Second  = (str[10] - '0') * 10 + (str[11] - '0');
+
+        debug(L"year=%d, month=%d, day=%d, hour=%d, minute=%d, second=%d",
+              t.Year, t.Month, t.Day, t.Hour, t.Minute, t.Second);
+
+        /* Note: no timezone management */
+        return efi_time_to_ctime(&t);
+}
+
 EFI_STATUS verify_pkcs7(const unsigned char *cert_sha256, UINTN cert_size,
                         const VOID *pkcs7, UINTN pkcs7_size,
                         VOID **data_p, int *size)
@@ -502,6 +555,7 @@ EFI_STATUS verify_pkcs7(const unsigned char *cert_sha256, UINTN cert_size,
         X509_STORE *store = NULL;
         BIO *p7_bio = NULL, *data_bio = NULL;
         VOID *payload = NULL;
+        UINT64 signing_time;
         char *tmp;
         int ret;
 
@@ -528,6 +582,10 @@ EFI_STATUS verify_pkcs7(const unsigned char *cert_sha256, UINTN cert_size,
                 goto done;
         }
 
+        signing_time = get_signing_time(p7);
+        if (!signing_time)
+                goto done;
+
         store = X509_STORE_new();
         if (!store) {
                 error(L"Failed to create x509 store");
@@ -547,6 +605,7 @@ EFI_STATUS verify_pkcs7(const unsigned char *cert_sha256, UINTN cert_size,
         }
 
         EVP_add_digest(EVP_sha256());
+        X509_VERIFY_PARAM_set_time(store->param, signing_time);
         ret = PKCS7_verify(p7, NULL, store, NULL, data_bio, 0);
         if (ret != 1) {
                 error(L"PKCS7 verification failed");
