@@ -255,7 +255,8 @@ static EFI_STATUS parse_line(char *line, VOID *context)
 				&ctx->guid, attributes,
 				vallen, val);
 	FreePool(varname);
-	if (EFI_ERROR(ret)) {
+	/* Delete a non-existent variable is permitted.  */
+	if (EFI_ERROR(ret) && !(ret == EFI_NOT_FOUND && vallen == 0)) {
 		if (!ctx->silent_write_error) {
 			efi_perror(ret, L"EFI variable setting failed");
 			return ret;
