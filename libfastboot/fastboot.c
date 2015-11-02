@@ -290,35 +290,46 @@ static char *get_ptype_str(EFI_GUID *guid)
 	return "none";
 }
 
-static EFI_STATUS publish_part(UINT64 size, CHAR16 *name, EFI_GUID *guid)
+static char *get_psize_str(UINT64 size)
 {
-	EFI_STATUS ret;
+	static char part_size[MAX_VARIABLE_LENGTH];
 	int len;
-	char fastboot_var[MAX_VARIABLE_LENGTH];
-	char partsize[MAX_VARIABLE_LENGTH];
 
-	len = snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
-		       (CHAR8 *)"partition-size:%s", name);
-	if (len < 0)
-		return EFI_INVALID_PARAMETER;
-
-	len = snprintf((CHAR8 *)partsize, sizeof(partsize),
+	len = snprintf((CHAR8 *)part_size, sizeof(part_size),
 		       (CHAR8 *)"0x%lX", size);
-	if (len < 0)
-		return EFI_INVALID_PARAMETER;
+	if (len < 0 || len >= (int)sizeof(part_size))
+		return NULL;
 
-	ret = fastboot_publish(fastboot_var, partsize);
-	if (EFI_ERROR(ret))
-		return ret;
+	return part_size;
+}
 
-	len = snprintf((CHAR8 *)fastboot_var, sizeof(fastboot_var),
-		       (CHAR8 *)"partition-type:%s", name);
-	if (len < 0)
-		return EFI_INVALID_PARAMETER;
+static EFI_STATUS publish_part(CHAR16 *part_name, UINT64 size, EFI_GUID *guid)
+{
+	struct descriptor {
+		char *name;
+		char *value;
+	} descriptors[] = {
+		{ "partition-size",	get_psize_str(size) },
+		{ "partition-type",	get_ptype_str(guid) },
+		{ "has-slot",		"no" }
+	};
+	char var[MAX_VARIABLE_LENGTH];
+	int len;
+	UINTN i;
+	struct descriptor *desc;
 
-	ret = fastboot_publish(fastboot_var, get_ptype_str(guid));
-	if (EFI_ERROR(ret))
-		return ret;
+	for (i = 0; i < ARRAY_SIZE(descriptors); i++) {
+		desc = &descriptors[i];
+		if (!desc->value)
+			return EFI_INVALID_PARAMETER;
+
+		len = snprintf((CHAR8 *)var, sizeof(var), (CHAR8 *)"%a:%s",
+			       desc->name, part_name);
+		if (len < 0 || len >= (int)sizeof(var))
+			return EFI_INVALID_PARAMETER;
+
+		fastboot_publish(var, desc->value);
+	}
 
 	return EFI_SUCCESS;
 }
@@ -340,17 +351,17 @@ static EFI_STATUS publish_partsize(void)
 		size = gparti[i].bio->Media->BlockSize
 			* (gparti[i].part.ending_lba + 1 - gparti[i].part.starting_lba);
 
-		ret = publish_part(size, gparti[i].part.name, &gparti[i].part.type);
+		ret = publish_part(gparti[i].part.name, size, &gparti[i].part.type);
 		if (EFI_ERROR(ret))
 			return ret;
 
 		/* stay compatible with userdata/data naming */
 		if (!StrCmp(gparti[i].part.name, L"data")) {
-			ret = publish_part(size, L"userdata", &gparti[i].part.type);
+			ret = publish_part(L"userdata", size, &gparti[i].part.type);
 			if (EFI_ERROR(ret))
 				return ret;
 		} else if (!StrCmp(gparti[i].part.name, L"userdata")) {
-			ret = publish_part(size, L"data", &gparti[i].part.type);
+			ret = publish_part(L"data", size, &gparti[i].part.type);
 			if (EFI_ERROR(ret))
 				return ret;
 		}
