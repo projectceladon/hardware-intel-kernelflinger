@@ -324,7 +324,7 @@ static CHAR16 *get_serial_port(void)
         }
         return val;
 error:
-        return StrDuplicate(L"tty0");
+        return NULL;
 }
 
 
@@ -706,14 +706,11 @@ static EFI_STATUS setup_command_line(
         }
 
         serialport = get_serial_port();
-        if (!serialport) {
-                ret = EFI_OUT_OF_RESOURCES;
-                goto out;
+        if (serialport) {
+                ret = prepend_command_line(&cmdline16, L"console=%s", serialport);
+                if (EFI_ERROR(ret))
+                        goto out;
         }
-
-        ret = prepend_command_line(&cmdline16, L"console=%s", serialport);
-        if (EFI_ERROR(ret))
-                goto out;
 
 #ifndef USER
         if (get_disable_watchdog()) {
@@ -776,7 +773,8 @@ static EFI_STATUS setup_command_line(
 out:
         FreePool(cmdline16);
         FreePool(bootreason);
-        FreePool(serialport);
+        if (serialport)
+                FreePool(serialport);
 
         return ret;
 }
