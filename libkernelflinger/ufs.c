@@ -78,7 +78,7 @@ static EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EF
 	}
 
 	scsi_dp = get_scsi_device_path(dp);
-	if (!dp) {
+	if (!scsi_dp) {
 		error(L"Failed to get SCSI device path");
 		return EFI_NOT_FOUND;
 	}
