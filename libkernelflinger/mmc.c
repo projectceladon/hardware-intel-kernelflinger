@@ -33,128 +33,45 @@
 #include <lib.h>
 #include "storage.h"
 #include "protocol/Mmc.h"
-#include "protocol/SdHostIo.h"
+#include "sdio.h"
 
-#define SDIO_DFLT_TIMEOUT 3000
-#define CARD_ADDRESS (1 << 16)
+/* eMMC card address is enforced to 1 by the BIOS at eMMC
+   initialization.  */
+#define CARD_ADDRESS		1
 
-EFI_GUID gEfiSdHostIoProtocolGuid = EFI_SD_HOST_IO_PROTOCOL_GUID;
-
-static EFI_STATUS secure_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT64 start, UINT64 end, UINTN timeout)
-{
-	CARD_STATUS status;
-	EFI_STATUS ret;
-
-	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, ERASE_GROUP_START, start, NoData, NULL, 0, ResponseR1, SDIO_DFLT_TIMEOUT, (UINT32 *) &status);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed set start erase");
-		return ret;
-	}
-
-	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, ERASE_GROUP_END, end, NoData, NULL, 0, ResponseR1, SDIO_DFLT_TIMEOUT, (UINT32 *) &status);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed set end erase");
-		return ret;
-	}
-
-	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, ERASE, 0x80000000, NoData, NULL, 0, ResponseR1, timeout, (UINT32 *) &status);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Secure Erase Failed");
-		return ret;
-	}
-
-	do {
-		uefi_call_wrapper(BS->Stall, 1, 100000);
-		ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, SEND_STATUS, CARD_ADDRESS, NoData, NULL, 0, ResponseR1, SDIO_DFLT_TIMEOUT, (UINT32 *) &status);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"failed get status");
-			return ret;
-		}
-	} while (!status.READY_FOR_DATA);
-	return ret;
-}
-
-static EFI_STATUS get_mmc_info(EFI_SD_HOST_IO_PROTOCOL *sdio, UINTN *erase_grp_size, UINTN *timeout)
+static EFI_STATUS get_mmc_info(EFI_SD_HOST_IO_PROTOCOL *sdio,
+			       UINTN *erase_grp_size, UINTN *timeout)
 {
 	EXT_CSD *ext_csd;
 	void *rawbuffer;
-	UINTN offset;
 	UINT32 status;
 	EFI_STATUS ret;
 
-	/* ext_csd pointer must be aligned to a multiple of sdio->HostCapability.BoundarySize
-	 * allocate twice the needed size, and compute the offset to get an aligned buffer
-	 */
-	rawbuffer = AllocateZeroPool(2 * sdio->HostCapability.BoundarySize);
-	if (!rawbuffer)
-		return EFI_OUT_OF_RESOURCES;
+	ret = alloc_aligned(&rawbuffer, (void **)&ext_csd, sizeof(*ext_csd),
+			    sdio->HostCapability.BoundarySize);
+	if (EFI_ERROR(ret))
+		return ret;
 
-	offset = (UINTN) rawbuffer & (sdio->HostCapability.BoundarySize - 1);
-	offset = sdio->HostCapability.BoundarySize - offset;
-	ext_csd = (EXT_CSD *) ((CHAR8 *)rawbuffer + offset);
-
-	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, SEND_EXT_CSD, CARD_ADDRESS, InData, (void *)ext_csd, sizeof(EXT_CSD), ResponseR1, SDIO_DFLT_TIMEOUT, &status);
+	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio, SEND_EXT_CSD,
+				CARD_ADDRESS << 16, InData, (void *)ext_csd,
+				sizeof(EXT_CSD), ResponseR1, SDIO_DFLT_TIMEOUT, &status);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"failed get ext_csd");
+		efi_perror(ret, L"Failed get eMMC EXT_CSD");
 		goto out;
 	}
 
-	/* Erase group size is 512Kbyte × HC_ERASE_GRP_SIZE
-	 * so it's 1024 x HC_ERASE_GRP_SIZE in sector count
-	 * timeout is 300ms x ERASE_TIMEOUT_MULT per erase group*/
+	/* Erase group size is 512Kbyte × HC_ERASE_GRP_SIZE so it's
+	 * 1024 x HC_ERASE_GRP_SIZE in sector count timeout is 300ms x
+	 * ERASE_TIMEOUT_MULT per erase group*/
 	*erase_grp_size = 1024 * ext_csd->HC_ERASE_GRP_SIZE;
 	*timeout = 300 * ext_csd->ERASE_TIMEOUT_MULT;
 
-	debug(L"eMMC parameter: erase grp size %d sectors, timeout %d ms", *erase_grp_size, *timeout);
+	debug(L"eMMC parameter: erase grp size %d sectors, timeout %d ms",
+	      *erase_grp_size, *timeout);
 
 out:
 	FreePool(rawbuffer);
 	return ret;
-}
-
-static EFI_STATUS mmc_erase_blocks(__attribute__((unused)) EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
-{
-	EFI_SD_HOST_IO_PROTOCOL *sdio;
-	EFI_STATUS ret;
-	UINTN erase_grp_size;
-	UINTN timeout;
-	UINT64 reminder;
-
-	/* check if we can use secure erase command */
-	ret = LibLocateProtocol(&gEfiSdHostIoProtocolGuid, (void **)&sdio);
-	if (EFI_ERROR(ret)) {
-		debug(L"failed to get sdio protocol");
-		return ret;
-	}
-	ret = get_mmc_info(sdio, &erase_grp_size, &timeout);
-	if (EFI_ERROR(ret)) {
-		debug(L"failed to get mmc parameter");
-		return ret;
-	}
-	if ((end - start + 1) < erase_grp_size)
-		return EFI_UNSUPPORTED;
-
-	reminder = start % erase_grp_size;
-	if (reminder) {
-		ret = fill_zero(bio, start, start + erase_grp_size - reminder - 1);
-		if (EFI_ERROR(ret)) {
-			error(L"failed to fill with zeros");
-			return ret;
-		}
-		start += erase_grp_size - reminder;
-	}
-
-	reminder = (end + 1) % erase_grp_size;
-	if (reminder) {
-		ret = fill_zero(bio, end + 1 - reminder, end);
-		if (EFI_ERROR(ret)) {
-			error(L"failed to fill with zeros");
-			return ret;
-		}
-		end -= reminder;
-	}
-	timeout = timeout * ((end + 1 - start) / erase_grp_size);
-	return secure_erase(sdio, start, end, timeout);
 }
 
 /* This mapping of GPPs is hardcoded for now.  If a new board comes
@@ -196,7 +113,7 @@ static EFI_STATUS mmc_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_
 	return EFI_NOT_FOUND;
 }
 
-static BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
+BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
 {
 	while (!IsDevicePathEndType(p)) {
 		if (DevicePathType(p) == HARDWARE_DEVICE_PATH
@@ -205,6 +122,36 @@ static BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
 		p = NextDevicePathNode(p);
 	}
 	return FALSE;
+}
+
+static EFI_STATUS mmc_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
+				   UINT64 start, UINT64 end)
+{
+	EFI_STATUS ret;
+	EFI_SD_HOST_IO_PROTOCOL *sdio;
+	EFI_DEVICE_PATH *dev_path;
+	UINTN erase_grp_size, timeout;
+
+	dev_path = DevicePathFromHandle(handle);
+	if (!dev_path) {
+		error(L"Failed to get device path");
+		return EFI_UNSUPPORTED;
+	}
+
+	ret = sdio_get(dev_path, &sdio);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get SDIO protocol");
+		return ret;
+	}
+
+	ret = get_mmc_info(sdio, &erase_grp_size, &timeout);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get erase group size");
+		return ret;
+	}
+
+	return sdio_erase(sdio, bio, start, end,
+			  CARD_ADDRESS, erase_grp_size, timeout, TRUE);
 }
 
 struct storage STORAGE(STORAGE_EMMC) = {
