@@ -32,21 +32,65 @@
 
 #include <lib.h>
 #include "storage.h"
-#include "pci.h"
+#include "sdio.h"
+#include "protocol/CardInfo.h"
+#include "mmc.h"
 
-#define PCI_VENDOR_ID_INTEL 0x8086
-#define PCI_DEVICE_ID_INTEL_BYT_SD 0x0f16
-
-static pci_device_ids_t sd_supported[] = {
-	{PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_BYT_SD},
-};
-
-static EFI_STATUS sdcard_erase_blocks(__attribute__((unused)) EFI_HANDLE handle,
-				      __attribute__((unused)) EFI_BLOCK_IO * bio,
-				      __attribute__((unused)) UINT64 start,
-				      __attribute__((unused)) UINT64 end)
+static EFI_STATUS get_card_data(EFI_SD_HOST_IO_PROTOCOL *sdio,
+				CARD_DATA **card_data)
 {
-	return EFI_UNSUPPORTED;
+	EFI_STATUS ret;
+	struct _EFI_EMMC_CARD_INFO_PROTOCOL *info;
+	EFI_GUID guid = EFI_CARD_INFO_PROTOCOL_GUID;
+
+	ret = LibLocateProtocol(&guid, (void **)&info);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Unable to locate card info output protocol");
+                return ret;
+        }
+
+	if (sdio != info->CardData->SdHostIo)
+		return EFI_UNSUPPORTED;
+
+	switch (info->CardData->CardType) {
+	case SDMemoryCard:
+	case SDMemoryCard2:
+	case SDMemoryCard2High:
+		*card_data = info->CardData;
+		return EFI_SUCCESS;
+	default:
+		return EFI_UNSUPPORTED;
+	}
+}
+
+static EFI_STATUS sdcard_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
+				      UINT64 start, UINT64 end)
+{
+	EFI_STATUS ret;
+	EFI_SD_HOST_IO_PROTOCOL *sdio;
+	EFI_DEVICE_PATH *dev_path;
+	CARD_DATA *card_data;
+
+	dev_path = DevicePathFromHandle(handle);
+	if (!dev_path) {
+		error(L"Failed to get device path");
+		return EFI_UNSUPPORTED;
+	}
+
+	ret = sdio_get(dev_path, &sdio);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get SDIO protocol");
+		return ret;
+	}
+
+	ret = get_card_data(sdio, &card_data);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get card data");
+		return ret;
+	}
+
+	return sdio_erase(sdio, bio, start, end,
+			  card_data->Address, 1, SDIO_DFLT_TIMEOUT, FALSE);
 }
 
 /* SDCards do not support hardware level partitions */
@@ -58,27 +102,14 @@ static EFI_STATUS sdcard_check_logical_unit(__attribute__((unused)) EFI_DEVICE_P
 
 static BOOLEAN is_sdcard(EFI_DEVICE_PATH *p)
 {
-	EFI_STATUS rc;
-	EFI_PCI_IO *pciio;
-	pci_device_ids_t ids;
-	UINTN i;
+	EFI_STATUS ret;
+	EFI_SD_HOST_IO_PROTOCOL *sdio;
 
-	rc = get_pci_device(p, &pciio);
-	if (EFI_ERROR(rc))
+	ret = sdio_get(p, &sdio);
+	if (EFI_ERROR(ret))
 		return FALSE;
 
-	rc = get_pci_ids(pciio, &ids);
-	if (EFI_ERROR(rc))
-		return FALSE;
-
-	for (i = 0; i < ARRAY_SIZE(sd_supported); i++) {
-		if (ids.vendor_id == sd_supported[i].vendor_id &&
-		    ids.device_id == sd_supported[i].device_id) {
-			return TRUE;
-		}
-	}
-
-	return FALSE;
+	return !is_emmc(p);
 }
 
 struct storage STORAGE(STORAGE_SDCARD) = {
