@@ -369,13 +369,26 @@ out:
 
 }
 
-EFI_STATUS erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+#define FS_MGR_SIZE 4096
+static EFI_STATUS erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
 {
 	EFI_STATUS ret;
+	UINTN min_end;
 
 	ret = storage_erase_blocks(handle, bio, start, end);
-	if (ret == EFI_SUCCESS)
-		return ret;
+	if (ret == EFI_SUCCESS) {
+		/* If the Android fs_mgr fails mounting a partition,
+		   it tries to detect if the partition has been wiped
+		   out to determine if it has to format it.  fs_mgr
+		   considers that the partition has been wiped out if
+		   the first 4096 bytes are filled up with all 0 or
+		   all 1.  storage_erase_blocks() uses hardware
+		   support to erase the blocks which does not garantee
+		   that content will be all 0 or all 1.  It also can
+		   be indeterminate data. */
+		min_end = start + (FS_MGR_SIZE / bio->Media->BlockSize) + 1;
+		return fill_zero(bio, start, min(min_end, end));
+	}
 
 	debug(L"Fallbacking to filling with zeros");
 	return fill_zero(bio, start, end);
