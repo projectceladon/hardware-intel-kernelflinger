@@ -268,10 +268,7 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
         if (t != UNKNOWN_TARGET)
                 goto out;
 
-        if (!StrCmp(target, L"dm-verity device corrupted"))
-                debug(L"Reboot was triggered by dm-verity module because partition is corrupted");
-        else
-                error(L"Unknown boot target in BCB: '%s'", target);
+        error(L"Unknown boot target in BCB: '%s'", target);
         t = NORMAL_BOOT;
 
 out:
@@ -296,7 +293,11 @@ static enum boot_target check_loader_entry_one_shot(VOID)
         debug(L"target = %s", target);
         ret = name_to_boot_target(target);
         if (ret == UNKNOWN_TARGET) {
-                error(L"Unknown oneshot boot target: '%s'", target);
+                if (!StrCmp(target, L"dm-verity device corrupted"))
+                        debug(L"Reboot was triggered by dm-verity module\
+ because partition is corrupted");
+                else
+                        error(L"Unknown oneshot boot target: '%s'", target);
                 ret = NORMAL_BOOT;
         } else if (ret == CHARGER && !get_current_off_mode_charge()) {
                 debug(L"Off mode charge is not set, powering off.");
