@@ -1227,7 +1227,7 @@ EFI_STATUS android_clear_memory()
                 map_sz = entry->NumberOfPages * EFI_PAGE_SIZE;
 
                 if (entry->Type == EfiConventionalMemory) {
-                        ZeroMem((void *) (UINTN)entry->PhysicalStart, map_sz);
+                        uefi_call_wrapper(BS->SetMem, 3, (void *) (UINTN)entry->PhysicalStart, map_sz, 0);
                         counter += entry->NumberOfPages;
                 }
         }
