@@ -137,6 +137,18 @@ static UINT64 _get_acpi_field(CHAR8 *name, CHAR8 *fieldname _unused, VOID **var,
 	return ret;
 }
 
+
+static UINTN acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
+{
+	UINT32 i;
+	CHAR8 sum = 0, *data = (CHAR8 *)table;
+
+	for (i = 0; i < table->length; i++)
+		sum += data[i];
+
+	return sum == 0 ? EFI_SUCCESS : EFI_CRC_ERROR;
+}
+
 EFI_STATUS get_rsdt_table(struct RSDT_TABLE **rsdt)
 {
 	EFI_GUID acpi2_guid = ACPI_20_TABLE_GUID;
@@ -158,42 +170,6 @@ EFI_STATUS get_rsdt_table(struct RSDT_TABLE **rsdt)
 		ret = EFI_COMPROMISED_DATA;
 		goto out;
 	}
-out:
-	return ret;
-}
-
-static UINTN acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
-{
-	UINT32 i;
-	CHAR8 sum = 0, *data = (CHAR8 *)table;
-
-	for (i = 0; i < table->length; i++)
-		sum += data[i];
-
-	return sum == 0 ? EFI_SUCCESS : EFI_CRC_ERROR;
-}
-
-EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table)
-{
-	struct RSDT_TABLE *rsdt;
-	EFI_STATUS ret;
-	int nb_acpi_tables;
-	int i;
-
-	if (!strcmp((CHAR8 *)"DSDT", signature)) {
-		UINT32 dsdt = get_acpi_field(FACP, DSDT);
-		if (dsdt == (UINT32)-1)
-			return EFI_NOT_FOUND;
-		*table = (VOID *)(UINTN)dsdt;
-		ret = acpi_verify_checksum((struct ACPI_DESC_HEADER *)*table);
-		if (EFI_ERROR(ret))
-			error(L"Invalid checksum for DSDT table");
-		return ret;
-	}
-
-	ret = get_rsdt_table(&rsdt);
-	if (EFI_ERROR(ret))
-		goto out;
 
 	ret = acpi_verify_checksum((struct ACPI_DESC_HEADER *)rsdt);
 	if (EFI_ERROR(ret)) {
@@ -201,30 +177,65 @@ EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table)
 		goto out;
 	}
 
+out:
+	return ret;
+}
+
+EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table)
+{
+	struct RSDT_TABLE *rsdt;
+	EFI_STATUS ret;
+	UINTN i, nb_acpi_tables, sign_count = 1;
+	char *end;
+	UINTN max_sign_len = sizeof(((struct ACPI_DESC_HEADER *)0)->signature);
+
+	if (!strcmp((CHAR8 *)"DSDT", signature)) {
+		UINT64 dsdt = get_acpi_field(FACP, DSDT);
+		if (dsdt == (UINT64)-1)
+			return EFI_NOT_FOUND;
+		*table = (VOID *)(UINTN)dsdt;
+		goto out;
+	}
+
+	ret = get_rsdt_table(&rsdt);
+	if (EFI_ERROR(ret))
+		return ret;
+
 	if (!strcmp((CHAR8 *)"RSDT", signature)) {
 		*table = rsdt;
 		goto out;
 	}
 
+	if (strlen(signature) > max_sign_len) {
+		sign_count = strtoul((char *)signature + max_sign_len, &end, 10);
+		if (*end != '\0' || sign_count == 0)
+			return EFI_INVALID_PARAMETER;
+	}
+
 	nb_acpi_tables = (rsdt->header.length - sizeof(rsdt->header)) / sizeof(rsdt->entry[1]);
 	ret = EFI_NOT_FOUND;
-	for (i = 0 ; i < nb_acpi_tables; i++) {
+	for (i = 0; i < nb_acpi_tables; i++) {
 		struct ACPI_DESC_HEADER *header = (VOID *)(UINTN)rsdt->entry[i];
-		if (!strncmpa(header->signature, signature, strlena(signature))) {
-			debug(L"Found %c%c%c%c table", signature[0], signature[1], signature[2], signature[3]);
-			ret = acpi_verify_checksum(header);
-			if (EFI_ERROR(ret)) {
-				error(L"Invalid checksum for %c%c%c%c table", signature[0],
-				      signature[1], signature[2], signature[3]);
-				break;
+		if (!strncmpa(header->signature, signature, max_sign_len)) {
+			if (sign_count > 1) {
+				sign_count--;
+				continue;
 			}
-
 			*table = header;
-			ret = EFI_SUCCESS;
-			break;
+			goto out;
 		}
 	}
+
+	return EFI_NOT_FOUND;
+
 out:
+	debug(L"Found %c%c%c%c table", signature[0], signature[1],
+	      signature[2], signature[3]);
+	ret = acpi_verify_checksum(*table);
+	if (EFI_ERROR(ret))
+		error(L"Invalid checksum for %c%c%c%c table", signature[0],
+		      signature[1], signature[2], signature[3]);
+
 	return ret;
 }
 
