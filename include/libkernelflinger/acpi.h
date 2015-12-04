@@ -122,7 +122,11 @@ struct OEM1_TABLE {
 	UINT8 rsvd2[11];		/* Reserved */
 } __attribute__ ((packed));
 
-EFI_STATUS get_acpi_table(CHAR8 *signature, VOID **table);
+/* Some ACPI table signatures, SSDT for instance, might appear several
+ * times.  An extra table number can be appended to the supplied
+ * SIGNATURE to specify which one is required.  For instance, with
+ * SIGNATURE set to "SSDT2", the second SSDT table is returned.  */
+EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table);
 UINT16 oem1_get_ia_apps_run(void);
 UINT8 oem1_get_ia_apps_cap(void);
 UINT8 oem1_get_ia_apps_to_use(void);
