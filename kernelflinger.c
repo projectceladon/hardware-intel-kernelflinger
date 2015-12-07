@@ -947,6 +947,10 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         EFI_HANDLE image;
         void *efiimage = NULL;
         UINTN imagesize;
+#ifdef USE_TXE
+        UINT8 *hash = NULL;
+        UINTN hash_size;
+#endif
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
@@ -966,6 +970,19 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                          * check just to make sure */
                         if (device_is_unlocked()) {
                                 set_image_oemvars_nocheck(bootimage, NULL);
+#ifdef USE_TXE
+                                ret = compute_rot_bitstream_hash(NULL, &hash, &hash_size);
+                                if (EFI_ERROR(ret)) {
+                                        efi_perror(ret, L"Failed to generate Root Of Trust bitstream hash");
+                                        /* Will not be able to bind the Root of Trust */
+                                        die();
+                                }
+                                ret = txe_bind_root_of_trust(hash, hash_size);
+                                if (EFI_ERROR(ret)) {
+                                        efi_perror(ret, L"Failed to bind the Root of Trust");
+                                        die();
+                                }
+#endif
                                 load_image(bootimage, BOOT_STATE_ORANGE, FALSE);
                         }
                         FreePool(bootimage);
@@ -1002,10 +1019,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                         reboot_to_target(target);
         }
 
-        /* Allow plenty of time for the error to be visible before the
-         * screen goes blank */
-        pause(30);
-        halt_system();
+        die();
 }
 #endif
 
