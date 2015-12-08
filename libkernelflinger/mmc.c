@@ -132,7 +132,7 @@ static EFI_STATUS mmc_erase_blocks(__attribute__((unused)) EFI_HANDLE handle, EF
 		return ret;
 	}
 	if ((end - start + 1) < erase_grp_size)
-		return ret;
+		return EFI_UNSUPPORTED;
 
 	reminder = start % erase_grp_size;
 	if (reminder) {
