@@ -157,7 +157,7 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 	}
 
 	/* Initialize log area */
-	margin = graphic.width / 10;
+	margin = min(graphic.width, graphic.height) / 10;
 	if (!default_textarea) {
 		font = ui_font_get("12x22");
 		if (!font)
@@ -185,7 +185,7 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 
 EFI_STATUS ui_display_vendor_splash(VOID)
 {
-	UINTN width, height, x, y, margin;
+	UINTN width, height, x, y, max_size;
 	ui_image_t *vendor;
 
 	ui_clear_screen();
@@ -198,22 +198,25 @@ EFI_STATUS ui_display_vendor_splash(VOID)
 		return EFI_UNSUPPORTED;
 	}
 
-	margin = graphic.width * 20 / 100;
-	if (graphic.width > graphic.height) { /* Landscape orientation. */
-		width = graphic.width - (2 * margin);
-		height = vendor->height * width / vendor->width;
-		x = margin;
-		y = (graphic.height / 2) - (height / 2);
-	} else {		/* Portrait orientation. */
-		height = graphic.height / 3;
-		width = vendor->width * height / vendor->height;
-		x = (graphic.width / 2) - (width / 2);
-		y = margin;
+	if (!vendor->width || !vendor->height) {
+		efi_perror(EFI_UNSUPPORTED, L"'%a' image has invalid dimensions",
+			   VENDOR_IMG_NAME);
+		return EFI_UNSUPPORTED;
 	}
 
-	ui_image_draw_scale(vendor, x, y , width, height);
+	max_size = min(graphic.width, graphic.height) / 3;
+	if (vendor->width > vendor->height) {
+		width = max_size;
+		height = vendor->height * width / vendor->width;
+	} else {
+		height = max_size;
+		width = vendor->width * height / vendor->height;
+	}
 
-	return EFI_SUCCESS;
+	x = (graphic.width / 2) - (width / 2);
+	y = (graphic.height / 2) - (height / 2);
+
+	return ui_image_draw_scale(vendor, x, y , width, height);
 }
 
 void ui_free(void)
