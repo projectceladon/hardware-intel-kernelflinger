@@ -382,7 +382,8 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
         ret = check_bootimage(bootimage, imgsize, sig, cert);
         if (!EFI_ERROR(ret)) {
                 verify_state = BOOT_STATE_GREEN;
-                *verifier_cert = X509_dup(cert);
+                if (verifier_cert)
+                        *verifier_cert = X509_dup(cert);
                 goto done;
         }
 
@@ -396,7 +397,8 @@ UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
         if (EFI_ERROR(ret))
                 goto done;
 
-        *verifier_cert = X509_dup(sig->certificate);
+        if (verifier_cert)
+                *verifier_cert = X509_dup(sig->certificate);
         oemkey = get_rsa_pubkey(cert);
         if (!oemkey ||
             EFI_ERROR(add_digest(sig->certificate->sig_alg)) ||

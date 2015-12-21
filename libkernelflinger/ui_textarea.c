@@ -178,10 +178,16 @@ EFI_STATUS ui_textarea_display_text(const ui_textline_t *text, ui_font_t *font,
 	EFI_STATUS ret;
 	UINTN line_nb, len, row_nb = 0;
 
+	if (!text || !font || !y)
+		return EFI_INVALID_PARAMETER;
+
 	for (line_nb = 0; text[line_nb].str; line_nb++) {
 		len = strlen((CHAR8 *)text[line_nb].str);
 		row_nb = row_nb < len ? len : row_nb;
 	}
+
+	if (!line_nb || !row_nb)
+		return EFI_INVALID_PARAMETER;
 
 	textarea.line_nb = line_nb;
 	textarea.row_nb = row_nb;

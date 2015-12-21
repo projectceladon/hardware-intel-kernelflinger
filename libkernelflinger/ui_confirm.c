@@ -97,6 +97,11 @@ BOOLEAN ui_confirm(const ui_textline_t *text, UINTN width, UINTN height,
 		row_nb = row_nb < len ? len : row_nb;
 	}
 
+	if (!line_nb || !row_nb) {
+		error(L"Invalid text for ui_confirm");
+		return FALSE;
+	}
+
 	text_height = line_nb * height / (line_nb + ARRAY_SIZE(yes_no_menu));
 	ret = ui_textarea_display_text(text, font, x, &y, width, text_height, NULL);
 	if (EFI_ERROR(ret))
