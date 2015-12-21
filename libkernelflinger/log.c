@@ -50,7 +50,7 @@ static SERIAL_IO_INTERFACE *serial;
 static CHAR16 buf16[BUFFER_SIZE];
 static CHAR8 buf8[BUFFER_SIZE];
 
-#define LOG_BUF_SIZE 1024
+#define LOG_BUF_SIZE 4096
 static CHAR8 log_buf[LOG_BUF_SIZE];
 static UINTN pos, last_pos;
 
@@ -58,7 +58,7 @@ EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 {
 	EFI_STATUS ret;
 	CHAR8 *buf, *cur;
-	UINTN size = sizeof(log_buf);
+	UINTN size;
 
 #ifdef USER
 	if (!device_is_provisioning())
@@ -77,8 +77,10 @@ EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 			cur += last_pos - pos;
 		}
 		memcpy(cur, log_buf, pos);
-	} else
+	} else {
+		size = pos;
 		buf = log_buf;
+	}
 
 	ret = set_efi_variable(&loader_guid, LOG_VAR,
 			       size, buf, nonvol, TRUE);
