@@ -832,7 +832,7 @@ static void fastboot_process_tx(__attribute__((__unused__)) void *buf,
 
 static EFI_STATUS get_command_buffer_argv(INTN *argc, CHAR8 *argv[], UINTN max_argc)
 {
-	char *saveptr, *token;
+	char *saveptr, *token = NULL;
 
 	argv[0] = (CHAR8 *)strtok_r((char *)command_buffer, ": ", &saveptr);
 	if (!argv[0])
