@@ -154,30 +154,39 @@ EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 sta
 	return storage->erase_blocks(handle, bio, start, end);
 }
 
+#define percent5(x, max) (x) * 20 / (max) * 5
+
 EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
 			    VOID *pattern, UINTN pattern_blocks)
 {
 	UINT64 lba;
 	UINT64 size;
+	UINT64 prev = 0, progress = 0;
 	EFI_STATUS ret;
 
 	debug(L"Fill lba %d -> %d", start, end);
-	for (lba = start; lba <= end; lba += pattern_blocks) {
+	if (end <= start)
+		return EFI_INVALID_PARAMETER;
+
+	for (lba = start; lba <= end; lba += pattern_blocks, prev = progress,
+				      progress = percent5(lba - start, end - start)) {
 		if (lba + pattern_blocks > end + 1)
 			size = end - lba + 1;
 		else
 			size = pattern_blocks;
 
-		ret = uefi_call_wrapper(bio->WriteBlocks, 5, bio, bio->Media->MediaId, lba, bio->Media->BlockSize * size, pattern);
+		if (progress != prev)
+			debug(L"%d%% completed", progress);
+
+		ret = uefi_call_wrapper(bio->WriteBlocks, 5, bio, bio->Media->MediaId, lba,
+					bio->Media->BlockSize * size, pattern);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to erase block %ld", lba);
-			goto exit;
+			return ret;
 		}
 	}
-	ret = EFI_SUCCESS;
 
- exit:
-	return ret;
+	return EFI_SUCCESS;
 }
 
 EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
