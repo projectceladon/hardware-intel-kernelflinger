@@ -141,7 +141,7 @@ static void cmd_oem_setvar(INTN argc, CHAR8 **argv)
 	else
 		ret = set_efi_variable(&loader_guid, varname,
 				       strlen(value) + 1, value,
-				       TRUE, FALSE);
+				       TRUE, TRUE);
 	if (EFI_ERROR(ret))
 		fastboot_fail("Unable to %a '%s' variable",
 			      value ? "set" : "clear", varname);
