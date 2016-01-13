@@ -52,6 +52,12 @@
 
 #define OS_INITIATED L"os_initiated"
 
+#if __LP64__
+#define EFI_LOADER_SIGNATURE "EL64"
+#else
+#define EFI_LOADER_SIGNATURE "EL32"
+#endif
+
 struct setup_header {
         UINT8 setup_secs;        /* Sectors for setup code */
         UINT16 root_flags;
@@ -104,6 +110,13 @@ struct efi_info {
         UINT32 efi_systab_hi;
         UINT32 efi_memmap_hi;
 };
+
+#define E820_UNDEFINED    0
+#define E820_RAM          1
+#define E820_RESERVED     2
+#define E820_ACPI         3
+#define E820_NVS          4
+#define E820_UNUSABLE     5
 
 struct e820_entry {
         UINT64 addr;                /* start of memory segment */
@@ -179,24 +192,229 @@ struct boot_params {
         UINT8 _pad9[276];
 };
 
-typedef void(*handover_func)(void *, EFI_SYSTEM_TABLE *, struct boot_params *) \
-            __attribute__((regparm(0)));
+/* See "Intel IA32/64 Architecture Software Developper Manual"
+ * Volume 3 - Chapter 3.4.5 "Segment Descriptors".
+ */
+struct segment_descriptor {
+        UINT16 limit0;
+        UINT16 base0;
+        UINT8 base1;
+        UINTN type: 4;
+        UINTN descriptor_type: 1;
+        UINTN descriptor_privilege_level: 2;
+        UINTN present: 1;
+        UINTN limit1: 4;
+        UINTN available: 1;
+        UINTN code_segment_64bit: 1;
+        UINTN default_operation_size: 1;
+        UINTN granularity: 1;
+        UINT8 base2;
+} __attribute__((__packed__));
 
-static inline void handover_jump(EFI_HANDLE image, struct boot_params *bp,
+typedef struct {
+        UINT16 limit;
+        struct segment_descriptor *base;
+} __attribute__((packed)) dt_addr_t;
+
+dt_addr_t gdt = { 0x800, 0x0 };
+
+typedef void(*kernel_func)(void *, struct boot_params *);
+
+#define SEGMENT_TYPE_DATA             0
+#define SEGMENT_TYPE_READ_WRITE       (1 << 1)
+#define SEGMENT_TYPE_CODE             (1 << 3)
+#define SEGMENT_TYPE_EXEC_READ        (1 << 1)
+#define SEGMENT_TYPE_TASK             ((1 << 3) | 1)
+#define SEGMENT_OPERATION_SIZE_16BITS 0
+#define SEGMENT_OPERATION_SIZE_32BITS 1
+#define SEGMENT_GRANULARITY_4KB       1
+#define DESCRIPTOR_TYPE_CODE_OR_DATA  1
+
+static EFI_STATUS setup_gdt(void)
+{
+        EFI_STATUS ret;
+
+        ret = emalloc(gdt.limit, 8, (EFI_PHYSICAL_ADDRESS *)&gdt.base);
+        if (EFI_ERROR(ret))
+                return ret;
+
+        memset(gdt.base, 0x0, gdt.limit);
+
+        /* According to "Intel IA32/64 Architecture Software
+         * Developper Manual"
+         * Volume 3 - Chapter 3.5.1 "Segment Descriptor Tables"
+         * The first descriptor in the GDT is not used by the
+         * processor.  */
+
+        gdt.base[1].limit0 = 0xffff;
+        gdt.base[1].base0 = 0x0000;
+        gdt.base[1].base1 = 0x00;
+        gdt.base[1].type = SEGMENT_TYPE_CODE | SEGMENT_TYPE_EXEC_READ;
+        gdt.base[1].descriptor_type = DESCRIPTOR_TYPE_CODE_OR_DATA;
+        gdt.base[1].descriptor_privilege_level = 0;
+        gdt.base[1].present = 1;
+        gdt.base[1].limit1 = 0xf;
+        gdt.base[1].available = 0;
+        gdt.base[1].code_segment_64bit = 0;
+        gdt.base[1].default_operation_size = SEGMENT_OPERATION_SIZE_32BITS;
+        gdt.base[1].granularity = SEGMENT_GRANULARITY_4KB;
+        gdt.base[1].base2 = 0x00;
+
+        gdt.base[2] = gdt.base[1];
+        gdt.base[2].type = SEGMENT_TYPE_DATA | SEGMENT_TYPE_READ_WRITE;
+
+        gdt.base[3].limit0 = 0x0000;
+        gdt.base[3].base0 = 0x0000;
+        gdt.base[3].base1 = 0x00;
+        gdt.base[3].type = SEGMENT_TYPE_TASK;
+        gdt.base[3].descriptor_type = 0;
+        gdt.base[3].descriptor_privilege_level = 0;
+        gdt.base[3].present = 1;
+        gdt.base[3].limit1 = 0x0;
+        gdt.base[3].available = 0;
+        gdt.base[3].code_segment_64bit = 0;
+        gdt.base[3].default_operation_size = SEGMENT_OPERATION_SIZE_16BITS;
+        gdt.base[3].granularity = SEGMENT_GRANULARITY_4KB;
+        gdt.base[3].base2 = 0x00;
+
+        return EFI_SUCCESS;
+}
+
+/* WARNING: Do not make any call that might change the memory mapping
+ * (allocation, print, ...) in this function.  */
+static void setup_e820_map(struct boot_params *boot_params,
+                           EFI_MEMORY_DESCRIPTOR *mem_entries,
+                           UINTN nr_entries,
+                           UINTN entry_sz)
+{
+        struct e820_entry *e820_map = boot_params->e820_map;
+        UINTN i, n_page = 0;
+
+        for (i = 0; i < nr_entries; i++) {
+                EFI_MEMORY_DESCRIPTOR *d;
+                unsigned int cur_type = 0;
+
+                d = (EFI_MEMORY_DESCRIPTOR *)((unsigned long)mem_entries + (i * entry_sz));
+                switch (d->Type) {
+                case EfiReservedMemoryType:
+                case EfiRuntimeServicesCode:
+                case EfiRuntimeServicesData:
+                case EfiMemoryMappedIO:
+                case EfiMemoryMappedIOPortSpace:
+                case EfiPalCode:
+                        cur_type = E820_RESERVED;
+                        break;
+
+                case EfiUnusableMemory:
+                        cur_type = E820_UNUSABLE;
+                        break;
+
+                case EfiACPIReclaimMemory:
+                        cur_type = E820_ACPI;
+                        break;
+
+                case EfiLoaderCode:
+                case EfiLoaderData:
+                case EfiBootServicesCode:
+                case EfiBootServicesData:
+                case EfiConventionalMemory:
+                        cur_type = E820_RAM;
+                        break;
+
+                case EfiACPIMemoryNVS:
+                        cur_type = E820_NVS;
+                        break;
+
+                default:
+                        continue;
+                }
+
+                if (n_page &&
+                    e820_map[n_page - 1].type == cur_type &&
+                    (e820_map[n_page - 1].addr + e820_map[n_page - 1].size) == d->PhysicalStart) {
+                        e820_map[n_page - 1].size += d->NumberOfPages << EFI_PAGE_SHIFT;
+                        continue;
+                }
+
+                e820_map[n_page].addr = d->PhysicalStart;
+                e820_map[n_page].size = d->NumberOfPages << EFI_PAGE_SHIFT;
+                e820_map[n_page].type = cur_type;
+                n_page++;
+        }
+
+        boot_params->e820_entries = n_page;
+}
+
+/* WARNING: Do not make any call that might change the memory mapping
+ * (allocation, print, ...) in this function.  */
+static EFI_STATUS setup_memory_map(struct boot_params *boot_params, UINTN *key)
+{
+        UINTN nr_entries, entry_sz;
+        EFI_MEMORY_DESCRIPTOR *mem_entries;
+        UINT32 entry_ver;
+        struct efi_info *efi = &boot_params->efi_info;
+
+        mem_entries = LibMemoryMap(&nr_entries, key, &entry_sz, &entry_ver);
+        if (!mem_entries)
+                return EFI_OUT_OF_RESOURCES;
+
+        efi->efi_systab = (UINT32)(UINTN)ST;
+        efi->efi_memdesc_size = entry_sz;
+        efi->efi_memdesc_version = entry_ver;
+        efi->efi_memmap = (UINT32)(UINTN)mem_entries;
+        efi->efi_memmap_size = entry_sz * nr_entries;
+#ifdef  __LP64__
+        efi->efi_systab_hi = (unsigned long)ST >> 32;
+        efi->efi_memmap_hi = (unsigned long)mem_entries >> 32;
+#endif
+
+        memcpy(&efi->efi_loader_signature,
+               EFI_LOADER_SIGNATURE, sizeof(efi->efi_loader_signature));
+
+        setup_e820_map(boot_params, mem_entries, nr_entries, entry_sz);
+
+        return EFI_SUCCESS;
+}
+
+static inline void handover_jump(EFI_HANDLE image,
+                                 struct boot_params *boot_params,
                                  EFI_PHYSICAL_ADDRESS kernel_start)
 {
-        UINTN offset = bp->hdr.handover_offset;
-        handover_func hf;
+        EFI_STATUS ret;
+        kernel_func kf;
+        UINTN map_key;
 
-        asm volatile ("cli");
+        ret = setup_gdt();
+        if (EFI_ERROR(ret))
+                return;
+
+        ret = setup_memory_map(boot_params, &map_key);
+        if (EFI_ERROR(ret))
+                return;
+
+        /* Do not add extra code between setup_memory_map() call and
+         * ExitBootServices() call or memory_map key might mismatch
+         * and ExitBootServices call might fail.
+         */
+
+        ret = uefi_call_wrapper(BS->ExitBootServices, 2, image, map_key);
+        if (EFI_ERROR(ret))
+                return;
+
 
 #if __LP64__
         /* The 64-bit kernel entry is 512 bytes after the start. */
         kernel_start += 512;
 #endif
 
-        hf = (handover_func)((UINTN)kernel_start + offset);
-        hf(image, ST, bp);
+        /* Disable interruptions. */
+        asm volatile ("cli");
+
+        /* Load GDT. */
+        asm volatile ("lgdt %0" :: "m" (gdt));
+
+        kf = (kernel_func)((UINTN)kernel_start);
+        kf(NULL, boot_params);
 }
 
 
@@ -779,6 +997,28 @@ out:
         return ret;
 }
 
+extern EFI_GUID GraphicsOutputProtocol;
+#define VIDEO_TYPE_EFI 0x70
+
+static void setup_screen_info_from_gop(struct screen_info *pinfo)
+{
+        EFI_GRAPHICS_OUTPUT_PROTOCOL *gop;
+        EFI_STATUS ret;
+
+        ret = LibLocateProtocol(&GraphicsOutputProtocol, (void **)&gop);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Unable to locate graphics output protocol");
+                return;
+        }
+
+        pinfo->orig_video_isVGA = VIDEO_TYPE_EFI;
+        pinfo->lfb_base = (UINT32)gop->Mode->FrameBufferBase;
+        pinfo->lfb_size = gop->Mode->FrameBufferSize;
+        pinfo->lfb_width = gop->Mode->Info->HorizontalResolution;
+        pinfo->lfb_height = gop->Mode->Info->VerticalResolution;
+        pinfo->lfb_linelength = gop->Mode->Info->PixelsPerScanLine * 4;
+}
+
 static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
 {
         EFI_PHYSICAL_ADDRESS kernel_start;
@@ -805,6 +1045,8 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         init_size = buf->hdr.init_size;
         buf->hdr.loader_id = 0x1;
         memset(&buf->screen_info, 0x0, sizeof(buf->screen_info));
+
+        setup_screen_info_from_gop(&buf->screen_info);
 
         ret = allocate_pages(AllocateAddress, EfiLoaderData,
                              EFI_SIZE_TO_PAGES(init_size), &kernel_start);
@@ -1078,16 +1320,6 @@ EFI_STATUS android_image_start_buffer(
         if (buf->hdr.version < 0x20c) {
                 /* Protocol 2.12, kernel 3.8 required */
                 error(L"Kernel header version %x too old", buf->hdr.version);
-                return EFI_INVALID_PARAMETER;
-        }
-
-#if __LP64__
-        if (!(buf->hdr.xloadflags & XLF_EFI_HANDOVER_64)) {
-                error(L"This kernel does not support 64-bit EFI Handover protocol");
-#else
-        if (!(buf->hdr.xloadflags & XLF_EFI_HANDOVER_32)) {
-                error(L"This kernel does not support 32-bit EFI Handover protocol");
-#endif
                 return EFI_INVALID_PARAMETER;
         }
 
