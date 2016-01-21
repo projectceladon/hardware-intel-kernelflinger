@@ -79,7 +79,7 @@ else
     ELF_OUTPUT := elf32-i386
 endif
 
-sym_binary := $(shell echo _binary_$(PADDED_VERITY_CERT) | sed "s/\//_/g" | sed "s/\./_/g")
+sym_binary := $(shell echo _binary_$(PADDED_VERITY_CERT) | sed "s/[\/\.-]/_/g")
 $(OEMCERT_OBJ): $(PADDED_VERITY_CERT)
 	mkdir -p $(@D) && \
 	$(EFI_OBJCOPY) --input binary --output $(ELF_OUTPUT) --binary-architecture i386 $< $@ && \
