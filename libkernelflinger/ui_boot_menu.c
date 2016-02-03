@@ -81,7 +81,8 @@ static EFI_STATUS ui_boot_menu_redraw(ui_boot_menu_t *menu, UINTN *y)
 	if (!image)
 		return EFI_UNSUPPORTED;
 
-	ret = ui_image_draw(image, menu->x, *y);
+	ret = ui_image_draw_scale(image, menu->x, *y,
+				  min(image->width, menu->max_width), 0);
 	if (EFI_ERROR(ret))
 		return ret;
 
