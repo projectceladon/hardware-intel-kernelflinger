@@ -57,6 +57,7 @@
 #include "blobstore.h"
 #endif
 #include "oemvars.h"
+#include "silentlake.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -962,6 +963,13 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                          * check just to make sure */
                         if (device_is_unlocked()) {
                                 set_image_oemvars_nocheck(bootimage, NULL);
+#ifdef USE_SILENTLAKE
+                                ret = silentlake_bind_root_of_trust(UNLOCKED, NULL);
+                                if (EFI_ERROR(ret)) {
+                                        efi_perror(ret, L"Failed to provide a root of trust to SilentLake");
+                                        die();
+                                }
+#endif
                                 load_image(bootimage, BOOT_STATE_ORANGE, FALSE);
                         }
                         FreePool(bootimage);
@@ -1329,6 +1337,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 break;
         }
 
+#ifdef USE_SILENTLAKE
+        ret = silentlake_bind_root_of_trust(get_current_state(), verifier_cert);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to provide a root of trust to SilentLake");
+                die();
+        }
+#endif
         if (verifier_cert)
                 X509_free(verifier_cert);
 
