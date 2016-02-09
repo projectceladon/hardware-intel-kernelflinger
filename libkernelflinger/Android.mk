@@ -100,6 +100,10 @@ ifeq ($(HAL_AUTODETECT),true)
     LOCAL_SRC_FILES += blobstore.c
 endif
 
+ifeq ($(KERNELFLINGER_SL_BIND_ROOT_TRUST),true)
+    LOCAL_SRC_FILES += silentlake.c
+endif
+
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(res_intermediates)
 

@@ -40,6 +40,10 @@ ifeq ($(KERNELFLINGER_OS_SECURE_BOOT),true)
     KERNELFLINGER_CFLAGS += -DOS_SECURE_BOOT
 endif
 
+ifeq ($(KERNELFLINGER_SL_BIND_ROOT_TRUST), true)
+    KERNELFLINGER_CFLAGS += -DUSE_SILENTLAKE
+endif
+
 KERNELFLINGER_STATIC_LIBRARIES := \
 	libuefi_ssl_static \
 	libuefi_crypto_static \
