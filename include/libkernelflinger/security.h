@@ -79,6 +79,8 @@ UINT8 verify_android_boot_image(
 /* Determines if UEFI Secure Boot is enabled or not. */
 BOOLEAN is_efi_secure_boot_enabled(VOID);
 
+EFI_STATUS set_os_secure_boot(BOOLEAN secure);
+
 /* Given a PKCS7 (DER encoded), look for the root certificate based on
  * CERT_SHA256 and verify the PKCS7.  On success, EFI_SUCCESS is
  * return and the PKCS7 payload is returned in DATA as a dynamically
