@@ -49,6 +49,16 @@
 #define SETUP_MODE_VAR	        L"SetupMode"
 #define SECURE_BOOT_VAR         L"SecureBoot"
 
+/* OsSecureBoot is *not* a standard EFI_GLOBAL variable
+ *
+ * It's value will be read at ExitBootServices() by the BIOS to run
+ * some hooks which will restrain some security features in case of a
+ * non os secure boot.
+ *
+ * It's value is 0 for unsecure, 1 for secure.
+ * We say we have an os secure boot when the boot state is green. */
+#define OS_SECURE_BOOT_VAR      L"OsSecureBoot"
+
 static VOID pr_error_openssl(void)
 {
 	unsigned long code;
@@ -453,6 +463,16 @@ BOOLEAN is_efi_secure_boot_enabled(VOID)
                 return FALSE;
 
         return value == 1;
+}
+
+EFI_STATUS set_os_secure_boot(BOOLEAN secure)
+{
+        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+        UINT8 value = secure ? 1 : 0;
+
+        debug(L"Setting os secure boot to %d", value);
+        return set_efi_variable(&global_guid, OS_SECURE_BOOT_VAR, sizeof(value),
+                                &value, FALSE, TRUE);
 }
 
 static X509 *find_cert_in_pkcs7(PKCS7 *p7, const unsigned char *cert_sha256)
