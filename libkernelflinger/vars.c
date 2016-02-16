@@ -70,6 +70,7 @@ typedef union {
 #define OEM_LOCK_UNLOCKED	(1 << 0)
 
 #define ANDROID_PROP_VALUE_MAX	92
+#define REBOOT_REASON_MAX 	64
 
 /* Default maximum number of watchdog resets in a row before the crash
  * event menu is displayed. */
@@ -629,19 +630,30 @@ bad:
 
 CHAR16 *get_reboot_reason()
 {
-	CHAR16 *reboot_reason, *reason, *saveptr;
+	static CHAR16 reboot_reason[REBOOT_REASON_MAX];
+	CHAR16 *rr;
 
-	reboot_reason = get_efi_variable_str(&loader_guid, REBOOT_REASON);
-	if (!reboot_reason)
+	if (reboot_reason[0])
+		return reboot_reason;
+
+	rr = get_efi_variable_str(&loader_guid, REBOOT_REASON);
+	if (!rr)
 		return NULL;
 
-	reason = str16tok_r(reboot_reason, L" ", &saveptr);
-#ifndef USER
-	CHAR16 *extra_reason = str16tok_r(NULL, L" ", &saveptr);
-	if (extra_reason)
-		return extra_reason;
-#endif
-	return reason;
+	if (StrLen(rr) >= REBOOT_REASON_MAX)
+		error(L"Reboot reason string is too long, truncating");
+
+	StrNCpy(reboot_reason, rr, REBOOT_REASON_MAX);
+	FreePool(rr);
+
+	return reboot_reason;
+}
+
+BOOLEAN is_reboot_reason(CHAR16 *reason)
+{
+	CHAR16 *rr = get_reboot_reason();
+
+	return rr && StrStr(rr, reason);
 }
 
 VOID del_reboot_reason()

@@ -683,40 +683,22 @@ char *strtok_r(char *str, const char *delim, char **saveptr)
         return res;
 }
 
-static inline BOOLEAN is_in_char16_set(CHAR16 c, const CHAR16 *set)
+CHAR16 *StrStr(const CHAR16 *s, const CHAR16 *find)
 {
-        UINTN i, len;
+        CHAR16 c, sc;
+        int len;
 
-        for (i = 0, len = StrLen(set); i < len; i++)
-                if (c == set[i])
-                        return TRUE;
-
-        return FALSE;
-}
-
-CHAR16 *str16tok_r(CHAR16 *str, const CHAR16 *delim, CHAR16 **saveptr)
-{
-        CHAR16 *p, *res;
-
-        if (!delim || !saveptr || (!str && !*saveptr))
-                return NULL;
-
-        if (str)
-                *saveptr = str;
-
-        if (**saveptr == L'\0')
-                return NULL;
-
-        res = *saveptr;
-        for (p = *saveptr; *p != L'\0' && !is_in_char16_set(*p, delim); p++)
-                ;
-
-        for (; *p != L'\0' && is_in_char16_set(*p, delim); p++)
-                *p = L'\0';
-
-        *saveptr = p;
-
-        return res;
+        if ((c = *find++) != 0) {
+                len = StrLen(find);
+                do {
+                        do {
+                                if ((sc = *s++) == 0)
+                                        return NULL;
+                        } while (sc != c);
+                } while (StrnCmp(s, find, len) != 0);
+                s--;
+        }
+        return (CHAR16 *)s;
 }
 
 VOID pause(UINTN seconds)
