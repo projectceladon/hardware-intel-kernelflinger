@@ -317,7 +317,6 @@ static BOOLEAN reset_is_due_to_watchdog_or_panic()
                 RESET_EC_WATCHDOG
         };
         enum reset_sources reset_source;
-        CHAR16 *reboot_reason;
         UINTN i;
 
         reset_source = rsci_get_reset_source();
@@ -327,17 +326,8 @@ static BOOLEAN reset_is_due_to_watchdog_or_panic()
                         return TRUE;
                 }
 
-        reboot_reason = get_reboot_reason();
-        if (reboot_reason) {
-                if (!StrCmp(reboot_reason, L"kernel_panic") ||
-                    !StrCmp(reboot_reason, L"watchdog")) {
-                        FreePool(reboot_reason);
-                        return TRUE;
-                }
-                FreePool(reboot_reason);
-        }
-
-        return FALSE;
+        return is_reboot_reason(L"kernel_panic") ||
+                is_reboot_reason(L"watchdog");
 }
 
 /* If more than get_watchdog_counter_max() watchdog (or kernel panic)
@@ -350,12 +340,6 @@ static enum boot_target check_watchdog(VOID)
         UINT8 counter;
         EFI_TIME time_ref, now;
 
-#ifdef USER
-        if(!StrCmp(get_reboot_reason(), L"shutdown")) {
-                del_reboot_reason();
-                return POWER_OFF;
-        }
-#endif
         if (!get_current_crash_event_menu())
                 return NORMAL_BOOT;
 
@@ -375,6 +359,13 @@ static enum boot_target check_watchdog(VOID)
                 }
                 return NORMAL_BOOT;
         }
+
+#ifdef USER
+        if (is_reboot_reason(L"shutdown")) {
+                del_reboot_reason();
+                return POWER_OFF;
+        }
+#endif
 
         ret = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
         if (EFI_ERROR(ret)) {

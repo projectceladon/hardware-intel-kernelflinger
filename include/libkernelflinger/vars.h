@@ -135,6 +135,7 @@ CHAR16 *boot_state_to_string(UINT8 boot_state);
 EFI_STATUS reprovision_state_vars(VOID);
 #endif
 CHAR16 *get_reboot_reason();
+BOOLEAN is_reboot_reason(CHAR16 *reason);
 VOID del_reboot_reason();
 #ifdef BOOTLOADER_POLICY
 BOOLEAN blpolicy_is_flashed(VOID);
