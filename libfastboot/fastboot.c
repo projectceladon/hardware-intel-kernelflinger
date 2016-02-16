@@ -413,7 +413,7 @@ static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char
 
 void fastboot_ack(const char *code, const char *fmt, va_list ap)
 {
-	CHAR8 msg[MAGIC_LENGTH];
+	static CHAR8 msg[MAGIC_LENGTH];
 	EFI_STATUS ret;
 
 	ret = fastboot_build_ack_msg((char *)msg, code, fmt, ap);
@@ -506,17 +506,18 @@ void fastboot_okay(const char *fmt, ...)
 
 static void flush_tx_buffer(void)
 {
-	static struct fastboot_tx_buffer *msg;
+	struct fastboot_tx_buffer *msg;
+	static CHAR8 buf[sizeof(msg->msg)];
 
 	msg = txbuf_head;
 	txbuf_head = txbuf_head->next;
 	if (!txbuf_head)
 		fastboot_state = next_state;
 
-	if (usb_write(msg->msg, sizeof(msg->msg)) < 0)
-		fastboot_state = STATE_ERROR;
-
+	memcpy(buf, msg->msg, sizeof(buf));
 	FreePool(msg);
+	if (usb_write(buf, sizeof(buf)) < 0)
+		fastboot_state = STATE_ERROR;
 }
 
 static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
@@ -742,8 +743,8 @@ static void fastboot_read_command(void)
 
 static void cmd_download(INTN argc, CHAR8 **argv)
 {
+	static CHAR8 response[MAGIC_LENGTH];
 	int len;
-	CHAR8 response[MAGIC_LENGTH];
 	UINTN newdlsize;
 
 	if (argc != 2) {
