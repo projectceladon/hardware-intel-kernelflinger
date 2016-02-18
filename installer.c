@@ -627,36 +627,36 @@ stop:
 	return EFI_SUCCESS;
 }
 
-int usb_read(void *buf, unsigned len)
+EFI_STATUS usb_read(void *buf, UINT32 size)
 {
 	fastboot_cmd_buf = buf;
-	fastboot_cmd_buf_len = len;
+	fastboot_cmd_buf_len = size;
 
-	return 0;
+	return EFI_SUCCESS;
 }
 
-int usb_write(void *pBuf, uint32_t size)
+EFI_STATUS usb_write(void *buf, UINT32 size)
 {
 #define PREFIX_LEN 4
 
 	if (size < PREFIX_LEN)
-		return 0;
+		return EFI_SUCCESS;
 
-	if (!memcmp((CHAR8 *)"INFO", pBuf, PREFIX_LEN)) {
-		Print(L"(bootloader) %a\n", pBuf + PREFIX_LEN);
+	if (!memcmp((CHAR8 *)"INFO", buf, PREFIX_LEN)) {
+		Print(L"(bootloader) %a\n", buf + PREFIX_LEN);
 		need_tx_cb = TRUE;
-	} if (!memcmp((CHAR8 *)"OKAY", pBuf, PREFIX_LEN)) {
-		if (((char *)pBuf)[PREFIX_LEN] != '\0')
-			Print(L"%a\n", pBuf + PREFIX_LEN);
+	} if (!memcmp((CHAR8 *)"OKAY", buf, PREFIX_LEN)) {
+		if (((char *)buf)[PREFIX_LEN] != '\0')
+			Print(L"%a\n", buf + PREFIX_LEN);
 		last_cmd_succeeded = TRUE;
 		fastboot_tx_cb(NULL, 0);
-	} else if (!memcmp((CHAR8 *)"FAIL", pBuf, PREFIX_LEN)) {
-		error(L"%a", pBuf + PREFIX_LEN);
+	} else if (!memcmp((CHAR8 *)"FAIL", buf, PREFIX_LEN)) {
+		error(L"%a", buf + PREFIX_LEN);
 		last_cmd_succeeded = FALSE;
 		fastboot_tx_cb(NULL, 0);
 	}
 
-	return 0;
+	return EFI_SUCCESS;
 }
 
 /* UI wrapper functions. */
