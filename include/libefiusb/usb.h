@@ -38,17 +38,16 @@
 typedef void (*data_callback_t)(void *buf, unsigned len);
 typedef void (*start_callback_t)(void);
 
-int usb_write(void *buf, unsigned len);
-int usb_read(void *buf, unsigned len);
-EFI_STATUS usb_init_and_connect(UINT8 subclass,
-				UINT8 protocol,
-				CHAR16 *str_configuration,
-				CHAR16 *str_interface,
-				start_callback_t start_cb,
-				data_callback_t rx_cb,
-				data_callback_t tx_cb);
+EFI_STATUS usb_start(UINT8 subclass,
+		     UINT8 protocol,
+		     CHAR16 *str_configuration,
+		     CHAR16 *str_interface,
+		     start_callback_t start_cb,
+		     data_callback_t rx_cb,
+		     data_callback_t tx_cb);
 EFI_STATUS usb_stop(void);
-EFI_STATUS usb_disconnect_and_unbind(void);
 EFI_STATUS usb_run(void);
+EFI_STATUS usb_read(void *buf, UINT32 size);
+EFI_STATUS usb_write(void *buf, UINT32 size);
 
 #endif	/* _USB_H_ */

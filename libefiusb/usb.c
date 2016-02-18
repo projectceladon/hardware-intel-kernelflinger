@@ -160,24 +160,25 @@ static USB_DEVICE_DESCRIPTOR device_descriptor = {
 	CONFIG_COUNT
 };
 
-int usb_write(void *pBuf, uint32_t size)
+EFI_STATUS usb_write(void *buf, UINT32 size)
 {
 	EFI_STATUS ret;
 	USB_DEVICE_IO_REQ ioReq;
 
 	ioReq.EndpointInfo.EndpointDesc = &config_descriptor.ep_in;
 	ioReq.EndpointInfo.EndpointCompDesc = NULL;
-	ioReq.IoInfo.Buffer = pBuf;
+	ioReq.IoInfo.Buffer = buf;
 	ioReq.IoInfo.Length = size;
 
 	/* queue the Tx request */
 	ret = uefi_call_wrapper(usb_device->EpTxData, 2, usb_device, &ioReq);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"failed to queue Tx request");
-	return EFI_ERROR(ret);
+
+	return ret;
 }
 
-int usb_read(void *buf, unsigned len)
+EFI_STATUS usb_read(void *buf, UINT32 size)
 {
 	EFI_STATUS ret;
 	USB_DEVICE_IO_REQ ioReq;
@@ -185,19 +186,19 @@ int usb_read(void *buf, unsigned len)
 	/* WA: usb device stack doesn't accept rx buffer not multiple of MaxPacketSize */
 	unsigned max_pkt_size = config_descriptor.ep_out.MaxPacketSize;
 
-	len = ALIGN(len, max_pkt_size);
+	size = ALIGN(size, max_pkt_size);
 
 	ioReq.EndpointInfo.EndpointDesc = &config_descriptor.ep_out;
 	ioReq.EndpointInfo.EndpointCompDesc = NULL;
 	ioReq.IoInfo.Buffer = buf;
-	ioReq.IoInfo.Length = len;
+	ioReq.IoInfo.Length = size;
 
 	/* queue the  receive request */
 	ret = uefi_call_wrapper(usb_device->EpRxData, 2, usb_device, &ioReq);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"failed to queue Rx request");
 
-	return EFI_ERROR(ret);
+	return ret;
 }
 
 static EFIAPI EFI_STATUS setup_handler(__attribute__((__unused__)) EFI_USB_DEVICE_REQUEST *CtrlRequest,
@@ -351,13 +352,10 @@ static void init_driver_objs(UINT8 subclass,
 	gEndpointObjs[1].EndpointCompDesc  = NULL;
 }
 
-EFI_STATUS usb_init_and_connect(UINT8 subclass,
-				UINT8 protocol,
-				CHAR16 *str_configuration,
-				CHAR16 *str_interface,
-				start_callback_t start_cb,
-				data_callback_t rx_cb,
-				data_callback_t tx_cb)
+EFI_STATUS usb_start(UINT8 subclass, UINT8 protocol,
+		     CHAR16 *str_configuration, CHAR16 *str_interface,
+		     start_callback_t start_cb, data_callback_t rx_cb,
+		     data_callback_t tx_cb)
 {
 	EFI_STATUS ret;
 
@@ -404,14 +402,6 @@ EFI_STATUS usb_stop(void)
 	ret = uefi_call_wrapper(usb_device->Stop, 1, usb_device);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to Stop USB", ret);
-
-	return ret;
-}
-
-
-EFI_STATUS usb_disconnect_and_unbind(void)
-{
-	EFI_STATUS ret;
 
 	ret = uefi_call_wrapper(usb_device->DisConnect, 1, usb_device);
 	if (EFI_ERROR(ret)) {

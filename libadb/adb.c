@@ -334,13 +334,9 @@ EFI_STATUS adb_init()
 	adb_pkt_in.data = in_buf;
 	exit_bt = UNKNOWN_TARGET;
 
-	return usb_init_and_connect(ADB_IF_SUBCLASS,
-				    ADB_IF_PROTOCOL,
-				    STR_CONFIGURATION,
-				    STR_INTERFACE,
-				    adb_read_msg,
-				    adb_process_rx,
-				    adb_process_tx);
+	return usb_start(ADB_IF_SUBCLASS, ADB_IF_PROTOCOL,
+			 STR_CONFIGURATION, STR_INTERFACE,
+			 adb_read_msg, adb_process_rx, adb_process_tx);
 }
 
 EFI_STATUS adb_run()
@@ -361,6 +357,6 @@ EFI_STATUS adb_run()
 EFI_STATUS adb_exit()
 {
 	asock_close_all();
-	usb_disconnect_and_unbind();
+	usb_stop();
 	return EFI_SUCCESS;
 }

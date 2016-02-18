@@ -422,7 +422,8 @@ void fastboot_ack(const char *code, const char *fmt, va_list ap)
 
 	debug(L"SENT %a", msg);
 	fastboot_state = next_state;
-	if (usb_write(msg, MAGIC_LENGTH) < 0)
+	ret = usb_write(msg, MAGIC_LENGTH);
+	if (EFI_ERROR(ret))
 		fastboot_state = STATE_ERROR;
 }
 
@@ -506,6 +507,7 @@ void fastboot_okay(const char *fmt, ...)
 
 static void flush_tx_buffer(void)
 {
+	EFI_STATUS ret;
 	struct fastboot_tx_buffer *msg;
 	static CHAR8 buf[sizeof(msg->msg)];
 
@@ -516,7 +518,8 @@ static void flush_tx_buffer(void)
 
 	memcpy(buf, msg->msg, sizeof(buf));
 	FreePool(msg);
-	if (usb_write(buf, sizeof(buf)) < 0)
+	ret = usb_write(buf, sizeof(buf));
+	if (EFI_ERROR(ret))
 		fastboot_state = STATE_ERROR;
 }
 
@@ -744,6 +747,7 @@ static void fastboot_read_command(void)
 static void cmd_download(INTN argc, CHAR8 **argv)
 {
 	static CHAR8 response[MAGIC_LENGTH];
+	EFI_STATUS ret;
 	int len;
 	UINTN newdlsize;
 
@@ -786,7 +790,8 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 	}
 
 	fastboot_state = STATE_START_DOWNLOAD;
-	if (usb_write(response, strlen((CHAR8 *)response)) < 0) {
+	ret = usb_write(response, strlen((CHAR8 *)response));
+	if (EFI_ERROR(ret)) {
 		fastboot_state = STATE_ERROR;
 		return;
 	}
@@ -1032,13 +1037,10 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 	 * or magic key */
 	ui_wait_for_key_release();
 
-	ret = usb_init_and_connect(FASTBOOT_IF_SUBCLASS,
-				   FASTBOOT_IF_PROTOCOL,
-				   STR_CONFIGURATION,
-				   STR_INTERFACE,
-				   fastboot_start_callback,
-				   fastboot_process_rx,
-				   fastboot_process_tx);
+	ret = usb_start(FASTBOOT_IF_SUBCLASS, FASTBOOT_IF_PROTOCOL,
+			STR_CONFIGURATION, STR_INTERFACE,
+			fastboot_start_callback, fastboot_process_rx,
+			fastboot_process_tx);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to initialized and connect");
 		goto exit;
@@ -1065,14 +1067,12 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 			break;
 	}
 
-	usb_stop();
+	ret = usb_stop();
+	if (EFI_ERROR(ret))
+		goto exit;
 
 	if (fastboot_target != UNKNOWN_TARGET)
 		*target = fastboot_target;
-
-	ret = usb_disconnect_and_unbind();
-	if (EFI_ERROR(ret))
-		goto exit;
 
 	*bootimage = fastboot_bootimage;
 	*efiimage = fastboot_efiimage;
