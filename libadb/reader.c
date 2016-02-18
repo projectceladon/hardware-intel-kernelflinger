@@ -196,9 +196,6 @@ next:
 	return EFI_SUCCESS;
 
 err:
-	if (priv->chunks)
-		FreePool(priv->chunks);
-
 	return EFI_ERROR(ret) ? ret : EFI_INVALID_PARAMETER;
 }
 
@@ -315,10 +312,7 @@ static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
 
 static void ram_close(reader_ctx_t *ctx)
 {
-	struct ram_priv *priv = ctx->private;
-
-	FreePool(priv->chunks);
-	priv->is_in_used = FALSE;
+	((struct ram_priv *)ctx->private)->is_in_used = FALSE;
 }
 
 /* Partition reader */
