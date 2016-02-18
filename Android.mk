@@ -92,6 +92,7 @@ ifneq ($(TARGET_USE_USERFASTBOOT),true)
     LOCAL_STATIC_LIBRARIES += \
 	libfastboot-$(TARGET_BUILD_VARIANT) \
 	libefiusb-$(TARGET_BUILD_VARIANT) \
+	libefitcp-$(TARGET_BUILD_VARIANT) \
 	libtransport-$(TARGET_BUILD_VARIANT)
 ifneq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_STATIC_LIBRARIES += libadb-$(TARGET_BUILD_VARIANT)
@@ -120,6 +121,7 @@ LOCAL_SRC_FILES := installer.c
 LOCAL_MODULE_STEM := installer
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,libfastboot) \
-	$(addprefix $(LOCAL_PATH)/,include/libefiusb)
+	$(addprefix $(LOCAL_PATH)/,include/libefiusb) \
+	$(addprefix $(LOCAL_PATH)/,include/libtcp)
 include $(BUILD_EFI_EXECUTABLE)
 
