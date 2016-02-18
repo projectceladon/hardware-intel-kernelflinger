@@ -33,7 +33,7 @@
 #include <efiapi.h>
 #include <efilib.h>
 #include <stdio.h>
-#include <usb.h>
+#include <transport.h>
 
 #include "lib.h"
 #include "uefi_utils.h"
@@ -542,14 +542,10 @@ exit:
 	return last_cmd_succeeded ? EFI_SUCCESS : EFI_INVALID_PARAMETER;
 }
 
-/* USB wrapper functions. */
-EFI_STATUS usb_init_and_connect(__attribute__((__unused__)) UINT8 subclass,
-				__attribute__((__unused__)) UINT8 protocol,
-				__attribute__((__unused__)) CHAR16 *str_configuration,
-				__attribute__((__unused__)) CHAR16 *str_interface,
-				start_callback_t start_cb,
-				data_callback_t rx_cb,
-				data_callback_t tx_cb)
+/* Installer transport abstraction. */
+EFI_STATUS installer_transport_start(start_callback_t start_cb,
+				     data_callback_t rx_cb,
+				     data_callback_t tx_cb)
 {
 	EFI_STATUS ret;
 	ret = fastboot_set_command_buffer(command_buffer,
@@ -569,17 +565,12 @@ EFI_STATUS usb_init_and_connect(__attribute__((__unused__)) UINT8 subclass,
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS usb_stop(void)
+EFI_STATUS installer_transport_stop(void)
 {
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS usb_disconnect_and_unbind(void)
-{
-	return EFI_SUCCESS;
-}
-
-EFI_STATUS usb_run(void)
+EFI_STATUS installer_transport_run(void)
 {
 	static BOOLEAN initialized = FALSE;
 	EFI_STATUS ret;
@@ -627,7 +618,7 @@ stop:
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS usb_read(void *buf, UINT32 size)
+EFI_STATUS installer_transport_read(void *buf, UINT32 size)
 {
 	fastboot_cmd_buf = buf;
 	fastboot_cmd_buf_len = size;
@@ -635,7 +626,7 @@ EFI_STATUS usb_read(void *buf, UINT32 size)
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS usb_write(void *buf, UINT32 size)
+EFI_STATUS installer_transport_write(void *buf, UINT32 size)
 {
 #define PREFIX_LEN 4
 
@@ -657,6 +648,28 @@ EFI_STATUS usb_write(void *buf, UINT32 size)
 	}
 
 	return EFI_SUCCESS;
+}
+
+static transport_t INSTALLER_TRANSPORT[] = {
+	{
+		.name = "Installer for fastboot",
+		.start = installer_transport_start,
+		.stop = installer_transport_stop,
+		.run = installer_transport_run,
+		.read = installer_transport_read,
+		.write = installer_transport_write
+	}
+};
+
+EFI_STATUS fastboot_transport_register(void)
+{
+	return transport_register(INSTALLER_TRANSPORT,
+				  ARRAY_SIZE(INSTALLER_TRANSPORT));
+}
+
+void fastboot_transport_unregister(void)
+{
+	transport_unregister();
 }
 
 /* UI wrapper functions. */

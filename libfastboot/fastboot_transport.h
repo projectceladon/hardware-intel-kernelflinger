@@ -1,6 +1,8 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
+ *
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,26 +28,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This file defines bootlogic data structures, try to keep it without
- * any external definitions in order to ease export of it.
  */
 
-#ifndef _ENDIAN_H_
-#define _ENDIAN_H_
+#ifndef _FASTBOOT_TRANSPORT_H_
+#define _FASTBOOT_TRANSPORT_H_
 
-#include <efi.h>
+EFI_STATUS fastboot_transport_register(void);
+void fastboot_transport_unregister(void);
 
-#define htobe16 __builtin_bswap16
-#define htobe32 __builtin_bswap32
-#define htobe64 __builtin_bswap64
-
-#define be16toh __builtin_bswap16
-#define be32toh __builtin_bswap32
-#define be64toh __builtin_bswap64
-
-typedef UINT8 __be8;
-typedef UINT16 __be16;
-typedef UINT32 __be32;
-typedef UINT64 __be64;
-
-#endif	/* _ENDIAN_H_ */
+#endif	/* _FASTBOOT_TRANSPORT_H_ */

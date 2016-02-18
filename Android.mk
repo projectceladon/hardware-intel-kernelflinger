@@ -115,13 +115,12 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := installer-$(TARGET_BUILD_VARIANT)
 LOCAL_STATIC_LIBRARIES := \
 	$(SHARED_STATIC_LIBRARIES) \
+	libtransport-$(TARGET_BUILD_VARIANT) \
 	libfastboot-for-installer-$(TARGET_BUILD_VARIANT)
 LOCAL_CFLAGS := $(SHARED_CFLAGS)
 LOCAL_SRC_FILES := installer.c
 LOCAL_MODULE_STEM := installer
 LOCAL_C_INCLUDES := \
-	$(addprefix $(LOCAL_PATH)/,libfastboot) \
-	$(addprefix $(LOCAL_PATH)/,include/libefiusb) \
-	$(addprefix $(LOCAL_PATH)/,include/libtcp)
+	$(addprefix $(LOCAL_PATH)/,libfastboot)
 include $(BUILD_EFI_EXECUTABLE)
 
