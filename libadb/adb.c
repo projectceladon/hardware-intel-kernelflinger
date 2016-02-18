@@ -33,6 +33,7 @@
 #include <lib.h>
 #include <vars.h>
 #include <usb.h>
+#include <tcp.h>
 #include <transport.h>
 
 #include "adb.h"
@@ -44,6 +45,9 @@
 #define ADB_IF_PROTOCOL		0x01
 #define STR_CONFIGURATION	L"ADB"
 #define STR_INTERFACE		L"ADB Interface"
+
+/* TCP configuration */
+#define TCP_PORT	5555
 
 /* Protocol definitions */
 #define ADB_VERSION	0x01000000
@@ -339,6 +343,33 @@ static EFI_STATUS adb_usb_start(start_callback_t start_cb,
 			 start_cb, rx_cb, tx_cb);
 }
 
+static void print_tcpip_information(EFI_IPv4_ADDRESS *address)
+{
+#define TCPIP_INFO_FMT L"ADB is listening on TCP %d.%d.%d.%d:%d"
+
+	ui_print(TCPIP_INFO_FMT, address->Addr[0], address->Addr[1],
+		 address->Addr[2], address->Addr[3], TCP_PORT);
+	debug(TCPIP_INFO_FMT, address->Addr[0], address->Addr[1],
+	      address->Addr[2], address->Addr[3], TCP_PORT);
+}
+
+static EFI_STATUS adb_tcp_start(start_callback_t start_cb,
+				data_callback_t rx_cb,
+				data_callback_t tx_cb)
+{
+	EFI_STATUS ret;
+	EFI_IPv4_ADDRESS station_address;
+
+	ret = tcp_start(TCP_PORT, start_cb, rx_cb, tx_cb,
+			&station_address);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	print_tcpip_information(&station_address);
+
+	return EFI_SUCCESS;
+}
+
 static transport_t ADB_TRANSPORT[] = {
 	{
 		.name = "USB for adb",
@@ -347,6 +378,14 @@ static transport_t ADB_TRANSPORT[] = {
 		.run = usb_run,
 		.read = usb_read,
 		.write = usb_write
+	},
+	{
+		.name = "TCP for adb",
+		.start = adb_tcp_start,
+		.stop = tcp_stop,
+		.run = tcp_run,
+		.read = tcp_read,
+		.write = tcp_write
 	}
 };
 
