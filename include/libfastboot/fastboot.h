@@ -40,6 +40,7 @@
 #include <vars.h>
 
 #define MAX_DOWNLOAD_SIZE (256 * 1024 * 1024)
+#define MAGIC_LENGTH 64
 
 /* GUID for variables used to communicate with Fastboot */
 extern const EFI_GUID fastboot_guid;

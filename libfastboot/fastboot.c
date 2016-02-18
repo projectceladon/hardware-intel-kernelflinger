@@ -39,7 +39,7 @@
 #include <string.h>
 #include <ui.h>
 #include <em.h>
-#include <usb.h>
+#include <transport.h>
 
 #include "uefi_utils.h"
 #include "gpt.h"
@@ -51,13 +51,8 @@
 #include "smbios.h"
 #include "info.h"
 #include "authenticated_action.h"
+#include "fastboot_transport.h"
 
-#define FASTBOOT_IF_SUBCLASS	0x42
-#define FASTBOOT_IF_PROTOCOL	0x03
-#define STR_CONFIGURATION	L"USB-Update"
-#define STR_INTERFACE		L"Fastboot"
-
-#define MAGIC_LENGTH 64
 /* size of "INFO" "OKAY" or "FAIL" */
 #define CODE_LENGTH 4
 #define INFO_PAYLOAD (MAGIC_LENGTH - CODE_LENGTH)
@@ -422,7 +417,7 @@ void fastboot_ack(const char *code, const char *fmt, va_list ap)
 
 	debug(L"SENT %a", msg);
 	fastboot_state = next_state;
-	ret = usb_write(msg, MAGIC_LENGTH);
+	ret = transport_write(msg, MAGIC_LENGTH);
 	if (EFI_ERROR(ret))
 		fastboot_state = STATE_ERROR;
 }
@@ -518,7 +513,7 @@ static void flush_tx_buffer(void)
 
 	memcpy(buf, msg->msg, sizeof(buf));
 	FreePool(msg);
-	ret = usb_write(buf, sizeof(buf));
+	ret = transport_write(buf, sizeof(buf));
 	if (EFI_ERROR(ret))
 		fastboot_state = STATE_ERROR;
 }
@@ -621,7 +616,7 @@ static void cmd_boot(__attribute__((__unused__)) INTN argc,
 
 	ret = fastboot_stop(dlbuffer, NULL, dlsize, UNKNOWN_TARGET);
 	if (EFI_ERROR(ret)) {
-		fastboot_fail("Failed to stop USB");
+		fastboot_fail("Failed to stop transport");
 		return;
 	}
 	ui_print(L"Booting received image ...");
@@ -670,7 +665,7 @@ void fastboot_reboot(enum boot_target target, CHAR16 *msg)
 {
 	EFI_STATUS ret = fastboot_stop(NULL, NULL, 0, target);
 	if (EFI_ERROR(ret)) {
-		fastboot_fail("Failed to stop USB");
+		fastboot_fail("Failed to stop transport");
 		return;
 	}
 	ui_print(msg);
@@ -740,9 +735,8 @@ void fastboot_run_root_cmd(const char *name, INTN argc, CHAR8 **argv)
 
 static void fastboot_read_command(void)
 {
-	usb_read(command_buffer, command_buffer_size);
+	transport_read(command_buffer, command_buffer_size);
 }
-#define BLK_DOWNLOAD (8*1024*1024)
 
 static void cmd_download(INTN argc, CHAR8 **argv)
 {
@@ -790,7 +784,7 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 	}
 
 	fastboot_state = STATE_START_DOWNLOAD;
-	ret = usb_write(response, strlen((CHAR8 *)response));
+	ret = transport_write(response, strlen((CHAR8 *)response));
 	if (EFI_ERROR(ret)) {
 		fastboot_state = STATE_ERROR;
 		return;
@@ -799,16 +793,12 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 
 static void worker_download(void)
 {
-	int len;
+	EFI_STATUS ret;
 
-	if (dlsize > BLK_DOWNLOAD)
-		len = BLK_DOWNLOAD;
-	else
-		len = dlsize;
-
-	if (usb_read(dlbuffer, len)) {
-		error(L"Failed to receive %d bytes", dlsize);
-		fastboot_fail("Usb receive failed");
+	ret = transport_read(dlbuffer, dlsize);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to receive %d bytes", dlsize);
+		fastboot_fail("Transport receive failed");
 		return;
 	}
 	fastboot_state = STATE_DOWNLOAD;
@@ -858,6 +848,8 @@ static EFI_STATUS get_command_buffer_argv(INTN *argc, CHAR8 *argv[], UINTN max_a
 }
 
 static unsigned received_len;
+static unsigned last_received_len;
+#define DATA_PROGRESS_THRESHOLD (5 * 1024 * 1024)
 static void fastboot_run_command()
 {
 #define MAX_ARGS 16
@@ -876,6 +868,7 @@ static void fastboot_run_command()
 
 	fastboot_run_root_cmd((char *)argv[0], argc, argv);
 	received_len = 0;
+	last_received_len = 0;
 
 	if (fastboot_state == STATE_TX)
 		flush_tx_buffer();
@@ -884,21 +877,21 @@ static void fastboot_run_command()
 static void fastboot_process_rx(void *buf, unsigned len)
 {
 	CHAR8 *s;
-	int req_len;
 
 	switch (fastboot_state) {
 	case STATE_DOWNLOAD:
 		received_len += len;
-		if (dlsize > MiB)
-			debug(L"\rRX %d MiB / %d MiB", received_len/MiB, dlsize / MiB);
-		else
-			debug(L"\rRX %d KiB / %d KiB", received_len/1024, dlsize / 1024);
+		if (received_len / DATA_PROGRESS_THRESHOLD >
+		    last_received_len / DATA_PROGRESS_THRESHOLD) {
+			if (dlsize > MiB)
+				debug(L"\rRX %d MiB / %d MiB", received_len/MiB, dlsize / MiB);
+			else
+				debug(L"\rRX %d KiB / %d KiB", received_len/1024, dlsize / 1024);
+		}
+		last_received_len = received_len;
 		if (received_len < dlsize) {
 			s = buf;
-			req_len = dlsize - received_len;
-			if (req_len > BLK_DOWNLOAD)
-				req_len = BLK_DOWNLOAD;
-			usb_read(&s[len], req_len);
+			transport_read(&s[len], dlsize - received_len);
 		} else {
 			fastboot_state = STATE_COMMAND;
 			fastboot_okay("");
@@ -1037,12 +1030,17 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 	 * or magic key */
 	ui_wait_for_key_release();
 
-	ret = usb_start(FASTBOOT_IF_SUBCLASS, FASTBOOT_IF_PROTOCOL,
-			STR_CONFIGURATION, STR_INTERFACE,
-			fastboot_start_callback, fastboot_process_rx,
-			fastboot_process_tx);
+	ret = fastboot_transport_register();
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to initialized and connect");
+		efi_perror(ret, L"fastboot failed to register supported transport");
+		goto exit;
+	}
+
+	ret = transport_start(fastboot_start_callback,
+			      fastboot_process_rx,
+			      fastboot_process_tx);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to initialize transport layer");
 		goto exit;
 	}
 
@@ -1055,9 +1053,9 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 		 * - retro-compatibility with previous USB device mode
 		 *   protocol implementation;
 		 * - the installer needs to be scheduled; */
-		ret = usb_run();
+		ret = transport_run();
 		if (EFI_ERROR(ret) && ret != EFI_TIMEOUT) {
-			efi_perror(ret, L"Error occurred during USB run");
+			efi_perror(ret, L"Error occurred during transport run");
 			goto exit;
 		}
 
@@ -1067,7 +1065,7 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 			break;
 	}
 
-	ret = usb_stop();
+	ret = transport_stop();
 	if (EFI_ERROR(ret))
 		goto exit;
 
