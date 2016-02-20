@@ -37,7 +37,7 @@
 
 EFI_STATUS get_boot_image_hash(const CHAR16 *label);
 EFI_STATUS get_esp_hash(__attribute__((__unused__)) const CHAR16 *label);
-EFI_STATUS get_ext4_hash(const CHAR16 *label);
+EFI_STATUS get_fs_hash(const CHAR16 *label);
 EFI_STATUS set_hash_algorithm(const CHAR8 *algo);
 
 #endif	/* _HASHES_H_ */
