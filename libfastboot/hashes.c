@@ -359,13 +359,6 @@ EFI_STATUS get_esp_hash(__attribute__((__unused__)) const CHAR16 *label)
 #define EXT4_SUPER_MAGIC 0xEF53
 #define EXT4_VALID_FS 0x0001
 
-#define VERITY_METADATA_SIZE 32768
-#define VERITY_METADATA_MAGIC_NUMBER 0xb001b001
-
-#define EXT4_HASH_SIZE 32
-#define EXT4_BLOCK_SIZE 4096
-#define HASHES_PER_BLOCK (EXT4_BLOCK_SIZE / EXT4_HASH_SIZE)
-
 struct ext4_super_block {
 	INT32 unused;
 	INT32 s_blocks_count_lo;
@@ -383,13 +376,50 @@ struct ext4_verity_header {
 	UINT32 protocol_version;
 };
 
+/*
+ * minimum squashfs definition to get the total size of the filesystem
+ */
+
+#define SQUASHFS_MAGIC 0x73717368
+#define SQUASHFS_PADDING 4096
+
+struct squashfs_super_block {
+	UINT32 s_magic;
+	UINT32 inodes;
+	UINT32 mkfs_time;
+	UINT32 block_size;
+	UINT32 fragments;
+	UINT16 compression;
+	UINT16 block_log;
+	UINT16 flags;
+	UINT16 no_ids;
+	UINT16 s_major;
+	UINT16 s_minor;
+	UINT64 root_inode;
+	UINT64 bytes_used;
+	UINT64 id_table_start;
+	UINT64 xattr_id_table_start;
+	UINT64 inode_table_start;
+	UINT64 directory_table_start;
+	UINT64 fragment_table_start;
+	UINT64 lookup_table_start;
+};
+
+/* verity definition */
+
+#define VERITY_METADATA_SIZE 32768
+#define VERITY_METADATA_MAGIC_NUMBER 0xb001b001
+#define VERITY_HASH_SIZE 32
+#define VERITY_BLOCK_SIZE 4096
+#define VERITY_HASHES_PER_BLOCK (VERITY_BLOCK_SIZE / VERITY_HASH_SIZE)
+
 /* adapted from build_verity_tree.cpp */
 static UINT64 verity_tree_blocks(UINT64 data_size, INT32 level)
 {
-	UINT64 level_blocks = DIV_ROUND_UP(data_size, EXT4_BLOCK_SIZE);
+	UINT64 level_blocks = DIV_ROUND_UP(data_size, VERITY_BLOCK_SIZE);
 
 	do {
-		level_blocks = DIV_ROUND_UP(level_blocks, HASHES_PER_BLOCK);
+		level_blocks = DIV_ROUND_UP(level_blocks, VERITY_HASHES_PER_BLOCK);
 	} while (level--);
 
 	return level_blocks;
@@ -409,7 +439,7 @@ static UINT64 verity_tree_size(UINT64 data_size)
 		verity_blocks += level_blocks;
 	} while (level_blocks > 1);
 
-	tree_size = verity_blocks * EXT4_BLOCK_SIZE;
+	tree_size = verity_blocks * VERITY_BLOCK_SIZE;
 	debug(L"verity tree size %lld", tree_size);
 	return tree_size;
 }
@@ -479,12 +509,11 @@ static EFI_STATUS get_ext4_len(struct gpt_partition_interface *gparti, UINT64 *l
 	if (EFI_ERROR(ret))
 		return ret;
 
-	if (sb.s_magic != EXT4_SUPER_MAGIC) {
-		error(L"Ext4 super magic not found [%02x]", sb.s_magic);
+	if (sb.s_magic != EXT4_SUPER_MAGIC)
 		return EFI_INVALID_PARAMETER;
-	}
+
 	if ((sb.s_state & EXT4_VALID_FS) != EXT4_VALID_FS) {
-		error(L"Ext4 invalid FS [%02x]", sb.s_state);
+		debug(L"Ext4 invalid FS [%02x]", sb.s_state);
 		return EFI_INVALID_PARAMETER;
 	}
 	block_size = 1024 << sb.s_log_block_size;
@@ -494,12 +523,33 @@ static EFI_STATUS get_ext4_len(struct gpt_partition_interface *gparti, UINT64 *l
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS check_verity_header(struct gpt_partition_interface *gparti, UINT64 ext4_len)
+static EFI_STATUS get_squashfs_len(struct gpt_partition_interface *gparti, UINT64 *len)
+{
+	struct squashfs_super_block sb;
+	UINT64 padding = SQUASHFS_PADDING;
+	EFI_STATUS ret;
+
+	ret = read_partition(gparti, 0, sizeof(sb), &sb);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	if (sb.s_magic != SQUASHFS_MAGIC)
+		return EFI_INVALID_PARAMETER;
+
+	if (sb.bytes_used % padding)
+		*len = ((sb.bytes_used + padding) / padding) * padding;
+	else
+		*len = sb.bytes_used;
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS check_verity_header(struct gpt_partition_interface *gparti, UINT64 fs_len)
 {
 	EFI_STATUS ret;
 	struct ext4_verity_header vh;
 
-	ret = read_partition(gparti, ext4_len, sizeof(vh), &vh);
+	ret = read_partition(gparti, fs_len, sizeof(vh), &vh);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -514,12 +564,20 @@ static EFI_STATUS check_verity_header(struct gpt_partition_interface *gparti, UI
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS get_ext4_hash(const CHAR16 *label)
+EFI_STATUS get_fs_hash(const CHAR16 *label)
 {
+	static struct supported_fs {
+		const char *name;
+		EFI_STATUS (*get_len)(struct gpt_partition_interface *gparti, UINT64 *len);
+	} SUPPORTED_FS[] = {
+		{ "Ext4", get_ext4_len },
+		{ "SquashFS", get_squashfs_len }
+	};
 	struct gpt_partition_interface gparti;
 	CHAR8 hash[EVP_MAX_MD_SIZE];
 	EFI_STATUS ret;
-	UINT64 ext4_len;
+	UINT64 fs_len;
+	UINTN i;
 
 	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
@@ -527,19 +585,27 @@ EFI_STATUS get_ext4_hash(const CHAR16 *label)
 		return ret;
 	}
 
-	ret = get_ext4_len(&gparti, &ext4_len);
+	for (i = 0; i < ARRAY_SIZE(SUPPORTED_FS); i++) {
+		ret = SUPPORTED_FS[i].get_len(&gparti, &fs_len);
+		if (EFI_ERROR(ret))
+			continue;
+		debug(L"%a filesystem found", SUPPORTED_FS[i].name);
+		break;
+	}
+	if (EFI_ERROR(ret)) {
+		error(L"%s partition does not contain a supported filesystem", label);
+		return ret;
+	}
+
+	ret = check_verity_header(&gparti, fs_len);
 	if (EFI_ERROR(ret))
 		return ret;
 
-	ret = check_verity_header(&gparti, ext4_len);
-	if (EFI_ERROR(ret))
-		return ret;
+	fs_len += verity_tree_size(fs_len) + VERITY_METADATA_SIZE;
 
-	ext4_len += verity_tree_size(ext4_len) + VERITY_METADATA_SIZE;
+	debug(L"filesystem size %lld", fs_len);
 
-	debug(L"filesystem size %lld", ext4_len);
-
-	ret = hash_partition(&gparti, ext4_len, hash);
+	ret = hash_partition(&gparti, fs_len, hash);
 	if (EFI_ERROR(ret))
 		return ret;
 	return report_hash(L"/", gparti.part.name, hash);

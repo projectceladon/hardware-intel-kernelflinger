@@ -196,8 +196,8 @@ static struct oem_hash {
 	{ L"boot",		get_boot_image_hash,	TRUE },
 	{ L"recovery",		get_boot_image_hash,	TRUE },
 	{ L"bootloader",	get_esp_hash,		TRUE },
-	{ L"system",		get_ext4_hash,		TRUE },
-	{ L"vendor",		get_ext4_hash,		FALSE }
+	{ L"system",		get_fs_hash,		TRUE },
+	{ L"vendor",		get_fs_hash,		FALSE }
 };
 
 static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)
