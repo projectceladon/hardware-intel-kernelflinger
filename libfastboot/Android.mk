@@ -8,6 +8,7 @@ SHARED_C_INCLUDES := $(LOCAL_PATH)/../include/libfastboot
 SHARED_STATIC_LIBRARIES := \
 	$(KERNELFLINGER_STATIC_LIBRARIES) \
 	libefiusb-$(TARGET_BUILD_VARIANT) \
+	libtransport-$(TARGET_BUILD_VARIANT) \
 	libkernelflinger-$(TARGET_BUILD_VARIANT)
 SHARED_SRC_FILES := \
 	fastboot.c \
