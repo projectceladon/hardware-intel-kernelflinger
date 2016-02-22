@@ -368,8 +368,8 @@ EFI_STATUS usb_start(UINT8 subclass, UINT8 protocol,
 
 	ret = LibLocateProtocol(&gEfiUsbDeviceModeProtocolGuid, (void **)&usb_device);
 	if (EFI_ERROR(ret) || !usb_device) {
-		error(L"Failed to locate usb device protocol");
-		return EFI_ERROR(ret) ? ret : EFI_UNSUPPORTED;
+		debug(L"Failed to locate usb device protocol");
+		return EFI_UNSUPPORTED;
 	}
 	ret = uefi_call_wrapper(usb_device->InitXdci, 1, usb_device);
 	if (EFI_ERROR(ret)) {

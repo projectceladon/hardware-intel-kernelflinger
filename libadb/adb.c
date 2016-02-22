@@ -33,6 +33,7 @@
 #include <lib.h>
 #include <vars.h>
 #include <usb.h>
+#include <transport.h>
 
 #include "adb.h"
 #include "adb_socket.h"
@@ -88,7 +89,7 @@ EFI_STATUS adb_send_pkt(adb_pkt_t *pkt, UINT32 command, UINT32 arg0, UINT32 arg1
 	pkt->msg.magic = pkt->msg.command ^ 0xFFFFFFFF;
 	pkt->msg.data_check = adb_pkt_sum(pkt);
 
-	ret = usb_write(&pkt->msg, sizeof(pkt->msg));
+	ret = transport_write(&pkt->msg, sizeof(pkt->msg));
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to send adb msg");
 		return ret;
@@ -109,9 +110,9 @@ static void adb_read_msg(void)
 	EFI_STATUS ret;
 
 	adb_state = ADB_READ_MSG;
-	ret = usb_read(&adb_pkt_in.msg, sizeof(adb_pkt_in.msg));
+	ret = transport_read(&adb_pkt_in.msg, sizeof(adb_pkt_in.msg));
 	if (EFI_ERROR(ret))
-		efi_perror(ret, L"usb_read failed for next adb message");
+		efi_perror(ret, L"transport_read failed for next adb message");
 }
 
 static void adb_read_msg_payload()
@@ -119,9 +120,9 @@ static void adb_read_msg_payload()
 	EFI_STATUS ret;
 
 	adb_state = ADB_READ_MSG_PAYLOAD;
-	ret = usb_read(adb_pkt_in.data, adb_pkt_in.msg.data_length);
+	ret = transport_read(adb_pkt_in.data, adb_pkt_in.msg.data_length);
 	if (EFI_ERROR(ret))
-		efi_perror(ret, L"usb_read failed for adb message payload");
+		efi_perror(ret, L"transport_read failed for adb message payload");
 
 }
 
@@ -311,7 +312,7 @@ static void adb_process_tx(__attribute__((__unused__)) void *buf,
 	if (!delayed_pkt_data)
 		return;
 
-	ret = usb_write(delayed_pkt_data->data, delayed_pkt_data->msg.data_length);
+	ret = transport_write(delayed_pkt_data->data, delayed_pkt_data->msg.data_length);
 	delayed_pkt_data = NULL;
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to send adb payload");
@@ -329,21 +330,47 @@ void adb_set_boot_target(enum boot_target bt)
 	exit_bt = bt;
 }
 
+static EFI_STATUS adb_usb_start(start_callback_t start_cb,
+				data_callback_t rx_cb,
+				data_callback_t tx_cb)
+{
+	return usb_start(ADB_IF_SUBCLASS, ADB_IF_PROTOCOL,
+			 STR_CONFIGURATION, STR_INTERFACE,
+			 start_cb, rx_cb, tx_cb);
+}
+
+static transport_t ADB_TRANSPORT[] = {
+	{
+		.name = "USB for adb",
+		.start = adb_usb_start,
+		.stop = usb_stop,
+		.run = usb_run,
+		.read = usb_read,
+		.write = usb_write
+	}
+};
+
 EFI_STATUS adb_init()
 {
+	EFI_STATUS ret;
+
 	adb_pkt_in.data = in_buf;
 	exit_bt = UNKNOWN_TARGET;
 
-	return usb_start(ADB_IF_SUBCLASS, ADB_IF_PROTOCOL,
-			 STR_CONFIGURATION, STR_INTERFACE,
-			 adb_read_msg, adb_process_rx, adb_process_tx);
+	ret = transport_register(ADB_TRANSPORT, ARRAY_SIZE(ADB_TRANSPORT));
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"adb failed to register support transport");
+		return ret;
+	}
+
+	return transport_start(adb_read_msg, adb_process_rx, adb_process_tx);
 }
 
 EFI_STATUS adb_run()
 {
 	EFI_STATUS ret;
 
-	ret = usb_run();
+	ret = transport_run();
 	if (EFI_ERROR(ret) && ret != EFI_TIMEOUT) {
 		efi_perror(ret, L"Error occurred during USB run");
 		return ret;
@@ -357,6 +384,6 @@ EFI_STATUS adb_run()
 EFI_STATUS adb_exit()
 {
 	asock_close_all();
-	usb_stop();
+	transport_stop();
 	return EFI_SUCCESS;
 }

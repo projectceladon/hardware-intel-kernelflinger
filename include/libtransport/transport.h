@@ -1,10 +1,8 @@
 /*
- * Copyright (c) 2014, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
  *
- * Authors: Sylvain Chouleur <sylvain.chouleur@intel.com>
- *          Jeremy Compostella <jeremy.compostella@intel.com>
- *          Jocelyn Falempe <jocelyn.falempe@intel.com>
+ * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,21 +30,36 @@
  *
  */
 
-#ifndef _USB_H_
-#define _USB_H_
+#ifndef _TRANSPORT_H_
+#define _TRANSPORT_H_
 
-#include <transport.h>
+#include <efi.h>
+#include <efiapi.h>
+#include <efilib.h>
 
-EFI_STATUS usb_start(UINT8 subclass,
-		     UINT8 protocol,
-		     CHAR16 *str_configuration,
-		     CHAR16 *str_interface,
-		     start_callback_t start_cb,
-		     data_callback_t rx_cb,
-		     data_callback_t tx_cb);
-EFI_STATUS usb_stop(void);
-EFI_STATUS usb_run(void);
-EFI_STATUS usb_read(void *buf, UINT32 size);
-EFI_STATUS usb_write(void *buf, UINT32 size);
+typedef void (*data_callback_t)(void *buf, unsigned len);
+typedef void (*start_callback_t)(void);
 
-#endif	/* _USB_H_ */
+typedef struct transport {
+	const char *name;
+	EFI_STATUS (*start)(start_callback_t start_cb,
+			    data_callback_t rx_cb,
+			    data_callback_t tx_cb);
+	EFI_STATUS (*stop)(void);
+	EFI_STATUS (*run)(void);
+	EFI_STATUS (*read)(void *buf, UINT32 size);
+	EFI_STATUS (*write)(void *buf, UINT32 size);
+} transport_t;
+
+EFI_STATUS transport_register(transport_t *trans, UINTN nb);
+void transport_unregister(void);
+
+EFI_STATUS transport_start(start_callback_t start_cb,
+			   data_callback_t rx_cb,
+			   data_callback_t tx_cb);
+EFI_STATUS transport_stop(void);
+EFI_STATUS transport_run(void);
+EFI_STATUS transport_read(void *buf, UINT32 len);
+EFI_STATUS transport_write(void *buf, UINT32 len);
+
+#endif	/* _TRANSPORT_H_ */
