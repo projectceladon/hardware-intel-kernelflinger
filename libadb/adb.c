@@ -76,6 +76,7 @@ static UINT32 adb_pkt_sum(adb_pkt_t *pkt)
 	return sum;
 }
 
+static adb_pkt_t *delayed_pkt_data;
 EFI_STATUS adb_send_pkt(adb_pkt_t *pkt, UINT32 command, UINT32 arg0, UINT32 arg1)
 {
 	EFI_STATUS ret;
@@ -96,9 +97,9 @@ EFI_STATUS adb_send_pkt(adb_pkt_t *pkt, UINT32 command, UINT32 arg0, UINT32 arg1
 	if (!pkt->msg.data_length)
 		return EFI_SUCCESS;
 
-	ret = usb_write(pkt->data, pkt->msg.data_length);
-	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Failed to send adb payload");
+	/* The USB stack does not support several writes in raw.  Wait
+	   for TX event to send the payload.  */
+	delayed_pkt_data = pkt;
 
 	return ret;
 }
@@ -305,6 +306,15 @@ static void adb_process_rx(void *buf, unsigned len)
 static void adb_process_tx(__attribute__((__unused__)) void *buf,
 			   __attribute__((__unused__)) unsigned len)
 {
+	EFI_STATUS ret;
+
+	if (!delayed_pkt_data)
+		return;
+
+	ret = usb_write(delayed_pkt_data->data, delayed_pkt_data->msg.data_length);
+	delayed_pkt_data = NULL;
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to send adb payload");
 }
 
 static enum boot_target exit_bt;
