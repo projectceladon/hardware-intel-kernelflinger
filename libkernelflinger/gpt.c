@@ -229,7 +229,7 @@ static EFI_STATUS gpt_remove_prefix(void)
 		not_removed = TRUE;
 	}
 
-	sdisk.label_prefix_removed = TRUE;
+	sdisk.label_prefix_removed = removed;
 	return EFI_SUCCESS;
 error:
 	error(L"Not all the partition have the '%s' prefix", ANDROID_PREFIX);
