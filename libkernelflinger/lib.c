@@ -862,18 +862,27 @@ VOID reboot(CHAR16 *target)
         while (1) { }
 }
 
+static BOOLEAN is_power_of_two(UINTN x)
+{
+        return x && !(x & (x - 1));
+}
+
 EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
                          UINTN size, UINTN align)
 {
+        if (align && !is_power_of_two(align))
+                return EFI_INVALID_PARAMETER;
+
         *free_addr = AllocateZeroPool(size + align);
         if (!*free_addr)
                 return EFI_OUT_OF_RESOURCES;
 
-        if (align > 1)
-                *aligned_addr = (char *)*free_addr +
-                                ((UINTN)*free_addr % align);
-        else
+        if (!align) {
                 *aligned_addr = *free_addr;
+                return EFI_SUCCESS;
+        }
+
+        *aligned_addr = (VOID *)(((EFI_PHYSICAL_ADDRESS)*free_addr + align - 1) & ~(align - 1));
 
         return EFI_SUCCESS;
 }
