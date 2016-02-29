@@ -199,11 +199,7 @@ static struct fastboot_var *fastboot_getvar_or_create(const char *name)
 	return var;
 }
 
-/*
- * remove all fastboot variable which starts with partition-
- */
-#define MATCH_PART "partition-"
-static void clean_partition_var(void)
+static void delete_var_starting_with(const char *prefix)
 {
 	struct fastboot_var *var;
 	struct fastboot_var *old_varlist;
@@ -214,7 +210,7 @@ static void clean_partition_var(void)
 
 	for (var = old_varlist; var; var = next) {
 		next = var->next;
-		if (!memcmp(MATCH_PART, var->name, strlena((CHAR8 *) MATCH_PART))) {
+		if (!memcmp(prefix, var->name, strlena((CHAR8 *)prefix))) {
 			FreePool(var);
 		} else {
 			var->next = varlist;
@@ -528,7 +524,8 @@ static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
 
 EFI_STATUS refresh_partition_var(void)
 {
-	clean_partition_var();
+	delete_var_starting_with("partition-");
+	delete_var_starting_with("has-slot");
 	return publish_partsize();
 }
 
