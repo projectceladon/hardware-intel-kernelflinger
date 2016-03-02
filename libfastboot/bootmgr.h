@@ -38,6 +38,7 @@
 typedef struct load_option {
 	CHAR16 *description;
 	CHAR16 *path;
+	CHAR16 *opt_params;
 } load_option_t;
 
 /* Create or update the load options described by LOAD_OPTIONS and set
