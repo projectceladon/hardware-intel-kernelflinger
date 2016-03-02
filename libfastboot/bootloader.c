@@ -49,7 +49,7 @@
 #endif
 
 static const load_option_t DEFAULT_LOAD_OPTIONS[] = {
-	{ L"Android-IA", DEFAULT_UEFI_LOAD_PATH }
+	{ L"Android-IA", DEFAULT_UEFI_LOAD_PATH, NULL }
 };
 
 static load_option_t *load_options;
@@ -67,6 +67,8 @@ static void free_load_options()
 			FreePool(load_options[i].description);
 		if (load_options[i].path)
 			FreePool(load_options[i].path);
+		if (load_options[i].opt_params)
+			FreePool(load_options[i].opt_params);
 	}
 
 	FreePool(load_options);
@@ -74,7 +76,7 @@ static void free_load_options()
 	load_option_nb = 0;
 }
 
-static EFI_STATUS add_load_option(CHAR8 *description, CHAR8 *path)
+static EFI_STATUS add_load_option(CHAR8 *description, CHAR8 *path, CHAR8 *opt_params)
 {
 	load_option_t *new_load_options;
 	load_option_t *current;
@@ -92,6 +94,7 @@ static EFI_STATUS add_load_option(CHAR8 *description, CHAR8 *path)
 	load_option_nb++;
 
 	current->path = NULL;
+	current->opt_params = NULL;
 
 	current->description = stra_to_str(description);
 	if (!current->description) {
@@ -105,6 +108,14 @@ static EFI_STATUS add_load_option(CHAR8 *description, CHAR8 *path)
 		return EFI_OUT_OF_RESOURCES;
 	}
 
+	if (opt_params) {
+		current->opt_params = stra_to_str(opt_params);
+		if (!current->opt_params) {
+			free_load_options();
+			return EFI_OUT_OF_RESOURCES;
+		}
+	}
+
 	return EFI_SUCCESS;
 }
 
@@ -112,6 +123,7 @@ static EFI_STATUS parse_line(char *line, VOID *context _unused)
 {
 	CHAR8 *description = (CHAR8 *)line;
 	CHAR8 *path;
+	CHAR8 *opt_params;
 
 	path = strchr((CHAR8 *)line, '=');
 	if (!path)
@@ -121,7 +133,11 @@ static EFI_STATUS parse_line(char *line, VOID *context _unused)
 	if (!*path || !*description)
 		return EFI_INVALID_PARAMETER;
 
-	return add_load_option(description, path);
+	opt_params = strchr(path, ';');
+	if (opt_params)
+		*opt_params++ = '\0';
+
+	return add_load_option(description, path, opt_params);
 }
 
 static EFI_STATUS read_load_options(EFI_HANDLE handle)

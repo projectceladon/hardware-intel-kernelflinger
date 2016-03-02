@@ -266,6 +266,18 @@ static EFI_STATUS create_load_option(CHAR16 *part_label, load_option_t *load_opt
 		goto exit;
 	}
 
+	efi_load_option = (EFI_LOAD_OPTION *)buffer;
+	efi_load_option->attributes = LOAD_OPTION_ACTIVE;
+	efi_load_option->file_path_list_length = buf_size - header_size;
+
+	if (load_option->opt_params) {
+		ret = append_to_buffer(load_option->opt_params, StrSize(load_option->opt_params));
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to append optional parameters");
+			goto exit;
+		}
+	}
+
 	len = SPrint(varname, sizeof(varname), VarBootOption, entry);
 	if (len != BOOTOPTION_LEN) {
 		error(L"Failed to format load option variable name");
@@ -273,11 +285,7 @@ static EFI_STATUS create_load_option(CHAR16 *part_label, load_option_t *load_opt
 		goto exit;
 	}
 
-	efi_load_option = (EFI_LOAD_OPTION *)buffer;
-	efi_load_option->attributes = LOAD_OPTION_ACTIVE;
-	efi_load_option->file_path_list_length = buf_size - header_size;
-	ret = set_efi_variable(&EfiGlobalVariable, varname, buf_size,
-			       efi_load_option, TRUE, TRUE);
+	ret = set_efi_variable(&EfiGlobalVariable, varname, buf_size, buffer, TRUE, TRUE);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to write '%s' variable", varname);
 
