@@ -93,18 +93,18 @@ EFI_STATUS adb_send_pkt(adb_pkt_t *pkt, UINT32 command, UINT32 arg0, UINT32 arg1
 	pkt->msg.magic = pkt->msg.command ^ 0xFFFFFFFF;
 	pkt->msg.data_check = adb_pkt_sum(pkt);
 
+	/* Some transport layer (USB in particular) might not support
+	   several writes in raw.  Wait for the TX event to send the
+	   payload.  Prepare the delayed packet before we send the
+	   first one because some transport implementation trig the TX
+	   even (TCP in particular) before the first transport_write()
+	   returns.  */
+	if (pkt->msg.data_length)
+		delayed_pkt_data = pkt;
+
 	ret = transport_write(&pkt->msg, sizeof(pkt->msg));
-	if (EFI_ERROR(ret)) {
+	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to send adb msg");
-		return ret;
-	}
-
-	if (!pkt->msg.data_length)
-		return EFI_SUCCESS;
-
-	/* The USB stack does not support several writes in raw.  Wait
-	   for TX event to send the payload.  */
-	delayed_pkt_data = pkt;
 
 	return ret;
 }
