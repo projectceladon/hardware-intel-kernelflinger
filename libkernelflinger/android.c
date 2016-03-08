@@ -354,6 +354,17 @@ static EFI_STATUS setup_memory_map(struct boot_params *boot_params, UINTN *key)
         UINT32 entry_ver;
         struct efi_info *efi = &boot_params->efi_info;
 
+        /* This function can be called several times. The previous
+         * memory map buffer must be freed. */
+        if (efi->efi_memmap) {
+                EFI_PHYSICAL_ADDRESS prev_memmap = efi->efi_memmap;
+#ifdef  __LP64__
+                prev_memmap = prev_memmap |
+                        (EFI_PHYSICAL_ADDRESS)efi->efi_memmap_hi << 32;
+#endif
+                FreePool((VOID *)prev_memmap);
+        }
+
         mem_entries = LibMemoryMap(&nr_entries, key, &entry_sz, &entry_ver);
         if (!mem_entries)
                 return EFI_OUT_OF_RESOURCES;
@@ -364,8 +375,8 @@ static EFI_STATUS setup_memory_map(struct boot_params *boot_params, UINTN *key)
         efi->efi_memmap = (UINT32)(UINTN)mem_entries;
         efi->efi_memmap_size = entry_sz * nr_entries;
 #ifdef  __LP64__
-        efi->efi_systab_hi = (unsigned long)ST >> 32;
-        efi->efi_memmap_hi = (unsigned long)mem_entries >> 32;
+        efi->efi_systab_hi = (EFI_PHYSICAL_ADDRESS)ST >> 32;
+        efi->efi_memmap_hi = (EFI_PHYSICAL_ADDRESS)mem_entries >> 32;
 #endif
 
         memcpy(&efi->efi_loader_signature,
@@ -376,31 +387,47 @@ static EFI_STATUS setup_memory_map(struct boot_params *boot_params, UINTN *key)
         return EFI_SUCCESS;
 }
 
-static inline void handover_jump(EFI_HANDLE image,
-                                 struct boot_params *boot_params,
-                                 EFI_PHYSICAL_ADDRESS kernel_start)
+static inline EFI_STATUS handover_jump(EFI_HANDLE image,
+                                       struct boot_params *boot_params,
+                                       EFI_PHYSICAL_ADDRESS kernel_start)
 {
-        EFI_STATUS ret;
+        EFI_STATUS ret = EFI_LOAD_ERROR;
         kernel_func kf;
-        UINTN map_key;
+        UINTN map_key, i;
 
         ret = setup_gdt();
-        if (EFI_ERROR(ret))
-                return;
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to setup GDT");
+                return ret;
+        }
 
-        ret = setup_memory_map(boot_params, &map_key);
-        if (EFI_ERROR(ret))
-                return;
-
-        /* Do not add extra code between setup_memory_map() call and
-         * ExitBootServices() call or memory_map key might mismatch
-         * and ExitBootServices call might fail.
+        /* According to UEFI specification 2.4 Chapter 6.4
+         * EFI_BOOT_SERVICES.ExitBootServices(), Firmware
+         * implementation may choose to do a partial shutdown of the
+         * boot services during the first call to ExitBootServices().
+         * Hence, we give two chances to ExitBootServices() to
+         * succeed.
          */
+        for (i = 0; i < 2; i++) {
+                ret = setup_memory_map(boot_params, &map_key);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to setup memory map");
+                        return ret;
+                }
 
-        ret = uefi_call_wrapper(BS->ExitBootServices, 2, image, map_key);
-        if (EFI_ERROR(ret))
-                return;
+                /* Do not add extra code between setup_memory_map() call and
+                 * ExitBootServices() call or memory_map key might mismatch
+                 * and ExitBootServices call might fail.
+                 */
 
+                ret = uefi_call_wrapper(BS->ExitBootServices, 2, image, map_key);
+                if (!EFI_ERROR(ret))
+                        goto boot;
+        }
+
+        return ret;
+
+boot:
 
 #if __LP64__
         /* The 64-bit kernel entry is 512 bytes after the start. */
@@ -415,6 +442,9 @@ static inline void handover_jump(EFI_HANDLE image,
 
         kf = (kernel_func)((UINTN)kernel_start);
         kf(NULL, boot_params);
+
+        /* Shouldn't get here. */
+        return EFI_LOAD_ERROR;
 }
 
 
@@ -1088,9 +1118,9 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         memcpy(boot_params, (CHAR8 *)buf, 2 * 512);
         boot_params->hdr.code32_start = (UINT32)((UINT64)kernel_start);
 
-        ret = EFI_LOAD_ERROR;
-        handover_jump(parent_image, boot_params, kernel_start);
+        ret = handover_jump(parent_image, boot_params, kernel_start);
         /* Shouldn't get here */
+        efi_perror(ret, L"handover to Linux kernel has failed");
 
         free_pages(boot_addr, EFI_SIZE_TO_PAGES(16384));
 out:
