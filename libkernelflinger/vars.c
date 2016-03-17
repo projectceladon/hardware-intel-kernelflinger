@@ -104,11 +104,16 @@ static struct state_display {
 	{ "unlocked", &COLOR_RED }
 };
 
-static CHAR8 current_off_mode_charge[2];
-static CHAR8 current_crash_event_menu[2];
-static CHAR8 disable_wdt[2];
-static CHAR8 current_update_oemvars[2];
-static CHAR8 ui_display_splash[2];
+typedef struct bool_value {
+	UINT8 is_cached : 1;
+	UINT8 value : 1;
+} __attribute__((__packed__)) bool_value_t;
+
+static bool_value_t current_off_mode_charge;
+static bool_value_t current_crash_event_menu;
+static bool_value_t disable_wdt;
+static bool_value_t current_update_oemvars;
+static bool_value_t ui_display_splash;
 
 CHAR16 *boot_state_to_string(UINT8 boot_state)
 {
@@ -126,75 +131,91 @@ CHAR16 *boot_state_to_string(UINT8 boot_state)
 	}
 }
 
-BOOLEAN get_current_boolean_var(const EFI_GUID *guid, CHAR16 *varname, CHAR8 cache[2],const BOOLEAN default_value)
+BOOLEAN get_current_boolean_var(const EFI_GUID *guid, CHAR16 *varname,
+				bool_value_t *cache, const BOOLEAN default_value)
 {
+	EFI_STATUS ret;
 	UINTN size;
-	CHAR8 *data;
+	CHAR8 *data = NULL;
 
-	if (cache[0] == '\0') {
-		if (EFI_ERROR(get_efi_variable(guid, varname,
-					       &size, (VOID **)&data, NULL)))
-			return default_value;
+	if (cache->is_cached)
+		return cache->value;
 
-		if (size != 2
-		    || (strcmp(data, (CHAR8 *)"0") && strcmp(data, (CHAR8 *)"1"))) {
-			FreePool(data);
-			return default_value;
-		}
+	cache->is_cached = 1;
+	cache->value = default_value;
 
-		memcpy(cache, data, 2);
+	ret = get_efi_variable(guid, varname, &size, (VOID **)&data, NULL);
+	if (EFI_ERROR(ret))
+		goto exit;
+
+	if (size != 2 || data[1] != '\0' || (data[0] != '1' && data[1] != '0'))
+		goto exit;
+
+	cache->value = data[0] == '1' ? 1 : 0;
+
+exit:
+	if (data)
 		FreePool(data);
-	}
-
-	return !strcmp(cache, (CHAR8 *)"1");
+	return cache->value;
 }
 
-EFI_STATUS set_boolean_var(const EFI_GUID *guid, CHAR16 *varname, CHAR8 cache[2], BOOLEAN enabled)
+EFI_STATUS set_boolean_var(const EFI_GUID *guid, CHAR16 *varname,
+			   bool_value_t *cache, BOOLEAN enabled)
 {
 	CHAR8 *val = (CHAR8 *)(enabled ? "1" : "0");
-	EFI_STATUS ret = set_efi_variable(guid, varname,
-					  2, val, TRUE, FALSE);
+	EFI_STATUS ret;
+
+	ret = set_efi_variable(guid, varname, 2, val, TRUE, FALSE);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to set %s variable", varname);
 		return ret;
 	}
 
-	memcpy(cache, val, 2);
+	cache->is_cached = 1;
+	cache->value = enabled;
+
 	return EFI_SUCCESS;
 }
 
 BOOLEAN get_current_off_mode_charge(void)
 {
-	return get_current_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR, current_off_mode_charge, TRUE);
+	return get_current_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR,
+				       &current_off_mode_charge, TRUE);
 }
 
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
 {
-	return set_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR, current_off_mode_charge, enabled);
+	return set_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR,
+			       &current_off_mode_charge, enabled);
 }
 
 BOOLEAN get_current_crash_event_menu(void)
 {
-	return get_current_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR, current_crash_event_menu, TRUE);
+	return get_current_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR,
+				       &current_crash_event_menu, TRUE);
 }
 
 EFI_STATUS set_crash_event_menu(BOOLEAN enabled)
 {
-	return set_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR, current_crash_event_menu, enabled);
+	return set_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR,
+			       &current_crash_event_menu, enabled);
 }
 
 BOOLEAN get_display_splash(void) {
-	return get_current_boolean_var(&loader_guid, UI_DISPLAY_SPLASH_VAR, ui_display_splash, TRUE);
+	return get_current_boolean_var(&loader_guid, UI_DISPLAY_SPLASH_VAR,
+				       &ui_display_splash, TRUE);
 }
 
 BOOLEAN get_oemvars_update(void)
 {
-	return get_current_boolean_var(&fastboot_guid, UPDATE_OEMVARS, current_update_oemvars, TRUE);
+	return get_current_boolean_var(&fastboot_guid, UPDATE_OEMVARS,
+				       &current_update_oemvars, TRUE);
 }
 
 EFI_STATUS set_oemvars_update(BOOLEAN enabled)
 {
-	return set_boolean_var(&fastboot_guid, UPDATE_OEMVARS, current_update_oemvars, enabled);
+	return set_boolean_var(&fastboot_guid, UPDATE_OEMVARS,
+			       &current_update_oemvars, enabled);
 }
 
 enum device_state get_current_state()
@@ -382,7 +403,8 @@ EFI_STATUS set_watchdog_counter_max(UINT8 max)
 
 BOOLEAN get_disable_watchdog()
 {
-	return get_current_boolean_var(&loader_guid, DISABLE_WDT_VAR, disable_wdt, FALSE);
+	return get_current_boolean_var(&loader_guid, DISABLE_WDT_VAR,
+				       &disable_wdt, FALSE);
 }
 
 static void CDD_clean_string(char *buf)
