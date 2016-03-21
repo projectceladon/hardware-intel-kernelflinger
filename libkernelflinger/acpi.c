@@ -138,7 +138,7 @@ static UINT64 _get_acpi_field(CHAR8 *name, CHAR8 *fieldname _unused, VOID **var,
 }
 
 
-static UINTN acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
+static EFI_STATUS acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
 {
 	UINT32 i;
 	CHAR8 sum = 0, *data = (CHAR8 *)table;
