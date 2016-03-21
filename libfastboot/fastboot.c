@@ -953,6 +953,12 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
+#ifdef HAL_AUTODETECT
+	ret = fastboot_publish("variant", info_variant());
+	if (EFI_ERROR(ret))
+		goto error;
+#endif
+
 	ret = fastboot_publish("version-bootloader", info_bootloader_version());
 	if (EFI_ERROR(ret))
 		goto error;
