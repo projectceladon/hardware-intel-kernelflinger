@@ -12,6 +12,7 @@ Kernelflinger implements the Google Bootloader requirements for
 Android<sup>TM</sup> L and M desserts.
 
 The key features are:
+
 1. [Google verified boot](https://source.android.com/security/verifiedboot/verified-boot.html)
    support.
 2. [Fastboot](./doc/fastboot.md) support over USB and TCP.
@@ -25,10 +26,9 @@ The key features are:
 Basic architecture
 ------------------
 
-* [libkernelflinger](./doc/libkernelflinger): library that provides
-  all the tools necessary to access ACPI and SMBIOS tables, run image
-  verification, use storage (SATA, eMMC, SDCard and UFS) and draw
-  graphic widgets.
+* libkernelflinger: library that provides all the tools necessary to
+  access ACPI and SMBIOS tables, run image verification, use storage
+  (SATA, eMMC, SDCard and UFS) and draw graphic widgets.
 * [libfastboot](./doc/fastboot.md): Fastboot protocol implementation.
   [fastboot protocol](https://android.googlesource.com/platform/system/core/+/master/fastboot/)
 * libadb: used by [Crashmode](./doc/crashmode.md).
@@ -105,5 +105,5 @@ Command line parameters
 -----------------------
 
 * `-f`: enforce kernelfliner to enter Fastboot mode
-* `-U` [test-suite-name]": run unittest test (see
-  [unittest.c](./doc/unittest.c)).
+* `-U` [test-suite-name]: run unittest test (see
+  [unittest.c](./unittest.c)).
