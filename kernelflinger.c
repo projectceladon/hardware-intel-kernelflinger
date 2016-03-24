@@ -1203,8 +1203,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
         if (boot_target == EXIT_SHELL)
                 return EFI_SUCCESS;
-        if (boot_target == CRASHMODE)
+        if (boot_target == CRASHMODE) {
                 boot_target = ux_prompt_user_for_boot_target(FALSE);
+                if (boot_target != FASTBOOT)
+                        reboot((CHAR16 *)boot_target_name(boot_target));
+        }
 
         if (boot_target == POWER_OFF)
                 halt_system();
