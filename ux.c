@@ -118,6 +118,7 @@ static const ui_textline_t adb_message[] = {
 	{ &COLOR_LIGHTGRAY,	"- gpt-factory-header",				FALSE },
 	{ &COLOR_LIGHTGRAY,	"- gpt-factory-parts",				FALSE },
 	{ &COLOR_LIGHTGRAY,	"- efivar:VAR_NAME[:GUID]",			FALSE },
+	{ &COLOR_LIGHTGRAY,	"- bert-region",				FALSE },
 	{ &COLOR_LIGHTGRAY,	"START and LENGTH are hexadecimal strings.",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"'ram' output file is an Android sparse file.",	FALSE },
 	{ NULL, NULL, FALSE }
