@@ -663,6 +663,55 @@ static EFI_STATUS gpt_factory_parts_open(reader_ctx_t *ctx, UINTN argc,
 	return _gpt_parts_open(ctx, LOGICAL_UNIT_FACTORY);
 }
 
+/* BERT Region reader */
+static const char BERR_MAGIC[4] = "BERR"; /* Boot Error Record Region */
+
+static EFI_STATUS bert_region_open(reader_ctx_t *ctx, UINTN argc,
+				   __attribute__((__unused__)) char **argv)
+{
+	EFI_STATUS ret;
+	struct BERT_TABLE *bert_table;
+
+	if (argc != 0)
+		return EFI_INVALID_PARAMETER;
+
+	ret = get_acpi_table((CHAR8 *)"BERT", (VOID **)&bert_table);
+	if (ret == EFI_NOT_FOUND) {
+		debug(L"BERT ACPI table not available");
+		return ret;
+	}
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Cannot access ACPI table BERT");
+		return ret;
+	}
+
+	ctx->private = bert_table;
+	ctx->cur = 0;
+	ctx->len = sizeof(BERR_MAGIC) + bert_table->region_length;
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS bert_region_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
+{
+	struct BERT_TABLE *bert_table = ctx->private;
+
+	/* First byte, send the BERR magic */
+	if (ctx->cur == 0) {
+		if (*len < sizeof(BERR_MAGIC))
+			return EFI_INVALID_PARAMETER;
+
+		*buf = (unsigned char *)BERR_MAGIC;
+		*len = sizeof(BERR_MAGIC);
+		return EFI_SUCCESS;
+	}
+
+	*len = min(*len, ctx->len - ctx->cur);
+	*buf = (unsigned char *)bert_table->region + ctx->cur - sizeof(BERR_MAGIC);
+
+	return EFI_SUCCESS;
+}
+
 /* Interface */
 static EFI_STATUS read_from_private(reader_ctx_t *ctx, unsigned char **buf,
 				    __attribute__((__unused__)) UINTN *len)
@@ -691,7 +740,8 @@ struct reader {
 	{ "gpt-header",		gpt_header_open,		read_from_private,	free_private },
 	{ "gpt-parts",		gpt_parts_open,			read_from_private,	free_private },
 	{ "gpt-factory-header",	gpt_factory_header_open,	read_from_private,	free_private },
-	{ "gpt-factory-parts",	gpt_factory_parts_open,		read_from_private,	free_private }
+	{ "gpt-factory-parts",	gpt_factory_parts_open,		read_from_private,	free_private },
+	{ "bert-region",	bert_region_open,		bert_region_read,	NULL }
 };
 
 #define MAX_ARGS		8
