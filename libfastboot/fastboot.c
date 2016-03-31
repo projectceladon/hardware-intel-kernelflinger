@@ -1004,7 +1004,7 @@ static EFI_STATUS fastboot_init()
 
 error:
 	fastboot_free();
-	error(L"Fastboot library initialization failed");
+	efi_perror(ret, L"Fastboot library initialization failed");
 	return ret;
 }
 
