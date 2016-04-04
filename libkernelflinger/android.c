@@ -579,88 +579,66 @@ error:
 static CHAR16 *get_wake_reason(void)
 {
         enum wake_sources wake_source;
-        CHAR16 *reason;
 
         wake_source = rsci_get_wake_source();
         switch(wake_source) {
         case WAKE_BATTERY_INSERTED:
-                reason = StrDuplicate(L"battery_inserted");
-                break;
+                return L"battery_inserted";
         case WAKE_USB_CHARGER_INSERTED:
-                reason = StrDuplicate(L"usb_charger_inserted");
-                break;
+                return L"usb_charger_inserted";
         case WAKE_ACDC_CHARGER_INSERTED:
-                reason = StrDuplicate(L"acdc_charger_inserted");
-                break;
+                return L"acdc_charger_inserted";
         case WAKE_POWER_BUTTON_PRESSED:
-                reason = StrDuplicate(L"power_button_pressed");
-                break;
+                return L"power_button_pressed";
         case WAKE_RTC_TIMER:
-                reason = StrDuplicate(L"rtc_timer");
-                break;
+                return L"rtc_timer";
         case WAKE_BATTERY_REACHED_IA_THRESHOLD:
-                reason = StrDuplicate(L"battery_reached_ia_threshold");
-                break;
+                return L"battery_reached_ia_threshold";
         default:
                 debug(L"wake_source = 0x%02x", wake_source);
-                reason = NULL;
         }
 
-        return reason;
+        return NULL;
 }
 
 
 static CHAR16 *get_reset_reason(void)
 {
         enum reset_sources reset_source;
-        CHAR16 *reason;
 
         reset_source = rsci_get_reset_source();
         switch (reset_source) {
 #ifndef IGNORE_NOT_APPLICABLE_RESET
         case RESET_NOT_APPLICABLE:
-                reason = StrDuplicate(L"not_applicable");
-                break;
+                return L"not_applicable";
 #endif
         case RESET_OS_INITIATED:
-                reason = StrDuplicate(OS_INITIATED);
-                break;
+                return OS_INITIATED;
         case RESET_FORCED:
-                reason = StrDuplicate(L"forced");
-                break;
+                return L"forced";
         case RESET_FW_UPDATE:
-                reason = StrDuplicate(L"firmware_update");
-                break;
+                return L"firmware_update";
         case RESET_KERNEL_WATCHDOG:
-                reason = StrDuplicate(L"watchdog");
-                break;
+                return L"watchdog";
         case RESET_SECURITY_WATCHDOG:
-                reason = StrDuplicate(L"security_watchdog");
-                break;
+                return L"security_watchdog";
         case RESET_SECURITY_INITIATED:
-                reason = StrDuplicate(L"security_initiated");
-                break;
+                return L"security_initiated";
         case RESET_EC_WATCHDOG:
-                reason = StrDuplicate(L"ec_watchdog");
-                break;
+                return L"ec_watchdog";
         case RESET_PMIC_WATCHDOG:
-                reason = StrDuplicate(L"pmic_watchdog");
-                break;
+                return L"pmic_watchdog";
         case RESET_SHORT_POWER_LOSS:
-                reason = StrDuplicate(L"short_power_loss");
-                break;
+                return L"short_power_loss";
         case RESET_PLATFORM_SPECIFIC:
-                reason = StrDuplicate(L"platform_specific");
-                break;
+                return L"platform_specific";
         case RESET_UNKNOWN:
-                reason = StrDuplicate(L"unknown");
-                break;
+                return L"unknown";
         default:
                 debug(L"reset_source = 0x%02x", reset_source);
-                reason = NULL;
         }
 
-        return reason;
+        return NULL;
 }
 
 
@@ -680,8 +658,7 @@ static CHAR16 *get_boot_reason(void)
         bootreason = get_reboot_reason();
         if (!bootreason) {
                 debug(L"Error while trying to read the reboot reason");
-                bootreason = StrDuplicate(L"unknown");
-                goto done;
+                goto unknown;
         }
 
         pos = bootreason;
@@ -691,12 +668,13 @@ static CHAR16 *get_boot_reason(void)
                             (*pos >= L'a' && *pos <= L'z') ||
                             *pos == L'_')) {
                         debug(L"Error, reboot reason contains non-alphanumeric characters");
-                        FreePool(bootreason);
-                        bootreason = StrDuplicate(L"unknown");
-                        break;
+                        goto unknown;
                 }
                 pos++;
         }
+
+unknown:
+        bootreason = L"unknown";
 done:
         del_reboot_reason();
         return bootreason;
@@ -1020,7 +998,6 @@ static EFI_STATUS setup_command_line(
         ret = EFI_SUCCESS;
 out:
         FreePool(cmdline16);
-        FreePool(bootreason);
         if (serialport)
                 FreePool(serialport);
 
