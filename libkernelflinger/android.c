@@ -1367,15 +1367,8 @@ out_cmdline:
 #if DEBUG_MESSAGES
 VOID dump_bcb(IN struct bootloader_message *bcb)
 {
-        CHAR16 *cmd16, *stat16;
-
-        cmd16 = stra_to_str(bcb->command);
-        stat16 = stra_to_str(bcb->status);
-        if (cmd16 && stat16)
-                debug(L"BCB: cmd '%s' status '%s'",
-                        cmd16, stat16);
-        FreePool(cmd16);
-        FreePool(stat16);
+        if (bcb->command && bcb->status)
+                debug(L"BCB: cmd '%a' status '%a'", bcb->command, bcb->status);
 }
 #else
 #define dump_bcb(b) (void)0
