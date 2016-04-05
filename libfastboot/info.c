@@ -43,7 +43,6 @@
 
 char *INFO_UNDEFINED = "N/A";
 static char bootloader_version[MAX_INFO_LENGTH];
-static char variant[MAX_INFO_LENGTH];
 
 char *info_bootloader_version(void)
 {
@@ -76,34 +75,14 @@ exit:
 	return value;
 }
 
-static char *info_get_from_variable(const EFI_GUID *guid, CHAR16 *varname, char *cache)
-{
-	EFI_STATUS ret;
-	CHAR8 *value = NULL;
-	UINTN size;
-
-	if (cache[0] != '\0')
-		return cache;
-
-	ret = get_efi_variable(guid, varname, &size, (VOID **)&value, NULL);
-	if (EFI_ERROR(ret) || !value)
-		return INFO_UNDEFINED;
-
-	if (size >= MAX_INFO_LENGTH) {
-		error(L"Variable value string is too long.");
-		FreePool(value);
-		return INFO_UNDEFINED;
-	}
-
-	memcpy((CHAR8 *)cache, value, size);
-	cache[size + 1] = '\0';
-
-	return cache;
-}
-
 char *info_variant(void)
 {
-	return info_get_from_variable(&fastboot_guid, L"Variant", variant);
+#ifdef HAL_AUTODETECT
+	return get_property_device();
+#else
+	return INFO_UNDEFINED;
+#endif
+
 }
 
 char *info_product(void)

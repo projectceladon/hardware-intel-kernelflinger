@@ -97,21 +97,89 @@ static EFI_STATUS read_file(EFI_FILE *file, UINTN size, void *data)
 	return ret;
 }
 
+typedef struct flash_buffer {
+	struct sparse_header sph;
+	struct chunk_header skip_ckh;
+	union {
+		struct chunk_header ckh;
+		char data[1];
+	} d;
+	char ckh_data[1];
+} __attribute__((__packed__)) flash_buffer_t;
+
+/* This function splits a chunk too large to fit into a
+   MAX_DOWNLOAD_SIZE buffer into smaller chunks and flash them. */
+static EFI_STATUS installer_flash_big_chunk(EFI_FILE *file, UINTN *remaining_data,
+					    flash_buffer_t *fb, UINTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret = EFI_INVALID_PARAMETER;
+	UINTN payload_size, read_size, already_read, ckh_blks, data_size;
+	const UINTN MAX_DATA_SIZE = MAX_DOWNLOAD_SIZE - offsetof(flash_buffer_t, ckh_data);
+	const UINTN MAX_BLKS = MAX_DATA_SIZE / fb->sph.blk_sz;
+	const UINTN HEADER_SIZE = offsetof(flash_buffer_t, d);
+	struct chunk_header *ckh;
+	void *read_ptr;
+
+	ckh = &fb->d.ckh;
+	payload_size = ckh->total_sz - sizeof(*ckh);
+	fb->sph.total_chunks = 2; /* skip and data chunks. */
+
+	for (ckh_blks = ckh->chunk_sz; ckh_blks; ckh_blks -= ckh->chunk_sz) {
+		ckh->chunk_sz = min(MAX_BLKS, ckh_blks);
+		data_size = ckh->chunk_sz * fb->sph.blk_sz;
+		ckh->total_sz = sizeof(*ckh) + data_size;
+		fb->sph.total_blks = fb->skip_ckh.chunk_sz + ckh->chunk_sz;
+
+		installer_flash_buffer(fb, ckh->total_sz + HEADER_SIZE, argc, argv);
+		if (!last_cmd_succeeded)
+			return EFI_INVALID_PARAMETER;
+
+		payload_size -= data_size;
+		if (!payload_size)
+			break;
+
+		/* Move the incomplete data from the end to the
+		   beginning of the buffer. */
+		read_ptr = fb->ckh_data;
+		read_size = min(payload_size, MAX_DATA_SIZE);
+		if (data_size < MAX_DATA_SIZE) {
+			already_read = MAX_DATA_SIZE - data_size;
+			memcpy(read_ptr, fb->d.data + ckh->total_sz, already_read);
+			read_size -= already_read;
+			read_ptr += already_read;
+		}
+
+		ret = read_file(file, read_size, read_ptr);
+		if (EFI_ERROR(ret))
+			return ret;
+		*remaining_data -= read_size;
+
+		fb->skip_ckh.chunk_sz += ckh->chunk_sz;
+	}
+
+	if (payload_size)
+		return EFI_INVALID_PARAMETER;
+
+	return EFI_SUCCESS;
+}
+
 /* This function splits a huge sparse file into smaller ones and flash
    them. */
 static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 				      UINTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
-	struct sparse_header sph, *new_sph;
-	struct chunk_header *ckh, *skip_ckh;
-	void *buf, *data;
-	UINTN remaining_data = size;
-	UINTN data_size, read_size, flash_size, header_size, already_read;
+	flash_buffer_t *fb;
+	struct sparse_header sph;
+	struct chunk_header *ckh;
+	void *buf;
+	UINTN read_size, flash_size, already_read, remaining_data = size;
 	void *read_ptr;
 	INTN nb_chunks;
 	EFI_FILE *file;
 	UINT32 blk_count;
+	const UINTN HEADER_SIZE = offsetof(flash_buffer_t, d);
+	const UINTN MAX_DATA_SIZE = MAX_DOWNLOAD_SIZE - HEADER_SIZE;
 
 	ret = uefi_open_file(file_io_interface, filename, &file);
 	if (EFI_ERROR(ret)) {
@@ -134,29 +202,23 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 		fastboot_fail("Failed to allocate %d bytes", MAX_DOWNLOAD_SIZE);
 		return;
 	}
-	data = buf;
+	fb = buf;
 
 	/* New sparse header. */
-	memcpy(data, &sph, sizeof(sph));
-	new_sph = data;
-	data += sizeof(*new_sph);
+	memcpy(&fb->sph, &sph, sizeof(sph));
 
 	/* Sparse skip chunk. */
-	skip_ckh = data;
-	skip_ckh->chunk_type = CHUNK_TYPE_DONT_CARE;
-	skip_ckh->total_sz = sizeof(*skip_ckh);
-	data += sizeof(*skip_ckh);
+	fb->skip_ckh.chunk_type = CHUNK_TYPE_DONT_CARE;
+	fb->skip_ckh.total_sz = sizeof(fb->skip_ckh);
 
-	header_size = data - buf;
-	data_size = MAX_DOWNLOAD_SIZE - header_size;
 	nb_chunks = sph.total_chunks;
-	read_size = data_size;
-	read_ptr = data;
+	read_size = MAX_DATA_SIZE;
+	read_ptr = fb->d.data;
 	blk_count = 0;
 
 	while (nb_chunks > 0 && remaining_data > 0) {
-		new_sph->total_chunks = 1;
-		new_sph->total_blks = skip_ckh->chunk_sz = blk_count;
+		fb->sph.total_chunks = 1;
+		fb->sph.total_blks = fb->skip_ckh.chunk_sz = blk_count;
 
 		if (remaining_data < read_size)
 			read_size = remaining_data;
@@ -169,8 +231,8 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 
 		/* Process the loaded chunks to build the new header
 		   and the skip chunk. */
-		flash_size = header_size;
-		ckh = data;
+		flash_size = HEADER_SIZE;
+		ckh = &fb->d.ckh;
 		while ((void *)ckh + sizeof(*ckh) <= read_ptr + read_size &&
 		       (void *)ckh + ckh->total_sz <= read_ptr + read_size) {
 			if (nb_chunks == 0) {
@@ -178,22 +240,32 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 				goto exit;
 			}
 			flash_size += ckh->total_sz;
-			new_sph->total_blks += ckh->chunk_sz;
+			fb->sph.total_blks += ckh->chunk_sz;
 			blk_count += ckh->chunk_sz;
-			new_sph->total_chunks++;
+			fb->sph.total_chunks++;
 			nb_chunks--;
 			ckh = (void *)ckh + ckh->total_sz;
 		}
 
-		/* Handle the inconsistencies. */
-		if (flash_size == header_size) {
-			if ((void *)ckh + sizeof(*ckh) < read_ptr + read_size) {
+		/* chunk is too big to fit in the download buffer. */
+		if (flash_size == HEADER_SIZE) {
+			if (ckh->chunk_type != CHUNK_TYPE_RAW ||
+			    remaining_data < ckh->total_sz - MAX_DATA_SIZE) {
 				fastboot_fail("Corrupted sparse file");
 				goto exit;
-			} else {
-				fastboot_fail("Found a too big chunk");
-				goto exit;
 			}
+
+			blk_count += ckh->chunk_sz;
+			nb_chunks--;
+
+			ret = installer_flash_big_chunk(file, &remaining_data,
+							fb, argc, argv);
+			if (EFI_ERROR(ret))
+				goto exit;
+
+			read_size = MAX_DATA_SIZE;
+			read_ptr = fb->d.data;
+			continue;
 		}
 
 		installer_flash_buffer(buf, flash_size, argc, argv);
@@ -204,12 +276,12 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 		   beginning of the buffer. */
 		if (buf + flash_size < read_ptr + read_size) {
 			already_read = read_ptr + read_size - (void *)ckh;
-			memcpy(data, ckh, already_read);
-			read_size = data_size - already_read;
-			read_ptr = data + already_read;
+			memcpy(fb->d.data, ckh, already_read);
+			read_size = MAX_DATA_SIZE - already_read;
+			read_ptr = fb->d.data + already_read;
 		} else {
-			read_size = data_size;
-			read_ptr = data;
+			read_size = MAX_DATA_SIZE;
+			read_ptr = fb->d.data;
 		}
 	}
 

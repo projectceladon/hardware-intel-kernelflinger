@@ -125,6 +125,7 @@ BOOLEAN ui_confirm(const ui_textline_t *text, UINTN width, UINTN height,
 				return FALSE;
 			break;
 		case EV_POWER:
+			ui_wait_for_key_release();
 			return !current;
 		default:
 			break;

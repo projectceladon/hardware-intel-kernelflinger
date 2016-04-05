@@ -82,7 +82,6 @@ static struct msg_for_state {
 };
 
 static const char *DROID_IMG_NAME = "droid_operation";
-static const UINTN SPACE = 20;
 
 /* Boot menu. */
 static ui_boot_action_t BOOT_ACTIONS[] = {

@@ -41,13 +41,9 @@
 #define BOOT_TARGET_SIZE         32
 #define BOOT_SIGNATURE_MAX_SIZE  4096
 
-/* Compute the Root Of Trust bistream and returns its SHA256 hash.
- * The RoT bitstream consists of the device State value (1 for locked
- * and 0 for unlocked) followed by the public key value of CERT.  CERT
- * must be the certificate that has been used to validate the
- * bootimage.  */
-EFI_STATUS compute_rot_bitstream_hash(X509 *cert, UINT8 **hash_p,
-				      UINTN *hash_size);
+/* Compute the SHA256 sum of the public key value of X509 input CERT */
+EFI_STATUS compute_pub_key_hash(X509 *cert, UINT8 **hash_p,
+                                UINTN *hash_size);
 
 /* Given an Android boot image, test if it is signed with the provided
  * certificate or the embedded one
