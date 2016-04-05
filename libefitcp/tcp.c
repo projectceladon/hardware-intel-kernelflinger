@@ -386,7 +386,7 @@ static EFI_STATUS ip_configuration(UINT32 port, EFI_IPv4_ADDRESS *address)
 		}
 	}
 
-	memcpy(address, &ip_data.ConfigData.StationAddress, sizeof(address));
+	memcpy(address, &ip_data.ConfigData.StationAddress, sizeof(*address));
 
 	return EFI_SUCCESS;
 }

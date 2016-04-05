@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
  *
  * Author: Jeremy Compostella <jeremy.compostella@intel.com>
@@ -30,9 +30,12 @@
  *
  */
 
-#ifndef _TEE_H_
-#define _TEE_H_
+#ifndef _SILENTLAKE_H_
+#define _SILENTLAKE_H_
 
-EFI_STATUS txe_bind_root_of_trust(UINT8 *hash, UINTN hash_size);
+#include <efi.h>
+#include <openssl/x509.h>
 
-#endif	/* _TEE_H_ */
+EFI_STATUS silentlake_bind_root_of_trust(enum device_state state, X509 *verifier_cert);
+
+#endif /* _SILENTLAKE_H_ */

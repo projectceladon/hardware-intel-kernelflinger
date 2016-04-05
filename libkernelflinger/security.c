@@ -274,19 +274,18 @@ static EFI_STATUS add_digest(X509_ALGOR *algo)
 }
 
 
-EFI_STATUS compute_rot_bitstream_hash(X509 *cert, UINT8 **hash_p, UINTN *hash_size)
+EFI_STATUS compute_pub_key_hash(X509 *cert, UINT8 **hash_p, UINTN *hash_size)
 {
         static UINT8 hash[SHA256_DIGEST_LENGTH];
         EFI_STATUS fun_ret = EFI_INVALID_PARAMETER;
         BIO *rot_bio = NULL;
-        UINT8 device_state;
         EVP_PKEY *pkey = NULL;
         RSA *rsa;
         int ret;
         int size;
         char *rot_bitstream;
 
-        if (!hash_p || !hash_size)
+        if (!hash_p || !hash_size || !cert)
                 return EFI_INVALID_PARAMETER;
 
         rot_bio = BIO_new(BIO_s_mem());
@@ -295,31 +294,23 @@ EFI_STATUS compute_rot_bitstream_hash(X509 *cert, UINT8 **hash_p, UINTN *hash_si
                 return EFI_OUT_OF_RESOURCES;
         }
 
-        device_state = device_is_locked() ? 1 : 0;
-        ret = BIO_write(rot_bio, &device_state, sizeof(device_state));
-        if (ret != sizeof(device_state)) {
-                error(L"Failed to write the device state to the RoT bitstream BIO");
+
+        pkey = get_rsa_pubkey(cert);
+        if (!pkey) {
+                error(L"Failed to get the public key from the certificate");
                 goto out;
         }
 
-        if (cert) {
-                pkey = get_rsa_pubkey(cert);
-                if (!pkey) {
-                        error(L"Failed to get the public key from the certificate");
-                        goto out;
-                }
+        rsa = EVP_PKEY_get1_RSA(pkey);
+        if (!rsa) {
+                error(L"Failed to get the RSA key from the public key");
+                goto out;
+        }
 
-                rsa = EVP_PKEY_get1_RSA(pkey);
-                if (!rsa) {
-                        error(L"Failed to get the RSA key from the public key");
-                        goto out;
-                }
-
-                ret = i2d_RSAPublicKey_bio(rot_bio, rsa);
-                if (ret <= 0) {
-                        error(L"Failed to write the RSA key to RoT bitstream BIO");
-                        goto out;
-                }
+        ret = i2d_RSAPublicKey_bio(rot_bio, rsa);
+        if (ret <= 0) {
+                error(L"Failed to write the RSA key to RoT bitstream BIO");
+                goto out;
         }
 
         size = BIO_get_mem_data(rot_bio, &rot_bitstream);

@@ -57,7 +57,7 @@
 #include "blobstore.h"
 #endif
 #include "oemvars.h"
-#include "txe.h"
+#include "silentlake.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -944,10 +944,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         EFI_HANDLE image;
         void *efiimage = NULL;
         UINTN imagesize;
-#ifdef USE_TXE
-        UINT8 *hash = NULL;
-        UINTN hash_size;
-#endif
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
@@ -967,16 +963,10 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                          * check just to make sure */
                         if (device_is_unlocked()) {
                                 set_image_oemvars_nocheck(bootimage, NULL);
-#ifdef USE_TXE
-                                ret = compute_rot_bitstream_hash(NULL, &hash, &hash_size);
+#ifdef USE_SILENTLAKE
+                                ret = silentlake_bind_root_of_trust(UNLOCKED, NULL);
                                 if (EFI_ERROR(ret)) {
-                                        efi_perror(ret, L"Failed to generate Root Of Trust bitstream hash");
-                                        /* Will not be able to bind the Root of Trust */
-                                        die();
-                                }
-                                ret = txe_bind_root_of_trust(hash, hash_size);
-                                if (EFI_ERROR(ret)) {
-                                        efi_perror(ret, L"Failed to bind the Root of Trust");
+                                        efi_perror(ret, L"Failed to provide a root of trust to SilentLake");
                                         die();
                                 }
 #endif
@@ -1213,8 +1203,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
         if (boot_target == EXIT_SHELL)
                 return EFI_SUCCESS;
-        if (boot_target == CRASHMODE)
+        if (boot_target == CRASHMODE) {
                 boot_target = ux_prompt_user_for_boot_target(FALSE);
+                if (boot_target != FASTBOOT)
+                        reboot((CHAR16 *)boot_target_name(boot_target));
+        }
 
         if (boot_target == POWER_OFF)
                 halt_system();
@@ -1306,18 +1299,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                                                 &verifier_cert);
         }
 
-        ret = compute_rot_bitstream_hash(verifier_cert, &hash, &hash_size);
-        if (verifier_cert)
-                X509_free(verifier_cert);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Failed to generate Root Of Trust bitstream hash");
-#ifdef USE_TXE
-                /* Will not be able to bind the Root of Trust */
-                die();
-#endif
-        }
-
         if (boot_state == BOOT_STATE_YELLOW) {
+                ret = compute_pub_key_hash(verifier_cert, &hash, &hash_size);
+                if (EFI_ERROR(ret))
+                        efi_perror(ret, L"Failed to compute pub key hash");
                 boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, hash, hash_size);
                 debug(L"User accepted untrusted bootimage warning");
         }
@@ -1355,13 +1340,15 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 break;
         }
 
-#ifdef USE_TXE
-        ret = txe_bind_root_of_trust(hash, hash_size);
+#ifdef USE_SILENTLAKE
+        ret = silentlake_bind_root_of_trust(get_current_state(), verifier_cert);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Failed to bind the Root of Trust");
+                efi_perror(ret, L"Failed to provide a root of trust to SilentLake");
                 die();
         }
 #endif
+        if (verifier_cert)
+                X509_free(verifier_cert);
 
         return load_image(bootimage, boot_state, boot_target);
 }
