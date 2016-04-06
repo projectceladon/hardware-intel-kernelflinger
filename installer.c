@@ -45,6 +45,7 @@
 #include "fastboot.h"
 #include "fastboot_oem.h"
 #include "text_parser.h"
+#include "android.h"
 
 static BOOLEAN last_cmd_succeeded;
 static fastboot_handle fastboot_flash_cmd;
@@ -399,6 +400,39 @@ free_filename:
 	FreePool(filename);
 }
 
+static void installer_boot(INTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	VOID *bootimage;
+	UINTN size;
+	CHAR16 *filename;
+
+	if (argc != 2) {
+		fastboot_fail("boot command takes one parameter");
+		return;
+	}
+
+	filename = stra_to_str((CHAR8 *)argv[1]);
+	if (!filename) {
+		fastboot_fail("Failed to convert filename to CHAR16");
+		return;
+	}
+
+	ret = uefi_read_file(file_io_interface, filename, &bootimage, &size);
+	FreePool(filename);
+	if (EFI_ERROR(ret)) {
+		inst_perror(ret, "Failed to read %a file", argv[1]);
+		return;
+	}
+
+	ret = android_image_start_buffer(g_parent_image, bootimage,
+                                         NORMAL_BOOT, BOOT_STATE_ORANGE, NULL);
+	if (EFI_ERROR(ret))
+		inst_perror(ret, "Failed to start %s image", filename);
+	else
+		fastboot_okay("");
+}
+
 static char **commands;
 static UINTN command_nb;
 static UINTN current_command;
@@ -497,7 +531,7 @@ static void usage(__attribute__((__unused__)) INTN argc,
 	Print(L" --help, -h             print this help and exit\n");
 	Print(L" --batch, -b FILE       run all the fastboot commands of FILE\n");
 	Print(L"If no option is provided, the installer assumes '%a'\n", DEFAULT_OPTIONS);
-	Print(L"Note: 'boot', 'update', 'flash-raw' and 'flashall' commands are NOT supported\n");
+	Print(L"Note: 'update', 'flash-raw' and 'flashall' commands are NOT supported\n");
 
 	fastboot_okay("");
 }
@@ -515,10 +549,10 @@ static struct replacements {
 	/* Fastboot changes. */
 	{ { "flash",	UNKNOWN_STATE,	installer_flash_cmd },	&fastboot_flash_cmd },
 	{ { "format",	UNLOCKED,	installer_format    },	NULL },
+	{ { "boot",	UNLOCKED,	installer_boot      },	NULL },
 	/* Unsupported commands. */
 	{ { "update",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
 	{ { "flashall",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
-	{ { "boot",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
 	{ { "devices",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
 	{ { "download",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
 	/* Installer specific commands. */
