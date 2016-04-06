@@ -658,7 +658,8 @@ static CHAR16 *get_boot_reason(void)
         bootreason = get_reboot_reason();
         if (!bootreason) {
                 debug(L"Error while trying to read the reboot reason");
-                goto unknown;
+                bootreason = L"unknown";
+                goto done;
         }
 
         pos = bootreason;
@@ -668,13 +669,12 @@ static CHAR16 *get_boot_reason(void)
                             (*pos >= L'a' && *pos <= L'z') ||
                             *pos == L'_')) {
                         debug(L"Error, reboot reason contains non-alphanumeric characters");
-                        goto unknown;
+                        bootreason = L"unknown";
+                        goto done;
                 }
                 pos++;
         }
 
-unknown:
-        bootreason = L"unknown";
 done:
         del_reboot_reason();
         return bootreason;
