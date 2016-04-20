@@ -618,6 +618,7 @@ static UINT8 validate_bootimage(
 
         switch (boot_target) {
         case NORMAL_BOOT:
+        case MEMORY:
                 expected = L"/boot";
                 /* in case of multistage ota */
                 expected2 = L"/recovery";
@@ -626,7 +627,10 @@ static UINT8 validate_bootimage(
                 expected = L"/boot";
                 break;
         case RECOVERY:
-                expected = L"/recovery";
+                if (recovery_in_boot_partition())
+                        expected = L"/boot";
+                else
+                        expected = L"/recovery";
                 break;
         case ESP_BOOTIMAGE:
                 /* "live" bootable image */
@@ -687,6 +691,10 @@ static EFI_STATUS load_boot_image(
                 } while (EFI_ERROR(ret) && slot_get_active());
                 break;
         case RECOVERY:
+                if (recovery_in_boot_partition()) {
+                        ret = load_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot);
+                        break;
+                }
                 if (use_slot() && !slot_recovery_tries_remaining()) {
                         ret = EFI_NOT_FOUND;
                         break;
@@ -790,7 +798,8 @@ static EFI_STATUS set_image_oemvars(VOID *bootimage)
 }
 
 static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
-                             enum boot_target boot_target)
+                             enum boot_target boot_target,
+                             X509 *verifier_cert)
 {
         EFI_STATUS ret;
 
@@ -816,7 +825,8 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
         debug(L"chainloading boot image, boot state is %s",
                         boot_state_to_string(boot_state));
         ret = android_image_start_buffer(g_parent_image, bootimage,
-                                         boot_target, boot_state, NULL);
+                                         boot_target, boot_state, NULL,
+                                         verifier_cert);
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Couldn't load Boot image");
 
@@ -850,6 +860,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
         void *efiimage = NULL;
         UINTN imagesize;
         VOID *bootimage;
+        X509 *verifier_cert = NULL;
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
@@ -876,7 +887,8 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
                                         die();
                                 }
 #endif
-                                load_image(bootimage, BOOT_STATE_ORANGE, NORMAL_BOOT);
+                                validate_bootimage(MEMORY, bootimage, &verifier_cert);
+                                load_image(bootimage, BOOT_STATE_ORANGE, MEMORY, verifier_cert);
                         }
                         FreePool(bootimage);
                         bootimage = NULL;
@@ -1207,10 +1219,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (EFI_ERROR(ret)) {
                 debug(L"issue loading boot image: %r", ret);
                 boot_state = BOOT_STATE_RED;
-        } else if (boot_state != BOOT_STATE_ORANGE) {
+        } else {
+                UINT8 new_boot_state;
                 debug(L"Validating boot image");
-                boot_state = validate_bootimage(boot_target, bootimage,
-                                                &verifier_cert);
+                new_boot_state = validate_bootimage(boot_target, bootimage,
+                                                    &verifier_cert);
+                if (boot_state != BOOT_STATE_ORANGE)
+                        boot_state = new_boot_state;
         }
 
         if (boot_state == BOOT_STATE_YELLOW) {
@@ -1259,10 +1274,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 die();
         }
 #endif
-        if (verifier_cert)
-                X509_free(verifier_cert);
 
-        ret = load_image(bootimage, boot_state, boot_target);
+        ret = load_image(bootimage, boot_state, boot_target, verifier_cert);
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Failed to start boot image");
 
@@ -1273,7 +1286,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         reboot_to_target(boot_target);
                 break;
         case RECOVERY:
-                if (slot_recovery_tries_remaining())
+                if (recovery_in_boot_partition()) {
+                        if (slot_get_active())
+                                reboot_to_target(boot_target);
+                } else if (slot_recovery_tries_remaining())
                         reboot_to_target(boot_target);
                 break;
         default:

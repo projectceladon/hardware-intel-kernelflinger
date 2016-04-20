@@ -16,6 +16,8 @@
 
 #ifndef GUMMIBOOT_ANDROID_H
 
+#include <openssl/x509.h>
+
 #include "efi.h"
 #include "efilib.h"
 #ifdef HAL_AUTODETECT
@@ -190,7 +192,8 @@ EFI_STATUS android_image_start_buffer(
                 IN VOID *bootimage,
                 IN enum boot_target boot_target,
                 IN UINT8 boot_state,
-                IN EFI_GUID *swap);
+                IN EFI_GUID *swap,
+                IN X509 *verity_cert);
 
 EFI_STATUS android_image_load_partition(
                 IN const CHAR16 *label,
@@ -212,6 +215,14 @@ EFI_STATUS write_bcb(
 
 /* Perform a security  RAM wipe */
 EFI_STATUS android_clear_memory(void);
+
+/* True if the current Android configuration use slot and does not
+ * have a recovery partition.  When true, it means that the current
+ * Android configuration requires to boot using the system partiton as
+ * root filesystem.  It also means that the Recovery mode is provided
+ * by the boot partition ramdisk.
+ */
+BOOLEAN recovery_in_boot_partition(void);
 
 /* Sanity check the data and return a pointer to the header.
  * Return NULL if the sanity check fails */

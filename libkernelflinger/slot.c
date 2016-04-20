@@ -461,7 +461,7 @@ EFI_STATUS slot_boot(enum boot_target target)
 	if (!use_slot())
 		return EFI_SUCCESS;
 
-	if (target == RECOVERY) {
+	if (target == RECOVERY && !recovery_in_boot_partition()) {
 		if (!boot_ctrl.recovery_tries_remaining)
 			return EFI_INVALID_PARAMETER;
 
@@ -496,7 +496,10 @@ EFI_STATUS slot_boot_failed(enum boot_target target)
 	EFI_STATUS ret;
 	slot_metadata_t *slot;
 
-	if (target != NORMAL_BOOT && target != CHARGER)
+	if (target != NORMAL_BOOT && target != CHARGER && target != RECOVERY)
+		return EFI_SUCCESS;
+
+	if (target == RECOVERY && !recovery_in_boot_partition())
 		return EFI_SUCCESS;
 
 	slot = get_slot(cur_suffix);
