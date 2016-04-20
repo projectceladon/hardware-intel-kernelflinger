@@ -48,7 +48,6 @@ enum boot_target {
         CHARGER,
         POWER_OFF,
         EXIT_SHELL,
-        TDOS,
         DNX,
         CRASHMODE
 };
