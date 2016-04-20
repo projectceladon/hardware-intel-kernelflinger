@@ -710,7 +710,7 @@ EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gb
 	return gpt_write_partition_tables();
 }
 
-EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, logical_unit_t log_unit)
+EFI_STATUS gpt_get_partition_guid(const CHAR16 *label, EFI_GUID *guid, logical_unit_t log_unit)
 {
 	EFI_STATUS ret;
 	struct gpt_partition *part;
@@ -730,7 +730,7 @@ EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, logical_unit_t 
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, logical_unit_t log_unit)
+EFI_STATUS gpt_swap_partition(const CHAR16 *label1, const CHAR16 *label2, logical_unit_t log_unit)
 {
 	EFI_STATUS ret;
 	struct gpt_partition *part1, *part2, save1;

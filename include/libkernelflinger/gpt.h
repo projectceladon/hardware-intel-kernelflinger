@@ -93,8 +93,8 @@ EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gb
 void gpt_free_cache(void);
 EFI_STATUS gpt_refresh(void);
 EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, logical_unit_t log_unit);
-EFI_STATUS gpt_get_partition_guid(CHAR16 *label, EFI_GUID *guid, logical_unit_t log_unit);
-EFI_STATUS gpt_swap_partition(CHAR16 *label1, CHAR16 *label2, logical_unit_t log_unit);
+EFI_STATUS gpt_get_partition_guid(const CHAR16 *label, EFI_GUID *guid, logical_unit_t log_unit);
+EFI_STATUS gpt_swap_partition(const CHAR16 *label1, const CHAR16 *label2, logical_unit_t log_unit);
 EFI_STATUS gpt_sync(void);
 EFI_STATUS gpt_get_partition_handle(const CHAR16 *label, logical_unit_t log_unit, EFI_HANDLE *handle);
 EFI_STATUS gpt_get_header(struct gpt_header **header, UINTN *size, logical_unit_t log_unit);
