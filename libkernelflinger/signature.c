@@ -22,40 +22,19 @@
 
 #include "signature.h"
 #include "asn1.h"
-
-#ifndef KERNELFLINGER
-#include "userfastboot_ui.h"
-#else
-#define malloc AllocatePool
-#define free FreePool
 #include "lib.h"
-#define pr_error(x, ...) error(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
-#define pr_debug(x, ...) debug(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
-#endif
 
 void free_boot_signature(struct boot_signature *bs)
 {
 	if (!bs)
 		return;
 
-	free(bs->signature);
-	free(bs->id.parameters);
+	FreePool(bs->signature);
+	FreePool(bs->id.parameters);
 	if (bs->certificate)
 		X509_free(bs->certificate);
-	free(bs);
+	FreePool(bs);
 }
-
-
-#ifndef KERNELFLINGER
-void dump_boot_signature(struct boot_signature *bs)
-{
-	pr_debug("boot sig format       %ld\n", bs->format_version);
-	pr_debug("boot sig algo id      %d\n", bs->id.nid);
-	pr_debug("target                %s\n", bs->attributes.target);
-	pr_debug("length                %ld\n", bs->attributes.length);
-	pr_debug("signature len         %ld\n", bs->signature_len);
-}
-#endif
 
 static int decode_algorithm_identifier(const unsigned char **datap, long *sizep,
 		struct algorithm_identifier *ai)
@@ -70,7 +49,7 @@ static int decode_algorithm_identifier(const unsigned char **datap, long *sizep,
 		return -1;
 
 	if (seq_size) {
-		pr_error("parameters not supported yet\n");
+		error(L"parameters not supported yet");
 		return -1;
 	} else {
 		ai->parameters = NULL;
@@ -79,7 +58,6 @@ static int decode_algorithm_identifier(const unsigned char **datap, long *sizep,
 	*sizep = *sizep - (*datap - orig);
 	return 0;
 }
-
 
 static int decode_auth_attributes(const unsigned char **datap, long *sizep,
 		struct auth_attributes *aa)
@@ -108,7 +86,6 @@ static int decode_auth_attributes(const unsigned char **datap, long *sizep,
 	return 0;
 }
 
-
 static int decode_boot_signature(const unsigned char **datap, long *sizep,
 		struct boot_signature *bs)
 {
@@ -122,7 +99,7 @@ static int decode_boot_signature(const unsigned char **datap, long *sizep,
 				NULL, NULL))
 		return -1;
 
-	pr_debug("BootSignature format version %ld\n", bs->format_version);
+	debug(L"BootSignature format version %ld", bs->format_version);
 	switch (bs->format_version) {
 	case 0:
 		break;
@@ -131,7 +108,7 @@ static int decode_boot_signature(const unsigned char **datap, long *sizep,
 		BIO *bio;
 		bio = BIO_new_mem_buf((void *)*datap, seq_size);
 		if (!bio) {
-			pr_error("Failed to allocate BIO ressources\n");
+			error(L"Failed to allocate BIO ressources");
 			return -1;
 		}
 		bs->certificate = d2i_X509_bio(bio, NULL);
@@ -143,26 +120,26 @@ static int decode_boot_signature(const unsigned char **datap, long *sizep,
 		break;
 	}
 	default:
-		pr_error("unsupported boot signature format %ld\n",
-			 bs->format_version);
+		error(L"unsupported boot signature format %ld",
+		      bs->format_version);
 		return -1;
 	}
 
 	if (decode_algorithm_identifier(datap, &seq_size, &bs->id)) {
-		pr_error("bad algorithm identifier\n");
+		error(L"bad algorithm identifier");
 		return -1;
 	}
 
 	if (decode_auth_attributes(datap, &seq_size, &bs->attributes)) {
-		pr_error("bad authenticated attributes\n");
-		free(bs->id.parameters);
+		error(L"bad authenticated attributes");
+		FreePool(bs->id.parameters);
 		return -1;
 	}
 
 	if (decode_octet_string(datap, &seq_size, (unsigned char **)&bs->signature,
 				&bs->signature_len)) {
-		pr_error("bad signature data\n");
-		free(bs->id.parameters);
+		error(L"bad signature data");
+		FreePool(bs->id.parameters);
 		return -1;
 	}
 
@@ -175,12 +152,12 @@ struct boot_signature *get_boot_signature(const void *data, long size)
 {
 	const unsigned char *pos = data;
 	long remain = size;
-	struct boot_signature *bs = malloc(sizeof(*bs));
+	struct boot_signature *bs = AllocatePool(sizeof(*bs));
 	if (!bs)
 		return NULL;
 
 	if (decode_boot_signature(&pos, &remain, bs)) {
-		free(bs);
+		FreePool(bs);
 		return NULL;
 	}
 	return bs;
