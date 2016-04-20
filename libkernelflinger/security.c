@@ -274,26 +274,29 @@ static EFI_STATUS add_digest(X509_ALGOR *algo)
 }
 
 
-EFI_STATUS compute_pub_key_hash(X509 *cert, UINT8 **hash_p, UINTN *hash_size)
+static EFI_STATUS pub_key_hash(X509 *cert, UINT8 **hash_p,
+                               const EVP_MD *hash_algo)
 {
         static UINT8 hash[SHA256_DIGEST_LENGTH];
         EFI_STATUS fun_ret = EFI_INVALID_PARAMETER;
-        BIO *rot_bio = NULL;
+        BIO *bio = NULL;
         EVP_PKEY *pkey = NULL;
         RSA *rsa;
         int ret;
         int size;
-        char *rot_bitstream;
+        char *raw_pkey;
 
-        if (!hash_p || !hash_size || !cert)
+        if (hash_algo != EVP_sha256() && hash_algo != EVP_sha1())
+                return EFI_UNSUPPORTED;
+
+        if (!hash_p || !cert)
                 return EFI_INVALID_PARAMETER;
 
-        rot_bio = BIO_new(BIO_s_mem());
-        if (!rot_bio) {
+        bio = BIO_new(BIO_s_mem());
+        if (!bio) {
                 error(L"Failed to allocate the RoT bitstream BIO");
                 return EFI_OUT_OF_RESOURCES;
         }
-
 
         pkey = get_rsa_pubkey(cert);
         if (!pkey) {
@@ -307,36 +310,44 @@ EFI_STATUS compute_pub_key_hash(X509 *cert, UINT8 **hash_p, UINTN *hash_size)
                 goto out;
         }
 
-        ret = i2d_RSAPublicKey_bio(rot_bio, rsa);
+        ret = i2d_RSAPublicKey_bio(bio, rsa);
         if (ret <= 0) {
                 error(L"Failed to write the RSA key to RoT bitstream BIO");
                 goto out;
         }
 
-        size = BIO_get_mem_data(rot_bio, &rot_bitstream);
+        size = BIO_get_mem_data(bio, &raw_pkey);
         if (size == -1) {
                 error(L"Failed to get the RoT bitstream BIO content");
                 goto out;
         }
 
-        ret = EVP_Digest(rot_bitstream, size, hash, NULL, EVP_sha256(), NULL);
+        ret = EVP_Digest(raw_pkey, size, hash, NULL, hash_algo, NULL);
         if (ret == 0) {
                 error(L"Failed to hash the RoT bitstream");
                 goto out;
         }
 
         *hash_p = hash;
-        *hash_size = sizeof(hash);
         fun_ret = EFI_SUCCESS;
 
 out:
         if (pkey)
                 EVP_PKEY_free(pkey);
-        if (rot_bio)
-                BIO_free(rot_bio);
+        if (bio)
+                BIO_free(bio);
         return fun_ret;
 }
 
+EFI_STATUS pub_key_sha256(X509 *cert, UINT8 **hash_p)
+{
+        return pub_key_hash(cert, hash_p, EVP_sha256());
+}
+
+EFI_STATUS pub_key_sha1(X509 *cert, UINT8 **hash_p)
+{
+        return pub_key_hash(cert, hash_p, EVP_sha1());
+}
 
 UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
                                 IN UINTN cert_size, OUT CHAR16 *target,

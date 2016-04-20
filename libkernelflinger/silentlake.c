@@ -67,7 +67,8 @@ EFI_STATUS silentlake_bind_root_of_trust(enum device_state state, X509 *verifier
 	sl_ret_code_t sl_ret;
 	sl_gvb_data_t data = {
 		.version    = SL_GVB_DATA_VERSION,
-		.lock_state = state
+		.lock_state = state,
+		.key_size   = SHA256_DIGEST_LENGTH
 	};
 	UINT8 *temp_hash;
 	UINT32 reg[4] = { 0, 0, 0, 0 };
@@ -82,8 +83,7 @@ EFI_STATUS silentlake_bind_root_of_trust(enum device_state state, X509 *verifier
 	      vmm_v.major, vmm_v.minor);
 
 	if (verifier_cert) {
-		ret = compute_pub_key_hash(verifier_cert, &temp_hash,
-					   (UINTN *)&data.key_size);
+		ret = pub_key_sha256(verifier_cert, &temp_hash);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to compute rot bitstream for sl");
 			return ret;

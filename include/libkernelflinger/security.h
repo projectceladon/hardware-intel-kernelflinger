@@ -41,9 +41,9 @@
 #define BOOT_TARGET_SIZE         32
 #define BOOT_SIGNATURE_MAX_SIZE  4096
 
-/* Compute the SHA256 sum of the public key value of X509 input CERT */
-EFI_STATUS compute_pub_key_hash(X509 *cert, UINT8 **hash_p,
-                                UINTN *hash_size);
+/* Compute sums of the public key value of X509 input CERT */
+EFI_STATUS pub_key_sha256(X509 *cert, UINT8 **hash_p);
+EFI_STATUS pub_key_sha1(X509 *cert, UINT8 **hash_p);
 
 /* Given an Android boot image, test if it is signed with the provided
  * certificate or the embedded one
