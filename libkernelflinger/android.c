@@ -717,7 +717,7 @@ static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
         CHAR16 *cmdline_prepend = NULL;
         BOOLEAN needs_pause = FALSE;
 
-        if (boot_target == NORMAL_BOOT) {
+        if (boot_target == NORMAL_BOOT || boot_target == MEMORY) {
                 cmdline16 = get_efi_variable_str8(&loader_guid, CMDLINE_REPLACE_VAR);
                 cmdline_append = get_efi_variable_str8(&loader_guid, CMDLINE_APPEND_VAR);
                 cmdline_prepend = get_efi_variable_str8(&loader_guid, CMDLINE_PREPEND_VAR);
@@ -866,11 +866,50 @@ static EFI_STATUS add_bootvars(VOID *bootimage, CHAR16 **cmdline16)
 }
 #endif
 
+#define ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init root="
+
+static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_cert)
+{
+        EFI_GUID system_guid;
+        EFI_STATUS ret;
+        char *key_id = NULL;
+
+        ret = gpt_get_partition_guid(slot_label(SYSTEM_LABEL),
+                                     &system_guid, LOGICAL_UNIT_USER);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
+                return ret;
+        }
+
+        if (!verity_cert) {
+#ifdef USERDEBUG
+                error(L"Cannot boot without a verity certificate");
+                return EFI_INVALID_PARAMETER;
+#else
+                ret = prepend_command_line(cmdline16, ROOTFS_PREFIX "PARTUUID=%g",
+                                           &system_guid);
+                return ret;
+#endif
+        }
+
+        ret = get_android_verity_key_id(verity_cert, &key_id);
+        if (EFI_ERROR(ret))
+                return ret;
+
+        ret = prepend_command_line(cmdline16, ROOTFS_PREFIX "/dev/dm-0 dm=\"system "
+                                   "none ro,0 1 android-verity %a PARTUUID=%g\"",
+                                   key_id, &system_guid);
+        FreePool(key_id);
+
+        return ret;
+}
+
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
                 IN EFI_GUID *swap_guid,
-                IN UINT8 boot_state)
+                IN UINT8 boot_state,
+                IN X509 *verity_cert)
 {
         CHAR16 *cmdline16 = NULL;
         char   *serialno = NULL;
@@ -980,6 +1019,15 @@ static EFI_STATUS setup_command_line(
         if (boot_target != RECOVERY && slot_get_active()) {
                 ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
                                            slot_get_active());
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+
+        if ((boot_target == NORMAL_BOOT || boot_target == CHARGER || boot_target == MEMORY) &&
+            recovery_in_boot_partition()) {
+                ret = prepend_command_line_rootfs(&cmdline16, verity_cert);
+                if (verity_cert)
+                        X509_free(verity_cert);
                 if (EFI_ERROR(ret))
                         goto out;
         }
@@ -1304,7 +1352,8 @@ EFI_STATUS android_image_start_buffer(
                 IN VOID *bootimage,
                 IN enum boot_target boot_target,
                 IN UINT8 boot_state,
-                IN EFI_GUID *swap_guid)
+                IN EFI_GUID *swap_guid,
+                IN X509 *verity_cert)
 {
         struct boot_img_hdr *aosp_header;
         struct boot_params *buf;
@@ -1344,17 +1393,20 @@ EFI_STATUS android_image_start_buffer(
         }
 
         debug(L"Creating command line");
-        ret = setup_command_line(bootimage, boot_target, swap_guid, boot_state);
+        ret = setup_command_line(bootimage, boot_target, swap_guid, boot_state,
+                                 verity_cert);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"setup_command_line");
                 return ret;
         }
 
-        debug(L"Loading the ramdisk");
-        ret = setup_ramdisk(bootimage);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"setup_ramdisk");
-                goto out_cmdline;
+        if (!recovery_in_boot_partition() || boot_target == RECOVERY) {
+                debug(L"Loading the ramdisk");
+                ret = setup_ramdisk(bootimage);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"setup_ramdisk");
+                        goto out_cmdline;
+                }
         }
 
         debug(L"Loading the kernel");
@@ -1477,5 +1529,16 @@ EFI_STATUS android_clear_memory()
         return EFI_SUCCESS;
 }
 
+BOOLEAN recovery_in_boot_partition(void)
+{
+        EFI_STATUS ret;
+        struct gpt_partition_interface gpart;
+
+        if (!use_slot())
+                return FALSE;
+
+        ret = gpt_get_partition_by_label(RECOVERY_LABEL, &gpart, LOGICAL_UNIT_USER);
+        return ret == EFI_NOT_FOUND;
+}
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */

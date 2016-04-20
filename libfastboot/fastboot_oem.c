@@ -193,7 +193,7 @@ static struct oem_hash {
 	BOOLEAN fail_if_missing;
 } OEM_HASH[] = {
 	{ BOOT_LABEL,		get_boot_image_hash,	TRUE },
-	{ RECOVERY_LABEL,	get_boot_image_hash,	TRUE },
+	{ RECOVERY_LABEL,	get_boot_image_hash,	FALSE },
 	{ BOOTLOADER_LABEL,	get_esp_hash,		TRUE },
 	{ SYSTEM_LABEL,		get_fs_hash,		TRUE },
 	{ VENDOR_LABEL,		get_fs_hash,		FALSE }

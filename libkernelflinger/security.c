@@ -664,6 +664,93 @@ done:
         return payload ? EFI_SUCCESS : EFI_INVALID_PARAMETER;
 }
 
+static EFI_STATUS get_x509_name_entry(X509 *cert, int nid, char **value)
+{
+        X509_NAME *name;
+        UINTN i, j, nb_entry;
+        X509_NAME_ENTRY *ent;
+        ASN1_OBJECT *obj;
+        ASN1_STRING *val;
+
+        name = X509_get_issuer_name(cert);
+        if (!name)
+                return EFI_INVALID_PARAMETER;
+
+        nb_entry = X509_NAME_entry_count(name);
+        for (i = 0; i < nb_entry; i++) {
+                ent = X509_NAME_get_entry(name, i);
+                obj = X509_NAME_ENTRY_get_object(ent);
+                val = X509_NAME_ENTRY_get_data(ent);
+
+                if (!obj || !val)
+                        error(L"Failed to get entry content");
+
+                if (OBJ_obj2nid(obj) != nid)
+                        continue;
+
+                for (j = 0; j < (UINTN)val->length; j++)
+                        if (val->data[j] > 0x7F) {
+                                error(L"Non-ASCII value unsupported");
+                                return EFI_UNSUPPORTED;
+                        }
+
+                *value = strdup((char *)val->data);
+                return EFI_SUCCESS;
+        }
+
+        return EFI_NOT_FOUND;
+}
+
+#define KEY_ID_SEPARATOR ":#"
+
+EFI_STATUS get_android_verity_key_id(X509 *cert, char **value)
+{
+        EFI_STATUS ret;
+        char *common_name = NULL, *keyid = NULL;
+        UINT8 *hash;
+        UINTN strsize, prefix_len;
+        int len;
+
+        if (!cert || !value)
+                return EFI_INVALID_PARAMETER;
+
+        ret = get_x509_name_entry(cert, NID_commonName, &common_name);
+        if (EFI_ERROR(ret))
+                goto out;
+
+        ret = pub_key_sha1(cert, &hash);
+        if (EFI_ERROR(ret))
+                goto out;
+
+        prefix_len = strlen((CHAR8 *)common_name) +
+                strlen((CHAR8 *)KEY_ID_SEPARATOR);
+        strsize = prefix_len + (SHA_DIGEST_LENGTH * 2) + 1;
+        keyid = AllocatePool(strsize);
+        if (!keyid)
+                goto out;
+
+        len = snprintf((CHAR8 *)keyid, prefix_len + 1,
+                       (CHAR8 *)"%a" KEY_ID_SEPARATOR, common_name);
+        if (len != (int)prefix_len) {
+                ret = EFI_BAD_BUFFER_SIZE;
+                goto out;
+        }
+
+        ret = bytes_to_hex_stra(hash, SHA_DIGEST_LENGTH,
+                                (CHAR8 *)keyid + len, strsize - len);
+        if (EFI_ERROR(ret))
+                goto out;
+
+        *value = keyid;
+
+out:
+        if (common_name)
+                FreePool(common_name);
+        if (EFI_ERROR(ret) && keyid)
+                FreePool(keyid);
+        return ret;
+}
+
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
 

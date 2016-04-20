@@ -86,4 +86,10 @@ EFI_STATUS verify_pkcs7(const unsigned char *cert_sha256, UINTN cert_size,
 			const VOID *pkcs7, UINTN pkcs7_size,
 			VOID **data, int *size);
 
+/* Given a X509 certificate, build the following string:
+ * COMMON_NAME:#PUBLIC_KEY_SHA1
+ * Where COMMON_NAME is the certificate issuer CN and PUBLIC_KEY_SHA1
+ * is the X509 certificate public key SHA1 hash.
+ */
+EFI_STATUS get_android_verity_key_id(X509 *cert, char **value);
 #endif
