@@ -44,7 +44,6 @@ static struct target {
         { FASTBOOT,       L"bootloader", L"Fastboot mode" },
         { FASTBOOT,       L"fastboot",   L"Fastboot mode" },
         { CHARGER,        L"charging",   L"Charger mode" },
-        { TDOS,           L"tdos",       L"Theft deterrent OS" },
         { DNX,            L"dnx",        L"Download and Execute mode" },
 #ifdef CRASHMODE_USE_ADB
         { CRASHMODE,      L"crashmode",  L"Crashmode" },

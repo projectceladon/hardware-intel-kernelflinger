@@ -82,9 +82,8 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
  * enter Fastboot mode */
 #define FASTBOOT_SENTINEL         L"\\force_fastboot"
 
-/* Paths to interesting alternate boot images */
+/* Path to Fastboot image */
 #define FASTBOOT_PATH             L"\\fastboot.img"
-#define TDOS_PATH                 L"\\tdos.img"
 
 /* BIOS Capsule update file */
 #define FWUPDATE_FILE             L"\\BIOSUPDATE.fv"
@@ -842,41 +841,6 @@ static VOID die(VOID)
         halt_system();
 }
 
-static VOID enter_tdos(UINT8 boot_state) __attribute__ ((noreturn));
-
-static VOID enter_tdos(UINT8 boot_state)
-{
-        EFI_STATUS ret;
-        VOID *bootimage;
-
-        ret = android_image_load_file(g_disk_device, TDOS_PATH,
-                        FALSE, &bootimage);
-        if (EFI_ERROR(ret)) {
-                error(L"Couldn't load TDOS image");
-                die();
-        }
-
-#ifdef USERDEBUG
-        debug(L"verify TDOS boot image");
-        CHAR16 target[BOOT_TARGET_SIZE];
-        UINT8 verify_state;
-        verify_state = verify_android_boot_image(bootimage, oem_cert,
-                                                 oem_cert_size, target, NULL);
-        if (verify_state != BOOT_STATE_GREEN) {
-                error(L"tdos image not verified");
-                die();
-        }
-
-        if (StrCmp(target, L"/tdos")) {
-                error(L"This does not appear to be a tdos image");
-                die();
-        }
-#endif
-        load_image(bootimage, boot_state, TDOS);
-        error(L"Couldn't chainload TDOS image");
-        die();
-}
-
 static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
         __attribute__ ((noreturn));
 
@@ -1277,11 +1241,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (boot_target == FASTBOOT || boot_target == MEMORY) {
                 debug(L"entering Fastboot mode");
                 enter_fastboot_mode(boot_state, target_address);
-        }
-
-        if (boot_target == TDOS) {
-                debug(L"entering TDOS");
-                enter_tdos(boot_state);
         }
 
         /* If the device is unlocked the only way to re-lock it is
