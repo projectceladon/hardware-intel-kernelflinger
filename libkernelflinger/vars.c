@@ -82,7 +82,7 @@ const EFI_GUID fastboot_guid = { 0x1ac80a82, 0x4f0c, 0x456b,
 const EFI_GUID loader_guid = { 0x4a67b082, 0x0a4c, 0x41cf,
 	{0xb6, 0xc7, 0x44, 0x0b, 0x29, 0xbb, 0x8c, 0x4f} };
 
-/* GUIDs for various interesting Android partitions */
+/* Various interesting partition labels */
 const CHAR16 *BOOT_LABEL = L"boot";
 const CHAR16 *RECOVERY_LABEL = L"recovery";
 const CHAR16 *MISC_LABEL = L"misc";
