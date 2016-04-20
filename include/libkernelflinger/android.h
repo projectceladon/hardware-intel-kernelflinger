@@ -104,9 +104,9 @@ struct boot_img_hdr
  * other way around.
  */
 struct bootloader_message {
-        CHAR8 command[32];
-        CHAR8 status[32];
-        CHAR8 recovery[1024];
+        char command[32];
+        char status[32];
+        char recovery[1024];
 };
 
 /* Functions to load an Android boot image.
