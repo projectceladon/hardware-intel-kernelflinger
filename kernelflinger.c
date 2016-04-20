@@ -1028,7 +1028,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         UINT8 boot_state = BOOT_STATE_GREEN;
         CHAR16 *loader_version = KERNELFLINGER_VERSION;
         UINT8 *hash = NULL;
-        UINTN hash_size;
         X509 *verifier_cert = NULL;
         CHAR16 *name = NULL;
         EFI_RESET_TYPE resetType;
@@ -1164,10 +1163,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         }
 
         if (boot_state == BOOT_STATE_YELLOW) {
-                ret = compute_pub_key_hash(verifier_cert, &hash, &hash_size);
+                ret = pub_key_sha256(verifier_cert, &hash);
                 if (EFI_ERROR(ret))
                         efi_perror(ret, L"Failed to compute pub key hash");
-                boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, hash, hash_size);
+                boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, hash,
+                           SHA256_DIGEST_LENGTH);
                 debug(L"User accepted untrusted bootimage warning");
         }
 
