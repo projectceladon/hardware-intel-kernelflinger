@@ -187,6 +187,7 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
         struct bootloader_message bcb;
         CHAR16 *target = NULL;
         enum boot_target t;
+        CHAR8 *bcb_cmd;
 
         *oneshot = FALSE;
         *target_path = NULL;
@@ -200,13 +201,13 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
 
         /* We own the status field; clear it in case there is any stale data */
         bcb.status[0] = '\0';
-
-        if (!strncmpa(bcb.command, (CHAR8 *)"boot-", 5)) {
-                target = stra_to_str(bcb.command + 5);
+        bcb_cmd = (CHAR8 *)bcb.command;
+        if (!strncmpa(bcb_cmd, (CHAR8 *)"boot-", 5)) {
+                target = stra_to_str(bcb_cmd + 5);
                 debug(L"BCB boot target: '%s'", target);
-        } else if (!strncmpa(bcb.command, (CHAR8 *)"bootonce-", 9)) {
-                target = stra_to_str(bcb.command + 9);
-                bcb.command[0] = '\0';
+        } else if (!strncmpa(bcb_cmd, (CHAR8 *)"bootonce-", 9)) {
+                target = stra_to_str(bcb_cmd + 9);
+                bcb_cmd[0] = '\0';
                 debug(L"BCB oneshot boot target: '%s'", target);
                 *oneshot = TRUE;
         }
