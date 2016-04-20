@@ -20,15 +20,7 @@
 #include <openssl/objects.h>
 
 #include "asn1.h"
-
-#ifndef KERNELFLINGER
-#include "userfastboot_ui.h"
-#else
-#define malloc AllocatePool
 #include "lib.h"
-#define pr_error(x, ...) error(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
-#define pr_debug(x, ...) debug(CONVERT_TO_WIDE(x), ##__VA_ARGS__)
-#endif
 
 /* Decode an integer from an ASN.1 message
  * datap - Pointer-pointer to data containing the integer message. Will be
@@ -47,15 +39,15 @@ int decode_integer(const unsigned char **datap, long *sizep, int raw,
 	orig = *datap;
 	ai = d2i_ASN1_INTEGER(NULL, datap, *sizep);
 	if (!ai) {
-		pr_error("integer conversion failed\n");
+		error(L"integer conversion failed");
 		return -1;
 	}
 
 	if (raw) {
 		if (intdata && intsize) {
-			*intdata = malloc(ai->length);
+			*intdata = AllocatePool(ai->length);
 			if (!*intdata) {
-				pr_error("out of memory\n");
+				error(L"out of memory");
 				return -1;
 			}
 			memcpy(*intdata, ai->data, ai->length);
@@ -82,19 +74,19 @@ int decode_octet_string(const unsigned char **datap, long *sizep,
 	orig = *datap;
 	os = d2i_ASN1_OCTET_STRING(NULL, datap, *sizep);
 	if (!os) {
-		pr_error("octet string conversion failed\n");
+		error(L"octet string conversion failed");
 		return -1;
 	}
 	if (os->length <= 0) {
-		pr_error("empty octet string\n");
+		error(L"empty octet string");
 		M_ASN1_OCTET_STRING_free(os);
 		return -1;
 	}
 
 	*oslen = os->length;
-	osd = malloc(os->length);
+	osd = AllocatePool(os->length);
 	if (!osd) {
-		pr_error("out of memory\n");
+		error(L"out of memory");
 		M_ASN1_OCTET_STRING_free(os);
 		return -1;
 	}
@@ -116,13 +108,13 @@ int decode_object(const unsigned char **datap, long *sizep,
 	orig = *datap;
 	o = d2i_ASN1_OBJECT(NULL, datap, *sizep);
 	if (!o) {
-		pr_error("octet string conversion failed\n");
+		error(L"octet string conversion failed");
 		return -1;
 	}
 	*nid = OBJ_obj2nid(o);
 	ASN1_OBJECT_free(o);
 	if (*nid == NID_undef) {
-		pr_error("undefined object\n");
+		error(L"undefined object");
 		return -1;
 	}
 
@@ -141,11 +133,11 @@ int decode_printable_string(const unsigned char **datap, long *sizep,
 	orig = *datap;
 	s = M_d2i_ASN1_PRINTABLESTRING(NULL, datap, *sizep);
 	if (!s) {
-		pr_error("printable string conversion failed\n");
+		error(L"printable string conversion failed");
 		return -1;
 	}
 	if (!s->length) {
-		pr_error("empty string\n");
+		error(L"empty string");
 		M_ASN1_PRINTABLESTRING_free(s);
 		return -1;
 	}
@@ -202,18 +194,18 @@ int consume_sequence(const unsigned char **datap, long *sizep)
 
 	j = ASN1_get_object(&data, &len, &tag, &xclass, size);
 	if (j & 0x80) {
-		pr_error("ASN.1 encoding error\n");
+		error(L"ASN.1 encoding error");
 		return -1;
 	}
 	remain = size - (data - orig);
 
 	if (!(j & V_ASN1_CONSTRUCTED) || tag != V_ASN1_SEQUENCE) {
-		pr_error("sequence not found\n");
+		error(L"sequence not found");
 		return -1;
 	}
 
 	if (len > remain) {
-		pr_error("bad length\n");
+		error(L"bad length");
 		return -1;
 	}
 

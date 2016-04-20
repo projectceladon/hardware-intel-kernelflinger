@@ -241,11 +241,9 @@ enum device_state get_current_state()
 			current_state = LOCKED;
 			error(L"Couldn't read %s, assuming locked", OEM_LOCK_VAR);
 			goto exit;
-#ifndef USERFASTBOOT
 		} else if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
 			current_state = LOCKED;
 			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK_VAR);
-#endif
 		} else {
 			if (stored_state[0] & OEM_LOCK_UNLOCKED)
 				current_state = UNLOCKED;

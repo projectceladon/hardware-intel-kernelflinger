@@ -37,9 +37,7 @@
 
 #include <openssl/sha.h>
 
-#ifndef USERFASTBOOT
 #include <fastboot.h>
-#endif
 
 #include "vars.h"
 #include "lib.h"
@@ -81,9 +79,6 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 /* If we find this in the root of the EFI system partition, unconditionally
  * enter Fastboot mode */
 #define FASTBOOT_SENTINEL         L"\\force_fastboot"
-
-/* Path to Fastboot image */
-#define FASTBOOT_PATH             L"\\fastboot.img"
 
 /* BIOS Capsule update file */
 #define FWUPDATE_FILE             L"\\BIOSUPDATE.fv"
@@ -143,9 +138,6 @@ static enum boot_target check_magic_key(VOID)
         unsigned long i;
         EFI_STATUS ret = EFI_NOT_READY;
         EFI_INPUT_KEY key;
-#ifdef USERFASTBOOT
-        enum boot_target bt;
-#endif
         unsigned long wait_ms = EFI_RESET_WAIT_MS;
 
         /* Some systems require a short stall before we can be sure there
@@ -182,22 +174,8 @@ static enum boot_target check_magic_key(VOID)
         if (ui_keycode_to_event(key.ScanCode) != MAGIC_KEY)
                 return NORMAL_BOOT;
 
-#ifdef USERFASTBOOT
-        Print(L"Continue holding key for %d second(s) to enter Fastboot mode.\n",
-              FASTBOOT_HOLD_DELAY / 1000);
-        Print(L"Release key now to load Recovery Console...");
-        if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, MAGIC_KEY)) {
-                bt = FASTBOOT;
-                Print(L"FASTBOOT\n");
-        } else {
-                bt = RECOVERY;
-                Print(L"RECOVERY\n");
-        }
-        return bt;
-#else
         if (ui_enforce_key_held(FASTBOOT_HOLD_DELAY, MAGIC_KEY))
                 return FASTBOOT;
-#endif
 
         return NORMAL_BOOT;
 }
@@ -412,13 +390,12 @@ error:
         return NORMAL_BOOT;
 }
 
-static enum boot_target check_command_line(VOID **address)
+static enum boot_target check_command_line(VOID)
 {
         UINTN argc, pos;
         CHAR16 **argv;
         enum boot_target bt;
 
-        *address = NULL;
         bt = NORMAL_BOOT;
 
         if (EFI_ERROR(get_argv(g_loaded_image, &argc, &argv)))
@@ -427,12 +404,10 @@ static enum boot_target check_command_line(VOID **address)
         for (pos = 0; pos < argc; pos++) {
                 debug(L"Argument %d: %s", pos, argv[pos]);
 
-#ifndef USERFASTBOOT
                 if (!StrCmp(argv[pos], L"-f")) {
                         bt = FASTBOOT;
                         continue;
                 }
-#endif
 #ifndef USER
                 if (!StrCmp(argv[pos], L"-U")) {
                         pos++;
@@ -448,14 +423,9 @@ static enum boot_target check_command_line(VOID **address)
                                 goto out;
                         }
 
-#ifdef USERFASTBOOT
-                        *address = (VOID *)strtoul16(argv[pos], NULL, 0);
-                        bt = MEMORY;
-#else
                         /* For compatibility...just ignore the supplied address
                          * and enter Fastboot mode */
                         bt = FASTBOOT;
-#endif
                         continue;
                 }
 
@@ -538,20 +508,17 @@ enum boot_target check_battery()
  * 7. Check LoaderEntryOneShot for a boot target
  * 8. Check if we should go into charge mode or normal boot
  *
- * target_address - If MEMORY returned, physical address to load data
  * target_path - If ESP_EFI_BINARY or ESP_BOOTIMAGE returned, path to the
  *               image on the EFI System Partition
  * oneshot - Whether this is a one-shot boot, indicating that the image at
  *           target_path should be deleted before chainloading
  *
  */
-static enum boot_target choose_boot_target(VOID **target_address,
-                CHAR16 **target_path, BOOLEAN *oneshot)
+static enum boot_target choose_boot_target(CHAR16 **target_path, BOOLEAN *oneshot)
 {
         enum boot_target ret;
 
         *target_path = NULL;
-        *target_address = NULL;
         *oneshot = TRUE;
 
 #if DEBUG_MESSAGES
@@ -560,7 +527,7 @@ static enum boot_target choose_boot_target(VOID **target_address,
         debug(L"Bootlogic: Choosing boot target");
 
         debug(L"Bootlogic: Check osloader command line...");
-        ret = check_command_line(target_address);
+        ret = check_command_line();
         if (ret != NORMAL_BOOT)
                 goto out;
 
@@ -657,10 +624,6 @@ static UINT8 validate_bootimage(
         case ESP_BOOTIMAGE:
                 /* "live" bootable image */
                 expected = L"/boot";
-#ifdef USERFASTBOOT
-                /* Bootable Fastboot image */
-                expected2 = L"/fastboot";
-#endif
                 break;
         default:
                 expected = NULL;
@@ -841,78 +804,19 @@ static VOID die(VOID)
         halt_system();
 }
 
-static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
+static VOID enter_fastboot_mode(UINT8 boot_state)
         __attribute__ ((noreturn));
-
-
-#ifdef USERFASTBOOT
-
-/* Enter Fastboot mode. If bootimage is NULL, load it from the file on the
- * EFI system partition */
-static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
-{
-        /* Fastboot is conceptually part of the bootloader itself. That it
-         * happens to currently be an Android Boot Image, and not part of the
-         * kernelflinger EFI binary, is an implementation detail. Fastboot boot
-         * image is not independently replaceable by end user without also
-         * replacing the bootloader.  On an ARM device the bootloader/fastboot
-         * are a single binary.
-         *
-         * Entering Fastboot is ALWAYS verified by the OEM
-         * certificate, regardless of the device's current boot state.
-         * If it doesn't verify we unconditionally halt the system. */
-        EFI_STATUS ret;
-
-        /* Publish the OEM key in a volatile EFI variable so that
-         * Userfastboot can use it to validate flashed bootloader images */
-        set_efi_variable(&fastboot_guid, OEM_KEY_VAR,
-                         oem_cert_size, oem_cert, FALSE, TRUE);
-        set_oemvars_update(TRUE);
-
-        if (!bootimage) {
-                ret = android_image_load_file(g_disk_device, FASTBOOT_PATH,
-                                FALSE, &bootimage);
-                if (EFI_ERROR(ret)) {
-                        error(L"Couldn't load Fastboot image");
-                        die();
-                }
-        }
-
-#ifdef USERDEBUG
-        debug(L"verify Fastboot boot image");
-        CHAR16 target[BOOT_TARGET_SIZE];
-        UINT8 verify_state;
-        verify_state = verify_android_boot_image(bootimage, oem_cert,
-                                                 oem_cert_size, target, NULL);
-        if (verify_state != BOOT_STATE_GREEN) {
-                error(L"Fastboot image not verified");
-                die();
-        }
-
-        if (StrCmp(target, L"/fastboot")) {
-                error(L"This does not appear to be a Fastboot image");
-                die();
-        }
-#endif
-        debug(L"chainloading fastboot, boot state is %s",
-                        boot_state_to_string(boot_state));
-        load_image(bootimage, boot_state, FASTBOOT);
-        error(L"Couldn't chainload Fastboot image");
-        die();
-}
-
-#else
-
 
 /* Enter Fastboot mode. If fastboot_start() returns a valid pointer,
  * try to start the bootimage pointed to. */
-static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
+static VOID enter_fastboot_mode(UINT8 boot_state)
 {
         EFI_STATUS ret = EFI_SUCCESS;
         enum boot_target target;
         EFI_HANDLE image;
         void *efiimage = NULL;
         UINTN imagesize;
+        VOID *bootimage;
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
@@ -977,7 +881,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
 
         die();
 }
-#endif
 
 static EFI_STATUS push_capsule(
                 IN EFI_FILE *root_dir,
@@ -1118,7 +1021,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
         EFI_STATUS ret;
         CHAR16 *target_path = NULL;
-        VOID *target_address = NULL;
         VOID *bootimage = NULL;
         BOOLEAN oneshot = FALSE;
         BOOLEAN lock_prompted = FALSE;
@@ -1169,7 +1071,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
         /* No UX prompts before this point, do not want to interfere
          * with magic key detection */
-        boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
+        boot_target = choose_boot_target(&target_path, &oneshot);
         if (boot_target == EXIT_SHELL)
                 return EFI_SUCCESS;
         if (boot_target == CRASHMODE) {
@@ -1208,7 +1110,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #ifdef USER
         if (device_is_provisioning()) {
                 debug(L"device is provisioning, force Fastboot mode");
-                enter_fastboot_mode(boot_state, target_address);
+                enter_fastboot_mode(boot_state);
         }
 #endif
 #else /* !USERDEBUG */
@@ -1236,11 +1138,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 flash_bootloader_policy();
 #endif
 
-        /* Fastboot is always validated by the OEM key baked into
-         * the kernelflinger binary */
-        if (boot_target == FASTBOOT || boot_target == MEMORY) {
+        if (boot_target == FASTBOOT) {
                 debug(L"entering Fastboot mode");
-                enter_fastboot_mode(boot_state, target_address);
+                enter_fastboot_mode(boot_state);
         }
 
         /* If the device is unlocked the only way to re-lock it is

@@ -18,13 +18,13 @@ ifeq ($(HAL_AUTODETECT),true)
 endif
 
 ifeq ($(TARGET_USE_USERFASTBOOT),true)
-    KERNELFLINGER_CFLAGS += -DUSERFASTBOOT
-else
+    $(error Userfastboot is not supported anymore)
+endif
+
 # adb in crashmode allows to pull the entire RAM and MUST never be
 # disabled allowed on a USER build for security reasons:
 ifneq ($(TARGET_BUILD_VARIANT),user)
     KERNELFLINGER_CFLAGS += -DCRASHMODE_USE_ADB
-endif
 endif
 
 ifneq ($(strip $(TARGET_BOOTLOADER_POLICY)),)
@@ -106,15 +106,13 @@ LOCAL_SRC_FILES := \
 	kernelflinger.c \
 	ux.c
 
-ifneq ($(TARGET_USE_USERFASTBOOT),true)
-    LOCAL_STATIC_LIBRARIES += \
+LOCAL_STATIC_LIBRARIES += \
 	libfastboot-$(TARGET_BUILD_VARIANT) \
 	libefiusb-$(TARGET_BUILD_VARIANT) \
 	libefitcp-$(TARGET_BUILD_VARIANT) \
 	libtransport-$(TARGET_BUILD_VARIANT)
 ifneq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_STATIC_LIBRARIES += libadb-$(TARGET_BUILD_VARIANT)
-endif
 endif
 
 ifneq ($(TARGET_BUILD_VARIANT),user)
