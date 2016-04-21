@@ -39,7 +39,7 @@
 #include "text_parser.h"
 #include "uefi_utils.h"
 
-#define BOOTLOADER_TMP_PART	L"bootloader2"
+#define BOOTLOADER_TMP_PART	BOOTLOADER_LABEL L"2"
 #define MANIFEST_PATH		L"\\manifest.txt"
 
 #if __LP64__
@@ -249,11 +249,11 @@ EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 			goto exit;
 	}
 
-	ret = gpt_swap_partition(BOOTLOADER_TMP_PART, BOOTLOADER_PART, LOGICAL_UNIT_USER);
+	ret = gpt_swap_partition(BOOTLOADER_TMP_PART, BOOTLOADER_LABEL, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to swap partitions");
 
-	ret = bootmgr_register_entries(BOOTLOADER_PART, load_options, load_option_nb);
+	ret = bootmgr_register_entries(BOOTLOADER_LABEL, load_options, load_option_nb);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to install the load options");
 

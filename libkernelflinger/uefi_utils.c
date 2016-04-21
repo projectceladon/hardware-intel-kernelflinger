@@ -50,7 +50,7 @@ EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs)
 	EFI_HANDLE esp_handle = NULL;
 	EFI_FILE_IO_INTERFACE *esp;
 
-	ret = gpt_get_partition_handle(BOOTLOADER_PART, LOGICAL_UNIT_USER,
+	ret = gpt_get_partition_handle(BOOTLOADER_LABEL, LOGICAL_UNIT_USER,
 				       &esp_handle);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get ESP partition");
