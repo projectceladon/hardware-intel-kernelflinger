@@ -37,6 +37,7 @@
 #include <lib.h>
 #include <fastboot.h>
 #include <android.h>
+#include <slot.h>
 
 #include "uefi_utils.h"
 #include "gpt.h"
@@ -219,7 +220,7 @@ static EFI_STATUS flash_new_bootimage(VOID *kernel, UINTN kernel_size,
 	UINTN new_size, partlen, page_size;
 	EFI_STATUS ret;
 
-	ret = gpt_get_partition_by_label(L"boot", &gparti, LOGICAL_UNIT_USER);
+	ret = gpt_get_partition_by_label(slot_label(BOOT_LABEL), &gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
 		error(L"Unable to get information on the boot partition");
 		return ret;

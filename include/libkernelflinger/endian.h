@@ -43,6 +43,9 @@
 #define be32toh __builtin_bswap32
 #define be64toh __builtin_bswap64
 
+#define le32toh(x) (x)
+#define htole32(x) (x)
+
 typedef UINT8 __be8;
 typedef UINT16 __be16;
 typedef UINT32 __be32;

@@ -103,6 +103,21 @@ static const ui_textline_t crash_event_message[] = {
 #endif
 	{ NULL, NULL, FALSE }
 };
+static const ui_textline_t not_bootable_message[] = {
+	{ &COLOR_LIGHTRED,	"WARNING:",				TRUE },
+	{ &COLOR_LIGHTGRAY,	"No valid boot image found.",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"Use the above menu to select",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"the next boot option.",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"If the problem persists, please",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"contact the technical assistance.",	FALSE },
+#ifndef CRASHMODE_USE_ADB
+	{ &COLOR_LIGHTGRAY,	"",					FALSE },
+	{ &COLOR_LIGHTGRAY,	"The device will power off in 5",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"minutes.",				FALSE },
+#endif
+	{ NULL, NULL, FALSE }
+};
 #ifdef CRASHMODE_USE_ADB
 static const ui_textline_t adb_message[] = {
 	{ &COLOR_LIGHTGRAY,	"",						FALSE },
@@ -134,7 +149,8 @@ static const struct ux_prompt {
 	[DEVICE_UNLOCKED_CODE]		=	{ &COLOR_ORANGE,	device_altered_unlocked },
 	[SECURE_BOOT_CODE]		=	{ &COLOR_ORANGE,	secure_boot_off },
 	[BOOTIMAGE_UNTRUSTED_CODE]	=	{ &COLOR_YELLOW,	device_untrusted_bootimage},
-	[CRASH_EVENT_CODE]		=	{ &COLOR_LIGHTRED,	crash_event_message}
+	[CRASH_EVENT_CODE]		=	{ &COLOR_LIGHTRED,	crash_event_message},
+	[NOT_BOOTABLE_CODE]		=	{ &COLOR_LIGHTRED,	not_bootable_message}
 };
 
 static const char *VENDOR_IMG_NAME = "splash_intel";
@@ -335,7 +351,7 @@ static ui_boot_action_t BOOT_ACTIONS[] = {
 	{ NULL,			NULL,	UNKNOWN_TARGET }
 };
 
-enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash) {
+enum boot_target ux_prompt_user_for_boot_target(enum ux_error_code code) {
 	ui_image_t *img;
 	ui_boot_menu_t *menu = NULL;
 	UINTN width, height, img_x, img_y, area_x, area_y, colsarea, linesarea;
@@ -354,10 +370,9 @@ enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash) {
 		{ NULL, NULL, FALSE }
 	};
 
-	if (due_to_crash) {
-		texts[0] = build_error_code_text(UX_PROMPT[CRASH_EVENT_CODE].color,
-						 CRASH_EVENT_CODE);
-		texts[1] = (ui_textline_t *)UX_PROMPT[CRASH_EVENT_CODE].text;
+	if (code != NO_ERROR_CODE) {
+		texts[0] = build_error_code_text(UX_PROMPT[code].color, code);
+		texts[1] = (ui_textline_t *)UX_PROMPT[code].text;
 		texts[2] = (ui_textline_t *)adb_message;
 		texts[3] = NULL;
 	} else {
@@ -366,7 +381,7 @@ enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash) {
 		texts[2] = NULL;
 	}
 #else
-	(void)due_to_crash;	/* Unused parameter.  */
+	(void)code;	/* Unused parameter.  */
 	const ui_textline_t *texts[] = { build_error_code_text(&COLOR_LIGHTRED, CRASH_EVENT_CODE),
 					 UX_PROMPT[CRASH_EVENT_CODE].text, NULL };
 #endif

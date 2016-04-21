@@ -40,12 +40,14 @@
 
 enum ux_error_code {
         MIN_ERROR_CODE = 0,
+        NO_ERROR_CODE = 0,
         RED_STATE_CODE,
         BAD_RECOVERY_CODE,
         DEVICE_UNLOCKED_CODE,
         SECURE_BOOT_CODE,
         BOOTIMAGE_UNTRUSTED_CODE,
         CRASH_EVENT_CODE,
+        NOT_BOOTABLE_CODE,
         MAX_ERROR_CODE
 };
 
@@ -58,12 +60,13 @@ enum boot_target ux_prompt_user(enum ux_error_code error_code,
 				BOOLEAN power_off, UINT8 *hash,
 				UINTN hash_size);
 
-/* If due_to_crash is TRUE, it informs the user about the multiple
- * crash events and let him choose a boot target.  If the build is a
- * USERDEBUG or ENG variant, it offers a minimal adb implementation to
- * dump data from memory and partition.  In that case, the boot_target
- * can also be provided using the adb reboot [TARGET].  */
-enum boot_target ux_prompt_user_for_boot_target(BOOLEAN due_to_crash);
+/* Prompt the user with the appropriate message accordingly to the
+ * error_code and let him choose the next boot target.  If the build
+ * is a USERDEBUG or ENG variant, it offers a minimal adb
+ * implementation to dump data from memory and partition.  In that
+ * case, the boot_target can also be provided using the adb reboot
+ * [TARGET].  */
+enum boot_target ux_prompt_user_for_boot_target(enum ux_error_code code);
 
 /* Display a low_battery image during DELAY seconds and exit.  */
 VOID ux_display_low_battery(UINTN delay);

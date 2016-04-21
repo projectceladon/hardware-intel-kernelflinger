@@ -46,9 +46,11 @@
 #include "fastboot_oem.h"
 #include "text_parser.h"
 #include "android.h"
+#include "slot.h"
 
 static BOOLEAN last_cmd_succeeded;
 static fastboot_handle fastboot_flash_cmd;
+static fastboot_handle fastboot_erase_cmd;
 static EFI_FILE_IO_INTERFACE *file_io_interface;
 static data_callback_t fastboot_rx_cb, fastboot_tx_cb;
 static CHAR8 DEFAULT_OPTIONS[] = "--batch installer.cmd";
@@ -62,6 +64,8 @@ static char command_buffer[256]; /* Large enough to fit long filename
 	fastboot_fail(x ": %r", ##__VA_ARGS__, ret); \
 } while (0)
 
+#define MAX_LABEL_LEN 64
+
 static void flush_tx_buffer(void)
 {
 	while (need_tx_cb) {
@@ -72,7 +76,7 @@ static void flush_tx_buffer(void)
 
 static void do_erase(INTN argc, CHAR8 **argv)
 {
-	fastboot_run_root_cmd("erase", argc, argv);
+	fastboot_erase_cmd(argc, argv);
 	flush_tx_buffer();
 }
 
@@ -92,6 +96,60 @@ static EFI_STATUS find_partition(CHAR8 *target)
 	FreePool(target16);
 
 	return ret;
+}
+
+static CHAR8 *get_target(CHAR8 *target)
+{
+	EFI_STATUS ret;
+	CHAR16 *target16;
+	const CHAR16 *label16;
+	static CHAR8 label[MAX_LABEL_LEN];
+	CHAR8 *ret_target = NULL;
+
+	ret = find_partition(target);
+	if (!EFI_ERROR(ret))
+		return target;
+	if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND)
+		return NULL;
+
+	target16 = stra_to_str(target);
+	if (!target16)
+		return NULL;
+
+	label16 = slot_label(target16);
+	if (!label16) {
+		ret_target = target;
+		goto out;
+	}
+
+	if (StrLen(label16) + 1 > sizeof(label)) {
+		fastboot_fail("Label name is too long");
+		goto out;
+	}
+
+	ret = str_to_stra(label, label16, sizeof(label));
+	if (!EFI_ERROR(ret))
+		ret_target = label;
+
+out:
+	if (target16)
+		FreePool(target16);
+
+	return ret_target;
+}
+
+static void installer_erase(INTN argc, CHAR8 **argv)
+{
+	if (argc != 2) {
+		fastboot_fail("Erase command requires exactly 2 arguments");
+		return;
+	}
+
+	argv[1] = get_target(argv[1]);
+	if (!argv[1])
+		return;
+
+	do_erase(argc, argv);
 }
 
 static void installer_flash_buffer(void *data, unsigned size,
@@ -341,6 +399,10 @@ static void installer_flash_cmd(INTN argc, CHAR8 **argv)
 		goto exit;
 	}
 
+	argv[1] = get_target(argv[1]);
+	if (!argv[1])
+		goto exit;
+
 	ret = find_partition(argv[1]);
 	switch (ret) {
 	case EFI_SUCCESS:
@@ -411,6 +473,11 @@ static void installer_format(INTN argc, CHAR8 **argv)
 	UINTN size;
 	CHAR16 *filename;
 
+	if (argc != 2) {
+		fastboot_fail("Format command requires exactly 2 arguments");
+		return;
+	}
+
 	filename = get_format_image_filename(argv[1]);
 	if (!filename)
 		return;
@@ -423,6 +490,10 @@ static void installer_format(INTN argc, CHAR8 **argv)
 		inst_perror(ret, "Unable to read file %s", filename);
 		goto free_filename;
 	}
+
+	argv[1] = get_target(argv[1]);
+	if (!argv[1])
+		goto free_data;
 
 	do_erase(argc, argv);
 	if (!last_cmd_succeeded)
@@ -622,21 +693,27 @@ static void unsupported_cmd(__attribute__((__unused__)) INTN argc,
 static struct replacements {
 	struct fastboot_cmd cmd;
 	fastboot_handle *save_handle;
+	const char *equ_name;
 } REPLACEMENTS[] = {
-	/* Fastboot changes. */
-	{ { "flash",	UNKNOWN_STATE,	installer_flash_cmd },	&fastboot_flash_cmd },
-	{ { "format",	UNLOCKED,	installer_format    },	NULL },
-	{ { "boot",	UNLOCKED,	installer_boot      },	NULL },
+	/* Fastboot replacements. */
+	{ .cmd = { .name = "flash", .handle = installer_flash_cmd },
+	  .save_handle = &fastboot_flash_cmd },
+	{ .cmd = { .name = "erase", .handle = installer_erase },
+	  .save_handle = &fastboot_erase_cmd },
+	{ .cmd = { .name = "format", .handle = installer_format	} },
+	{ .cmd = { .name = "boot", .handle = installer_boot } },
+	/* Equivalent commands. */
+	{ .cmd = { .name = "--set-active" }, .equ_name = "set_active" },
 	/* Unsupported commands. */
-	{ { "update",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
-	{ { "flashall",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
-	{ { "devices",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
-	{ { "download",	UNKNOWN_STATE, unsupported_cmd	    },	NULL },
+	{ .cmd = { "update",	LOCKED, unsupported_cmd	    } },
+	{ .cmd = { "flashall",	LOCKED, unsupported_cmd	    } },
+	{ .cmd = { "devices",	LOCKED, unsupported_cmd	    } },
+	{ .cmd = { "download",	LOCKED, unsupported_cmd	    } },
 	/* Installer specific commands. */
-	{ { "--help",	LOCKED,	usage			    },	NULL },
-	{ { "-h",	LOCKED,	usage			    },	NULL },
-	{ { "--batch",	LOCKED,	batch			    },	NULL },
-	{ { "-b",	LOCKED,	batch			    },	NULL }
+	{ .cmd = { "--help",	LOCKED,	usage		    } },
+	{ .cmd = { "-h",	LOCKED,	usage		    } },
+	{ .cmd = { "--batch",	LOCKED,	batch		    } },
+	{ .cmd = { "-b",	LOCKED,	batch		    } }
 };
 
 static EFI_STATUS installer_replace_functions()
@@ -655,6 +732,19 @@ static EFI_STATUS installer_replace_functions()
 			cmd->handle = REPLACEMENTS[i].cmd.handle;
 
 		if (!cmd && REPLACEMENTS[i].cmd.handle) {
+			ret = fastboot_register(&REPLACEMENTS[i].cmd);
+			if (EFI_ERROR(ret))
+				return ret;
+			continue;
+		}
+
+		if (REPLACEMENTS[i].equ_name) {
+			cmd = fastboot_get_root_cmd(REPLACEMENTS[i].equ_name);
+			if (!cmd)
+				return EFI_INVALID_PARAMETER;
+
+			REPLACEMENTS[i].cmd.min_state = cmd->min_state;
+			REPLACEMENTS[i].cmd.handle = cmd->handle;
 			ret = fastboot_register(&REPLACEMENTS[i].cmd);
 			if (EFI_ERROR(ret))
 				return ret;
@@ -709,6 +799,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 
 	store_command(*options != '\0' ? (char *)options : (char *)DEFAULT_OPTIONS,
 		      NULL);
+
+	/* Initialize slot management. */
+	ret = slot_init();
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Slot management initialization failed");
+		goto exit;
+	}
 
 	/* Run the fastboot library. */
 	ret = fastboot_start(&bootimage, &efiimage, &imagesize, &target);

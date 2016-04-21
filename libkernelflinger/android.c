@@ -49,6 +49,7 @@
 #ifdef HAL_AUTODETECT
 #include "blobstore.h"
 #endif
+#include "slot.h"
 
 #define OS_INITIATED L"os_initiated"
 
@@ -975,6 +976,13 @@ static EFI_STATUS setup_command_line(
         if (EFI_ERROR(ret))
                 goto out;
 #endif
+
+        if (boot_target != RECOVERY && slot_get_active()) {
+                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
+                                           slot_get_active());
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */

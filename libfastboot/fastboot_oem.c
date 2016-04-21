@@ -36,6 +36,7 @@
 #include <lib.h>
 #include <vars.h>
 #include <storage.h>
+#include <slot.h>
 
 #include "uefi_utils.h"
 #include "flash.h"
@@ -211,7 +212,7 @@ static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)
 	}
 
 	for (i = 0; i < ARRAY_SIZE(OEM_HASH); i++) {
-		ret = OEM_HASH[i].hash(OEM_HASH[i].name);
+		ret = OEM_HASH[i].hash(slot_label(OEM_HASH[i].name));
 		if (EFI_ERROR(ret)
 		    && (ret != EFI_NOT_FOUND || OEM_HASH[i].fail_if_missing)) {
 			fastboot_fail("Failed to get hash for %s, %r",

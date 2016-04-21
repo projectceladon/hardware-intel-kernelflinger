@@ -94,7 +94,8 @@ LOCAL_SRC_FILES := \
 	smbios.c \
 	oemvars.c \
 	text_parser.c \
-	watchdog.c
+	watchdog.c \
+	slot.c
 
 ifeq ($(HAL_AUTODETECT),true)
     LOCAL_SRC_FILES += blobstore.c

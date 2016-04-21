@@ -99,8 +99,9 @@ static VOID test_ux(VOID)
         ux_prompt_user(SECURE_BOOT_CODE, FALSE, NULL, 0);
         ux_prompt_user(BOOTIMAGE_UNTRUSTED_CODE, TRUE, fake_hash, sizeof(fake_hash));
         ux_prompt_user(BOOTIMAGE_UNTRUSTED_CODE, FALSE, fake_hash, sizeof(fake_hash));
-        ux_prompt_user_for_boot_target(TRUE);
-        ux_prompt_user_for_boot_target(FALSE);
+        ux_prompt_user_for_boot_target(NO_ERROR_CODE);
+        ux_prompt_user_for_boot_target(CRASH_EVENT_CODE);
+        ux_prompt_user_for_boot_target(NOT_BOOTABLE_CODE);
         ux_display_low_battery(3);
 }
 
