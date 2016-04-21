@@ -90,9 +90,12 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define SERIALNO_MAX_SIZE	20
 
 /* Various interesting partition labels */
-extern const CHAR16 *BOOT_LABEL;
-extern const CHAR16 *RECOVERY_LABEL;
-extern const CHAR16 *MISC_LABEL;
+#define BOOT_LABEL		L"boot"
+#define RECOVERY_LABEL		L"recovery"
+#define MISC_LABEL		L"misc"
+#define VENDOR_LABEL		L"vendor"
+#define SYSTEM_LABEL		L"system"
+#define BOOTLOADER_LABEL	L"bootloader"
 
 BOOLEAN device_is_unlocked(void);
 BOOLEAN device_is_locked(void);

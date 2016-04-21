@@ -39,7 +39,6 @@
 #include "gpt_bin.h"
 
 #define MBR_CODE_SIZE	440
-#define BOOTLOADER_PART L"bootloader"
 
 struct gpt_header {
 	char signature[8];

@@ -313,7 +313,7 @@ static struct label_exception {
 	{ L"ifwi", flash_ifwi },
 	{ L"oemvars", flash_oemvars },
 	{ L"zimage", flash_zimage },
-	{ BOOTLOADER_PART, flash_bootloader },
+	{ BOOTLOADER_LABEL, flash_bootloader },
 #ifdef BOOTLOADER_POLICY
 	{ CONVERT_TO_WIDE(ACTION_AUTHORIZATION), authenticated_action }
 #endif

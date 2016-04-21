@@ -193,11 +193,11 @@ static struct oem_hash {
 	EFI_STATUS (*hash)(const CHAR16 *name);
 	BOOLEAN fail_if_missing;
 } OEM_HASH[] = {
-	{ L"boot",		get_boot_image_hash,	TRUE },
-	{ L"recovery",		get_boot_image_hash,	TRUE },
-	{ L"bootloader",	get_esp_hash,		TRUE },
-	{ L"system",		get_fs_hash,		TRUE },
-	{ L"vendor",		get_fs_hash,		FALSE }
+	{ BOOT_LABEL,		get_boot_image_hash,	TRUE },
+	{ RECOVERY_LABEL,	get_boot_image_hash,	TRUE },
+	{ BOOTLOADER_LABEL,	get_esp_hash,		TRUE },
+	{ SYSTEM_LABEL,		get_fs_hash,		TRUE },
+	{ VENDOR_LABEL,		get_fs_hash,		FALSE }
 };
 
 static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)
