@@ -653,7 +653,7 @@ EFI_STATUS get_fs_hash(const CHAR16 *label)
 	if (ret == EFI_NOT_FOUND) {
 		ret = check_fec_header(&gparti, &fs_len);
 		if (EFI_ERROR(ret))
-			return ret;
+			debug(L"No verity or FEC found, hashing the filesystem only");
 	}
 
 	debug(L"filesystem size %lld", fs_len);
