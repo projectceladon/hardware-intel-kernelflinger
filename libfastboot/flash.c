@@ -82,27 +82,43 @@ EFI_STATUS flash_write(VOID *data, UINTN size)
 		return EFI_INVALID_PARAMETER;
 	}
 	ret = uefi_call_wrapper(gparti.dio->WriteDisk, 5, gparti.dio, gparti.bio->Media->MediaId, cur_offset, size, data);
-	if (EFI_ERROR(ret))
+	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to write bytes");
+		return ret;
+	}
 
 	cur_offset += size;
-	return ret;
+	return EFI_SUCCESS;
 }
 
 EFI_STATUS flash_fill(UINT32 pattern, UINTN size)
 {
-	UINT32 *buf;
-	UINTN i;
 	EFI_STATUS ret;
+	UINT32 *aligned_buf;
+	VOID *buf;
+	UINTN i, buf_size, write_size;
 
-	buf = AllocatePool(size);
-	if (!buf)
-		return EFI_OUT_OF_RESOURCES;
+	if (!gparti.bio || !size || size % gparti.bio->Media->BlockSize)
+		return EFI_INVALID_PARAMETER;
 
-	for (i = 0; i < size / sizeof(*buf); i++)
-		buf[i] = pattern;
+	buf_size = min(gparti.bio->Media->BlockSize * N_BLOCK, size);
+	ret = alloc_aligned(&buf, (VOID **)&aligned_buf, buf_size, gparti.bio->Media->IoAlign);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Unable to allocate the pattern buf");
+		return ret;
+	}
 
-	ret = flash_write(buf, size);
+	for (i = 0; i < buf_size / sizeof(*aligned_buf); i++)
+		aligned_buf[i] = pattern;
+
+	for (; size; size -= write_size) {
+		write_size = min(size, buf_size);
+		ret = flash_write(aligned_buf, write_size);
+		if (EFI_ERROR(ret))
+			goto out;
+	}
+
+out:
 	FreePool(buf);
 	return ret;
 }
