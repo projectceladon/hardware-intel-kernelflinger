@@ -76,6 +76,34 @@ len = 1
 type = linux
 ```
 
+If the Android build is using slot AB mechanism, the slot number is
+defined in the `[base]` section and every partition that have several
+slots have the `has_slot = true` parameter:
+
+```ini
+[base]
+partitions = bootloader bootloader2 boot misc metadata system cache data persistent
+nb_slot = 2
+
+[...]
+
+[partition.boot]
+label = boot
+len = 30
+type = boot
+has_slot = true
+
+[...]
+
+[partition.system]
+label = system
+len = 1024
+type = linux
+has_slot = true
+
+[...]
+```
+
 ### `fastboot flash bootloader <filename>`
 
 Unlocked devices only. Kernelfinger Fastboot implementation requires

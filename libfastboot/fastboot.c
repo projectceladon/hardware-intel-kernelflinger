@@ -39,6 +39,7 @@
 #include <ui.h>
 #include <em.h>
 #include <transport.h>
+#include <slot.h>
 
 #include "uefi_utils.h"
 #include "gpt.h"
@@ -303,10 +304,24 @@ static EFI_STATUS publish_part(CHAR16 *part_name, UINT64 size, EFI_GUID *guid)
 		{ "partition-type",	get_ptype_str(guid) },
 		{ "has-slot",		"no" }
 	};
+	EFI_STATUS ret;
 	char var[MAX_VARIABLE_LENGTH];
 	int len;
 	UINTN i;
 	struct descriptor *desc;
+	const CHAR16 *parent_label;
+
+	parent_label = slot_base(part_name);
+	if (parent_label) {
+		len = snprintf((CHAR8 *)var, sizeof(var), (CHAR8 *)"has-slot:%s",
+			       parent_label);
+		if (len < 0 || len >= (int)sizeof(var))
+			return EFI_INVALID_PARAMETER;
+
+		ret = fastboot_publish(var, "yes");
+		if (EFI_ERROR(ret))
+			return ret;
+	}
 
 	for (i = 0; i < ARRAY_SIZE(descriptors); i++) {
 		desc = &descriptors[i];
@@ -318,8 +333,65 @@ static EFI_STATUS publish_part(CHAR16 *part_name, UINT64 size, EFI_GUID *guid)
 		if (len < 0 || len >= (int)sizeof(var))
 			return EFI_INVALID_PARAMETER;
 
-		fastboot_publish(var, desc->value);
+		ret = fastboot_publish(var, desc->value);
+		if (EFI_ERROR(ret))
+			return ret;
 	}
+
+	return ret;
+}
+
+static EFI_STATUS publish_slots(void)
+{
+	struct descriptor {
+		char *name;
+		const char *(*get_value)(const char *suffix);
+	} descriptors[] = {
+		{ "slot-successful", slot_get_successful },
+		{ "slot-unbootable", slot_get_unbootable },
+		{ "slot-retry-count", slot_get_retry_count }
+	};
+	EFI_STATUS ret;
+	char var[MAX_VARIABLE_LENGTH];
+	int len;
+	UINTN i, j, nb_slots;
+	char **suffixes;
+	struct descriptor *desc;
+
+	nb_slots = slot_get_suffixes(&suffixes);
+	if (!nb_slots)
+		return EFI_SUCCESS;
+
+	ret = fastboot_publish_dynamic("current-slot", slot_get_active);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	for (i = 0, j = 0; i < nb_slots; i++) {
+		len = snprintf((CHAR8 *)var + j, sizeof(var) - j,
+			       i == 0 ? (CHAR8 *)"%a" : (CHAR8 *)",%a",
+			       suffixes[i]);
+		if (len < 0 || len >= (int)(sizeof(var) - j))
+			return EFI_INVALID_PARAMETER;
+		j += len;
+	}
+
+	ret = fastboot_publish("slot-suffixes", var);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	for (i = 0; i < nb_slots; i++)
+		for (j = 0; j < ARRAY_SIZE(descriptors); j++) {
+			desc = &descriptors[j];
+
+			len = snprintf((CHAR8 *)var, sizeof(var), (CHAR8 *)"%a:%a",
+				       desc->name, suffixes[i]);
+			if (len < 0 || len >= (int)sizeof(var))
+				return EFI_INVALID_PARAMETER;
+
+			ret = fastboot_publish(var, desc->get_value(suffixes[i]));
+			if (EFI_ERROR(ret))
+				return ret;
+		}
 
 	return EFI_SUCCESS;
 }
@@ -524,8 +596,23 @@ static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
 
 EFI_STATUS refresh_partition_var(void)
 {
+	EFI_STATUS ret;
+
 	delete_var_starting_with("partition-");
 	delete_var_starting_with("has-slot");
+	delete_var_starting_with("slot-");
+	delete_var_starting_with("current-slot");
+
+	ret = slot_reset();
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to reset A/B slot management");
+		return ret;
+	}
+
+	ret = publish_slots();
+	if (EFI_ERROR(ret))
+		return ret;
+
 	return publish_partsize();
 }
 
@@ -595,12 +682,16 @@ static void cmd_erase(INTN argc, CHAR8 **argv)
 	}
 	ui_print(L"Erasing %s ...", label);
 	ret = erase_by_label(label);
-	FreePool(label);
 	if (EFI_ERROR(ret)) {
+		FreePool(label);
 		fastboot_fail("Erase failure: %r", ret);
 		return;
 	}
 
+	if (!StrCmp(label, SLOT_STORAGE_PART))
+		slot_restore();
+
+	FreePool(label);
 	ui_print(L"Erase done.");
 	fastboot_okay("");
 }
@@ -684,6 +775,28 @@ static void cmd_reboot_bootloader(__attribute__((__unused__)) INTN argc,
 				  __attribute__((__unused__)) CHAR8 **argv)
 {
 	fastboot_reboot(FASTBOOT, L"Rebooting to bootloader ...");
+}
+
+static void cmd_set_active(INTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret;
+
+	if (!use_slot()) {
+		fastboot_fail("This device does not have slots");
+		return;
+	}
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	ret = slot_set_active((char *)argv[1]);
+	if (EFI_ERROR(ret))
+		fastboot_fail("Failed to set %a slot as active: %r",
+			      argv[1], ret);
+
+	fastboot_okay("");
 }
 
 static struct fastboot_cmd *get_cmd(cmdlist_t list, const char *name)
@@ -826,7 +939,7 @@ static EFI_STATUS get_command_buffer_argv(INTN *argc, CHAR8 *argv[], UINTN max_a
 {
 	char *saveptr, *token = NULL;
 
-	argv[0] = (CHAR8 *)strtok_r((char *)command_buffer, ": ", &saveptr);
+	argv[0] = (CHAR8 *)strtok_r((char *)command_buffer, ":= ", &saveptr);
 	if (!argv[0])
 		return EFI_INVALID_PARAMETER;
 
@@ -923,7 +1036,8 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "boot",		UNLOCKED,	cmd_boot },
 	{ "continue",		LOCKED,		cmd_continue },
 	{ "reboot",		LOCKED,		cmd_reboot },
-	{ "reboot-bootloader",	LOCKED,		cmd_reboot_bootloader }
+	{ "reboot-bootloader",	LOCKED,		cmd_reboot_bootloader },
+	{ "set_active",		UNLOCKED,	cmd_set_active }
 };
 
 static EFI_STATUS fastboot_init()
@@ -976,6 +1090,10 @@ static EFI_STATUS fastboot_init()
 	}
 
 	ret = publish_partsize();
+	if (EFI_ERROR(ret))
+		goto error;
+
+	ret = publish_slots();
 	if (EFI_ERROR(ret))
 		goto error;
 

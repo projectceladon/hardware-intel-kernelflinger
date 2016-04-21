@@ -56,6 +56,7 @@
 #endif
 #include "oemvars.h"
 #include "silentlake.h"
+#include "slot.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
@@ -390,7 +391,7 @@ static enum boot_target check_watchdog(VOID)
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Failed to reset the watchdog status");
 
-        return ux_prompt_user_for_boot_target(TRUE);
+        return ux_prompt_user_for_boot_target(CRASH_EVENT_CODE);
 
 error:
         return NORMAL_BOOT;
@@ -671,9 +672,25 @@ static EFI_STATUS load_boot_image(
         switch (boot_target) {
         case NORMAL_BOOT:
         case CHARGER:
-                ret = android_image_load_partition(BOOT_LABEL, bootimage);
+                ret = EFI_NOT_FOUND;
+                if (use_slot() && !slot_get_active())
+                        break;
+                do {
+                        const CHAR16 *label = slot_label(BOOT_LABEL);
+                        ret = android_image_load_partition(label, bootimage);
+                        if (EFI_ERROR(ret)) {
+                                efi_perror(ret, L"Failed to load boot image from %s partition",
+                                           label);
+                                if (use_slot())
+                                        slot_boot_failed(boot_target);
+                        }
+                } while (EFI_ERROR(ret) && slot_get_active());
                 break;
         case RECOVERY:
+                if (use_slot() && !slot_recovery_tries_remaining()) {
+                        ret = EFI_NOT_FOUND;
+                        break;
+                }
                 ret = android_image_load_partition(RECOVERY_LABEL, bootimage);
                 break;
         case ESP_BOOTIMAGE:
@@ -790,12 +807,22 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                 efi_perror(ret, L"Failed to set os secure boot");
 #endif
 
+        ret = slot_boot(boot_target);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to write slot boot");
+                return ret;
+        }
+
         debug(L"chainloading boot image, boot state is %s",
                         boot_state_to_string(boot_state));
         ret = android_image_start_buffer(g_parent_image, bootimage,
                                          boot_target, boot_state, NULL);
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Couldn't load Boot image");
+
+        ret = slot_boot_failed(boot_target);
+        if (EFI_ERROR(ret))
+                efi_perror(ret, L"Failed to write slot failure");
 
         return ret;
 }
@@ -876,7 +903,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
                 /* Offer a fast path between crashmode and fastboot
                    mode to keep the RAM state.  */
                 if (target == CRASHMODE) {
-                        target = ux_prompt_user_for_boot_target(FALSE);
+                        target = ux_prompt_user_for_boot_target(NO_ERROR_CODE);
                         if (target == FASTBOOT)
                                 continue;
                 }
@@ -1023,6 +1050,18 @@ out:
 }
 #endif
 
+static void bootloader_recover_mode(UINT8 boot_state)
+{
+        enum boot_target target;
+
+        target = ux_prompt_user_for_boot_target(NOT_BOOTABLE_CODE);
+        if (target == FASTBOOT)
+                enter_fastboot_mode(boot_state);
+
+        reboot_to_target(target);
+        die();
+}
+
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
         EFI_STATUS ret;
@@ -1074,13 +1113,19 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                                 NULL);
         }
 
+        ret = slot_init();
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Slot management initialization failed");
+                return ret;
+        }
+
         /* No UX prompts before this point, do not want to interfere
          * with magic key detection */
         boot_target = choose_boot_target(&target_path, &oneshot);
         if (boot_target == EXIT_SHELL)
                 return EFI_SUCCESS;
         if (boot_target == CRASHMODE) {
-                boot_target = ux_prompt_user_for_boot_target(FALSE);
+                boot_target = ux_prompt_user_for_boot_target(NO_ERROR_CODE);
                 if (boot_target != FASTBOOT)
                         reboot_to_target(boot_target);
         }
@@ -1185,11 +1230,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
                 debug(L"User accepted bad boot image warning");
 
-                if (bootimage == NULL) {
-                        error(L"Unable to load boot image at all; stop.");
-                        pause(5);
-                        halt_system();
-                }
+                if (bootimage == NULL)
+                        bootloader_recover_mode(boot_state);
         }
 
         switch (boot_target) {
@@ -1220,7 +1262,27 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (verifier_cert)
                 X509_free(verifier_cert);
 
-        return load_image(bootimage, boot_state, boot_target);
+        ret = load_image(bootimage, boot_state, boot_target);
+        if (EFI_ERROR(ret))
+                efi_perror(ret, L"Failed to start boot image");
+
+        switch (boot_target) {
+        case NORMAL_BOOT:
+        case CHARGER:
+                if (slot_get_active())
+                        reboot_to_target(boot_target);
+                break;
+        case RECOVERY:
+                if (slot_recovery_tries_remaining())
+                        reboot_to_target(boot_target);
+                break;
+        default:
+                break;
+        }
+
+        bootloader_recover_mode(boot_state);
+
+        return EFI_INVALID_PARAMETER;
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

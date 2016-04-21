@@ -31,6 +31,7 @@
  */
 
 #include <lib.h>
+#include <slot.h>
 
 #include "reader.h"
 #include "acpi.h"
@@ -350,7 +351,7 @@ static EFI_STATUS _part_open(reader_ctx_t *ctx, UINTN argc, char **argv, logical
 	}
 
 	gparti = &priv->gparti;
-	ret = gpt_get_partition_by_label(partname, gparti, log_unit);
+	ret = gpt_get_partition_by_label(slot_label(partname), gparti, log_unit);
 	FreePool(partname);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Cannot access partition '%a'", argv[0]);
