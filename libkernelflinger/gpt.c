@@ -386,6 +386,9 @@ EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, logical_unit
 {
 	EFI_STATUS ret;
 
+	if (!gpart)
+		return EFI_INVALID_PARAMETER;
+
 	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
 		return ret;
@@ -423,6 +426,9 @@ EFI_STATUS gpt_get_partition_by_label(const CHAR16 *label,
 	struct gpt_partition *part;
 	EFI_STATUS ret;
 
+	if (!label || !gpart)
+		return EFI_INVALID_PARAMETER;
+
 	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
 		return ret;
@@ -446,6 +452,9 @@ EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN 
 {
 	EFI_STATUS ret;
 	UINTN p;
+
+	if (!gpartlist || !part_count)
+		return EFI_INVALID_PARAMETER;
 
 	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
@@ -690,6 +699,9 @@ EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gb
 {
 	EFI_STATUS ret;
 
+	if (!gbp)
+		return EFI_INVALID_PARAMETER;
+
 	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
 		return ret;
@@ -715,6 +727,9 @@ EFI_STATUS gpt_get_partition_guid(const CHAR16 *label, EFI_GUID *guid, logical_u
 	EFI_STATUS ret;
 	struct gpt_partition *part;
 
+	if (!label || !guid)
+		return EFI_INVALID_PARAMETER;
+
 	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
 		return ret;
@@ -734,6 +749,9 @@ EFI_STATUS gpt_swap_partition(const CHAR16 *label1, const CHAR16 *label2, logica
 {
 	EFI_STATUS ret;
 	struct gpt_partition *part1, *part2, save1;
+
+	if (!label1 || !label2)
+		return EFI_INVALID_PARAMETER;
 
 	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
@@ -785,6 +803,9 @@ EFI_STATUS gpt_get_partition_handle(const CHAR16 *label,
 	UINTN i;
 	EFI_DEVICE_PATH *device_path;
 	HARDDRIVE_DEVICE_PATH *hd_path;
+
+	if (!label || !handle)
+		return EFI_INVALID_PARAMETER;
 
 	*handle = NULL;
 
