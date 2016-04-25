@@ -65,26 +65,36 @@ static EFI_STATUS fastboot_oem_publish(void)
 	return publish_intel_variables();
 }
 
-static void cmd_oem_off_mode_charge(INTN argc, CHAR8 **argv)
+static EFI_STATUS cmd_oem_set_boolean(INTN argc, CHAR8 **argv,
+				      char *name, EFI_STATUS (*set_fun)(BOOLEAN value))
 {
 	EFI_STATUS ret;
 
 	if (argc != 2) {
 		fastboot_fail("Invalid parameter");
-		return;
+		return EFI_INVALID_PARAMETER;
 	}
 
 	if (strcmp(argv[1], (CHAR8* )"1") && strcmp(argv[1], (CHAR8 *)"0")) {
 		fastboot_fail("Invalid value");
-		error(L"Please specify 1 or 0 to enable/disable charge mode");
-		return;
+		error(L"Please specify 1 or 0 to enable/disable %a", name);
+		return EFI_INVALID_PARAMETER;
 	}
 
-        ret = set_off_mode_charge(!strcmp(argv[1], (CHAR8* )"1"));
-	if (EFI_ERROR(ret)) {
+        ret = set_fun(!strcmp(argv[1], (CHAR8* )"1"));
+	if (EFI_ERROR(ret))
 		fastboot_fail("Failed to set %a", OFF_MODE_CHARGE);
+
+	return ret;
+}
+
+static void cmd_oem_off_mode_charge(INTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret;
+
+	ret = cmd_oem_set_boolean(argc, argv, OFF_MODE_CHARGE, set_off_mode_charge);
+	if (EFI_ERROR(ret))
 		return;
-	}
 
 	ret = fastboot_oem_publish();
 	if (EFI_ERROR(ret))
@@ -97,22 +107,9 @@ static void cmd_oem_crash_event_menu(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
 
-	if (argc != 2) {
-		fastboot_fail("Invalid parameter");
+	ret = cmd_oem_set_boolean(argc, argv, CRASH_EVENT_MENU, set_crash_event_menu);
+	if (EFI_ERROR(ret))
 		return;
-	}
-
-	if (strcmp(argv[1], (CHAR8* )"1") && strcmp(argv[1], (CHAR8 *)"0")) {
-		fastboot_fail("Invalid value");
-		error(L"Please specify 1 or 0 to enable/disable crash event menu");
-		return;
-	}
-
-        ret = set_crash_event_menu(!strcmp(argv[1], (CHAR8* )"1"));
-	if (EFI_ERROR(ret)) {
-		fastboot_fail("Failed to set %a", CRASH_EVENT_MENU);
-		return;
-	}
 
 	ret = fastboot_oem_publish();
 	if (EFI_ERROR(ret))
