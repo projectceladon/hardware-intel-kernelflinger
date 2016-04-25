@@ -122,6 +122,13 @@ struct OEM1_TABLE {
 	UINT8 rsvd2[11];		/* Reserved */
 } __attribute__ ((packed));
 
+/* BERT (Boot Error Record Table) as defined in ACPI spec, APEI chapter */
+struct BERT_TABLE {
+	struct ACPI_DESC_HEADER header;
+	UINT32 region_length;		/* Length of BERT region */
+	UINT64 region;			/* Physical address of BERT region */
+} __attribute__ ((packed));
+
 /* Some ACPI table signatures, SSDT for instance, might appear several
  * times.  An extra table number can be appended to the supplied
  * SIGNATURE to specify which one is required.  For instance, with

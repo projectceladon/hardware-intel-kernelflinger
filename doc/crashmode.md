@@ -115,6 +115,7 @@ Crashmode adb implementation is limited to the following commands:
 - pull gpt-factory-header: retrieve the factory GPT header.
 - pull gpt-factory-parts: retrieve the factory GPT partition table.
 - pull efivar:VAR_NAME[:GUID]: retrieve VAR_NAME EFI variable content.
+- pull bert-region: retrieve BERT region, prepended by "BERR" magic.
 ```
 
 The optional `START` and `LENGTH` parameters allow to perform a
@@ -164,6 +165,14 @@ the flat file you are looking for manual analysis.
 
 * RAM data retrieval is limited to one `pull` command at a time.
 * `START` is a physical address.
+
+### BERT region
+
+The `pull bert-region` command retrieves the
+[APEI](https://firmware.intel.com/sites/default/files/resources/A_Tour_beyond_BIOS_Implementing_APEI_with_UEFI_White_Paper.pdf)
+(ACPI Platform Error Interface, see
+[ACPI specification](http://uefi.org/specifications)) BERT (Boot Error
+Record Table) region prepended by `BERR` magic.
 
 ### Example:
 

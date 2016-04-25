@@ -61,7 +61,7 @@ struct fastboot_var {
 	struct fastboot_var *next;
 	char name[MAX_VARIABLE_LENGTH];
 	char value[MAX_VARIABLE_LENGTH];
-	char *(*get_value)(void);
+	const char *(*get_value)(void);
 };
 
 struct fastboot_tx_buffer {
@@ -199,11 +199,7 @@ static struct fastboot_var *fastboot_getvar_or_create(const char *name)
 	return var;
 }
 
-/*
- * remove all fastboot variable which starts with partition-
- */
-#define MATCH_PART "partition-"
-static void clean_partition_var(void)
+static void delete_var_starting_with(const char *prefix)
 {
 	struct fastboot_var *var;
 	struct fastboot_var *old_varlist;
@@ -214,7 +210,7 @@ static void clean_partition_var(void)
 
 	for (var = old_varlist; var; var = next) {
 		next = var->next;
-		if (!memcmp(MATCH_PART, var->name, strlena((CHAR8 *) MATCH_PART))) {
+		if (!memcmp(prefix, var->name, strlena((CHAR8 *)prefix))) {
 			FreePool(var);
 		} else {
 			var->next = varlist;
@@ -235,7 +231,7 @@ static void fastboot_unpublish_all()
 	varlist = NULL;
 }
 
-EFI_STATUS fastboot_publish_dynamic(const char *name, char *(get_value)(void))
+EFI_STATUS fastboot_publish_dynamic(const char *name, const char *(get_value)(void))
 {
 	struct fastboot_var *var;
 
@@ -273,7 +269,7 @@ EFI_STATUS fastboot_publish(const char *name, const char *value)
 	return EFI_SUCCESS;
 }
 
-static char *get_ptype_str(EFI_GUID *guid)
+static const char *get_ptype_str(EFI_GUID *guid)
 {
 	if (!CompareGuid(guid, &guid_linux_data))
 		return "ext4";
@@ -284,7 +280,7 @@ static char *get_ptype_str(EFI_GUID *guid)
 	return "none";
 }
 
-static char *get_psize_str(UINT64 size)
+static const char *get_psize_str(UINT64 size)
 {
 	static char part_size[MAX_VARIABLE_LENGTH];
 	int len;
@@ -300,8 +296,8 @@ static char *get_psize_str(UINT64 size)
 static EFI_STATUS publish_part(CHAR16 *part_name, UINT64 size, EFI_GUID *guid)
 {
 	struct descriptor {
-		char *name;
-		char *value;
+		const char *name;
+		const char *value;
 	} descriptors[] = {
 		{ "partition-size",	get_psize_str(size) },
 		{ "partition-type",	get_ptype_str(guid) },
@@ -366,7 +362,7 @@ static EFI_STATUS publish_partsize(void)
 	return EFI_SUCCESS;
 }
 
-static char *get_battery_voltage_var()
+static const char *get_battery_voltage_var()
 {
 	EFI_STATUS ret;
 	int len;
@@ -528,7 +524,8 @@ static BOOLEAN is_in_white_list(const CHAR8 *key, const char **white_list)
 
 EFI_STATUS refresh_partition_var(void)
 {
-	clean_partition_var();
+	delete_var_starting_with("partition-");
+	delete_var_starting_with("has-slot");
 	return publish_partsize();
 }
 
@@ -622,9 +619,9 @@ static void cmd_boot(__attribute__((__unused__)) INTN argc,
 	fastboot_okay("");
 }
 
-static char *fastboot_var_value(struct fastboot_var *var)
+static const char *fastboot_var_value(struct fastboot_var *var)
 {
-	char *value;
+	const char *value;
 
 	if (!var->get_value)
 		return var->value;
@@ -1007,7 +1004,7 @@ static EFI_STATUS fastboot_init()
 
 error:
 	fastboot_free();
-	error(L"Fastboot library initialization failed");
+	efi_perror(ret, L"Fastboot library initialization failed");
 	return ret;
 }
 

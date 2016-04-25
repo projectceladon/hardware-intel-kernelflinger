@@ -98,11 +98,11 @@ EFI_STATUS file_read(IN EFI_FILE_HANDLE dir, IN const CHAR16 *name,
 /*
  * String manipulation
  */
-CHAR16 *stra_to_str(CHAR8 *stra);
+CHAR16 *stra_to_str(const CHAR8 *stra);
 
-EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN len);
+EFI_STATUS str_to_stra(CHAR8 *dst, const CHAR16 *src, UINTN len);
 
-EFI_STATUS stra_to_guid(char *str, EFI_GUID *g);
+EFI_STATUS stra_to_guid(const char *str, EFI_GUID *g);
 
 int vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap);
 
