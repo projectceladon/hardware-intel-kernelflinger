@@ -105,6 +105,8 @@ BOOLEAN get_crash_event_menu(void);
 EFI_STATUS set_crash_event_menu(BOOLEAN enabled);
 BOOLEAN get_oemvars_update(void);
 EFI_STATUS set_oemvars_update(BOOLEAN updated);
+BOOLEAN get_slot_fallback(void);
+EFI_STATUS set_slot_fallback(BOOLEAN enabled);
 
 enum device_state {
 	UNKNOWN_STATE = -1,

@@ -50,6 +50,9 @@
 #define UPDATE_OEMVARS		L"UpdateOemVars"
 #define UI_DISPLAY_SPLASH	L"UIDisplaySplash"
 #define REBOOT_REASON		L"LoaderEntryRebootReason"
+#ifndef USER
+#define SLOT_FALLBACK		L"SlotFallback"
+#endif
 #ifdef BOOTLOADER_POLICY_EFI_VAR
 #define OVERRIDE_AUTHORIZATION_KEY	L"OAK"
 #define BOOTLOADER_POLICY_MASK		L"BPM"
@@ -109,6 +112,9 @@ static bool_value_t crash_event_menu;
 static bool_value_t disable_wdt;
 static bool_value_t update_oemvars;
 static bool_value_t ui_display_splash;
+#ifndef USER
+static bool_value_t slot_fallback;
+#endif
 
 CHAR16 *boot_state_to_string(UINT8 boot_state)
 {
@@ -211,6 +217,27 @@ EFI_STATUS set_oemvars_update(BOOLEAN enabled)
 {
 	return set_boolean_var(&fastboot_guid, UPDATE_OEMVARS,
 			       &update_oemvars, enabled);
+}
+
+BOOLEAN get_slot_fallback(void)
+{
+#ifndef USER
+	return get_current_boolean_var(&fastboot_guid, SLOT_FALLBACK,
+				       &slot_fallback, TRUE);
+#else
+	return TRUE;
+#endif
+}
+
+EFI_STATUS set_slot_fallback(BOOLEAN enabled)
+{
+#ifndef USER
+	return set_boolean_var(&fastboot_guid, SLOT_FALLBACK,
+			       &slot_fallback, enabled);
+#else
+	(void)enabled;	/* Unused parameter.  */
+	return EFI_UNSUPPORTED;
+#endif
 }
 
 enum device_state get_current_state()
