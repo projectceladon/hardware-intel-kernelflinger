@@ -40,19 +40,19 @@
 #include "smbios.h"
 #include "version.h"
 
-#define OFF_MODE_CHARGE_VAR	L"off-mode-charge"
-#define OEM_LOCK_VAR		L"OEMLock"
-#define CRASH_EVENT_MENU_VAR	L"CrashEventMenu"
-#define WDT_COUNTER_VAR		L"WatchdogCounter"
-#define WDT_COUNTER_MAX_VAR	L"WatchdogCounterMax"
-#define WDT_TIME_REF_VAR	L"WatchdogTimeReference"
-#define DISABLE_WDT_VAR		L"DisableWatchdog"
+#define OFF_MODE_CHARGE		L"off-mode-charge"
+#define OEM_LOCK		L"OEMLock"
+#define CRASH_EVENT_MENU	L"CrashEventMenu"
+#define WDT_COUNTER		L"WatchdogCounter"
+#define WDT_COUNTER_MAX		L"WatchdogCounterMax"
+#define WDT_TIME_REF		L"WatchdogTimeReference"
+#define DISABLE_WDT		L"DisableWatchdog"
 #define UPDATE_OEMVARS		L"UpdateOemVars"
-#define UI_DISPLAY_SPLASH_VAR	L"UIDisplaySplash"
+#define UI_DISPLAY_SPLASH	L"UIDisplaySplash"
 #define REBOOT_REASON		L"LoaderEntryRebootReason"
 #ifdef BOOTLOADER_POLICY_EFI_VAR
-#define OAK_VARNAME		L"OAK"
-#define BPM_VARNAME		L"BPM"
+#define OVERRIDE_AUTHORIZATION_KEY	L"OAK"
+#define BOOTLOADER_POLICY_MASK		L"BPM"
 #endif
 
 #ifdef BOOTLOADER_POLICY
@@ -83,7 +83,7 @@ const EFI_GUID loader_guid = { 0x4a67b082, 0x0a4c, 0x41cf,
 	{0xb6, 0xc7, 0x44, 0x0b, 0x29, 0xbb, 0x8c, 0x4f} };
 
 #ifdef BOOTLOADER_POLICY_EFI_VAR
-const CHAR16 *FASTBOOT_SECURED_VARS[] = { OAK_VARNAME, BPM_VARNAME };
+const CHAR16 *FASTBOOT_SECURED_VARS[] = { OVERRIDE_AUTHORIZATION_KEY, BOOTLOADER_POLICY_MASK };
 const UINTN FASTBOOT_SECURED_VARS_SIZE = ARRAY_SIZE(FASTBOOT_SECURED_VARS);
 #endif
 
@@ -104,10 +104,10 @@ typedef struct bool_value {
 	UINT8 value : 1;
 } __attribute__((__packed__)) bool_value_t;
 
-static bool_value_t current_off_mode_charge;
-static bool_value_t current_crash_event_menu;
+static bool_value_t off_mode_charge;
+static bool_value_t crash_event_menu;
 static bool_value_t disable_wdt;
-static bool_value_t current_update_oemvars;
+static bool_value_t update_oemvars;
 static bool_value_t ui_display_splash;
 
 CHAR16 *boot_state_to_string(UINT8 boot_state)
@@ -172,45 +172,45 @@ EFI_STATUS set_boolean_var(const EFI_GUID *guid, CHAR16 *varname,
 	return EFI_SUCCESS;
 }
 
-BOOLEAN get_current_off_mode_charge(void)
+BOOLEAN get_off_mode_charge(void)
 {
-	return get_current_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR,
-				       &current_off_mode_charge, TRUE);
+	return get_current_boolean_var(&fastboot_guid, OFF_MODE_CHARGE,
+				       &off_mode_charge, TRUE);
 }
 
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
 {
-	return set_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR,
-			       &current_off_mode_charge, enabled);
+	return set_boolean_var(&fastboot_guid, OFF_MODE_CHARGE,
+			       &off_mode_charge, enabled);
 }
 
-BOOLEAN get_current_crash_event_menu(void)
+BOOLEAN get_crash_event_menu(void)
 {
-	return get_current_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR,
-				       &current_crash_event_menu, TRUE);
+	return get_current_boolean_var(&fastboot_guid, CRASH_EVENT_MENU,
+				       &crash_event_menu, TRUE);
 }
 
 EFI_STATUS set_crash_event_menu(BOOLEAN enabled)
 {
-	return set_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR,
-			       &current_crash_event_menu, enabled);
+	return set_boolean_var(&fastboot_guid, CRASH_EVENT_MENU,
+			       &crash_event_menu, enabled);
 }
 
 BOOLEAN get_display_splash(void) {
-	return get_current_boolean_var(&loader_guid, UI_DISPLAY_SPLASH_VAR,
+	return get_current_boolean_var(&loader_guid, UI_DISPLAY_SPLASH,
 				       &ui_display_splash, TRUE);
 }
 
 BOOLEAN get_oemvars_update(void)
 {
 	return get_current_boolean_var(&fastboot_guid, UPDATE_OEMVARS,
-				       &current_update_oemvars, TRUE);
+				       &update_oemvars, TRUE);
 }
 
 EFI_STATUS set_oemvars_update(BOOLEAN enabled)
 {
 	return set_boolean_var(&fastboot_guid, UPDATE_OEMVARS,
-			       &current_update_oemvars, enabled);
+			       &update_oemvars, enabled);
 }
 
 enum device_state get_current_state()
@@ -221,7 +221,7 @@ enum device_state get_current_state()
 	UINT32 flags;
 
 	if (current_state == UNKNOWN_STATE) {
-		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK_VAR,
+		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK,
 				       &dsize, (void **)&stored_state, &flags);
 		/* If the variable does not exist, assume unlocked. */
 		if (ret == EFI_NOT_FOUND) {
@@ -234,11 +234,11 @@ enum device_state get_current_state()
 		/* If we can't read the state, be safe and assume locked. */
 		if (EFI_ERROR(ret) || !dsize) {
 			current_state = LOCKED;
-			error(L"Couldn't read %s, assuming locked", OEM_LOCK_VAR);
+			error(L"Couldn't read %s, assuming locked", OEM_LOCK);
 			goto exit;
 		} else if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
 			current_state = LOCKED;
-			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK_VAR);
+			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK);
 		} else {
 			if (stored_state[0] & OEM_LOCK_UNLOCKED)
 				current_state = UNLOCKED;
@@ -269,11 +269,11 @@ EFI_STATUS set_current_state(enum device_state state)
 		return EFI_INVALID_PARAMETER;
 	}
 
-	EFI_STATUS ret = set_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
+	EFI_STATUS ret = set_efi_variable(&fastboot_guid, OEM_LOCK,
 					  sizeof(stored_state), &stored_state,
 					  TRUE, FALSE);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to set %s variable", OEM_LOCK_VAR);
+		efi_perror(ret, L"Failed to set %s variable", OEM_LOCK);
 		return ret;
 	}
 
@@ -285,7 +285,7 @@ EFI_STATUS set_current_state(enum device_state state)
 #ifndef USER
 EFI_STATUS reprovision_state_vars(VOID)
 {
-	return del_efi_variable(&fastboot_guid, OEM_LOCK_VAR);
+	return del_efi_variable(&fastboot_guid, OEM_LOCK);
 }
 #endif
 
@@ -311,7 +311,7 @@ BOOLEAN device_is_locked()
 
 BOOLEAN device_is_provisioning(void)
 {
-	/* Force OEM_LOCK_VAR check if we haven't already */
+	/* Force OEM_LOCK check if we haven't already */
 	get_current_state();
 
 	return provisioning_mode;
@@ -324,7 +324,7 @@ EFI_STATUS get_watchdog_status(UINT8 *counter, EFI_TIME *time)
 	UINTN size;
 	UINT32 flags;
 
-	ret = get_efi_variable_byte(&fastboot_guid, WDT_COUNTER_VAR,
+	ret = get_efi_variable_byte(&fastboot_guid, WDT_COUNTER,
 				    counter);
 	if (ret == EFI_NOT_FOUND) {
 		*counter = 0;
@@ -333,7 +333,7 @@ EFI_STATUS get_watchdog_status(UINT8 *counter, EFI_TIME *time)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	ret = get_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR, &size,
+	ret = get_efi_variable(&fastboot_guid, WDT_TIME_REF, &size,
 			       (VOID **)&tmp, &flags);
 	if (EFI_ERROR(ret))
 		return ret;
@@ -360,18 +360,18 @@ EFI_STATUS reset_watchdog_status(VOID)
 EFI_STATUS set_watchdog_counter(UINT8 counter)
 {
 	if (counter == 0)
-		return del_efi_variable(&fastboot_guid, WDT_COUNTER_VAR);
+		return del_efi_variable(&fastboot_guid, WDT_COUNTER);
 
-	return set_efi_variable(&fastboot_guid, WDT_COUNTER_VAR,
+	return set_efi_variable(&fastboot_guid, WDT_COUNTER,
 				sizeof(counter), &counter, TRUE, FALSE);
 }
 
 EFI_STATUS set_watchdog_time_reference(EFI_TIME *time)
 {
 	if (time == NULL)
-		return del_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR);
+		return del_efi_variable(&fastboot_guid, WDT_TIME_REF);
 
-	return set_efi_variable(&fastboot_guid, WDT_TIME_REF_VAR,
+	return set_efi_variable(&fastboot_guid, WDT_TIME_REF,
 				sizeof(*time), time, TRUE, FALSE);
 }
 
@@ -381,7 +381,7 @@ UINT8 get_watchdog_counter_max(VOID)
 	EFI_STATUS ret;
 	UINT8 max;
 
-	ret = get_efi_variable_byte(&fastboot_guid, WDT_COUNTER_MAX_VAR, &max);
+	ret = get_efi_variable_byte(&fastboot_guid, WDT_COUNTER_MAX, &max);
 	return EFI_ERROR(ret) ? WATCHDOG_COUNTER_MAX : max;
 #else
 	return WATCHDOG_COUNTER_MAX;
@@ -390,13 +390,13 @@ UINT8 get_watchdog_counter_max(VOID)
 
 EFI_STATUS set_watchdog_counter_max(UINT8 max)
 {
-	return set_efi_variable(&fastboot_guid, WDT_COUNTER_MAX_VAR,
+	return set_efi_variable(&fastboot_guid, WDT_COUNTER_MAX,
 				sizeof(max), &max, TRUE, FALSE);
 }
 
 BOOLEAN get_disable_watchdog()
 {
-	return get_current_boolean_var(&loader_guid, DISABLE_WDT_VAR,
+	return get_current_boolean_var(&loader_guid, DISABLE_WDT,
 				       &disable_wdt, FALSE);
 }
 
@@ -707,7 +707,7 @@ static bpm_t get_bpm()
 	UINT64 *bpm_data;
 	bpm_t bpm = { .raw = DEFAULT_BLPOLICY };
 
-	ret = get_efi_variable(&fastboot_guid, BPM_VARNAME,
+	ret = get_efi_variable(&fastboot_guid, BOOTLOADER_POLICY_MASK,
 			       &size, (VOID **)&bpm_data, &flags);
 	if (EFI_ERROR(ret))
 		goto out;
@@ -731,10 +731,11 @@ EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size)
 	UINT32 flags;
 	VOID *data;
 
-	ret = get_efi_variable(&fastboot_guid, OAK_VARNAME,
+	ret = get_efi_variable(&fastboot_guid, OVERRIDE_AUTHORIZATION_KEY,
 			       size, (VOID **)&data, &flags);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to read OAK EFI variable");
+		efi_perror(ret, L"Failed to read %s EFI variable",
+			   OVERRIDE_AUTHORIZATION_KEY);
 		return ret;
 	}
 
