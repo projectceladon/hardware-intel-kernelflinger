@@ -326,6 +326,12 @@ other.  `STORAGE` value is limited to `emmc` and `ufs`.
 
 Enable (1) or disable(0) [Crashmode](./crashmode.md).
 
+### `fastboot oem slot-fallback <0|1>`
+
+Works in any state but is limited to `non-user` builds. Enable (1) or
+disable(0) slot fallback mechanism.  If set to 0, the active slot and
+the recovery remaining tries number are not decremented.
+
 ### `oem set-watchdog-counter-max <value>`
 
 Works in any device state but is limited to `non-user` builds.

@@ -52,6 +52,7 @@
 
 #define OFF_MODE_CHARGE		"off-mode-charge"
 #define CRASH_EVENT_MENU	"crash-event-menu"
+#define SLOT_FALLBACK		"slot-fallback"
 
 static cmdlist_t cmdlist;
 
@@ -347,6 +348,17 @@ static void cmd_oem_set_watchdog_counter_max(INTN argc, CHAR8 **argv)
 
 	fastboot_okay("");
 }
+
+static void cmd_oem_disable_slot_fallback(INTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret;
+
+	ret = cmd_oem_set_boolean(argc, argv, SLOT_FALLBACK, set_slot_fallback);
+	if (EFI_ERROR(ret))
+		return;
+
+	fastboot_okay("");
+}
 #endif
 
 static void cmd_oem_get_logs(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
@@ -425,6 +437,7 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "reprovision",		LOCKED,		cmd_oem_reprovision  },
 	{ "rm",				LOCKED,		cmd_oem_rm },
 	{ "set-watchdog-counter-max",	LOCKED,		cmd_oem_set_watchdog_counter_max },
+	{ SLOT_FALLBACK,		LOCKED,		cmd_oem_disable_slot_fallback },
 #endif
 	{ "get-hashes",			LOCKED,		cmd_oem_gethashes  },
 	{ "get-provisioning-logs",	LOCKED,		cmd_oem_get_logs },
