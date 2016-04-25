@@ -970,7 +970,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *bootimage)
                                         die();
                                 }
 #endif
-                                load_image(bootimage, BOOT_STATE_ORANGE, FALSE);
+                                load_image(bootimage, BOOT_STATE_ORANGE, NORMAL_BOOT);
                         }
                         FreePool(bootimage);
                         bootimage = NULL;

@@ -205,7 +205,7 @@ char *strcasestr(const char *s, const char *find)
         return (char *)s;
 }
 
-CHAR16 *stra_to_str(CHAR8 *stra)
+CHAR16 *stra_to_str(const CHAR8 *stra)
 {
         UINTN len, i;
         CHAR16 *str;
@@ -221,7 +221,7 @@ CHAR16 *stra_to_str(CHAR8 *stra)
         return str;
 }
 
-EFI_STATUS stra_to_guid(char *str, EFI_GUID *g)
+EFI_STATUS stra_to_guid(const char *str, EFI_GUID *g)
 {
         char value[3] = { '\0', '\0', '\0' };
         char *end;
@@ -644,7 +644,7 @@ EFI_STATUS string_to_guid(
 }
 
 
-EFI_STATUS str_to_stra(CHAR8 *dst, CHAR16 *src, UINTN max_len)
+EFI_STATUS str_to_stra(CHAR8 *dst, const CHAR16 *src, UINTN max_len)
 {
         UINTN i;
 
