@@ -58,7 +58,7 @@ static EFI_STATUS fastboot_oem_publish(void)
 {
 	EFI_STATUS ret;
 
-	ret = fastboot_publish(OFF_MODE_CHARGE, get_current_off_mode_charge() ? "1" : "0");
+	ret = fastboot_publish(OFF_MODE_CHARGE, get_off_mode_charge() ? "1" : "0");
 	if (EFI_ERROR(ret))
 		return ret;
 

@@ -282,7 +282,7 @@ static enum boot_target check_loader_entry_one_shot(VOID)
                 else
                         error(L"Unknown oneshot boot target: '%s'", target);
                 ret = NORMAL_BOOT;
-        } else if (ret == CHARGER && !get_current_off_mode_charge()) {
+        } else if (ret == CHARGER && !get_off_mode_charge()) {
                 debug(L"Off mode charge is not set, powering off.");
                 ret = POWER_OFF;
         }
@@ -323,7 +323,7 @@ static enum boot_target check_watchdog(VOID)
         UINT8 counter;
         EFI_TIME time_ref, now;
 
-        if (!get_current_crash_event_menu())
+        if (!get_crash_event_menu())
                 return NORMAL_BOOT;
 
         ret = get_watchdog_status(&counter, &time_ref);
@@ -450,7 +450,7 @@ static enum boot_target check_battery_inserted()
 {
         enum wake_sources wake_source;
 
-        if (!get_current_off_mode_charge())
+        if (!get_off_mode_charge())
                 return NORMAL_BOOT;
 
         wake_source = rsci_get_wake_source();
@@ -464,7 +464,7 @@ static enum boot_target check_charge_mode()
 {
         enum wake_sources wake_source;
 
-        if (!get_current_off_mode_charge())
+        if (!get_off_mode_charge())
                 return NORMAL_BOOT;
 
         wake_source = rsci_get_wake_source();
@@ -479,7 +479,7 @@ static enum boot_target check_charge_mode()
 
 enum boot_target check_battery()
 {
-        if (!get_current_off_mode_charge())
+        if (!get_off_mode_charge())
                 return NORMAL_BOOT;
 
         if (is_battery_below_boot_OS_threshold()) {

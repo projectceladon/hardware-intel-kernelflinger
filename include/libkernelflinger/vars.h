@@ -99,9 +99,9 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 
 BOOLEAN device_is_unlocked(void);
 BOOLEAN device_is_locked(void);
-BOOLEAN get_current_off_mode_charge(void);
+BOOLEAN get_off_mode_charge(void);
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled);
-BOOLEAN get_current_crash_event_menu(void);
+BOOLEAN get_crash_event_menu(void);
 EFI_STATUS set_crash_event_menu(BOOLEAN enabled);
 BOOLEAN get_oemvars_update(void);
 EFI_STATUS set_oemvars_update(BOOLEAN updated);
