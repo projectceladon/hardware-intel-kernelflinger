@@ -29,61 +29,51 @@ device = auto
 label = bootloader
 len = 60
 type = esp
-guid = 2568845d-2332-4675-bc39-8fa5a4748d15
 
 [partition.bootloader2]
 label = bootloader2
 len = 60
 type = fat
-guid = 114eaffe-1552-4022-b26e-9b053604cf84
 
 [partition.boot]
 label = boot
 len = 30
 type = boot
-guid = 49a4d17f-93a3-45c1-a0de-f50b2ebe2599
 
 [partition.recovery]
 label = recovery
 len = 30
 type = recovery
-guid = 4177c722-9e92-4aab-8644-43502bfd5506
 
 [partition.misc]
 label = misc
 len = 1
 type = misc
-guid = ef32a33b-a409-486c-9141-9ffb711f6266
 
 [partition.metadata]
 label = metadata
 len = 16
 type = metadata
-guid = 20ac26be-20b7-11e3-84c5-6cfdb94711e9
 
 [partition.system]
 label = system
 len = 2560
 type = linux
-guid = 38f428e6-d326-425d-9140-6e0ea133647c
 
 [partition.cache]
 label = cache
 len = 100
 type = linux
-guid = a893ef21-e428-470a-9e55-0668fd91a2d9
 
 [partition.data]
 label = data
 len = -1
 type = linux
-guid = dc76dda9-5ac1-491c-af42-a82591580c0d
 
 [partition.persistent]
 label = persistent
 len = 1
 type = linux
-guid = ebc597d0-2053-4b15-8b64-e0aac75f4db1
 ```
 
 ### `fastboot flash bootloader <filename>`
