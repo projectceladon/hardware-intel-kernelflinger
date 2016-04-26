@@ -48,7 +48,7 @@ enum storage_type {
 #define N_BLOCK (4096)
 
 struct storage {
-	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
+	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
 	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
 	BOOLEAN (*probe)(EFI_DEVICE_PATH *p);
 	const CHAR16 *name;
@@ -60,9 +60,9 @@ EFI_STATUS identify_boot_device(enum storage_type type);
 PCI_DEVICE_PATH *get_boot_device(void);
 EFI_STATUS storage_set_boot_device(EFI_HANDLE device);
 EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
-EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
+EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
+EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 		     VOID *pattern, UINTN pattern_blocks);
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end);
+EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
 
 #endif	/* _STORAGE_H_ */

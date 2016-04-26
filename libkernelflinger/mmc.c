@@ -125,7 +125,7 @@ BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
 }
 
 static EFI_STATUS mmc_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
-				   UINT64 start, UINT64 end)
+				   EFI_LBA start, EFI_LBA end)
 {
 	EFI_STATUS ret;
 	EFI_SD_HOST_IO_PROTOCOL *sdio;

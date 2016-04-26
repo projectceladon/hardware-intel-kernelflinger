@@ -56,8 +56,8 @@ EFI_STATUS sdio_get(EFI_DEVICE_PATH *p, EFI_SD_HOST_IO_PROTOCOL **sdio)
 	return uefi_call_wrapper(BS->HandleProtocol, 3, sdio_handle, &guid, (void **)sdio);
 }
 
-static EFI_STATUS sdio_erase_group(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT64 start,
-				   UINT64 end, UINTN timeout, UINT16 card_address,
+static EFI_STATUS sdio_erase_group(EFI_SD_HOST_IO_PROTOCOL *sdio, EFI_LBA start,
+				   EFI_LBA end, UINTN timeout, UINT16 card_address,
 				   BOOLEAN emmc)
 {
 	EFI_STATUS ret;
@@ -115,12 +115,12 @@ static EFI_STATUS sdio_erase_group(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT64 start,
 }
 
 EFI_STATUS sdio_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, EFI_BLOCK_IO *bio,
-		      UINT64 start, UINT64 end,
+		      EFI_LBA start, EFI_LBA end,
 		      UINT16 card_address, UINTN erase_grp_size, UINTN erase_timeout,
 		      BOOLEAN emmc)
 {
 	EFI_STATUS ret;
-	UINT64 left;
+	EFI_LBA left;
 	UINTN timeout;
 
 	if (!sdio || !bio)

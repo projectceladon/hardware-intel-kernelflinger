@@ -44,7 +44,7 @@ static EFI_DEVICE_PATH *get_scsi_device_path(EFI_DEVICE_PATH *p)
 	return NULL;
 }
 
-static EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+static EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
 {
 	EFI_STATUS ret;
 	EFI_GUID ScsiPassThruProtocolGuid = EFI_EXT_SCSI_PASS_THRU_PROTOCOL_GUID;

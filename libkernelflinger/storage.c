@@ -145,7 +145,7 @@ EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_uni
 	return storage->check_logical_unit(p, log_unit);
 }
 
-EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
 {
 	if (!valid_storage())
 		return EFI_UNSUPPORTED;
@@ -156,10 +156,10 @@ EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, UINT64 sta
 
 #define percent5(x, max) (x) * 20 / (max) * 5
 
-EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
+EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 			    VOID *pattern, UINTN pattern_blocks)
 {
-	UINT64 lba;
+	EFI_LBA lba;
 	UINT64 size;
 	UINT64 prev = 0, progress = 0;
 	EFI_STATUS ret;
@@ -189,7 +189,7 @@ EFI_STATUS fill_with(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end,
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, UINT64 start, UINT64 end)
+EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
 {
 	EFI_STATUS ret;
 	VOID *emptyblock;

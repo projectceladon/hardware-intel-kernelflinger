@@ -117,7 +117,7 @@ static BOOLEAN is_dsm_trim_supported(EFI_ATA_PASS_THRU_PROTOCOL *ata,
  * See. 4.18.3.2 LBA Range Entry
  */
 static EFI_STATUS ata_dsm_trim(EFI_ATA_PASS_THRU_PROTOCOL *ata,
-			       SATA_DEVICE_PATH *sata_dp, UINT64 start, UINT64 end,
+			       SATA_DEVICE_PATH *sata_dp, EFI_LBA start, EFI_LBA end,
 			       UINT16 max_dsm_block_nb)
 {
 	EFI_STATUS ret = EFI_INVALID_PARAMETER;
@@ -136,8 +136,7 @@ static EFI_STATUS ata_dsm_trim(EFI_ATA_PASS_THRU_PROTOCOL *ata,
 		.Length = EFI_ATA_PASS_THRU_LENGTH_BYTES | EFI_ATA_PASS_THRU_LENGTH_SECTOR_COUNT
 	};
 	lba_range_entry_t *range, *buf;
-	UINT64 left;
-	UINTN nr_sectors, nr_ranges, nr_blocks, i, count;
+	EFI_LBA nr_sectors, nr_ranges, nr_blocks, i, count, left;
 
 	nr_sectors = end - start + 1;
 	nr_ranges = nr_sectors / MAX_SECTOR_PER_RANGE;
@@ -185,7 +184,7 @@ out:
 
 static EFI_STATUS sata_erase_blocks(EFI_HANDLE handle,
 				    __attribute__((unused)) EFI_BLOCK_IO *bio,
-				    UINT64 start, UINT64 end)
+				    EFI_LBA start, EFI_LBA end)
 {
 	EFI_STATUS ret;
 	EFI_GUID AtaPassThruProtocolGuid = EFI_ATA_PASS_THRU_PROTOCOL_GUID;
