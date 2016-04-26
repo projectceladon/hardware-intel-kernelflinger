@@ -695,7 +695,7 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	return gpt_refresh();
 }
 
-EFI_STATUS gpt_create(UINTN start_lba, UINTN part_count, struct gpt_bin_part *gbp, logical_unit_t log_unit)
+EFI_STATUS gpt_create(UINT64 start_lba, UINTN part_count, struct gpt_bin_part *gbp, logical_unit_t log_unit)
 {
 	EFI_STATUS ret;
 
