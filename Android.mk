@@ -61,6 +61,8 @@ SHARED_STATIC_LIBRARIES := \
 
 include $(CLEAR_VARS)
 
+# if dm-verity is disabled for eng purpose skip the oem-cert
+ifeq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY), true)
 kf_intermediates := $(call intermediates-dir-for,EFI,kernelflinger)
 
 VERITY_CERT := $(kf_intermediates)/verity.cer
@@ -89,6 +91,17 @@ $(OEMCERT_OBJ): $(PADDED_VERITY_CERT)
                        --rename-section .data=.oemkeys $@ $@
 
 LOCAL_GENERATED_SOURCES := $(OEMCERT_OBJ)
+else
+ifneq (,$(filter user userdebug, $(TARGET_BUILD_VARIANT)))
+
+fail_no_oem_cert:
+	$(error Trying to build kernelflinger-$(TARGET_BUILD_VARIANT)\
+without oem-cert, this is allowed only for eng builds)
+
+LOCAL_GENERATED_SOURCES := fail_no_oem_cert
+endif
+endif # PRODUCT_SUPPORTS_VERITY
+
 LOCAL_SRC_FILES := \
 	kernelflinger.c \
 	ux.c
@@ -110,7 +123,9 @@ endif
 
 LOCAL_MODULE := kernelflinger-$(TARGET_BUILD_VARIANT)
 LOCAL_CFLAGS := $(SHARED_CFLAGS)
+ifeq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY), true)
 LOCAL_OBJCOPY_FLAGS := -j .oemkeys
+endif
 LOCAL_STATIC_LIBRARIES += $(SHARED_STATIC_LIBRARIES)
 LOCAL_MODULE_STEM := kernelflinger
 
