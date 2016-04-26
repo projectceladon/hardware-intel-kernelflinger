@@ -93,7 +93,7 @@ two `bootloader` partitions labelled `bootloader` and
 `bootloader2`. The `flash bootloader` process is the following:
 
 1. Flash `FILENAME` into the `bootloader2` partition.
-2. Verify the content of the `bootloader2` partition: 
+2. Verify the content of the `bootloader2` partition:
   * `bootloader2` contains a FAT16 or FAT32 file-system
   * the usual bootloader EFI binary is present and loadable
   * and all the EFI binaries described in the `/manifest.txt` file are
