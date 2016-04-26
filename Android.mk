@@ -44,13 +44,6 @@ ifeq ($(KERNELFLINGER_SL_BIND_ROOT_TRUST), true)
     KERNELFLINGER_CFLAGS += -DUSE_SILENTLAKE
 endif
 
-ifneq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY), true)
-ifneq (,$(filter user userdebug, $(TARGET_BUILD_VARIANT)))
-    $(error Trying to build kernelflinger-$(TARGET_BUILD_VARIANT)\
-without oem-cert, this is allowed only for eng builds)
-endif
-endif
-
 KERNELFLINGER_STATIC_LIBRARIES := \
 	libuefi_ssl_static \
 	libuefi_crypto_static \
@@ -68,8 +61,6 @@ SHARED_STATIC_LIBRARIES := \
 
 include $(CLEAR_VARS)
 
-# if dm-verity is disabled for eng purpose skip the oem-cert
-ifeq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY), true)
 kf_intermediates := $(call intermediates-dir-for,EFI,kernelflinger)
 
 VERITY_CERT := $(kf_intermediates)/verity.cer
@@ -98,8 +89,6 @@ $(OEMCERT_OBJ): $(PADDED_VERITY_CERT)
                        --rename-section .data=.oemkeys $@ $@
 
 LOCAL_GENERATED_SOURCES := $(OEMCERT_OBJ)
-endif # PRODUCT_SUPPORTS_VERITY
-
 LOCAL_SRC_FILES := \
 	kernelflinger.c \
 	ux.c

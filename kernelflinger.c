@@ -98,15 +98,10 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 static EFI_HANDLE g_disk_device;
 static EFI_LOADED_IMAGE *g_loaded_image;
 
-#ifndef USERDEBUG
-#define oem_cert NULL
-#define oem_cert_size 0
-#else
 extern char _binary_oemcert_start;
 extern char _binary_oemcert_end;
 #define oem_cert (&_binary_oemcert_start)
 #define oem_cert_size (&_binary_oemcert_end - &_binary_oemcert_start)
-#endif
 
 #if DEBUG_MESSAGES
 static VOID print_rsci_values(VOID)
