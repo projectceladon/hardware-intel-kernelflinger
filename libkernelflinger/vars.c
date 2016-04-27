@@ -143,7 +143,7 @@ BOOLEAN get_current_boolean_var(const EFI_GUID *guid, CHAR16 *varname,
 	if (EFI_ERROR(ret))
 		goto exit;
 
-	if (size != 2 || data[1] != '\0' || (data[0] != '1' && data[1] != '0'))
+	if (size != 2 || data[1] != '\0' || (data[0] != '1' && data[0] != '0'))
 		goto exit;
 
 	cache->value = data[0] == '1' ? 1 : 0;
