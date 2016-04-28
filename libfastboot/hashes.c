@@ -413,6 +413,16 @@ struct squashfs_super_block {
 #define VERITY_BLOCK_SIZE 4096
 #define VERITY_HASHES_PER_BLOCK (VERITY_BLOCK_SIZE / VERITY_HASH_SIZE)
 
+/* FEC definition */
+
+#define FEC_MAGIC 0xFECFECFE
+#define FEC_BLOCK_SIZE 4096
+
+struct fec_header {
+	UINT32 magic;
+	/* [...] */
+};
+
 /* adapted from build_verity_tree.cpp */
 static UINT64 verity_tree_blocks(UINT64 data_size, INT32 level)
 {
@@ -444,13 +454,19 @@ static UINT64 verity_tree_size(UINT64 data_size)
 	return tree_size;
 }
 
+static UINT64 part_size(struct gpt_partition_interface *gparti)
+{
+	return (gparti->part.ending_lba + 1 - gparti->part.starting_lba) *
+		gparti->bio->Media->BlockSize;
+}
+
 static EFI_STATUS read_partition(struct gpt_partition_interface *gparti, UINT64 offset, UINT64 len, void *data)
 {
 	UINT64 partlen;
 	UINT64 partoffset;
 	EFI_STATUS ret;
 
-	partlen = (gparti->part.ending_lba + 1 - gparti->part.starting_lba) * gparti->bio->Media->BlockSize;
+	partlen = part_size(gparti);
 	partoffset = gparti->part.starting_lba * gparti->bio->Media->BlockSize;
 
 	if (len + offset > partlen) {
@@ -544,23 +560,56 @@ static EFI_STATUS get_squashfs_len(struct gpt_partition_interface *gparti, UINT6
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS check_verity_header(struct gpt_partition_interface *gparti, UINT64 fs_len)
+/*
+ * The partitions with a verity tree can have three differents layout:
+ * <data_blocks> <verity_metdata> <verity_tree> <hole>
+ * <data_blocks> <hole> <verity_tree> <verity_metdata>
+ * <data_blocks> <hole> <verity_tree> <verity_metdata> <fec_data> <fec_hdr>
+ */
+
+static EFI_STATUS check_verity_header(struct gpt_partition_interface *gparti, UINT64 *fs_len)
 {
 	EFI_STATUS ret;
 	struct ext4_verity_header vh;
 
-	ret = read_partition(gparti, fs_len, sizeof(vh), &vh);
+	ret = read_partition(gparti, *fs_len, sizeof(vh), &vh);
 	if (EFI_ERROR(ret))
 		return ret;
 
-	if (vh.magic != VERITY_METADATA_MAGIC_NUMBER) {
-		debug(L"verity magic not found");
-		return EFI_INVALID_PARAMETER;
+	if (vh.magic == VERITY_METADATA_MAGIC_NUMBER && !vh.protocol_version) {
+		*fs_len += verity_tree_size(*fs_len) + VERITY_METADATA_SIZE;
+		return EFI_SUCCESS;
 	}
-	if (vh.protocol_version) {
-		debug(L"verity protocol version unsupported %d", vh.protocol_version);
-		return EFI_INVALID_PARAMETER;
+
+	ret = read_partition(gparti, part_size(gparti) - VERITY_METADATA_SIZE,
+			     sizeof(vh), &vh);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	if (vh.magic == VERITY_METADATA_MAGIC_NUMBER && !vh.protocol_version) {
+		*fs_len = part_size(gparti);
+		return EFI_SUCCESS;
 	}
+
+	return EFI_NOT_FOUND;
+}
+
+static EFI_STATUS check_fec_header(struct gpt_partition_interface *gparti, UINT64 *fs_len)
+{
+	EFI_STATUS ret;
+	struct fec_header fec;
+
+	ret = read_partition(gparti, part_size(gparti) - FEC_BLOCK_SIZE,
+			     sizeof(fec), &fec);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	if (fec.magic != FEC_MAGIC) {
+		debug(L"FEC magic not found");
+		return EFI_NOT_FOUND;
+	}
+
+	*fs_len = part_size(gparti);
 	return EFI_SUCCESS;
 }
 
@@ -597,11 +646,15 @@ EFI_STATUS get_fs_hash(const CHAR16 *label)
 		return ret;
 	}
 
-	ret = check_verity_header(&gparti, fs_len);
-	if (EFI_ERROR(ret))
+	ret = check_verity_header(&gparti, &fs_len);
+	if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND)
 		return ret;
 
-	fs_len += verity_tree_size(fs_len) + VERITY_METADATA_SIZE;
+	if (ret == EFI_NOT_FOUND) {
+		ret = check_fec_header(&gparti, &fs_len);
+		if (EFI_ERROR(ret))
+			return ret;
+	}
 
 	debug(L"filesystem size %lld", fs_len);
 

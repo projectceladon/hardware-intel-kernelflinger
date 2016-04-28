@@ -98,10 +98,15 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 static EFI_HANDLE g_disk_device;
 static EFI_LOADED_IMAGE *g_loaded_image;
 
+#ifndef USERDEBUG
+#define oem_cert NULL
+#define oem_cert_size 0
+#else
 extern char _binary_oemcert_start;
 extern char _binary_oemcert_end;
 #define oem_cert (&_binary_oemcert_start)
 #define oem_cert_size (&_binary_oemcert_end - &_binary_oemcert_start)
+#endif
 
 #if DEBUG_MESSAGES
 static VOID print_rsci_values(VOID)
@@ -1206,7 +1211,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (boot_target == CRASHMODE) {
                 boot_target = ux_prompt_user_for_boot_target(FALSE);
                 if (boot_target != FASTBOOT)
-                        reboot((CHAR16 *)boot_target_name(boot_target));
+                        reboot_to_target(boot_target);
         }
 
         if (boot_target == POWER_OFF)
