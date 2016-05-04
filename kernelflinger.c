@@ -188,6 +188,7 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
         CHAR16 *target = NULL;
         enum boot_target t;
         CHAR8 *bcb_cmd;
+        BOOLEAN dirty;
 
         *oneshot = FALSE;
         *target_path = NULL;
@@ -199,6 +200,7 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
                 goto out;
         }
 
+        dirty = bcb.status[0] != '\0';
         /* We own the status field; clear it in case there is any stale data */
         bcb.status[0] = '\0';
         bcb_cmd = (CHAR8 *)bcb.command;
@@ -208,13 +210,16 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
         } else if (!strncmpa(bcb_cmd, (CHAR8 *)"bootonce-", 9)) {
                 target = stra_to_str(bcb_cmd + 9);
                 bcb_cmd[0] = '\0';
+                dirty = TRUE;
                 debug(L"BCB oneshot boot target: '%s'", target);
                 *oneshot = TRUE;
         }
 
-        ret = write_bcb(MISC_LABEL, &bcb);
-        if (EFI_ERROR(ret))
-                error(L"Unable to update BCB contents!");
+        if (dirty) {
+                ret = write_bcb(MISC_LABEL, &bcb);
+                if (EFI_ERROR(ret))
+                        error(L"Unable to update BCB contents!");
+        }
 
         if (!target) {
                 t = NORMAL_BOOT;
