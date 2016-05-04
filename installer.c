@@ -70,6 +70,30 @@ static void flush_tx_buffer(void)
 	}
 }
 
+static void do_erase(INTN argc, CHAR8 **argv)
+{
+	fastboot_run_root_cmd("erase", argc, argv);
+	flush_tx_buffer();
+}
+
+static EFI_STATUS find_partition(CHAR8 *target)
+{
+	EFI_STATUS ret;
+	CHAR16 *target16;
+	struct gpt_partition_interface gparti;
+
+	target16 = stra_to_str(target);
+	if (!target16) {
+		fastboot_fail("Failed to convert target to CHAR16");
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	ret = gpt_get_partition_by_label(target16, &gparti, LOGICAL_UNIT_USER);
+	FreePool(target16);
+
+	return ret;
+}
+
 static void installer_flash_buffer(void *data, unsigned size,
 				   INTN argc, CHAR8 **argv)
 {
@@ -317,6 +341,20 @@ static void installer_flash_cmd(INTN argc, CHAR8 **argv)
 		goto exit;
 	}
 
+	ret = find_partition(argv[1]);
+	switch (ret) {
+	case EFI_SUCCESS:
+		do_erase(argc, argv);
+		if (!last_cmd_succeeded)
+			goto exit;
+		break;
+	case EFI_NOT_FOUND:
+		break;
+	default:
+		inst_perror(ret, "Failed to get partition information");
+		goto exit;
+	}
+
 	if (size > MAX_DOWNLOAD_SIZE) {
 		installer_split_and_flash(filename, size, argc, argv);
 		goto exit;
@@ -386,8 +424,7 @@ static void installer_format(INTN argc, CHAR8 **argv)
 		goto free_filename;
 	}
 
-	fastboot_run_root_cmd("erase", argc, argv);
-	flush_tx_buffer();
+	do_erase(argc, argv);
 	if (!last_cmd_succeeded)
 		goto free_data;
 
