@@ -319,7 +319,14 @@ EFI_STATUS fastboot_ui_init(void)
 
 enum boot_target fastboot_ui_event_handler()
 {
-	return ui_boot_menu_event_handler(boot_menu, ui_read_input());
+	ui_events_t event = EV_NONE;
+
+	event = ui_read_input();
+	if (event == EV_NONE)
+		return UNKNOWN_TARGET;
+
+	ui_wait_for_key_release();
+	return ui_boot_menu_event_handler(boot_menu, event);
 }
 
 void fastboot_ui_destroy(void)
