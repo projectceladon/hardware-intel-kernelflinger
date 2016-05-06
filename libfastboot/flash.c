@@ -211,11 +211,12 @@ static EFI_STATUS flash_ifwi(VOID *data, UINTN size)
 	return flash_into_esp(data, size, L"ifwi.bin");
 }
 
-static EFI_STATUS flash_zimage(VOID *data, UINTN size)
+static EFI_STATUS flash_new_bootimage(VOID *kernel, UINTN kernel_size,
+				      VOID *ramdisk, UINTN ramdisk_size)
 {
 	struct boot_img_hdr *bootimage, *new_bootimage;
 	VOID *new_cur, *cur;
-	UINTN new_size, partlen;
+	UINTN new_size, partlen, page_size;
 	EFI_STATUS ret;
 
 	ret = gpt_get_partition_by_label(L"boot", &gparti, LOGICAL_UNIT_USER);
@@ -223,10 +224,10 @@ static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 		error(L"Unable to get information on the boot partition");
 		return ret;
 	}
-
 	partlen = (gparti.part.ending_lba + 1 - gparti.part.starting_lba)
 		* gparti.bio->Media->BlockSize;
-	bootimage = AllocatePool(partlen);
+
+	bootimage = AllocatePool(sizeof(*bootimage));
 	if (!bootimage) {
 		error(L"Unable to allocate bootimage buffer");
 		return EFI_OUT_OF_RESOURCES;
@@ -235,7 +236,7 @@ static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 	ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
 				gparti.bio->Media->MediaId,
 				gparti.part.starting_lba * gparti.bio->Media->BlockSize,
-				partlen, bootimage);
+				sizeof(*bootimage), bootimage);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to load the current bootimage");
 		goto out;
@@ -247,8 +248,44 @@ static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 		goto out;
 	}
 
-	new_size = bootimage_size(bootimage) - bootimage->kernel_size
-		+ pagealign(bootimage, size);
+	if (bootimage_size(bootimage) > partlen) {
+		error(L"Invalid boot image size");
+		ret = EFI_INVALID_PARAMETER;
+		goto out;
+	}
+
+	bootimage = ReallocatePool(bootimage, sizeof(*bootimage),
+				   bootimage_size(bootimage));
+	if (!bootimage) {
+		error(L"Unable to increase the bootimage buffer size");
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
+				gparti.bio->Media->MediaId,
+				gparti.part.starting_lba * gparti.bio->Media->BlockSize,
+				bootimage_size(bootimage), bootimage);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to load the current bootimage");
+		goto out;
+	}
+
+	page_size = bootimage->page_size;
+	if (!kernel) {
+		kernel = (VOID *)bootimage + page_size;
+		kernel_size = bootimage->kernel_size;
+	}
+	if (!ramdisk) {
+		ramdisk = (VOID *)bootimage + page_size +
+			pagealign(bootimage, bootimage->kernel_size);
+		ramdisk_size = bootimage->ramdisk_size;
+	}
+
+	new_size = bootimage_size(bootimage)
+		- pagealign(bootimage, bootimage->kernel_size)
+		+ pagealign(bootimage, kernel_size)
+		- pagealign(bootimage, bootimage->ramdisk_size)
+		+ pagealign(bootimage, ramdisk_size);
 	if (new_size > partlen) {
 		error(L"Kernel image is too large to fit in the boot partition");
 		ret = EFI_INVALID_PARAMETER;
@@ -262,20 +299,23 @@ static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 	}
 
 	/* Create the new bootimage. */
-	memcpy((VOID *)new_bootimage, bootimage, bootimage->page_size);
+	memcpy((VOID *)new_bootimage, bootimage, sizeof(*bootimage));
 
-	new_bootimage->kernel_size = size;
-	new_bootimage->kernel_addr = bootimage->kernel_addr;
-	new_cur = (VOID *)new_bootimage + bootimage->page_size;
-	memcpy(new_cur, data, size);
+	cur = (VOID *)bootimage + page_size;
+	new_cur = (VOID *)new_bootimage + page_size;
 
-	new_cur += pagealign(new_bootimage, size);
-	cur = (VOID *)bootimage + bootimage->page_size
-		+ pagealign(bootimage, bootimage->kernel_size);
-	memcpy(new_cur, cur, bootimage->ramdisk_size);
+	new_bootimage->kernel_size = kernel_size;
+	memcpy(new_cur, kernel, kernel_size);
 
-	new_cur += pagealign(new_bootimage, new_bootimage->ramdisk_size);
+	cur += pagealign(bootimage, bootimage->kernel_size);
+	new_cur += pagealign(new_bootimage, kernel_size);
+
+	new_bootimage->ramdisk_size = ramdisk_size;
+	memcpy(new_cur, ramdisk, ramdisk_size);
+
 	cur += pagealign(bootimage, bootimage->ramdisk_size);
+	new_cur += pagealign(new_bootimage, ramdisk_size);
+
 	memcpy(new_cur, cur, bootimage->second_size);
 
 	/* Flash new the bootimage. */
@@ -284,9 +324,19 @@ static EFI_STATUS flash_zimage(VOID *data, UINTN size)
 
 	FreePool(new_bootimage);
 
- out:
+out:
 	FreePool(bootimage);
 	return ret;
+}
+
+static EFI_STATUS flash_kernel(VOID *data, UINTN size)
+{
+	return flash_new_bootimage(data, size, NULL, 0);
+}
+
+static EFI_STATUS flash_ramdisk(VOID *data, UINTN size)
+{
+	return flash_new_bootimage(NULL, 0, data, size);
 }
 
 EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label)
@@ -328,7 +378,8 @@ static struct label_exception {
 	{ L"sfu", flash_sfu },
 	{ L"ifwi", flash_ifwi },
 	{ L"oemvars", flash_oemvars },
-	{ L"zimage", flash_zimage },
+	{ L"kernel", flash_kernel },
+	{ L"ramdisk", flash_ramdisk },
 	{ BOOTLOADER_LABEL, flash_bootloader },
 #ifdef BOOTLOADER_POLICY
 	{ CONVERT_TO_WIDE(ACTION_AUTHORIZATION), authenticated_action }
