@@ -109,8 +109,22 @@ FS1:\>
 ```
 
 With the `--batch <filename>` parameter, Installer sequentially runs
-all the commands listed in FILENAME.  Installer stops the execution at
-the first command failure.
+all the commands listed in FILENAME. The batch file format allows to
+prefix the command with a list of attribute, example:
+
+```conf
+<[<ATTRIBUTE>]> flash system system.img
+```
+
+The only supported attribute is:
+- 'o': the command is optional.  If the command fails to execute,
+  Installer does not abort the flash process and continue with the
+  next command.
+
+Example:
+```conf
+[o] flash system system.img
+```
 
 Without any parameter, Installer assumes `--batch installer.cmd`.  It
 allows to create a USB stick that will automatically flash the device

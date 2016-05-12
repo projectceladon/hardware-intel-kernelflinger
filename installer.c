@@ -470,7 +470,10 @@ static void installer_boot(INTN argc, CHAR8 **argv)
 		fastboot_okay("");
 }
 
-static char **commands;
+static struct command {
+	BOOLEAN optional;
+	char *cmd;
+} *commands;
 static UINTN command_nb;
 static UINTN current_command;
 
@@ -482,8 +485,8 @@ static void free_commands(void)
 		return;
 
 	for (i = 0; i < command_nb; i++)
-		if (commands[i])
-			FreePool(commands[i]);
+		if (commands[i].cmd)
+			FreePool(commands[i].cmd);
 
 	FreePool(commands);
 	commands = NULL;
@@ -491,9 +494,46 @@ static void free_commands(void)
 	current_command = 0;
 }
 
+static EFI_STATUS create_new_command(struct command *command, char *str)
+{
+	char *cmd = str;
+
+	command->optional = FALSE;
+
+	if (*str == '[') {
+		str++;
+		cmd = (char *)strchr((CHAR8 *)str, ']');
+		if (!cmd)
+			return EFI_INVALID_PARAMETER;
+		*cmd++ = '\0';
+
+		while (*str) {
+			switch (*str++) {
+			case 'o':
+				command->optional = TRUE;
+				break;
+			default:
+				return EFI_INVALID_PARAMETER;
+			}
+		}
+
+		while (*cmd && isspace(*cmd))
+			cmd++;
+		if (!*cmd)
+			return EFI_INVALID_PARAMETER;
+	}
+
+	command->cmd = strdup(cmd);
+	if (!command->cmd)
+		return EFI_OUT_OF_RESOURCES;
+
+	return EFI_SUCCESS;
+}
+
 static EFI_STATUS store_command(char *command, VOID *context _unused)
 {
-	char **new_commands;
+	EFI_STATUS ret;
+	struct command *new_commands;
 
 	new_commands = AllocatePool((command_nb + 1) * sizeof(*new_commands));
 	if (!new_commands) {
@@ -502,10 +542,10 @@ static EFI_STATUS store_command(char *command, VOID *context _unused)
 	}
 
 	memcpy(new_commands, commands, command_nb * sizeof(*commands));
-	new_commands[command_nb] = strdup(command);
-	if (!new_commands[command_nb]) {
+	ret = create_new_command(&new_commands[command_nb], command);
+	if (EFI_ERROR(ret)) {
 		free_commands();
-		return EFI_OUT_OF_RESOURCES;
+		return ret;
 	}
 	if (commands)
 		FreePool(commands);
@@ -522,7 +562,7 @@ static char *next_command()
 		return NULL;
 	}
 
-	return commands[current_command++];
+	return commands[current_command++].cmd;
 }
 
 static void batch(INTN argc, CHAR8 **argv)
@@ -733,9 +773,13 @@ EFI_STATUS installer_transport_run(void)
 
 	if (current_command > 0) {
 		flush_tx_buffer();
-		if (!last_cmd_succeeded)
-			goto stop;
-		Print(L"Command successfully executed\n");
+		if (last_cmd_succeeded)
+			Print(L"Command successfully executed\n");
+		else {
+			if (!commands[current_command - 1].optional)
+				goto stop;
+			Print(L"Command failed but is optional\n");
+		}
 	}
 
 	cmd = next_command();
