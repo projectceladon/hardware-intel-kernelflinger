@@ -483,7 +483,7 @@ static void free_commands(void)
 
 	for (i = 0; i < command_nb; i++)
 		if (commands[i])
-			FreePool(commands);
+			FreePool(commands[i]);
 
 	FreePool(commands);
 	commands = NULL;
