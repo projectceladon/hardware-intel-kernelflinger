@@ -172,11 +172,10 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 		return ret;
 	}
 
-	if (disk->bio->Media->LogicalPartition != 0)
-		return EFI_NOT_FOUND;
-
-	if (disk->bio->Media->RemovableMedia)
-		return EFI_NOT_FOUND;
+	if (disk->bio->Media->LogicalPartition ||
+	    disk->bio->Media->RemovableMedia ||
+	    disk->bio->Media->ReadOnly)
+		return EFI_INVALID_PARAMETER;
 
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &DiskIoProtocol, (VOID *)&disk->dio);
 	if (EFI_ERROR(ret)) {
