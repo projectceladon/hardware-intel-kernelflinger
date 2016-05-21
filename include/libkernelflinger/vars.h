@@ -93,6 +93,7 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define MISC_LABEL		L"misc"
 #define VENDOR_LABEL		L"vendor"
 #define SYSTEM_LABEL		L"system"
+#define OEM_LABEL		L"oem"
 #define BOOTLOADER_LABEL	L"bootloader"
 #define TOS_LABEL		L"tos"
 

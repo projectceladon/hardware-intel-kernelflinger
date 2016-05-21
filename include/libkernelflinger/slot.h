@@ -80,6 +80,16 @@ const char *slot_get_unbootable(const char *suffix);
  * not a valid slot suffix. */
 const char *slot_get_retry_count(const char *suffix);
 
+/* Returns TRUE if the active is corrupted from a dm-verity point of
+ * view.  FALSE is returned if slot AB management is not in used or if
+ * an error is encountered. */
+BOOLEAN slot_get_verity_corrupted(void);
+
+/* Sets the corrupted flag of the active slot to CORRUPTED.
+ * EFI_SUCCESS is returned on success or if the corrupted flag has
+ * been successfully updated. */
+EFI_STATUS slot_set_verity_corrupted(BOOLEAN eio);
+
 /* Parses the current partition scheme.  If slot partitions are found,
  * slot AB management is enabled, slot AB metadata is initialized and
  * stored on disk.  If no slot partition is found, slot AB management

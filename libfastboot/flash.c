@@ -368,9 +368,13 @@ static EFI_STATUS flash_ramdisk(VOID *data, UINTN size)
 	return flash_new_bootimage(NULL, 0, data, size);
 }
 
+static CHAR16 *DM_VERITY_PARTITIONS[] =
+	{ SYSTEM_LABEL, VENDOR_LABEL, OEM_LABEL };
+
 EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label)
 {
 	EFI_STATUS ret;
+	UINTN i;
 
 	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
@@ -388,8 +392,15 @@ EFI_STATUS flash_partition(VOID *data, UINTN size, CHAR16 *label)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	if (!CompareGuid(&gparti.part.type, &EfiPartTypeSystemPartitionGuid))
-		return gpt_refresh();
+	if (!CompareGuid(&gparti.part.type, &EfiPartTypeSystemPartitionGuid)) {
+		ret = gpt_refresh();
+		if (EFI_ERROR(ret))
+			return ret;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(DM_VERITY_PARTITIONS); i++)
+		if (!StrCmp(DM_VERITY_PARTITIONS[i], label))
+			return slot_set_verity_corrupted(FALSE);
 
 	return EFI_SUCCESS;
 }
