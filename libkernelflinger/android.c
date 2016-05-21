@@ -1036,6 +1036,12 @@ static EFI_STATUS setup_command_line(
                         X509_free(verity_cert);
                 if (EFI_ERROR(ret))
                         goto out;
+
+                if (slot_get_verity_corrupted()) {
+                        ret = prepend_command_line(&cmdline16, L"androidboot.veritymode=eio");
+                        if (EFI_ERROR(ret))
+                                goto out;
+                }
         }
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located

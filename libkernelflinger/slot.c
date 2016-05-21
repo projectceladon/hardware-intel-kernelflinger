@@ -381,6 +381,7 @@ EFI_STATUS slot_set_active(const char *suffix)
 	slot->priority = MAX_PRIORITY;
 	slot->tries_remaining = MAX_RETRIES;
 	slot->successful_boot = 0;
+	slot->verity_corrupted = 0;
 
 	cur_suffix = suffixes[SUFFIX_INDEX(suffix)];
 
@@ -436,7 +437,46 @@ const char *slot_get_retry_count(const char *suffix)
 	return res;
 }
 
+BOOLEAN slot_get_verity_corrupted(void)
+{
+	slot_metadata_t *slot;
+
+	if (!use_slot())
+		return FALSE;
+
+	if (!cur_suffix)
+		return FALSE;
+
+	slot = get_slot(cur_suffix);
+	if (!slot)
+		return FALSE;
+
+	return slot->verity_corrupted == 1 ? TRUE : FALSE;
+}
+
 /* Actions */
+EFI_STATUS slot_set_verity_corrupted(BOOLEAN corrupted)
+{
+	slot_metadata_t *slot;
+	UINT8 corrupted_val = corrupted ? 1 : 0;
+
+	if (!use_slot())
+		return EFI_SUCCESS;
+
+	if (!cur_suffix)
+		return EFI_NOT_READY;
+
+	slot = get_slot(cur_suffix);
+	if (!slot)
+		return EFI_DEVICE_ERROR;
+
+	if (slot->verity_corrupted == corrupted_val)
+		return EFI_SUCCESS;
+
+	slot->verity_corrupted = corrupted_val;
+	return write_boot_ctrl();
+}
+
 EFI_STATUS slot_reset(void)
 {
 	UINTN nb_slot;

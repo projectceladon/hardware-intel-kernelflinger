@@ -260,8 +260,9 @@ out:
 
 static enum boot_target check_loader_entry_one_shot(VOID)
 {
+        EFI_STATUS ret;
         CHAR16 *target;
-        enum boot_target ret;
+        enum boot_target bt;
 
         debug(L"checking %s", LOADER_ENTRY_ONESHOT);
         target = get_efi_variable_str(&loader_guid, LOADER_ENTRY_ONESHOT);
@@ -272,21 +273,25 @@ static enum boot_target check_loader_entry_one_shot(VOID)
                 return NORMAL_BOOT;
 
         debug(L"target = %s", target);
-        ret = name_to_boot_target(target);
-        if (ret == UNKNOWN_TARGET) {
-                if (!StrCmp(target, L"dm-verity device corrupted"))
+        bt = name_to_boot_target(target);
+        if (bt == UNKNOWN_TARGET) {
+                if (!StrCmp(target, L"dm-verity device corrupted")) {
                         debug(L"Reboot was triggered by dm-verity module\
  because partition is corrupted");
-                else
+                        ret = slot_set_verity_corrupted(TRUE);
+                        if (EFI_ERROR(ret))
+                                efi_perror(ret, L"Failed to set the active\
+ slot verity eio flag");
+                } else
                         error(L"Unknown oneshot boot target: '%s'", target);
-                ret = NORMAL_BOOT;
-        } else if (ret == CHARGER && !get_off_mode_charge()) {
+                bt = NORMAL_BOOT;
+        } else if (bt == CHARGER && !get_off_mode_charge()) {
                 debug(L"Off mode charge is not set, powering off.");
-                ret = POWER_OFF;
+                bt = POWER_OFF;
         }
 
         FreePool(target);
-        return ret;
+        return bt;
 }
 
 static BOOLEAN reset_is_due_to_watchdog_or_panic()
