@@ -369,6 +369,7 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 	}
 
 exit:
+	uefi_call_wrapper(file->Close, 1, file);
 	FreePool(buf);
 }
 
@@ -770,7 +771,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 
 	ret = handle_protocol(image, &LoadedImageProtocol, (void **)&loaded_img);
 	if (ret != EFI_SUCCESS) {
-		inst_perror(ret, "LoadedImageProtocol error");
+		efi_perror(ret, L"LoadedImageProtocol error");
 		return ret;
 	}
 
@@ -778,7 +779,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, loaded_img->DeviceHandle,
 				&FileSystemProtocol, (void *)&file_io_interface);
 	if (EFI_ERROR(ret)) {
-		inst_perror(ret, "Failed to get FileSystemProtocol");
+		efi_perror(ret, L"Failed to get FileSystemProtocol");
 		return ret;
 	}
 
@@ -786,7 +787,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	UINTN size = StrLen(loaded_img->LoadOptions) + 1;
 	buf = options = AllocatePool(size);
 	if (!options) {
-		fastboot_fail("Unable to allocate buffer for parameters");
+		error(L"Unable to allocate buffer for parameters");
 		return EFI_OUT_OF_RESOURCES;
 	}
 	str_to_stra(options, loaded_img->LoadOptions, size);
@@ -795,10 +796,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 		options[i] = '\0';
 	/* Drop the first parameter.  */
 	options = strchr(options, ' ');
-	skip_whitespace((char **)&options);
+	if (options)
+		skip_whitespace((char **)&options);
 
-	store_command(*options != '\0' ? (char *)options : (char *)DEFAULT_OPTIONS,
-		      NULL);
+	if (!options || *options == '\0')
+		options = DEFAULT_OPTIONS;
+	store_command((char *)options, NULL);
 
 	/* Initialize slot management. */
 	ret = slot_init();

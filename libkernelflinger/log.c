@@ -141,6 +141,8 @@ void log(const CHAR16 *fmt, ...)
 	if (EFI_ERROR(str_to_stra(buf8, buf16, length)))
 		goto exit;
 
+	/* Drop the NUL termination character */
+	length--;
 	if (EFI_ERROR(uefi_call_wrapper(serial->Write, 3, serial, &length, buf8)))
 		goto exit;
 

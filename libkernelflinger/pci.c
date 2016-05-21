@@ -35,6 +35,9 @@
 
 PCI_DEVICE_PATH* get_pci_device_path(EFI_DEVICE_PATH *p)
 {
+	if (!p)
+		return NULL;
+
 	while (!IsDevicePathEndType(p)) {
 		if (DevicePathType(p) == HARDWARE_DEVICE_PATH
 		    && DevicePathSubType(p) == HW_PCI_DP)
@@ -49,6 +52,9 @@ EFI_STATUS get_pci_device(IN EFI_DEVICE_PATH *p, OUT EFI_PCI_IO **p_pciio)
 	EFI_STATUS ret;
 	EFI_HANDLE pci_handle;
 	EFI_DEVICE_PATH *tmp_path = p;
+
+	if (!p || !p_pciio)
+		return EFI_INVALID_PARAMETER;
 
 	ret = locate_device_path(&PciIoProtocol, &tmp_path, &pci_handle);
 	if (EFI_ERROR(ret)) {
@@ -67,6 +73,9 @@ EFI_STATUS get_pci_device(IN EFI_DEVICE_PATH *p, OUT EFI_PCI_IO **p_pciio)
 
 EFI_STATUS get_pci_ids(IN EFI_PCI_IO *pciio, OUT pci_device_ids_t *ids)
 {
+	if (!pciio || !ids)
+		return EFI_INVALID_PARAMETER;
+
 	return uefi_call_wrapper(pciio->Pci.Read, 5, pciio, EfiPciIoWidthUint16,
 				 0, 2, ids);
 }
