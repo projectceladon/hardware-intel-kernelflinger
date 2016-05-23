@@ -795,9 +795,11 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 {
         EFI_STATUS ret;
 
+#ifdef USER
         /* per bootloaderequirements.pdf */
-        if (boot_state != BOOT_STATE_GREEN)
+        if (boot_state == BOOT_STATE_ORANGE)
                 android_clear_memory();
+#endif
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                         &boot_state, FALSE, TRUE);

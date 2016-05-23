@@ -39,6 +39,7 @@
 #include "fastboot_ui.h"
 #include "gpt.h"
 #include "intel_variables.h"
+#include "android.h"
 
 static cmdlist_t cmdlist;
 
@@ -185,6 +186,9 @@ static void cmd_unlock(__attribute__((__unused__)) INTN argc,
 
 	if (get_unlock_ability() == UNLOCK_ALLOWED) {
 		change_device_state(UNLOCKED, TRUE);
+#ifdef USER
+		android_clear_memory();
+#endif
 	} else {
 #ifdef USER
 		fastboot_fail("Unlocking device not allowed");
