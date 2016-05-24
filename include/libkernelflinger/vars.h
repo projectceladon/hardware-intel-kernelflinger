@@ -96,6 +96,7 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define VENDOR_LABEL		L"vendor"
 #define SYSTEM_LABEL		L"system"
 #define BOOTLOADER_LABEL	L"bootloader"
+#define TOS_LABEL		L"tos"
 
 BOOLEAN device_is_unlocked(void);
 BOOLEAN device_is_locked(void);
@@ -147,6 +148,15 @@ BOOLEAN blpolicy_is_flashed(VOID);
 BOOLEAN device_is_class_A(VOID);
 UINT8 min_boot_state_policy();
 EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size);
+#endif
+#ifndef USERDEBUG
+#define oem_cert NULL
+#define oem_cert_size 0
+#else
+extern char _binary_oemcert_start;
+extern char _binary_oemcert_end;
+#define oem_cert (&_binary_oemcert_start)
+#define oem_cert_size (&_binary_oemcert_end - &_binary_oemcert_start)
 #endif
 #endif /* _VARS_H_ */
 
