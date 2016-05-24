@@ -105,6 +105,10 @@ ifeq ($(KERNELFLINGER_SL_BIND_ROOT_TRUST),true)
     LOCAL_SRC_FILES += silentlake.c
 endif
 
+ifeq ($(TARGET_USE_TRUSTY),true)
+    LOCAL_SRC_FILES += trusty.c
+endif
+
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(res_intermediates)
 

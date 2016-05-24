@@ -51,6 +51,7 @@
 #include "em.h"
 #include "storage.h"
 #include "version.h"
+#include "trusty.h"
 #ifdef HAL_AUTODETECT
 #include "blobstore.h"
 #endif
@@ -92,16 +93,7 @@ static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
 
 static EFI_HANDLE g_disk_device;
 static EFI_LOADED_IMAGE *g_loaded_image;
-
-#ifndef USERDEBUG
-#define oem_cert NULL
-#define oem_cert_size 0
-#else
-extern char _binary_oemcert_start;
-extern char _binary_oemcert_end;
-#define oem_cert (&_binary_oemcert_start)
-#define oem_cert_size (&_binary_oemcert_end - &_binary_oemcert_start)
-#endif
+static VOID die(VOID) __attribute__ ((noreturn));
 
 #if DEBUG_MESSAGES
 static VOID print_rsci_values(VOID)
@@ -816,6 +808,15 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                 efi_perror(ret, L"Failed to set os secure boot");
 #endif
 
+#ifdef USE_TRUSTY
+        debug(L"loading trusty");
+        ret = start_trusty(boot_target, boot_state);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Unable to start trusty; stop.");
+                die();
+        }
+#endif
+
         ret = slot_boot(boot_target);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Failed to write slot boot");
@@ -836,8 +837,6 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 
         return ret;
 }
-
-static VOID die(VOID) __attribute__ ((noreturn));
 
 static VOID die(VOID)
 {
