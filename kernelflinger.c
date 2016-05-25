@@ -1091,7 +1091,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
         /* gnu-efi initialization */
         InitializeLib(image, sys_table);
-        ux_init();
+        ux_display_vendor_splash();
 
         debug(KERNELFLINGER_VERSION);
 
