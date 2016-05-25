@@ -163,7 +163,18 @@ static UINTN wmargin;
 static UINTN hmargin;
 
 static EFI_STATUS ux_init_screen() {
+	static BOOLEAN initialized;
 	EFI_STATUS ret;
+
+
+	if (!initialized) {
+		uefi_call_wrapper(ST->ConOut->Reset, 2, ST->ConOut, FALSE);
+	        uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
+				  EFI_WHITE | EFI_BACKGROUND_BLACK);
+		uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, FALSE);
+	        uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
+		initialized = TRUE;
+	}
 
 	ret = ui_init(&swidth, &sheight);
 	if (EFI_ERROR(ret)) {
@@ -551,12 +562,7 @@ VOID ux_display_empty_battery(VOID) {
 	ux_display_img_battery(EMPTY_BATTERY_IMG_NAME, 0);
 }
 
-VOID ux_init(VOID) {
-	uefi_call_wrapper(ST->ConOut->Reset, 2, ST->ConOut, FALSE);
-        uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
-			  EFI_WHITE | EFI_BACKGROUND_BLACK);
-	uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, FALSE);
-        uefi_call_wrapper(ST->ConIn->Reset, 2, ST->ConIn, FALSE);
+VOID ux_display_vendor_splash(VOID) {
 
 	if (get_display_splash()) {
 		if (EFI_ERROR(ux_init_screen()))

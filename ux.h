@@ -72,6 +72,6 @@ enum boot_target ux_prompt_user_for_boot_target(enum ux_error_code code);
 VOID ux_display_low_battery(UINTN delay);
 VOID ux_display_empty_battery(VOID);
 
-VOID ux_init(VOID);
+VOID ux_display_vendor_splash(VOID);
 
 #endif
