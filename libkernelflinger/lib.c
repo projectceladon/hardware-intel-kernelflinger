@@ -882,7 +882,7 @@ EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
                 return EFI_SUCCESS;
         }
 
-        *aligned_addr = (VOID *)(((EFI_PHYSICAL_ADDRESS)*free_addr + align - 1) & ~(align - 1));
+        *aligned_addr = (VOID *)(((UINTN)*free_addr + align - 1) & ~(align - 1));
 
         return EFI_SUCCESS;
 }
