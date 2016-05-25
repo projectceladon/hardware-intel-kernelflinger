@@ -358,7 +358,7 @@ static EFI_STATUS setup_memory_map(struct boot_params *boot_params, UINTN *key)
         /* This function can be called several times. The previous
          * memory map buffer must be freed. */
         if (efi->efi_memmap) {
-                EFI_PHYSICAL_ADDRESS prev_memmap = efi->efi_memmap;
+                UINTN prev_memmap = efi->efi_memmap;
 #ifdef  __LP64__
                 prev_memmap = prev_memmap |
                         (EFI_PHYSICAL_ADDRESS)efi->efi_memmap_hi << 32;

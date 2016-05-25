@@ -40,6 +40,22 @@ int fprintf(FILE *f, const char *s, ...)
 	return 0;
 }
 
+int ioctl(int d, int request, ...)
+{
+	error(L"Error: STUBBED %a", __func__);
+	return 0;
+}
+
+typedef void (*sighandler_t)(int);
+sighandler_t bsd_signal(int signum, sighandler_t handler)
+{
+	error(L"Error: STUBBED %a", __func__);
+	return NULL;
+}
+
+static const char __ctype_[256];
+const char *_ctype_ = __ctype_;
+
 typedef int (*sort_compare)(void *buffer1, void *buffer2);
 
 static void quick_sort_worker(

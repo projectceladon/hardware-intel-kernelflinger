@@ -52,8 +52,8 @@ static struct ram_priv {
 	EFI_PHYSICAL_ADDRESS end;
 
 	/* Current memory region */
-	EFI_PHYSICAL_ADDRESS cur;
-	EFI_PHYSICAL_ADDRESS cur_end;
+	UINTN cur;
+	UINTN cur_end;
 
 	/* Sparse format */
 	UINTN chunk_nb;
@@ -708,7 +708,7 @@ static EFI_STATUS bert_region_read(reader_ctx_t *ctx, unsigned char **buf, UINTN
 	}
 
 	*len = min(*len, ctx->len - ctx->cur);
-	*buf = (unsigned char *)bert_table->region + ctx->cur - sizeof(BERR_MAGIC);
+	*buf = (unsigned char *)(UINTN)bert_table->region + ctx->cur - sizeof(BERR_MAGIC);
 
 	return EFI_SUCCESS;
 }
