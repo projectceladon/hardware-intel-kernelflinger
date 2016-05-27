@@ -685,3 +685,16 @@ void *realloc(void *ptr, size_t size)
 	mc->size = size;
 	return mc->addr;
 }
+
+void *memchr(const void *s, int c, size_t n)
+{
+	const unsigned char *p = s;
+
+	if (n) {
+		for( ; n; n--, p++)
+			if (*p == (unsigned char)c)
+				return (void *) p;
+	}
+
+	return NULL;
+}
