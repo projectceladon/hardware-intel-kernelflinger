@@ -78,6 +78,8 @@ struct mbr {
 	uint16_t sig;
 } __attribute__((__packed__));
 
+#define MAX_PART 128
+
 struct gpt_disk {
 	EFI_BLOCK_IO *bio;
 	EFI_DISK_IO *dio;
@@ -85,7 +87,7 @@ struct gpt_disk {
 	BOOLEAN label_prefix_removed;
 	logical_unit_t log_unit;
 	struct gpt_header gpt_hd;
-	struct gpt_partition *partitions;
+	struct gpt_partition partitions[MAX_PART];
 };
 
 /* Allow to scan and flash only one disk at a time
@@ -135,25 +137,18 @@ static EFI_STATUS read_gpt_partitions(struct gpt_disk *disk)
 	UINTN offset;
 	UINTN size;
 
+	if (disk->gpt_hd.number_of_entries > MAX_PART) {
+		error(L"Maximum number of partition supported is %d", MAX_PART);
+		return EFI_UNSUPPORTED;
+	}
+
 	offset = disk->bio->Media->BlockSize * disk->gpt_hd.entries_lba;
 	size = disk->gpt_hd.number_of_entries * disk->gpt_hd.size_of_entry;
 
-	disk->partitions = AllocatePool(size);
-	if (!disk->partitions) {
-		error(L"Failed to allocate %d bytes for partitions", size);
-		return EFI_OUT_OF_RESOURCES;
-	}
-
 	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio, disk->bio->Media->MediaId, offset, size, disk->partitions);
-	if (EFI_ERROR(ret)) {
+	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to read GPT partitions");
-		goto free_partitions;
-	}
-	return ret;
 
-free_partitions:
-	FreePool(disk->partitions);
-	disk->partitions = NULL;
 	return ret;
 }
 
@@ -339,8 +334,6 @@ free_handles:
 
 void gpt_free_cache(void)
 {
-	if (sdisk.partitions)
-		FreePool(sdisk.partitions);
 	ZeroMem(&sdisk, sizeof(sdisk));
 }
 
@@ -556,15 +549,10 @@ static EFI_STATUS gpt_check_partition_list(UINTN part_count, struct gpt_bin_part
 	return EFI_SUCCESS;
 }
 
-static struct gpt_partition *gpt_fill_entries(UINTN part_count, struct gpt_bin_part *gbp)
+static VOID gpt_fill_entries(UINTN part_count, struct gpt_bin_part *gbp, struct gpt_partition *gp)
 {
-	struct gpt_partition *gp;
 	UINT64 start_lba;
 	UINTN i;
-
-	gp = AllocateZeroPool(sdisk.gpt_hd.number_of_entries * sdisk.gpt_hd.size_of_entry);
-	if (!gp)
-		return NULL;
 
 	/* align on MiB boundaries ??? */
 	start_lba = sdisk.gpt_hd.first_usable_lba;
@@ -578,7 +566,6 @@ static struct gpt_partition *gpt_fill_entries(UINTN part_count, struct gpt_bin_p
 		start_lba = gp[i].ending_lba + 1;
 		debug(L"partition %s, start %ld, end %ld", gp[i].name, gp[i].starting_lba, gp[i].ending_lba);
 	}
-	return gp;
 }
 
 static EFI_STATUS gpt_write_mbr(void)
@@ -705,17 +692,18 @@ EFI_STATUS gpt_create(UINT64 start_lba, UINTN part_count, struct gpt_bin_part *g
 	if (EFI_ERROR(ret))
 		return ret;
 
-	if (sdisk.partitions) {
-		FreePool(sdisk.partitions);
-		sdisk.partitions = NULL;
-	}
 	gpt_new(&sdisk.gpt_hd, start_lba, sdisk.bio->Media->BlockSize, sdisk.bio->Media->LastBlock);
 
 	ret = gpt_check_partition_list(part_count, gbp);
 	if (EFI_ERROR(ret))
 		return ret;
 
-	sdisk.partitions = gpt_fill_entries(part_count, gbp);
+	if (part_count > MAX_PART) {
+		error(L"Maximum number of partition supported is %d", MAX_PART);
+		return EFI_INVALID_PARAMETER;
+	}
+
+	gpt_fill_entries(part_count, gbp, sdisk.partitions);
 	sdisk.label_prefix_removed = FALSE;
 
 	return gpt_write_partition_tables();
