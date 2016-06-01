@@ -35,8 +35,9 @@
 #include "storage.h"
 #include "pci.h"
 
-static struct storage *storage;
+static struct storage *cur_storage;
 static PCI_DEVICE_PATH boot_device;
+static enum storage_type boot_device_type;
 static BOOLEAN initialized = FALSE;
 
 static BOOLEAN is_boot_device(EFI_DEVICE_PATH *p)
@@ -58,7 +59,9 @@ extern struct storage STORAGE(STORAGE_SDCARD);
 extern struct storage STORAGE(STORAGE_SATA);
 
 static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
-				   enum storage_type filter)
+				   enum storage_type filter,
+				   struct storage **storage,
+				   enum storage_type *type)
 {
 	enum storage_type st;
 	static struct storage *supported_storage[STORAGE_ALL] =  {
@@ -72,7 +75,8 @@ static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 		if ((filter == st || filter == STORAGE_ALL) &&
 		    supported_storage[st] && supported_storage[st]->probe(device_path)) {
 			debug(L"%s storage identified", supported_storage[st]->name);
-			storage = supported_storage[st];
+			*storage = supported_storage[st];
+			*type = st;
 			return EFI_SUCCESS;
 		}
 	}
@@ -80,7 +84,7 @@ static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 	return EFI_UNSUPPORTED;
 }
 
-EFI_STATUS identify_boot_device(enum storage_type type)
+EFI_STATUS identify_boot_device(enum storage_type filter)
 {
 	EFI_STATUS ret;
 	EFI_HANDLE *handles;
@@ -88,6 +92,8 @@ EFI_STATUS identify_boot_device(enum storage_type type)
 	UINTN i;
 	EFI_DEVICE_PATH *device_path;
 	PCI_DEVICE_PATH *pci = NULL;
+	struct storage *storage;
+	enum storage_type type;
 
 	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol,
 				&BlockIoProtocol, NULL, &nb_handle, &handles);
@@ -101,16 +107,27 @@ EFI_STATUS identify_boot_device(enum storage_type type)
 		device_path = DevicePathFromHandle(handles[i]);
 		pci = get_pci_device_path(device_path);
 
-		if (!pci || EFI_ERROR(identify_storage(device_path, type)))
+		if (!pci)
 			continue;
-		if (!boot_device.Header.Type) {
+
+		if (boot_device.Function == pci->Function &&
+		    boot_device.Device == pci->Device)
+			continue;
+
+		ret = identify_storage(device_path, filter, &storage, &type);
+		if (EFI_ERROR(ret))
+			continue;
+
+		if (!boot_device.Header.Type || boot_device_type > type) {
 			memcpy(&boot_device, pci, sizeof(boot_device));
+			boot_device_type = type;
+			cur_storage = storage;
 			continue;
 		}
-		if (pci->Function != boot_device.Function
-		    || pci->Device != boot_device.Device) {
-			error(L"Multiple PCI storage found! Can't make a decision");
-			storage = NULL;
+
+		if (boot_device_type == type) {
+			error(L"Multiple identifcal storage found! Can't make a decision");
+			cur_storage = NULL;
 			boot_device.Header.Type = 0;
 			FreePool(handles);
 			return EFI_UNSUPPORTED;
@@ -123,6 +140,8 @@ EFI_STATUS identify_boot_device(enum storage_type type)
 		error(L"No PCI storage found");
 		return EFI_UNSUPPORTED;
 	}
+
+	debug(L"%s storage selected", cur_storage->name);
 	return EFI_SUCCESS;
 }
 
@@ -132,7 +151,7 @@ static BOOLEAN valid_storage(void)
 		initialized = TRUE;
 		return !EFI_ERROR(identify_boot_device(STORAGE_ALL));
 	}
-	return boot_device.Header.Type && storage;
+	return boot_device.Header.Type && cur_storage;
 }
 
 EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
@@ -142,7 +161,7 @@ EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_uni
 	if (!is_boot_device(p))
 		return EFI_UNSUPPORTED;
 
-	return storage->check_logical_unit(p, log_unit);
+	return cur_storage->check_logical_unit(p, log_unit);
 }
 
 EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
@@ -151,7 +170,7 @@ EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA st
 		return EFI_UNSUPPORTED;
 
 	debug(L"Erase lba %ld -> %ld", start, end);
-	return storage->erase_blocks(handle, bio, start, end);
+	return cur_storage->erase_blocks(handle, bio, start, end);
 }
 
 #define percent5(x, max) (x) * 20 / (max) * 5
@@ -226,7 +245,8 @@ EFI_STATUS storage_set_boot_device(EFI_HANDLE device)
 		return EFI_UNSUPPORTED;
 	}
 
-	ret = identify_storage(device_path, STORAGE_ALL);
+	ret = identify_storage(device_path, STORAGE_ALL, &cur_storage,
+			       &boot_device_type);
 	if (EFI_ERROR(ret)) {
 		error(L"Boot device unsupported");
 		return ret;
