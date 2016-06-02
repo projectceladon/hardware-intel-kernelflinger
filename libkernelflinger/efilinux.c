@@ -67,10 +67,11 @@ failed:
  * @size: size in bytes of the requested allocation
  * @align: the required alignment of the allocation
  * @addr: a pointer to the allocated address on success
+ * @low: pick up an address in low memory region
  *
  * If we cannot satisfy @align we return 0.
  */
-EFI_STATUS emalloc(UINTN size, UINTN align, EFI_PHYSICAL_ADDRESS *addr)
+EFI_STATUS emalloc(UINTN size, UINTN align, EFI_PHYSICAL_ADDRESS *addr, BOOLEAN low)
 {
         UINTN map_size, map_key, desc_size;
         EFI_MEMORY_DESCRIPTOR *map_buf;
@@ -102,12 +103,16 @@ EFI_STATUS emalloc(UINTN size, UINTN align, EFI_PHYSICAL_ADDRESS *addr)
                 end = start + (desc->NumberOfPages << EFI_PAGE_SHIFT);
 
                 /* Low-memory is super-precious! */
-                if (end <= 1 << 20)
-                        continue;
-                if (start < 1 << 20) {
-                        size -= (1 << 20) - start;
-                        start = (1 << 20);
+                if (!low) {
+                        if (end <= 1 << 20)
+                                continue;
+                        if (start < 1 << 20) {
+                                size -= (1 << 20) - start;
+                                start = (1 << 20);
+                        }
                 }
+                if (start == 0)
+                        start += 8;
 
                 aligned = (start + align -1) & ~(align -1);
 

@@ -175,7 +175,7 @@ static inline const CHAR16 *memory_type_to_str(UINT32 type)
         return memory_types[type];
 }
 
-EFI_STATUS emalloc(UINTN, UINTN, EFI_PHYSICAL_ADDRESS *);
+EFI_STATUS emalloc(UINTN, UINTN, EFI_PHYSICAL_ADDRESS *, BOOLEAN);
 void efree(EFI_PHYSICAL_ADDRESS memory, UINTN size);
 
 EFI_STATUS memory_map(EFI_MEMORY_DESCRIPTOR **map_buf,

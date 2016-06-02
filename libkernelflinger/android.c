@@ -217,7 +217,7 @@ typedef struct {
         struct segment_descriptor *base;
 } __attribute__((packed)) dt_addr_t;
 
-dt_addr_t gdt = { 0x800, 0x0 };
+dt_addr_t *gdt;
 
 typedef void(*kernel_func)(void *, struct boot_params *);
 
@@ -235,11 +235,16 @@ static EFI_STATUS setup_gdt(void)
 {
         EFI_STATUS ret;
 
-        ret = emalloc(gdt.limit, 8, (EFI_PHYSICAL_ADDRESS *)&gdt.base);
+        ret = emalloc(sizeof(gdt), 8, (EFI_PHYSICAL_ADDRESS *)&gdt, TRUE);
         if (EFI_ERROR(ret))
                 return ret;
 
-        memset(gdt.base, 0x0, gdt.limit);
+        gdt->limit = 0x800;
+        ret = emalloc(gdt->limit, 8, (EFI_PHYSICAL_ADDRESS *)&gdt->base, TRUE);
+        if (EFI_ERROR(ret))
+                return ret;
+
+        memset(gdt->base, 0x0, gdt->limit);
 
         /* According to "Intel IA32/64 Architecture Software
          * Developper Manual"
@@ -247,36 +252,36 @@ static EFI_STATUS setup_gdt(void)
          * The first descriptor in the GDT is not used by the
          * processor.  */
 
-        gdt.base[1].limit0 = 0xffff;
-        gdt.base[1].base0 = 0x0000;
-        gdt.base[1].base1 = 0x00;
-        gdt.base[1].type = SEGMENT_TYPE_CODE | SEGMENT_TYPE_EXEC_READ;
-        gdt.base[1].descriptor_type = DESCRIPTOR_TYPE_CODE_OR_DATA;
-        gdt.base[1].descriptor_privilege_level = 0;
-        gdt.base[1].present = 1;
-        gdt.base[1].limit1 = 0xf;
-        gdt.base[1].available = 0;
-        gdt.base[1].code_segment_64bit = 0;
-        gdt.base[1].default_operation_size = SEGMENT_OPERATION_SIZE_32BITS;
-        gdt.base[1].granularity = SEGMENT_GRANULARITY_4KB;
-        gdt.base[1].base2 = 0x00;
+        gdt->base[1].limit0 = 0xffff;
+        gdt->base[1].base0 = 0x0000;
+        gdt->base[1].base1 = 0x00;
+        gdt->base[1].type = SEGMENT_TYPE_CODE | SEGMENT_TYPE_EXEC_READ;
+        gdt->base[1].descriptor_type = DESCRIPTOR_TYPE_CODE_OR_DATA;
+        gdt->base[1].descriptor_privilege_level = 0;
+        gdt->base[1].present = 1;
+        gdt->base[1].limit1 = 0xf;
+        gdt->base[1].available = 0;
+        gdt->base[1].code_segment_64bit = 0;
+        gdt->base[1].default_operation_size = SEGMENT_OPERATION_SIZE_32BITS;
+        gdt->base[1].granularity = SEGMENT_GRANULARITY_4KB;
+        gdt->base[1].base2 = 0x00;
 
-        gdt.base[2] = gdt.base[1];
-        gdt.base[2].type = SEGMENT_TYPE_DATA | SEGMENT_TYPE_READ_WRITE;
+        gdt->base[2] = gdt->base[1];
+        gdt->base[2].type = SEGMENT_TYPE_DATA | SEGMENT_TYPE_READ_WRITE;
 
-        gdt.base[3].limit0 = 0x0000;
-        gdt.base[3].base0 = 0x0000;
-        gdt.base[3].base1 = 0x00;
-        gdt.base[3].type = SEGMENT_TYPE_TASK;
-        gdt.base[3].descriptor_type = 0;
-        gdt.base[3].descriptor_privilege_level = 0;
-        gdt.base[3].present = 1;
-        gdt.base[3].limit1 = 0x0;
-        gdt.base[3].available = 0;
-        gdt.base[3].code_segment_64bit = 0;
-        gdt.base[3].default_operation_size = SEGMENT_OPERATION_SIZE_16BITS;
-        gdt.base[3].granularity = SEGMENT_GRANULARITY_4KB;
-        gdt.base[3].base2 = 0x00;
+        gdt->base[3].limit0 = 0x0000;
+        gdt->base[3].base0 = 0x0000;
+        gdt->base[3].base1 = 0x00;
+        gdt->base[3].type = SEGMENT_TYPE_TASK;
+        gdt->base[3].descriptor_type = 0;
+        gdt->base[3].descriptor_privilege_level = 0;
+        gdt->base[3].present = 1;
+        gdt->base[3].limit1 = 0x0;
+        gdt->base[3].available = 0;
+        gdt->base[3].code_segment_64bit = 0;
+        gdt->base[3].default_operation_size = SEGMENT_OPERATION_SIZE_16BITS;
+        gdt->base[3].granularity = SEGMENT_GRANULARITY_4KB;
+        gdt->base[3].base2 = 0x00;
 
         return EFI_SUCCESS;
 }
@@ -439,7 +444,7 @@ boot:
         asm volatile ("cli");
 
         /* Load GDT. */
-        asm volatile ("lgdt %0" :: "m" (gdt));
+        asm volatile ("lgdt %0" :: "m" (*gdt));
 
         kf = (kernel_func)((UINTN)kernel_start);
         kf(NULL, boot_params);
@@ -505,7 +510,7 @@ static EFI_STATUS setup_ramdisk(UINT8 *bootimage)
 
         bp->hdr.ramdisk_len = rsize;
         debug(L"ramdisk size %d", rsize);
-        ret = emalloc(rsize, 0x1000, &ramdisk_addr);
+        ret = emalloc(rsize, 0x1000, &ramdisk_addr, FALSE);
         if (EFI_ERROR(ret))
                 return ret;
 
@@ -1130,7 +1135,8 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
                  * We failed to allocate the preferred address, so
                  * just allocate some memory and hope for the best.
                  */
-                ret = emalloc(init_size, buf->hdr.kernel_alignment, &kernel_start);
+                ret = emalloc(init_size, buf->hdr.kernel_alignment, &kernel_start,
+                              FALSE);
                 if (EFI_ERROR(ret))
                         return ret;
         }
