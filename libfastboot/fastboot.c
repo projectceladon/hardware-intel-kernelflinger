@@ -964,7 +964,7 @@ static void fastboot_run_command()
 #define MAX_ARGS 16
 	EFI_STATUS ret;
 	CHAR8 *argv[MAX_ARGS];
-	INTN argc;
+	INTN argc = 0;
 
 	if (fastboot_state != STATE_COMMAND)
 		return;

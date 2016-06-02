@@ -130,7 +130,7 @@ static EFI_STATUS mmc_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
 	EFI_STATUS ret;
 	EFI_SD_HOST_IO_PROTOCOL *sdio;
 	EFI_DEVICE_PATH *dev_path;
-	UINTN erase_grp_size, timeout;
+	UINTN erase_grp_size = 0, timeout = 0;
 
 	dev_path = DevicePathFromHandle(handle);
 	if (!dev_path) {
