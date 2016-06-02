@@ -69,7 +69,7 @@ static EFI_STATUS sdcard_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
 	EFI_STATUS ret;
 	EFI_SD_HOST_IO_PROTOCOL *sdio;
 	EFI_DEVICE_PATH *dev_path;
-	CARD_DATA *card_data;
+	CARD_DATA *card_data = NULL;
 
 	dev_path = DevicePathFromHandle(handle);
 	if (!dev_path) {

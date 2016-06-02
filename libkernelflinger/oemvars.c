@@ -168,7 +168,7 @@ static int parse_oemvar_attributes(char **linep, uint32_t *attributesp, enum var
 static EFI_STATUS parse_line(char *line, VOID *context)
 {
 	EFI_STATUS ret;
-	uint32_t attributes;
+	uint32_t attributes = 0;
 	enum vartype type;
 	CHAR16 *varname;
 	UINTN vallen;
