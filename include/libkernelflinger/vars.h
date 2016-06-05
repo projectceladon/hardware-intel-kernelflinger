@@ -54,8 +54,6 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
  * accessor functions for them */
 
 #define LOADER_ENTRY_ONESHOT    L"LoaderEntryOneShot"
-/* Report bootloader version */
-#define LOADER_VERSION_VAR      L"LoaderVersion"
 
 #define SERIAL_PORT_VAR         L"SerialPort"
 
@@ -114,7 +112,7 @@ enum device_state {
 	LOCKED = 0,
 	UNLOCKED = 1
 };
-char *get_current_state_string(void);
+const char *get_current_state_string(void);
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color();
 EFI_STATUS set_current_state(enum device_state state);
 enum device_state get_current_state();

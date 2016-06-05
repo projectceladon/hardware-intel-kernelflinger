@@ -33,12 +33,8 @@
 #ifndef __INFO_H__
 #define __INFO_H__
 
-#include <efi.h>
-
-extern char *INFO_UNDEFINED;
-
-char *info_bootloader_version(void);
-char *info_variant(void);
-char *info_product(void);
+const char *info_bootloader_version(void);
+const char *info_variant(void);
+const char *info_product(void);
 
 #endif	/* __INFO_H__ */

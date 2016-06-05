@@ -115,23 +115,23 @@ static EFI_GRAPHICS_OUTPUT_BLT_PIXEL *fastboot_ui_default_color(void)
 	return &COLOR_WHITE;
 }
 
-static char *fastboot_ui_info_hw_version(void)
+static const char *fastboot_ui_info_hw_version(void)
 {
 	return SMBIOS_GET_STRING(1, Version);
 }
 
-static char *fastboot_ui_info_ifwi_version(void)
+static const char *fastboot_ui_info_ifwi_version(void)
 {
 	return SMBIOS_GET_STRING(0, BiosVersion);
 }
 
-static char *fastboot_ui_info_serial_number(void)
+static const char *fastboot_ui_info_serial_number(void)
 {
 	char *serial = get_serial_number();
 	return serial ? serial : "N/A";
 }
 
-static char *fastboot_ui_info_secure_boot(void)
+static const char *fastboot_ui_info_secure_boot(void)
 {
 	return is_efi_secure_boot_enabled() ? "ENABLED" : "DISABLED";
 }
@@ -143,7 +143,7 @@ static EFI_GRAPHICS_OUTPUT_BLT_PIXEL *fastboot_ui_info_secure_boot_color(void)
 
 struct info_text_fun {
 	const char *header;
-	char *(*get_value)(void);
+	const char *(*get_value)(void);
 	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *(*get_color)(void);
 } const FASTBOOT_INFOS[] = {
 	{ "PRODUCT NAME",	info_product,			fastboot_ui_default_color },
@@ -185,7 +185,8 @@ static UINTN fastboot_ui_info_draw(UINTN x, UINTN y, UINTN width, UINTN height)
 			goto exit;
 		}
 
-		value = info->get_value();
+
+		value = (char *)info->get_value();
 		if (!value) {
 			error(L"Failed to get fastboot info line %d value", i);
 			goto exit;
