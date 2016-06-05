@@ -34,6 +34,7 @@
 #include <efilib.h>
 #include <stdio.h>
 #include <transport.h>
+#include <version.h>
 
 #include "lib.h"
 #include "uefi_utils.h"
@@ -678,9 +679,18 @@ static void usage(__attribute__((__unused__)) INTN argc,
 	Print(L"  installer is an EFI application acting like the fastboot command.\n\n");
 	Print(L" COMMANDS               fastboot commands (cf. the fastboot manual page)\n");
 	Print(L" --help, -h             print this help and exit\n");
+	Print(L" --version, -v          print Installer version and exit\n");
 	Print(L" --batch, -b FILE       run all the fastboot commands of FILE\n");
 	Print(L"If no option is provided, the installer assumes '%a'\n", DEFAULT_OPTIONS);
 	Print(L"Note: 'update', 'flash-raw' and 'flashall' commands are NOT supported\n");
+
+	fastboot_okay("");
+}
+
+static void version(__attribute__((__unused__)) INTN argc,
+		    __attribute__((__unused__)) CHAR8 **argv)
+{
+	Print(L"%s\n", KERNELFLINGER_VERSION);
 
 	fastboot_okay("");
 }
@@ -713,6 +723,8 @@ static struct replacements {
 	/* Installer specific commands. */
 	{ .cmd = { "--help",	LOCKED,	usage		    } },
 	{ .cmd = { "-h",	LOCKED,	usage		    } },
+	{ .cmd = { "--version",	LOCKED,	version		    } },
+	{ .cmd = { "-v",	LOCKED,	version		    } },
 	{ .cmd = { "--batch",	LOCKED,	batch		    } },
 	{ .cmd = { "-b",	LOCKED,	batch		    } }
 };
