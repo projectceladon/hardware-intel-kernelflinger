@@ -30,62 +30,27 @@
  *
  */
 
-#include "info.h"
-#include <efi.h>
-#include <efilib.h>
 #include <vars.h>
-#include <lib.h>
-#include <fastboot.h>
+#include <version.h>
 
-#include "uefi_utils.h"
+#include "info.h"
 
-#define MAX_INFO_LENGTH	50
-
-char *INFO_UNDEFINED = "N/A";
-static char bootloader_version[MAX_INFO_LENGTH];
-
-char *info_bootloader_version(void)
+const char *info_bootloader_version(void)
 {
-	EFI_STATUS ret;
-	CHAR16 *version;
-	char *value = INFO_UNDEFINED;
-
-	if (bootloader_version[0] != '\0')
-		return bootloader_version;
-
-	version = get_efi_variable_str(&loader_guid, LOADER_VERSION_VAR);
-	if (!version)
-		return INFO_UNDEFINED;
-
-	if (StrLen(version) >= sizeof(bootloader_version)) {
-		error(L"Bootloader string is too long.");
-		goto exit;
-	}
-
-	ret = str_to_stra((CHAR8 *)bootloader_version, version, StrLen(version) + 1);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to convert bootloader version to CHAR8");
-		goto exit;
-	}
-
-	value = bootloader_version;
-
-exit:
-	FreePool(version);
-	return value;
+	return KERNELFLINGER_VERSION_8;
 }
 
-char *info_variant(void)
+const char *info_variant(void)
 {
 #ifdef HAL_AUTODETECT
 	return get_property_device();
 #else
-	return INFO_UNDEFINED;
+	return "N/A";
 #endif
 
 }
 
-char *info_product(void)
+const char *info_product(void)
 {
 	return TARGET_BOOTLOADER_BOARD_NAME;
 }

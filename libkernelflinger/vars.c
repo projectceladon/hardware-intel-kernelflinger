@@ -316,7 +316,7 @@ EFI_STATUS reprovision_state_vars(VOID)
 }
 #endif
 
-char *get_current_state_string()
+const char *get_current_state_string()
 {
 	return STATE_DISPLAY[get_current_state() + 1].string;
 }

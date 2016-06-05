@@ -1084,7 +1084,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         BOOLEAN lock_prompted = FALSE;
         enum boot_target boot_target = NORMAL_BOOT;
         UINT8 boot_state = BOOT_STATE_GREEN;
-        CHAR16 *loader_version = KERNELFLINGER_VERSION;
         UINT8 *hash = NULL;
         X509 *verifier_cert = NULL;
         CHAR16 *name = NULL;
@@ -1094,9 +1093,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         InitializeLib(image, sys_table);
         ux_init();
 
-        debug(L"%s", loader_version);
-        set_efi_variable_str(&loader_guid, LOADER_VERSION_VAR,
-                        FALSE, TRUE, loader_version);
+        debug(KERNELFLINGER_VERSION);
 
         /* populate globals */
         g_parent_image = image;
