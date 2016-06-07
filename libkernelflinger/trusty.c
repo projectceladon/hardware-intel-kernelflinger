@@ -360,6 +360,12 @@ static EFI_STATUS load_tos_image(OUT VOID **bootimage)
         return EFI_SUCCESS;
 
 cleanup_tos:
+#ifndef USERDEBUG
+        if(EFI_SECURITY_VIOLATION == ret) {
+                error(L"Invalid TOS image. Boot anyway on ENG build");
+                ret = EFI_SUCCESS;
+        }
+#endif
         if (*bootimage)
                 FreePool(*bootimage);
         return ret;
@@ -379,8 +385,12 @@ EFI_STATUS start_trusty(IN enum boot_target boot_target, IN UINT8 boot_state)
         }
 
         if (boot_state == BOOT_STATE_RED) {
+#ifndef USERDEBUG
+               debug(L"Red state: invalid boot image. Start trusty anyway as ENG build");
+#else
                error(L"Red state: invalid boot image. Stop");
                return EFI_INVALID_PARAMETER;
+#endif
         }
 
         ret = load_tos_image(&tosimage);
