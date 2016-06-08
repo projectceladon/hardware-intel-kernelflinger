@@ -41,6 +41,9 @@
    during the dump.  */
 #define MAX_MEMORY_REGION_NB 256
 
+#define SIZEOF_TOTALSZ		sizeof(((chunk_header_t *)0)->total_sz)
+#define MAX_CHUNK_SIZE		(((UINT64)1 << (SIZEOF_TOTALSZ * 8)) - EFI_PAGE_SIZE)
+
 static struct ram_priv {
 	BOOLEAN is_in_used;
 
@@ -68,6 +71,9 @@ static VOID sort_memory_map(CHAR8 *entries, UINTN nr_entries, UINTN entry_sz)
 	EFI_MEMORY_DESCRIPTOR *cur, *next;
 	UINTN i;
 
+	if (nr_entries <= 1)
+		return;
+
 	/* Bubble sort algorithm */
 	do {
 		swapped = FALSE;
@@ -88,11 +94,22 @@ static VOID sort_memory_map(CHAR8 *entries, UINTN nr_entries, UINTN entry_sz)
 
 static EFI_STATUS ram_add_chunk(reader_ctx_t *ctx, struct ram_priv *priv, UINT16 type, UINT64 size)
 {
+	EFI_STATUS ret = EFI_SUCCESS;
 	struct chunk_header *cur = NULL;
 
 	if (size % EFI_PAGE_SIZE) {
 		error(L"chunk size must be multiple of %d bytes", EFI_PAGE_SIZE);
 		return EFI_INVALID_PARAMETER;
+	}
+
+	if (type == CHUNK_TYPE_RAW) {
+		while ((UINT32)(size + sizeof(*cur)) <= size) {
+			/* Overflow detected in UINT32 total_sz field */
+			ret = ram_add_chunk(ctx, priv, type, MAX_CHUNK_SIZE);
+			if (EFI_ERROR(ret))
+				return ret;
+			size -= MAX_CHUNK_SIZE;
+		}
 	}
 
 	if (priv->chunk_nb == MAX_MEMORY_REGION_NB) {
@@ -289,8 +306,10 @@ static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
 
 	/* Start new chunk */
 	if (priv->cur == priv->cur_end) {
-		if (priv->cur_chunk == priv->chunk_nb || *len < sizeof(*priv->chunks))
+		if (priv->cur_chunk == priv->chunk_nb || *len < sizeof(*priv->chunks)) {
+			error(L"Invalid parameter in %a", __func__);
 			return EFI_INVALID_PARAMETER;
+		}
 
 		chunk = &priv->chunks[priv->cur_chunk++];
 		*buf = (unsigned char *)chunk;
