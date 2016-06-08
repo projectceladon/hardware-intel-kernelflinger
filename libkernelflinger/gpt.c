@@ -41,7 +41,6 @@
 #include "storage.h"
 
 #define PROTECTIVE_MBR 0xEE
-#define GPT_SIGNATURE "EFI PART"
 
 struct legacy_partition {
 	UINT8	status;
@@ -79,8 +78,6 @@ struct mbr {
 } __attribute__((__packed__));
 
 #define GPT_REVISION 0x00010000
-#define GPT_ENTRIES 128
-#define GPT_ENTRY_SIZE 128
 
 struct gpt_disk {
 	EFI_BLOCK_IO *bio;
@@ -679,31 +676,50 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	return gpt_refresh();
 }
 
-EFI_STATUS gpt_create(UINT64 start_lba, UINTN part_count, struct gpt_bin_part *gbp, logical_unit_t log_unit)
+EFI_STATUS gpt_create(struct gpt_header *gh, UINTN gh_size,
+		      UINT64 start_lba, UINTN part_count, struct gpt_bin_part *gbp, logical_unit_t log_unit)
 {
 	EFI_STATUS ret;
 
-	if (!gbp)
+	if (gh && gbp)
 		return EFI_INVALID_PARAMETER;
 
 	ret = gpt_cache_partition(log_unit);
 	if (EFI_ERROR(ret))
 		return ret;
 
-	gpt_new(&sdisk.gpt_hd, start_lba, sdisk.bio->Media->BlockSize, sdisk.bio->Media->LastBlock);
+	if (gh) {
+		if (CompareMem(gh->signature, GPT_SIGNATURE, sizeof(gh->signature)) ||
+		    gh_size != GPT_HEADER_SIZE + sizeof(sdisk.partitions))
+			return EFI_INVALID_PARAMETER;
 
-	ret = gpt_check_partition_list(part_count, gbp);
-	if (EFI_ERROR(ret))
-		return ret;
-
-	if (part_count > GPT_ENTRIES) {
-		error(L"Maximum number of partition supported is %d", GPT_ENTRIES);
-		return EFI_INVALID_PARAMETER;
+		CopyMem(&sdisk.gpt_hd, gh, sizeof(sdisk.gpt_hd));
+		CopyMem(sdisk.partitions, (char *)gh + GPT_HEADER_SIZE,
+			sizeof(sdisk.partitions));
+		goto out;
 	}
 
-	gpt_fill_entries(part_count, gbp, sdisk.partitions);
-	sdisk.label_prefix_removed = FALSE;
+	if (gbp) {
+		gpt_new(&sdisk.gpt_hd, start_lba, sdisk.bio->Media->BlockSize,
+			sdisk.bio->Media->LastBlock);
 
+		ret = gpt_check_partition_list(part_count, gbp);
+		if (EFI_ERROR(ret))
+			return ret;
+
+		if (part_count > GPT_ENTRIES) {
+			error(L"Maximum number of partition supported is %d", GPT_ENTRIES);
+			return EFI_INVALID_PARAMETER;
+		}
+
+		gpt_fill_entries(part_count, gbp, sdisk.partitions);
+		goto out;
+	}
+
+	return EFI_INVALID_PARAMETER;
+
+out:
+	sdisk.label_prefix_removed = FALSE;
 	return gpt_write_partition_tables();
 }
 

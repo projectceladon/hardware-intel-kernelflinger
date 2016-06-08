@@ -14,6 +14,10 @@ Unlocked devices only. Provisions the GPT partition scheme on the
 device, accepting an `gpt.bin` file which contains a specification for
 the device's GPT.
 
+Two gpt.bin formats are accepted:
+
+#### 1. gpt_ini2bin.py
+
 `gpt.bin` file is generated using the
 [gpt_ini2bin.py](https://android.googlesource.com/platform/hardware/bsp/intel/+/de59ae73d7e3e139f1a5d31f4d107c996c377be5/soc/edison/tools/gpt_ini2bin.py)
 script from a `gpt.ini` file.
@@ -103,6 +107,11 @@ has_slot = true
 
 [...]
 ```
+
+#### 2. bpttool
+
+[bpttool](https://android.googlesource.com/platform/system/tools/bpt/+/master)
+is an AOSP project that can be used to create the partition table.
 
 ### `fastboot flash bootloader <filename>`
 
