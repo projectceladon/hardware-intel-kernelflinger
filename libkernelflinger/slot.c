@@ -202,12 +202,15 @@ static slot_metadata_t *highest_priority_slot(void)
 	return &slots[cur];
 }
 
-static EFI_STATUS disable_slot(slot_metadata_t *slot)
+static EFI_STATUS disable_slot(slot_metadata_t *slot, BOOLEAN store)
 {
 	EFI_STATUS ret;
 
 	memset(slot, 0, sizeof(*slot));
 	cur_suffix = NULL;
+
+	if (!store)
+		return EFI_SUCCESS;
 
 	ret = write_boot_ctrl();
 	if (EFI_ERROR(ret))
@@ -229,7 +232,7 @@ static EFI_STATUS select_highest_priority_slot(void)
 
 		if (slot->tries_remaining == 0 &&
 		    slot->successful_boot == 0) {
-			ret = disable_slot(slot);
+			ret = disable_slot(slot, TRUE);
 			if (EFI_ERROR(ret))
 				return ret;
 		}
@@ -347,6 +350,18 @@ const char *slot_get_active(void)
 	return use_slot() ? cur_suffix : NULL;
 }
 
+static void lower_other_slots_priority(slot_metadata_t *except)
+{
+	UINTN i;
+
+	for (i = 0; i < boot_ctrl.nb_slot; i++)
+		if (&slots[i] != except && slots[i].priority) {
+			slots[i].priority--;
+			if (!slots[i].priority)
+				disable_slot(&slots[i], FALSE);
+		}
+}
+
 EFI_STATUS slot_set_active(const char *suffix)
 {
 	slot_metadata_t *slot;
@@ -356,16 +371,18 @@ EFI_STATUS slot_set_active(const char *suffix)
 	if (!slot)
 		return EFI_NOT_FOUND;
 
+	/* Lower priority of all other slots so they are all less than
+	   MAX_PRIORITY in a way that preserves existing order
+	   priority. */
+	for (i = 0; i < boot_ctrl.nb_slot; i++)
+		if (&slots[i] != slot && slots[i].priority == MAX_PRIORITY)
+			lower_other_slots_priority(slot);
+
 	slot->priority = MAX_PRIORITY;
 	slot->tries_remaining = MAX_RETRIES;
 	slot->successful_boot = 0;
 
 	cur_suffix = suffixes[SUFFIX_INDEX(suffix)];
-
-	/* Lower other slots priority. */
-	for (i = 0; i < boot_ctrl.nb_slot; i++)
-		if (&slots[i] != slot && slots[i].priority == MAX_PRIORITY)
-			slots[i].priority = MAX_PRIORITY - 1;
 
 	return write_boot_ctrl();
 }
@@ -508,7 +525,7 @@ EFI_STATUS slot_boot_failed(enum boot_target target)
 		return EFI_NOT_FOUND;
 	}
 
-	ret = disable_slot(slot);
+	ret = disable_slot(slot, TRUE);
 	if (EFI_ERROR(ret))
 		return ret;
 
