@@ -39,6 +39,7 @@
 #include "gpt_bin.h"
 
 #define MBR_CODE_SIZE	440
+#define GPT_SIGNATURE  "EFI PART"
 
 struct gpt_header {
 	char signature[8];
@@ -74,6 +75,10 @@ struct gpt_partition {
 	/* Remainder of entry is reserved and should be 0 */
 } __attribute__((packed));
 
+#define GPT_ENTRIES	128
+#define GPT_ENTRY_SIZE	128
+#define GPT_HEADER_SIZE 512
+
 struct gpt_partition_interface {
 	struct gpt_partition part;
 	EFI_BLOCK_IO *bio;
@@ -88,7 +93,8 @@ typedef enum {
 
 EFI_STATUS gpt_get_partition_by_label(const CHAR16 *label, struct gpt_partition_interface *gpart, logical_unit_t log_unit);
 EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, logical_unit_t log_unit);
-EFI_STATUS gpt_create(UINT64 start_lba, UINTN part_count, struct gpt_bin_part *gbp, logical_unit_t log_unit);
+EFI_STATUS gpt_create(struct gpt_header *gh, UINTN gh_size,
+		      UINT64 start_lba, UINTN part_count, struct gpt_bin_part *gbp, logical_unit_t log_unit);
 void gpt_free_cache(void);
 EFI_STATUS gpt_refresh(void);
 EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, logical_unit_t log_unit);
