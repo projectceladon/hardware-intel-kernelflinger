@@ -728,10 +728,16 @@ static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
 
         if (!cmdline16) {
                 CHAR8 full_cmdline[BOOT_ARGS_SIZE + BOOT_EXTRA_ARGS_SIZE];
+                int offset = BOOT_ARGS_SIZE;
 
-                memcpy(full_cmdline, aosp_header->cmdline, (BOOT_ARGS_SIZE - 1));
-                if (aosp_header->cmdline[BOOT_ARGS_SIZE - 2]) {
-                        memcpy(full_cmdline + (BOOT_ARGS_SIZE - 1),
+                /* include the potential NUL terminal char */
+                memcpy(full_cmdline, aosp_header->cmdline, BOOT_ARGS_SIZE);
+                /* if there is extra cmdline arguments */
+                if (aosp_header->extra_cmdline[0]) {
+                        /* legacy boot.img format cmdline is NUL terminated */
+                        if (!aosp_header->cmdline[BOOT_ARGS_SIZE - 1])
+                                offset--;
+                        memcpy(full_cmdline + offset,
                                aosp_header->extra_cmdline,
                                BOOT_EXTRA_ARGS_SIZE);
                 }
