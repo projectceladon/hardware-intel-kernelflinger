@@ -60,7 +60,7 @@
 #include "slot.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
-static const char __attribute__((used)) magic[] = "### KERNELFLINGER ###";
+static const CHAR16 __attribute__((used)) magic[] = L"### kernelflinger ###";
 
 /* Default max wait time for console reset in units of milliseconds if no EFI
  * variable is set for this platform.
