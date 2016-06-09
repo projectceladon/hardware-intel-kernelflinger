@@ -78,7 +78,9 @@ struct mbr {
 	uint16_t sig;
 } __attribute__((__packed__));
 
-#define MAX_PART 128
+#define GPT_REVISION 0x00010000
+#define GPT_ENTRIES 128
+#define GPT_ENTRY_SIZE 128
 
 struct gpt_disk {
 	EFI_BLOCK_IO *bio;
@@ -87,7 +89,7 @@ struct gpt_disk {
 	BOOLEAN label_prefix_removed;
 	logical_unit_t log_unit;
 	struct gpt_header gpt_hd;
-	struct gpt_partition partitions[MAX_PART];
+	struct gpt_partition partitions[GPT_ENTRIES];
 };
 
 /* Allow to scan and flash only one disk at a time
@@ -137,8 +139,8 @@ static EFI_STATUS read_gpt_partitions(struct gpt_disk *disk)
 	UINTN offset;
 	UINTN size;
 
-	if (disk->gpt_hd.number_of_entries > MAX_PART) {
-		error(L"Maximum number of partition supported is %d", MAX_PART);
+	if (disk->gpt_hd.number_of_entries > GPT_ENTRIES) {
+		error(L"Maximum number of partition supported is %d", GPT_ENTRIES);
 		return EFI_UNSUPPORTED;
 	}
 
@@ -481,10 +483,6 @@ EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN 
 	return EFI_SUCCESS;
 }
 
-#define GPT_REVISION 0x00010000
-#define GPT_ENTRIES 128
-#define GPT_ENTRY_SIZE 128
-
 static void gpt_new(struct gpt_header *gh, UINTN start_lba, UINTN blocksize, UINTN lastblock)
 {
 	UINTN gpt_size;
@@ -698,8 +696,8 @@ EFI_STATUS gpt_create(UINT64 start_lba, UINTN part_count, struct gpt_bin_part *g
 	if (EFI_ERROR(ret))
 		return ret;
 
-	if (part_count > MAX_PART) {
-		error(L"Maximum number of partition supported is %d", MAX_PART);
+	if (part_count > GPT_ENTRIES) {
+		error(L"Maximum number of partition supported is %d", GPT_ENTRIES);
 		return EFI_INVALID_PARAMETER;
 	}
 
