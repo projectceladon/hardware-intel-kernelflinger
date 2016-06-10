@@ -49,15 +49,17 @@
 
 
 static const ui_textline_t red_state[] = {
-	{ &COLOR_LIGHTGRAY,	"Your device has failed verification",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"and may not work properly.",		FALSE },
+	{ &COLOR_LIGHTGRAY,	"Your device has failed verification.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"It is corrupt. It can't be trusted ",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"and will not boot.",			FALSE },
 	{ NULL, NULL, FALSE}
 };
 
 static const ui_textline_t bad_recovery[] = {
 	{ &COLOR_LIGHTGRAY,	"Your device has failed verification",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"of Recovery Console and may not",	FALSE },
-	{ &COLOR_LIGHTGRAY,	"work properly.",			FALSE },
+	{ &COLOR_LIGHTGRAY,	"of Recovery Console. It is corrupt.",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"It can't be trusted and will not",	FALSE },
+	{ &COLOR_LIGHTGRAY,	"boot.",				FALSE },
 	{ NULL, NULL, FALSE }
 };
 
@@ -291,7 +293,7 @@ static const ui_textline_t empty_text[] = {
 	{ NULL, NULL, FALSE }
 };
 
-enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off,
+enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT8 boot_state,
 				UINT8 *hash, UINTN hash_size)
 {
 	CHAR8 msg[max(sizeof(PENDING_TIMEOUT_POWER_OFF_FMT),
@@ -324,6 +326,14 @@ enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off,
 			error(L"Failed to format hash");
 			text = empty_text;
 		}
+	}
+
+	if (boot_state == BOOT_STATE_RED) {
+		msg[0] = '\0';
+		display_text(code, prompt->color, prompt->text, text, footer_text);
+		ui_wait_for_event(SECOND_TIMEOUT_SECS, EV_TIMEOUT);
+		bt = CRASHMODE;
+		goto out;
 	}
 
 	if (power_off)
