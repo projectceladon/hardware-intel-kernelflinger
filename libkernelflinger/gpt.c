@@ -502,7 +502,7 @@ static void gpt_new(struct gpt_header *gh, UINTN start_lba, UINTN blocksize, UIN
 		gh->first_usable_lba = MiB / blocksize;
 	gh->last_usable_lba = ALIGN_DOWN(lastblock - (gpt_size), (MiB / blocksize)) - 1;
 
-	debug(L"first usable lba %ld, last usable lba %ld",
+	debug(L"first usable lba %lld, last usable lba %lld",
 	      gh->first_usable_lba, gh->last_usable_lba);
 	/* TODO generate unique UUID for disk */
 }
@@ -537,7 +537,7 @@ static EFI_STATUS gpt_check_partition_list(UINTN part_count, struct gpt_bin_part
 	disksize = ((sdisk.gpt_hd.last_usable_lba + 1 - sdisk.gpt_hd.first_usable_lba) * sdisk.bio->Media->BlockSize) / MiB;
 
 	if (totsize > disksize) {
-		error(L"partitions are bigger than the disk, partitions %ld MiB disk %ld MiB", totsize, disksize);
+		error(L"partitions are bigger than the disk, partitions %lld MiB disk %lld MiB", totsize, disksize);
 		return EFI_INVALID_PARAMETER;
 	}
 	gbp[part_data].length = disksize - totsize;
@@ -559,7 +559,7 @@ static VOID gpt_fill_entries(UINTN part_count, struct gpt_bin_part *gbp, struct 
 		gp[i].starting_lba = start_lba;
 		gp[i].ending_lba = start_lba - 1 + gbp[i].length * (MiB / sdisk.bio->Media->BlockSize);
 		start_lba = gp[i].ending_lba + 1;
-		debug(L"partition %s, start %ld, end %ld", gp[i].name, gp[i].starting_lba, gp[i].ending_lba);
+		debug(L"partition %s, start %lld, end %lld", gp[i].name, gp[i].starting_lba, gp[i].ending_lba);
 	}
 }
 
@@ -853,7 +853,7 @@ EFI_STATUS gpt_get_header(struct gpt_header **header, UINTN *size, logical_unit_
 	if (EFI_ERROR(ret))
 		return ret;
 
-	*size = sizeof(*header);
+	*size = sizeof(**header);
 	*header = AllocatePool(*size);
 	if (!*header)
 		return EFI_OUT_OF_RESOURCES;
