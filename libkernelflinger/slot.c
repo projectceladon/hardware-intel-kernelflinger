@@ -121,7 +121,7 @@ static inline EFI_STATUS sync_boot_ctrl(BOOLEAN out)
 		return ret;
 
 	offset = gparti.part.starting_lba * gparti.bio->Media->BlockSize +
-		offsetof(struct bootloader_message, slot_suffix);
+		offsetof(struct bootloader_message_ab, slot_suffix);
 
 	return uefi_call_wrapper((out ? gparti.dio->ReadDisk : gparti.dio->WriteDisk),
 				 5, gparti.dio,
