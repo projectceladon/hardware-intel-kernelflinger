@@ -205,7 +205,6 @@ static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	EFI_STATUS ret = EFI_SUCCESS;
 	struct ram_priv *priv;
 	char *endptr;
-	CHAR8 *entries = NULL;
 	UINT32 descr_ver;
 	UINTN descr_sz, key, memmap_sz, nr_descr;
 	UINT64 length;
@@ -260,7 +259,6 @@ static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	sort_memory_map(priv->memmap, nr_descr, descr_sz);
 
 	ret = ram_build_chunks(ctx, priv, nr_descr, descr_sz);
-	FreePool(entries);
 	if (EFI_ERROR(ret))
 		goto err;
 
