@@ -57,8 +57,8 @@ enum ux_error_code {
  * supplied GVB hash will be included.  It returns either NORMAL_BOOT
  * either POWER_OFF depending on the user choice.  */
 enum boot_target ux_prompt_user(enum ux_error_code error_code,
-				BOOLEAN power_off, UINT8 *hash,
-				UINTN hash_size);
+				BOOLEAN power_off, UINT8 boot_state,
+				UINT8 *hash, UINTN hash_size);
 
 /* Prompt the user with the appropriate message accordingly to the
  * error_code and let him choose the next boot target.  If the build

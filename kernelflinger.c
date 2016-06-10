@@ -1004,6 +1004,18 @@ static EFI_STATUS push_capsule(
         return ret;
 }
 
+static void bootloader_recover_mode(UINT8 boot_state)
+{
+        enum boot_target target;
+
+        target = ux_prompt_user_for_boot_target(NOT_BOOTABLE_CODE);
+        if (target == FASTBOOT)
+                enter_fastboot_mode(boot_state);
+
+        reboot_to_target(target);
+        die();
+}
+
 static VOID boot_error(enum ux_error_code error_code, UINT8 boot_state,
                        UINT8 *hash, UINTN hash_size)
 {
@@ -1022,7 +1034,12 @@ static VOID boot_error(enum ux_error_code error_code, UINT8 boot_state,
 #endif
         }
 
-        bt = ux_prompt_user(error_code, power_off, hash, hash_size);
+        bt = ux_prompt_user(error_code, power_off, boot_state, hash, hash_size);
+
+        if (bt == CRASHMODE) {
+                debug(L"Rebooting to bootloader recover mode");
+                bootloader_recover_mode(boot_state);
+        }
 
         if (power_off || bt == POWER_OFF)
                 halt_system();
@@ -1062,18 +1079,6 @@ out:
         FreePool(bootimage);
 }
 #endif
-
-static void bootloader_recover_mode(UINT8 boot_state)
-{
-        enum boot_target target;
-
-        target = ux_prompt_user_for_boot_target(NOT_BOOTABLE_CODE);
-        if (target == FASTBOOT)
-                enter_fastboot_mode(boot_state);
-
-        reboot_to_target(target);
-        die();
-}
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
@@ -1240,11 +1245,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         boot_error(BAD_RECOVERY_CODE, boot_state, NULL, 0);
                 else
                         boot_error(RED_STATE_CODE, boot_state, NULL, 0);
-
-                debug(L"User accepted bad boot image warning");
-
-                if (bootimage == NULL)
-                        bootloader_recover_mode(boot_state);
         }
 
         switch (boot_target) {
