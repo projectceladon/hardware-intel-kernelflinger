@@ -42,10 +42,8 @@
 #define FIRST_TIMEOUT_SECS	5
 #define SECOND_TIMEOUT_SECS	30
 
-#define PENDING_TIMEOUT_POWER_OFF_FMT	"Your device will power off in %d seconds."
-#define VOLUP_TO_POWER_OFF		"Press Volume Up to power off."
-#define VOLUP_TO_POWER_OFF_NOW		"Press Volume Up to power off now."
-#define PENDING_TIMEOUT_CONTINUE_FMT	"Your device will boot in %d seconds."
+#define PRESS_TO_PAUSE_FMT		"Press %a to pause %a"
+#define PRESS_TO_CONTINUE_FMT		"Press %a to continue"
 
 
 static const ui_textline_t red_state[] = {
@@ -296,8 +294,16 @@ static const ui_textline_t empty_text[] = {
 enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT8 boot_state,
 				UINT8 *hash, UINTN hash_size)
 {
-	CHAR8 msg[max(sizeof(PENDING_TIMEOUT_POWER_OFF_FMT),
-		      sizeof(PENDING_TIMEOUT_CONTINUE_FMT)) + 10];
+#ifdef USE_POWER_BUTTON
+	ui_events_t expected = EV_POWER;
+	CHAR8 *button = (CHAR8 *)"Power";
+#else
+	ui_events_t expected = EV_UP;
+	CHAR8 *button = (CHAR8 *)"Volume Up";
+#endif
+	CHAR8 *boot = (CHAR8 *)(power_off ? "shutdown" : "boot");
+	CHAR8 msg[max(sizeof(PRESS_TO_PAUSE_FMT), sizeof(PRESS_TO_CONTINUE_FMT)) +
+		  strlen(button) + strlen(boot) + 1];
 	ui_textline_t footer_text[] = {
 		{ &COLOR_WHITE, "", FALSE },
 		{ &COLOR_LIGHTGRAY, "Please contact customer support",	FALSE },
@@ -307,7 +313,7 @@ enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT
 		{ &COLOR_GREEN, NULL, TRUE },
 		{ NULL, NULL, FALSE }
 	};
-	CHAR8 *fmt;
+	CHAR8 *fmt = (CHAR8 *)PRESS_TO_PAUSE_FMT;
 	const ui_textline_t *text = empty_text;
 	const struct ux_prompt *prompt;
 	enum boot_target bt = power_off ? POWER_OFF : NORMAL_BOOT;
@@ -336,26 +342,17 @@ enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT
 		goto out;
 	}
 
-	if (power_off)
-		fmt = (CHAR8 *)PENDING_TIMEOUT_POWER_OFF_FMT;
-	else
-		fmt = (CHAR8 *)PENDING_TIMEOUT_CONTINUE_FMT;
-
-	snprintf((CHAR8 *)msg, sizeof(msg), fmt, FIRST_TIMEOUT_SECS);
+	snprintf(msg, sizeof(msg), fmt, button, boot);
 
 	display_text(code, prompt->color, prompt->text, text, footer_text);
-	if (ui_wait_for_input(FIRST_TIMEOUT_SECS) == EV_TIMEOUT)
+	if (ui_wait_for_event(FIRST_TIMEOUT_SECS, expected) == EV_TIMEOUT)
 		goto out;
 
-	snprintf((CHAR8 *)msg, sizeof(msg), fmt, SECOND_TIMEOUT_SECS);
-	if (power_off)
-		footer_text[5].str = VOLUP_TO_POWER_OFF_NOW;
-	else
-		footer_text[5].str = VOLUP_TO_POWER_OFF;
+	fmt = (CHAR8 *)PRESS_TO_CONTINUE_FMT;
+	snprintf(msg, sizeof(msg), fmt, button);
 
 	display_text(code, prompt->color, prompt->text, text, footer_text);
-	if (ui_wait_for_event(SECOND_TIMEOUT_SECS, EV_UP) == EV_UP)
-		bt = POWER_OFF;
+	ui_wait_for_event(SECOND_TIMEOUT_SECS, expected);
 
 out:
 	clear_text();

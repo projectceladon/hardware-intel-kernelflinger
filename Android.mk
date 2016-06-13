@@ -25,6 +25,10 @@ ifeq ($(TARGET_USE_USERFASTBOOT),true)
     $(error Userfastboot is not supported anymore)
 endif
 
+ifeq ($(KERNELFLINGER_USE_POWER_BUTTON),true)
+    KERNELFLINGER_CFLAGS += -DUSE_POWER_BUTTON
+endif
+
 # adb in crashmode allows to pull the entire RAM and MUST never be
 # disabled allowed on a USER build for security reasons:
 ifneq ($(TARGET_BUILD_VARIANT),user)

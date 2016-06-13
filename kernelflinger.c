@@ -1171,7 +1171,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                  * or run EFI binaries. Set lock_prompted to true so
                  * we don't ask again later */
                 boot_error(SECURE_BOOT_CODE, boot_state, NULL, 0);
-                debug(L"User accepted UEFI secure boot disabled warning");
         } else  if (device_is_unlocked()) {
                 boot_state = BOOT_STATE_ORANGE;
                 debug(L"Device is unlocked");
@@ -1216,10 +1215,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         /* If the device is unlocked the only way to re-lock it is
          * via fastboot. Skip this UX if we already prompted earlier
          * about EFI secure boot being turned off */
-        if (boot_state == BOOT_STATE_ORANGE && !lock_prompted) {
+        if (boot_state == BOOT_STATE_ORANGE && !lock_prompted)
                 boot_error(DEVICE_UNLOCKED_CODE, boot_state, NULL, 0);
-                debug(L"User accepted unlocked device warning");
-        }
 
         debug(L"Loading boot image");
         ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
@@ -1242,7 +1239,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         efi_perror(ret, L"Failed to compute pub key hash");
                 boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, hash,
                            SHA256_DIGEST_LENGTH);
-                debug(L"User accepted untrusted bootimage warning");
         }
 
         if (boot_state == BOOT_STATE_RED) {
