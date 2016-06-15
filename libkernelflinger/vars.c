@@ -40,15 +40,6 @@
 #include "smbios.h"
 #include "version.h"
 
-#define OFF_MODE_CHARGE		L"off-mode-charge"
-#define OEM_LOCK		L"OEMLock"
-#define CRASH_EVENT_MENU	L"CrashEventMenu"
-#define WDT_COUNTER		L"WatchdogCounter"
-#define WDT_COUNTER_MAX		L"WatchdogCounterMax"
-#define WDT_TIME_REF		L"WatchdogTimeReference"
-#define DISABLE_WDT		L"DisableWatchdog"
-#define UPDATE_OEMVARS		L"UpdateOemVars"
-#define UI_DISPLAY_SPLASH	L"UIDisplaySplash"
 #define REBOOT_REASON		L"LoaderEntryRebootReason"
 #ifndef USER
 #define SLOT_FALLBACK		L"SlotFallback"
@@ -180,25 +171,25 @@ EFI_STATUS set_boolean_var(const EFI_GUID *guid, CHAR16 *varname,
 
 BOOLEAN get_off_mode_charge(void)
 {
-	return get_current_boolean_var(&fastboot_guid, OFF_MODE_CHARGE,
+	return get_current_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR,
 				       &off_mode_charge, TRUE);
 }
 
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
 {
-	return set_boolean_var(&fastboot_guid, OFF_MODE_CHARGE,
+	return set_boolean_var(&fastboot_guid, OFF_MODE_CHARGE_VAR,
 			       &off_mode_charge, enabled);
 }
 
 BOOLEAN get_crash_event_menu(void)
 {
-	return get_current_boolean_var(&fastboot_guid, CRASH_EVENT_MENU,
+	return get_current_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR,
 				       &crash_event_menu, TRUE);
 }
 
 EFI_STATUS set_crash_event_menu(BOOLEAN enabled)
 {
-	return set_boolean_var(&fastboot_guid, CRASH_EVENT_MENU,
+	return set_boolean_var(&fastboot_guid, CRASH_EVENT_MENU_VAR,
 			       &crash_event_menu, enabled);
 }
 
