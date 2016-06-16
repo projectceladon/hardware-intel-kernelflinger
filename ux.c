@@ -335,10 +335,15 @@ enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT
 	}
 
 	if (boot_state == BOOT_STATE_RED) {
+#ifdef USERDEBUG
 		msg[0] = '\0';
-		display_text(code, prompt->color, prompt->text, text, footer_text);
-		ui_wait_for_event(SECOND_TIMEOUT_SECS, EV_TIMEOUT);
 		bt = CRASHMODE;
+		display_text(code, prompt->color, prompt->text, text, footer_text);
+#else
+		footer_text[4].str = "BOOT_STATE is RED but allow to boot anyway on eng builds!";
+		display_text(code, prompt->color, empty_text, text, footer_text);
+#endif
+		ui_wait_for_event(SECOND_TIMEOUT_SECS, EV_TIMEOUT);
 		goto out;
 	}
 
