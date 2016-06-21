@@ -59,6 +59,20 @@
  * We say we have an os secure boot when the boot state is green. */
 #define OS_SECURE_BOOT_VAR      L"OsSecureBoot"
 
+/* operating system version and security patch level; for
+     * version "A.B.C" and patch level "Y-M-D":
+     * ver = A << 14 | B << 7 | C         (7 bits for each of A, B, C)
+     * lvl = ((Y - 2000) & 127) << 4 | M  (7 bits for Y, 4 bits for M)
+     * os_version = ver << 11 | lvl */
+union android_version {
+    UINT32 value;
+    struct {
+        UINT32 version:21;
+        UINT32 year:7;
+        UINT32 month:4;
+     } __attribute__((packed)) split;
+};
+
 static VOID pr_error_openssl(void)
 {
 	unsigned long code;
@@ -748,6 +762,55 @@ out:
                 FreePool(common_name);
         if (EFI_ERROR(ret) && keyid)
                 FreePool(keyid);
+        return ret;
+}
+
+/* Initialize the struct rot_data for startup_information */
+EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state, IN X509 *verifier_cert,
+                        OUT struct rot_data_t *rot_data)
+{
+        EFI_STATUS ret = EFI_SUCCESS;
+        enum device_state state;
+        struct boot_img_hdr *boot_image_header;
+        UINT8 *temp_hash;
+        union android_version temp_version;
+
+        if (!bootimage)
+                return EFI_INVALID_PARAMETER;
+
+        boot_image_header = (struct boot_img_hdr *)bootimage;
+
+        /* Initialize the rot data structure */
+        rot_data->version = ROT_DATA_STRUCT_VERSION2;
+        state = get_current_state();
+        switch (state) {
+                case UNLOCKED:
+                        rot_data->deviceLocked = 0;
+                        break;
+                case LOCKED:
+                        rot_data->deviceLocked = 1;
+                        break;
+                default:
+                        debug(L"Unknown device state");
+                        return EFI_UNSUPPORTED;
+        }
+        rot_data->verifiedBootState = boot_state;
+        temp_version.value = boot_image_header->os_version;
+        rot_data->osVersion = temp_version.split.version;
+        rot_data->patchMonthYear = ((temp_version.split.year + 2000) << 4) + temp_version.split.month;
+
+        if (verifier_cert) {
+                ret = pub_key_sha256(verifier_cert, &temp_hash);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to compute key hash");
+                        return ret;
+                }
+                rot_data->key_size = SHA256_DIGEST_LENGTH;
+                CopyMem(rot_data->key_hash256, temp_hash, rot_data->key_size);
+        } else {
+                rot_data->key_size = 0;
+                memset(rot_data->key_hash256, 0, SHA256_DIGEST_LENGTH);
+        }
         return ret;
 }
 

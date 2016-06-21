@@ -40,6 +40,7 @@
 
 #define BOOT_TARGET_SIZE         32
 #define BOOT_SIGNATURE_MAX_SIZE  4096
+#define ROT_DATA_STRUCT_VERSION2 0x02
 
 /* Compute sums of the public key value of X509 input CERT */
 EFI_STATUS pub_key_sha256(X509 *cert, UINT8 **hash_p);
@@ -92,4 +93,37 @@ EFI_STATUS verify_pkcs7(const unsigned char *cert_sha256, UINTN cert_size,
  * is the X509 certificate public key SHA1 hash.
  */
 EFI_STATUS get_android_verity_key_id(X509 *cert, char **value);
+
+/* Structure for RoT info (fields defined by Google Keymaster2)
+*/
+struct rot_data_t{
+        /* version 2 for current TEE keymaster2 */
+        UINT32 version;
+        /* 0:unlocked, 1:locked, others not used */
+        UINT32 deviceLocked;
+        /* GREEN:0, YELLOW:1, ORANGE:2, others not used(no RED for TEE) */
+        UINT32 verifiedBootState;
+        /* The current version of the OS as an integer in the format MMmmss,
+          * where MM is a two-digit major version number, mm is a two-digit,
+          * minor version number, and ss is a two-digit sub-minor version number.
+          * For example, version 6.0.1 would be represented as 060001;
+        */
+        UINT32 osVersion;
+        /* The month and year of the last patch as an integer in the format,
+          * YYYYMM, where YYYY is a four-digit year and MM is a two-digit month.
+          * For example, April 2016 would be represented as 201604.
+        */
+        UINT32 patchMonthYear;
+        /* A secure hash (SHA-256 recommended by Google) of the key used to verify the system image
+          * key_size (in bytes) is zero: denotes no key provided by Bootloader. When key_size is
+          * 32, it denotes,key_hash256 is available. Other values not defined now.
+        */
+        UINT32 key_size;
+        UINT8  key_hash256[SHA256_DIGEST_LENGTH];
+} ;
+
+/* Initialize the struct rot_data for startup_information */
+EFI_STATUS get_rot_data(IN VOID *bootimage, IN UINT8 boot_state, IN X509 *verifier_cert,
+                        OUT struct rot_data_t *rot_data);
+
 #endif

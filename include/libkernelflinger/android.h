@@ -46,8 +46,14 @@ struct boot_img_hdr
 
     unsigned tags_addr;    /* physical addr for kernel tags */
     unsigned page_size;    /* flash page size we assume */
-    unsigned unused[2];    /* future expansion: should be 0 */
+    unsigned unused;       /* reserved for future expansion: MUST be 0 */
 
+    /* operating system version and security patch level; for
+     * version "A.B.C" and patch level "Y-M-D":
+     * ver = A << 14 | B << 7 | C         (7 bits for each of A, B, C)
+     * lvl = ((Y - 2000) & 127) << 4 | M  (7 bits for Y, 4 bits for M)
+     * os_version = ver << 11 | lvl */
+    unsigned os_version;
     unsigned char name[BOOT_NAME_SIZE]; /* asciiz product name */
 
     unsigned char cmdline[BOOT_ARGS_SIZE];
