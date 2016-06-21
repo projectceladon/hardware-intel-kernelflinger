@@ -799,7 +799,9 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                              X509 *verifier_cert)
 {
         EFI_STATUS ret;
-
+#ifdef USE_TRUSTY
+        struct rot_data_t rot_data;
+#endif
 #ifdef USER
         /* per bootloaderequirements.pdf */
         if (boot_state == BOOT_STATE_ORANGE)
@@ -816,11 +818,30 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 #endif
 
 #ifdef USE_TRUSTY
-        debug(L"loading trusty");
-        ret = start_trusty(boot_target, boot_state);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Unable to start trusty; stop.");
-                die();
+        if (boot_target == NORMAL_BOOT ||
+            boot_target == RECOVERY ||
+            boot_target == CHARGER ||
+            boot_target == MEMORY) {
+
+                if (boot_state == BOOT_STATE_RED) {
+#ifndef USERDEBUG
+                        debug(L"Red state: start trusty anyway as ENG build");
+#else
+                        debug(L"Red state: invalid boot image.Unable to start trusty. Stop");
+                        die();
+#endif
+                }
+                debug(L"loading trusty");
+                ret = get_rot_data(bootimage, boot_state, verifier_cert, &rot_data);
+                if (EFI_ERROR(ret)){
+                        efi_perror(ret, L"Unable to get the rot_data for trusty");
+                        die();
+                }
+                ret = start_trusty(&rot_data);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Unable to start trusty; stop.");
+                        die();
+                }
         }
 #endif
 

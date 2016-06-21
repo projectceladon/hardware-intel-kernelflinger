@@ -39,13 +39,12 @@
 /* Load a TOS boot image into RAM, validate the image against the certificate,
  * find the TOS header and then start the TOS by calling into the entry
  * Parameters:
- * boot_target - Boot target
- * boot_state  - Boot state
+ * rot_data - Rot data
  * Return values:
  * EFI_INVALID_PARAMETER - Unsupported boot target type, invalid boot state,
  * or loaded TOS image was missing or corrupt
  * EFI_SECURITY_VIOLATION - Validation failed against certificate
  */
-EFI_STATUS start_trusty(IN enum boot_target boot_target, IN UINT8 boot_state);
+EFI_STATUS start_trusty(struct rot_data_t *rot_data);
 
 #endif /* _TRUSTY_H_ */
