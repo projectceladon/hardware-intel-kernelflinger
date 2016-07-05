@@ -712,6 +712,7 @@ EFI_STATUS gpt_create(struct gpt_header *gh, UINTN gh_size,
 			return EFI_INVALID_PARAMETER;
 		}
 
+		memset(sdisk.partitions, 0, sizeof(sdisk.partitions));
 		gpt_fill_entries(part_count, gbp, sdisk.partitions);
 		goto out;
 	}
