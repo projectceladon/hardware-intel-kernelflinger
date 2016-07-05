@@ -138,6 +138,7 @@ char *get_device_id(void);
 CHAR16 *boot_state_to_string(UINT8 boot_state);
 #ifndef USER
 EFI_STATUS reprovision_state_vars(VOID);
+EFI_STATUS erase_efivars(VOID);
 #endif
 CHAR16 *get_reboot_reason();
 BOOLEAN is_reboot_reason(CHAR16 *reason);

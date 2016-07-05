@@ -314,6 +314,93 @@ EFI_STATUS reprovision_state_vars(VOID)
 {
 	return del_efi_variable(&fastboot_guid, OEM_LOCK);
 }
+
+static struct efivar_black_list {
+	const CHAR16 *name;
+	const EFI_GUID *guid;
+} EFIVAR_BLACK_LIST[] = {
+	{ .name = OEM_LOCK, &fastboot_guid },
+	/* We cannot delete the LOG_VAR EFI variable because
+	   Kernelflinger continously saves all the error messages in
+	   it. Deleting it could lead to a infinite loop. */
+	{ .name = LOG_VAR, &loader_guid }
+};
+
+EFI_STATUS erase_efivars(VOID)
+{
+	EFI_STATUS ret;
+	UINTN bufsize, namesize;
+	CHAR16 *name;
+	EFI_GUID guid;
+	UINTN i;
+
+	bufsize = 64;		/* Initial size large enough to handle
+				   usual variable names length and
+				   avoid the ReallocatePool call as
+				   much as possible.  */
+	name = AllocateZeroPool(bufsize);
+	if (!name) {
+		error(L"Failed to allocate variable name buffer");
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	for (;;) {
+		namesize = bufsize;
+		ret = uefi_call_wrapper(RT->GetNextVariableName, 3, &namesize,
+					name, &guid);
+		if (ret == EFI_NOT_FOUND) {
+			ret = EFI_SUCCESS;
+			goto exit;
+		}
+		if (ret == EFI_BUFFER_TOO_SMALL) {
+			name = ReallocatePool(name, bufsize, namesize);
+			if (!name) {
+				error(L"Failed to re-allocate variable name buffer");
+				return EFI_OUT_OF_RESOURCES;
+			}
+			bufsize = namesize;
+			continue;
+		}
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"GetNextVariableName failed");
+			goto exit;
+		}
+
+		if (memcmp(&loader_guid, &guid, sizeof(guid)) &&
+		    memcmp(&fastboot_guid, &guid, sizeof(guid)))
+			continue;
+
+#ifdef BOOTLOADER_POLICY_EFI_VAR
+		if (!memcmp(&guid, &fastboot_guid, sizeof(guid)))
+			for (i = 0; i < FASTBOOT_SECURED_VARS_SIZE; i++)
+				if (!StrCmp(FASTBOOT_SECURED_VARS[i], name))
+					goto skip;
+#endif	/* BOOTLOADER_POLICY_EFI_VAR */
+
+		for (i = 0; i < ARRAY_SIZE(EFIVAR_BLACK_LIST); i++) {
+			if (!StrCmp(EFIVAR_BLACK_LIST[i].name, name) &&
+			    !memcmp(EFIVAR_BLACK_LIST[i].guid, &guid, sizeof(guid)))
+				goto skip;
+		}
+
+		ret = del_efi_variable(&guid, name);
+		if (EFI_ERROR(ret))
+			efi_perror(ret, L"Failed to delete %s:%g EFI variable", name, &guid);
+		else {
+			debug(L"%s:%g EFI variable has been deleted", name, &guid);
+			/* If we have deleted a variable, we are
+			   loosing the "previous variable reference"
+			   and we have to start over. */
+			name[0] = '\0';
+		}
+skip:
+		continue;
+	}
+
+exit:
+	FreePool(name);
+	return ret;
+}
 #endif
 
 const char *get_current_state_string()

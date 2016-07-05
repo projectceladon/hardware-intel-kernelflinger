@@ -354,6 +354,17 @@ This command sets the maximum number of crash events in a row before
 Works in any device state.
 See. [Bootloader policy and Factory Reset Protection](./FRP.md).
 
+### `oem erase-efivars`
+
+Works in any device state but is limited to `non-user` builds.  This
+commands deletes all the EFI variables declared under the Loader GUID
+or Fastboot GUID except:
+- The "OEMLock" EFI variable declared under the Fastboot GUID
+- The "KernelflingerLogs" EFI variable declared under the Loader GUID
+- All the "Bootloader policy" time-based authenticated EFI variables
+  declared under the Fastboot
+  GUID. See. [Bootloader policy and Factory Reset Protection](./FRP.md).
+
 Non-standard Variables
 ----------------------
 
