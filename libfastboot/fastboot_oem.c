@@ -359,6 +359,25 @@ static void cmd_oem_disable_slot_fallback(INTN argc, CHAR8 **argv)
 
 	fastboot_okay("");
 }
+
+static void cmd_oem_erase_efivars(__attribute__((__unused__)) INTN argc,
+				  __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+
+	if (argc != 1) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	ret = erase_efivars();
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to erase all the EFI variables, %r", ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
 #endif
 
 static void cmd_oem_get_logs(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
@@ -438,6 +457,7 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "rm",				LOCKED,		cmd_oem_rm },
 	{ "set-watchdog-counter-max",	LOCKED,		cmd_oem_set_watchdog_counter_max },
 	{ SLOT_FALLBACK,		LOCKED,		cmd_oem_disable_slot_fallback },
+	{ "erase-efivars",		LOCKED,		cmd_oem_erase_efivars },
 #endif
 	{ "get-hashes",			LOCKED,		cmd_oem_gethashes  },
 	{ "get-provisioning-logs",	LOCKED,		cmd_oem_get_logs },
