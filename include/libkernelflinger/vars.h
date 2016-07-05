@@ -78,24 +78,6 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 /* EFI variable to store the kernelflinger logs.  */
 #define LOG_VAR			L"KernelflingerLogs"
 
-#define OFF_MODE_CHARGE_VAR	L"off-mode-charge"
-
-#define CRASH_EVENT_MENU_VAR	L"CrashEventMenu"
-
-#define OEM_LOCK		L"OEMLock"
-
-#define WDT_COUNTER		L"WatchdogCounter"
-
-#define WDT_COUNTER_MAX		L"WatchdogCounterMax"
-
-#define WDT_TIME_REF		L"WatchdogTimeReference"
-
-#define DISABLE_WDT		L"DisableWatchdog"
-
-#define UPDATE_OEMVARS		L"UpdateOemVars"
-
-#define UI_DISPLAY_SPLASH	L"UIDisplaySplash"
-
 #ifndef USER
 #define CMDLINE_PREPEND_VAR     L"PrependCmdline"
 #define CMDLINE_APPEND_VAR      L"AppendCmdline"
