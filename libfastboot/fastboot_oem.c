@@ -85,7 +85,7 @@ static EFI_STATUS cmd_oem_set_boolean(INTN argc, CHAR8 **argv,
 
         ret = set_fun(!strcmp(argv[1], (CHAR8* )"1"));
 	if (EFI_ERROR(ret))
-		fastboot_fail("Failed to set %a", name);
+		fastboot_fail("Failed to set %a", OFF_MODE_CHARGE);
 
 	return ret;
 }
@@ -359,41 +359,6 @@ static void cmd_oem_disable_slot_fallback(INTN argc, CHAR8 **argv)
 
 	fastboot_okay("");
 }
-
-static CHAR16 *optional_efivars[] = {
-  OFF_MODE_CHARGE_VAR,
-  CRASH_EVENT_MENU_VAR,
-  UPDATE_OEMVARS,
-  UI_DISPLAY_SPLASH,
-  OEM_LOCK,
-  DISABLE_WDT,
-  WDT_COUNTER,
-  WDT_COUNTER_MAX,
-  WDT_TIME_REF,
-  LOG_VAR,
-  SERIAL_PORT_VAR,
-  MAGIC_KEY_TIMEOUT_VAR,
-  HOLD_KEY_STALL_TIME_VAR,
-  CMDLINE_PREPEND_VAR,
-  CMDLINE_APPEND_VAR,
-  CMDLINE_REPLACE_VAR
-};
-
-static void cmd_oem_erase_efivars(__attribute__((__unused__)) INTN argc,
-				 __attribute__((__unused__)) CHAR8 **argv)
-{
-	EFI_STATUS ret;
-	UINTN i;
-
-	for (i = 0; i < ARRAY_SIZE(optional_efivars); i++) {
-		fastboot_info("Deleting the variable %s", optional_efivars[i]);
-		ret = del_efi_variable(&loader_guid, optional_efivars[i]);
-		if (EFI_ERROR(ret))
-			fastboot_info("Unable to erase '%s' variable", optional_efivars[i]);
-	}
-
-	fastboot_okay("");
-}
 #endif
 
 static void cmd_oem_get_logs(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
@@ -473,7 +438,6 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "rm",				LOCKED,		cmd_oem_rm },
 	{ "set-watchdog-counter-max",	LOCKED,		cmd_oem_set_watchdog_counter_max },
 	{ SLOT_FALLBACK,		LOCKED,		cmd_oem_disable_slot_fallback },
-	{ "erase-efivars",		UNLOCKED,	cmd_oem_erase_efivars },
 #endif
 	{ "get-hashes",			LOCKED,		cmd_oem_gethashes  },
 	{ "get-provisioning-logs",	LOCKED,		cmd_oem_get_logs },
