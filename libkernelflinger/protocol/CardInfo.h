@@ -146,8 +146,22 @@ typedef struct {
 	UINT16  MaxCurrent;
 } SWITCH_STATUS;
 
-typedef struct CARD_DATA CARD_DATA;
+#define MAX_NUMBER_OF_PARTITIONS 8
 
+typedef struct _EFI_EMMC_RPMB_OP_PROTOCOL  EFI_EMMC_RPMB_OP_PROTOCOL;
+
+typedef BOOLEAN (EFIAPI *IS_RPMBKEY_PROGRAMMED)(EFI_EMMC_RPMB_OP_PROTOCOL *This);
+
+typedef EFI_STATUS (EFIAPI *EMMC_PROGRAM_RPMBKEY)(EFI_EMMC_RPMB_OP_PROTOCOL *This,
+						  UINT8 * KeyString);
+
+struct _EFI_EMMC_RPMB_OP_PROTOCOL {
+	IS_RPMBKEY_PROGRAMMED EmmcIsRPMBProgrammed;
+	EMMC_PROGRAM_RPMBKEY  EmmcProgramRPMBKey;
+};
+
+/* Depending on the BIOS release/vendor, the MMC_PARTITION_DATA and
+ * CARD_DATA structures can be different. */
 typedef struct {
 	UINT32                    Signature;
 	EFI_HANDLE                Handle;
@@ -155,15 +169,13 @@ typedef struct {
 	EFI_DEVICE_PATH_PROTOCOL  *DevPath;
 	EFI_BLOCK_IO     BlockIo;
 	EFI_BLOCK_IO_MEDIA        BlockIoMedia;
-	CARD_DATA                 *CardData;
-} MMC_PARTITION_DATA;
+	struct CARD_DATA_v1       *CardData;
+} MMC_PARTITION_DATA_v1;
 
-#define MAX_NUMBER_OF_PARTITIONS 8
-
-struct CARD_DATA {
+struct CARD_DATA_v1 {
 	UINT32                    Signature;
 	EFI_HANDLE                Handle;
-	MMC_PARTITION_DATA        Partitions[MAX_NUMBER_OF_PARTITIONS];
+	MMC_PARTITION_DATA_v1     Partitions[MAX_NUMBER_OF_PARTITIONS];
 	EFI_SD_HOST_IO_PROTOCOL   *SdHostIo;
 	EFI_UNICODE_STRING_TABLE  *ControllerNameTable;
 	CARD_TYPE                 CardType;
@@ -188,6 +200,52 @@ struct CARD_DATA {
 	SD_STATUS_REG             SDSattus;
 	SWITCH_STATUS             SwitchStatus;
 };
+
+typedef struct {
+	UINT32                    Signature;
+	EFI_HANDLE                Handle;
+	EFI_HANDLE                SmmHandle;
+	BOOLEAN                   Present;
+	EFI_DEVICE_PATH_PROTOCOL  *DevPath;
+	EFI_BLOCK_IO     BlockIo;
+	EFI_BLOCK_IO_MEDIA        BlockIoMedia;
+	struct CARD_DATA_v2       *CardData;
+} MMC_PARTITION_DATA_v2;
+
+struct CARD_DATA_v2 {
+	UINT32                    Signature;
+	EFI_HANDLE                Handle;
+	MMC_PARTITION_DATA_v2     Partitions[MAX_NUMBER_OF_PARTITIONS];
+	EFI_SD_HOST_IO_PROTOCOL   *SdHostIo;
+	EFI_EMMC_RPMB_OP_PROTOCOL RPMBIo;
+	EFI_UNICODE_STRING_TABLE  *ControllerNameTable;
+	CARD_TYPE                 CardType;
+	UINT8                     CurrentBusWidth;
+	BOOLEAN                   DualVoltage;
+	BOOLEAN                   NeedFlush;
+	UINT8                     Reserved[3];
+	UINT16                    Address;
+	UINT32                    BlockLen;
+	UINT32                    MaxFrequency;
+	UINT64                    BlockNumber;
+	CARD_STATUS               CardStatus;
+	OCR                       OCRRegister;
+	CID                       CIDRegister;
+	CSD                       CSDRegister;
+	EXT_CSD                   ExtCSDRegister;
+	UINT8                     *RawBufferPointer;
+	UINT8                     *AlignedBuffer;
+	TASK_FILE                 TaskFile;
+	IDENTIFY_DEVICE_DATA      IndentifyDeviceData;
+	SCR                       SCRRegister;
+	SD_STATUS_REG             SDSattus;
+	SWITCH_STATUS             SwitchStatus;
+};
+
+typedef union CARD_DATA {
+	struct CARD_DATA_v1 v1;
+	struct CARD_DATA_v2 v2;
+} CARD_DATA;
 
 struct _EFI_EMMC_CARD_INFO_PROTOCOL {
 	CARD_DATA *CardData;

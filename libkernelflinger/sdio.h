@@ -37,10 +37,17 @@
 
 #include <lib.h>
 #include "protocol/SdHostIo.h"
+#include "protocol/CardInfo.h"
 
 #define SDIO_DFLT_TIMEOUT	3000
 
-EFI_STATUS sdio_get(EFI_DEVICE_PATH *p, EFI_SD_HOST_IO_PROTOCOL **sdio);
+EFI_STATUS sdio_get(EFI_DEVICE_PATH *p,
+		    EFI_HANDLE *handle,
+		    EFI_SD_HOST_IO_PROTOCOL **sdio);
+EFI_STATUS sdio_get_card_info(EFI_SD_HOST_IO_PROTOCOL *sdio,
+			      EFI_HANDLE handle,
+			      CARD_TYPE *type,
+			      UINT16 *address);
 EFI_STATUS sdio_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, EFI_BLOCK_IO *bio,
 		      UINT64 start, UINT64 end, UINT16 card_address,
 		      UINTN erase_grp_size, UINTN erase_timeout,

@@ -43,17 +43,62 @@
 #define SDCARD_ERASE_GROUP_END		33
 #define STATUS_ERROR_MASK		0xFCFFA080
 
-EFI_STATUS sdio_get(EFI_DEVICE_PATH *p, EFI_SD_HOST_IO_PROTOCOL **sdio)
+EFI_STATUS sdio_get(EFI_DEVICE_PATH *p,
+		    EFI_HANDLE *handle,
+		    EFI_SD_HOST_IO_PROTOCOL **sdio)
 {
 	EFI_STATUS ret;
-	EFI_HANDLE sdio_handle;
 	EFI_GUID guid = EFI_SD_HOST_IO_PROTOCOL_GUID;
 
-	ret = uefi_call_wrapper(BS->LocateDevicePath, 3, &guid, &p, &sdio_handle);
-	if (EFI_ERROR(ret))
-		return ret;
+	if (!handle)
+		return EFI_INVALID_PARAMETER;
 
-	return uefi_call_wrapper(BS->HandleProtocol, 3, sdio_handle, &guid, (void **)sdio);
+	if (!p && !*handle)
+		return EFI_INVALID_PARAMETER;
+
+	if (!*handle) {
+		ret = uefi_call_wrapper(BS->LocateDevicePath, 3, &guid, &p, handle);
+		if (EFI_ERROR(ret))
+			return ret;
+	}
+
+	return uefi_call_wrapper(BS->HandleProtocol, 3, *handle, &guid, (void **)sdio);
+}
+
+static BOOLEAN is_valid_card_type(CARD_TYPE type)
+{
+	return type > UnknownCard && type <= SDMemoryCard2High;
+}
+
+EFI_STATUS sdio_get_card_info(EFI_SD_HOST_IO_PROTOCOL *sdio,
+			      EFI_HANDLE handle,
+			      CARD_TYPE *type,
+			      UINT16 *address)
+{
+	EFI_STATUS ret;
+	struct _EFI_EMMC_CARD_INFO_PROTOCOL *info;
+	EFI_GUID guid = EFI_CARD_INFO_PROTOCOL_GUID;
+
+	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &guid, (void **)&info);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Unable to locate card info protocol");
+		return ret;
+	}
+
+	if (sdio == info->CardData->v1.SdHostIo) {
+		if (!is_valid_card_type(info->CardData->v1.CardType))
+			return EFI_UNSUPPORTED;
+		*type = info->CardData->v1.CardType;
+		*address = info->CardData->v1.Address;
+	} else if (sdio == info->CardData->v2.SdHostIo) {
+		if (!is_valid_card_type(info->CardData->v2.CardType))
+			return EFI_UNSUPPORTED;
+		*type = info->CardData->v2.CardType;
+		*address = info->CardData->v2.Address;
+	} else
+		return EFI_UNSUPPORTED;
+
+	return EFI_SUCCESS;
 }
 
 static EFI_STATUS sdio_erase_group(EFI_SD_HOST_IO_PROTOCOL *sdio, EFI_LBA start,
