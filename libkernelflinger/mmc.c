@@ -113,15 +113,20 @@ static EFI_STATUS mmc_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_
 	return EFI_NOT_FOUND;
 }
 
-BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
+static BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
 {
-	while (!IsDevicePathEndType(p)) {
-		if (DevicePathType(p) == HARDWARE_DEVICE_PATH
-		    && DevicePathSubType(p) == HW_CONTROLLER_DP)
-			return TRUE;
-		p = NextDevicePathNode(p);
-	}
-	return FALSE;
+	EFI_STATUS ret;
+	EFI_SD_HOST_IO_PROTOCOL *sdio;
+	EFI_HANDLE handle = NULL;
+	CARD_TYPE type;
+	UINT16 address;
+
+	ret = sdio_get(p, &handle, &sdio);
+	if (EFI_ERROR(ret))
+		return FALSE;
+
+	ret = sdio_get_card_info(sdio, handle, &type, &address);
+	return EFI_ERROR(ret) || type == MMCCard;
 }
 
 static EFI_STATUS mmc_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
@@ -129,6 +134,7 @@ static EFI_STATUS mmc_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
 {
 	EFI_STATUS ret;
 	EFI_SD_HOST_IO_PROTOCOL *sdio;
+	EFI_HANDLE sdio_handle = NULL;
 	EFI_DEVICE_PATH *dev_path;
 	UINTN erase_grp_size = 0, timeout = 0;
 
@@ -138,7 +144,7 @@ static EFI_STATUS mmc_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
 		return EFI_UNSUPPORTED;
 	}
 
-	ret = sdio_get(dev_path, &sdio);
+	ret = sdio_get(dev_path, &sdio_handle, &sdio);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get SDIO protocol");
 		return ret;

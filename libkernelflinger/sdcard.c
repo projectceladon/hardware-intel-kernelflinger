@@ -33,33 +33,16 @@
 #include <lib.h>
 #include "storage.h"
 #include "sdio.h"
-#include "protocol/CardInfo.h"
-#include "mmc.h"
 
-static EFI_STATUS get_card_data(EFI_SD_HOST_IO_PROTOCOL *sdio,
-				CARD_DATA **card_data)
+static BOOLEAN is_sdcard_type(CARD_TYPE type)
 {
-	EFI_STATUS ret;
-	struct _EFI_EMMC_CARD_INFO_PROTOCOL *info;
-	EFI_GUID guid = EFI_CARD_INFO_PROTOCOL_GUID;
-
-	ret = LibLocateProtocol(&guid, (void **)&info);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Unable to locate card info output protocol");
-                return ret;
-        }
-
-	if (sdio != info->CardData->SdHostIo)
-		return EFI_UNSUPPORTED;
-
-	switch (info->CardData->CardType) {
+	switch (type) {
 	case SDMemoryCard:
 	case SDMemoryCard2:
 	case SDMemoryCard2High:
-		*card_data = info->CardData;
-		return EFI_SUCCESS;
+		return TRUE;
 	default:
-		return EFI_UNSUPPORTED;
+		return FALSE;
 	}
 }
 
@@ -68,8 +51,10 @@ static EFI_STATUS sdcard_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
 {
 	EFI_STATUS ret;
 	EFI_SD_HOST_IO_PROTOCOL *sdio;
+	EFI_HANDLE sdio_handle = NULL;
 	EFI_DEVICE_PATH *dev_path;
-	CARD_DATA *card_data = NULL;
+	CARD_TYPE type;
+	UINT16 address;
 
 	dev_path = DevicePathFromHandle(handle);
 	if (!dev_path) {
@@ -77,20 +62,23 @@ static EFI_STATUS sdcard_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
 		return EFI_UNSUPPORTED;
 	}
 
-	ret = sdio_get(dev_path, &sdio);
+	ret = sdio_get(dev_path, &sdio_handle, &sdio);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get SDIO protocol");
 		return ret;
 	}
 
-	ret = get_card_data(sdio, &card_data);
+	ret = sdio_get_card_info(sdio, sdio_handle, &type, &address);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get card data");
+		efi_perror(ret, L"Failed to get card information");
 		return ret;
 	}
 
-	return sdio_erase(sdio, bio, start, end,
-			  card_data->Address, 1, SDIO_DFLT_TIMEOUT, FALSE);
+	if (is_sdcard_type(type))
+		return sdio_erase(sdio, bio, start, end,
+				  address, 1, SDIO_DFLT_TIMEOUT, FALSE);
+
+	return EFI_UNSUPPORTED;
 }
 
 /* SDCards do not support hardware level partitions */
@@ -104,12 +92,19 @@ static BOOLEAN is_sdcard(EFI_DEVICE_PATH *p)
 {
 	EFI_STATUS ret;
 	EFI_SD_HOST_IO_PROTOCOL *sdio;
+	EFI_HANDLE handle = NULL;
+	CARD_TYPE type;
+	UINT16 address;
 
-	ret = sdio_get(p, &sdio);
+	ret = sdio_get(p, &handle, &sdio);
 	if (EFI_ERROR(ret))
 		return FALSE;
 
-	return !is_emmc(p);
+	ret = sdio_get_card_info(sdio, handle, &type, &address);
+	if (EFI_ERROR(ret))
+		return FALSE;
+
+	return is_sdcard_type(type);
 }
 
 struct storage STORAGE(STORAGE_SDCARD) = {
