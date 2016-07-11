@@ -667,7 +667,7 @@ EFI_STATUS str_to_stra(CHAR8 *dst, const CHAR16 *src, UINTN max_len)
 
 /*
  * Parameters Passed : character  : char to be converted to int
- *                     base       : the base of convertion ( hex, dec etc)
+ *                     base       : the base of conversion ( hex, dec etc)
  *
  * Returns           :   value    : character after conversion to int
  *
@@ -719,7 +719,7 @@ out:
 
 /*
  * Parameters Passed : nptr  : Pointer to the string to be converted to int
- *                     base  : the base of convertion ( hex, dec etc)
+ *                     base  : the base of conversion ( hex, dec etc)
  *               endptr: Reference to the next character after the converted string
  * Returns           : value : coverted unsigned long int
  *

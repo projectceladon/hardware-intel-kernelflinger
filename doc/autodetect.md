@@ -23,7 +23,7 @@ properties that can be used to identify the device product.
 
 If Autodetect is enabled, Kernelflinger also loads the Blobstore
 stored in the second stage area of the boot image, extract the OEMVARS
-blob for the current device variant and flash these product dependant
+blob for the current device variant and flash these product dependent
 EFI variables.
 
 Blobstore
