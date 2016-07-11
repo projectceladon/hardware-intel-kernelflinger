@@ -18,7 +18,7 @@ int atoi(const char *str)
 	int u;
 	char c;
 
-	/* skip preceeding white space */
+	/* skip preceding white space */
 	while (*str && *str == ' ')
 		str ++;
 

@@ -51,7 +51,7 @@ typedef enum {
 } CHARGE_STATE;
 
 //
-// Battery Infomation
+// Battery Information
 //
 typedef struct {
         UINT16  DesignCapacity;

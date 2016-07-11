@@ -144,7 +144,7 @@ While the other instances tables can be retrieved with:
 $ adb pull ACPI:TABLE_NAME<N>
 ```
 
-with `<N>` going from 1 to the occurence number of `TABLE_NAME` ACPI
+with `<N>` going from 1 to the occurrence number of `TABLE_NAME` ACPI
 tables.
 
 ### EFI variables

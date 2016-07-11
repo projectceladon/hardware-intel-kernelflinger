@@ -316,7 +316,7 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
 
 cleanup:
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Error has occured!");
+                efi_perror(ret, L"Error has occurred!");
                 if (runtime_base)
                         free_pages(runtime_base, EFI_SIZE_TO_PAGES(tos_header->rt_mem_size));
         }

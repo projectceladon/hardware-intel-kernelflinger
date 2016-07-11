@@ -490,7 +490,7 @@ static EFI_STATUS erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA sta
 		   considers that the partition has been wiped out if
 		   the first 4096 bytes are filled up with all 0 or
 		   all 1.  storage_erase_blocks() uses hardware
-		   support to erase the blocks which does not garantee
+		   support to erase the blocks which does not guarantee
 		   that content will be all 0 or all 1.  It also can
 		   be indeterminate data. */
 		min_end = start + (FS_MGR_SIZE / bio->Media->BlockSize) + 1;
