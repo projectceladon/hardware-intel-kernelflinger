@@ -381,7 +381,7 @@ EFI_STATUS bootmgr_register_entries(CHAR16 *part_label,
 	for (i = 0; i < load_option_nb; i++) {
 		ret = find_load_option_entry(load_options[i].description, &entries[i]);
 		if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
-			efi_perror(ret, L"Failed to Look up for the existant load option");
+			efi_perror(ret, L"Failed to Look up for the existent load option");
 			goto exit;
 		}
 
