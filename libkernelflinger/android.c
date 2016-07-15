@@ -478,7 +478,7 @@ struct boot_img_hdr *get_bootimage_header(VOID *bootimage_blob)
                 return NULL;
 
         hdr = (struct boot_img_hdr *)bootimage_blob;
-        if (strncmpa((CHAR8 *)BOOT_MAGIC, hdr->magic, BOOT_MAGIC_SIZE))
+        if (memcmp(hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE))
                 return NULL;
         return hdr;
 }
@@ -1202,7 +1202,7 @@ EFI_STATUS android_image_load_partition(
                 efi_perror(ret, L"ReadDisk (header)");
                 return ret;
         }
-        if (strncmpa((CHAR8 *)BOOT_MAGIC, aosp_header.magic, BOOT_MAGIC_SIZE)) {
+        if (memcmp(aosp_header.magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
                 error(L"This partition does not appear to contain an Android boot image");
                 return EFI_INVALID_PARAMETER;
         }
@@ -1328,7 +1328,7 @@ EFI_STATUS android_image_load_file(
         debug(L"Read boot image from file (%d bytes)", buffersize);
 
         aosp_header = (struct boot_img_hdr *)bootimage;
-        if (strncmpa((CHAR8 *)BOOT_MAGIC, aosp_header->magic, BOOT_MAGIC_SIZE)) {
+        if (memcmp(aosp_header->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
                 error(L"File does not appear to contain an Android boot image");
                 ret = EFI_INVALID_PARAMETER;
         }
@@ -1375,7 +1375,7 @@ EFI_STATUS android_image_start_buffer(
                 return EFI_INVALID_PARAMETER;
 
         aosp_header = (struct boot_img_hdr *)bootimage;
-        if (strncmpa((CHAR8 *)BOOT_MAGIC, aosp_header->magic, BOOT_MAGIC_SIZE)) {
+        if (memcmp(aosp_header->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
                 error(L"buffer does not appear to contain an Android boot image");
                 return EFI_INVALID_PARAMETER;
         }

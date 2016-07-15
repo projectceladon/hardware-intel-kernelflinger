@@ -271,7 +271,7 @@ static EFI_STATUS flash_new_bootimage(VOID *kernel, UINTN kernel_size,
 		goto out;
 	}
 
-	if (strncmpa((CHAR8 *)BOOT_MAGIC, bootimage->magic, BOOT_MAGIC_SIZE)) {
+	if (memcmp(bootimage->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
 		error(L"boot partition does not contain a valid bootimage");
 		ret = EFI_UNSUPPORTED;
 		goto out;
