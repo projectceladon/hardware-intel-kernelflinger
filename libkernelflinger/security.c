@@ -696,8 +696,10 @@ static EFI_STATUS get_x509_name_entry(X509 *cert, int nid, char **value)
                 obj = X509_NAME_ENTRY_get_object(ent);
                 val = X509_NAME_ENTRY_get_data(ent);
 
-                if (!obj || !val)
+                if (!obj || !val) {
                         error(L"Failed to get entry content");
+                        continue;
+                }
 
                 if (OBJ_obj2nid(obj) != nid)
                         continue;
