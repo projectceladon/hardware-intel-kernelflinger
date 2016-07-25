@@ -102,7 +102,9 @@ struct tos_image_header {
         UINT32 tos_ldr_size;
         /* Trusty IMR base + seed_msg_dst_offset */
         UINT32 seed_msg_dst_offset;
-} ;
+        /* this's reserved for future usage */
+        UINT32 reserved;
+};
 
 
 /* Get the TOS image header from the bootimage
