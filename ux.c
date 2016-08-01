@@ -276,13 +276,16 @@ static const ui_textline_t *format_hash(UINT8 *hash, UINTN hash_size) {
 		{ &COLOR_WHITE, buf, FALSE },
 		{ NULL, NULL, FALSE }
 	};
+	int len;
 
 	if (hash_size < MIN_HASH_SIZE)
 		return NULL;
 
-	snprintf((CHAR8 *)buf, sizeof(buf),
-		 (CHAR8 *)"ID: " HASH_FORMAT,
-		 hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
+	len = snprintf((CHAR8 *)buf, sizeof(buf),
+		       (CHAR8 *)"ID: " HASH_FORMAT,
+		       hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
+	if (len != sizeof(buf) - 1)
+		return NULL;
 
 	return hash_text;
 }
