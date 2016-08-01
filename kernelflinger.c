@@ -1245,13 +1245,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (EFI_ERROR(ret)) {
                 debug(L"issue loading boot image: %r", ret);
                 boot_state = BOOT_STATE_RED;
-        } else {
-                UINT8 new_boot_state;
+        } else if (boot_state != BOOT_STATE_ORANGE) {
                 debug(L"Validating boot image");
-                new_boot_state = validate_bootimage(boot_target, bootimage,
-                                                    &verifier_cert);
-                if (boot_state != BOOT_STATE_ORANGE)
-                        boot_state = new_boot_state;
+                boot_state = validate_bootimage(boot_target, bootimage,
+                                                &verifier_cert);
         }
 
         if (boot_state == BOOT_STATE_YELLOW) {
