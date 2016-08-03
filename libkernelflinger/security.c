@@ -711,6 +711,9 @@ static EFI_STATUS get_x509_name_entry(X509 *cert, int nid, char **value)
                         }
 
                 *value = strdup((char *)val->data);
+                if (!*value)
+                        return EFI_OUT_OF_RESOURCES;
+
                 return EFI_SUCCESS;
         }
 
