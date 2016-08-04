@@ -96,6 +96,17 @@ size_t strlen(const CHAR8 *s)
         return strlena(s);
 }
 
+size_t strnlen(const CHAR8 *s, size_t maxlen)
+{
+        size_t i;
+
+        for (i = 0; i < maxlen; i++)
+                if (s[i] == '\0')
+                        break;
+
+        return i;
+}
+
 CHAR8 *strcpy(CHAR8 *dest, const CHAR8 *src)
 {
         unsigned int i;

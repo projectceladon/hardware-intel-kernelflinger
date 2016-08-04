@@ -21,36 +21,6 @@
 
 #define TARGET_MAX		32
 
-/* ASN.1 grammar for boot signature
- *
- * AndroidVerifiedBoot DEFINITIONS ::= BEGIN
- *   -- From PKCS #1/RFC3279 ASN.1 module
- *   RSAPublicKey ::= SEQUENCE {
- *       modulus           INTEGER,  -- n
- *       publicExponent    INTEGER   -- e
- *   }
- *
- *   AlgorithmIdentifier ::= SEQUENCE {
- *       algorithm OBJECT IDENTIFIER,
- *       parameters ANY DEFINED BY algorithm OPTIONAL
- *   }
- *
- *   AuthenticatedAttributes ::= SEQUENCE {
- *       target PrintableString,  -- specific version of CHARACTER STRING accepted by a compiler
- *       length INTEGER
- *   }
- *
- *   AndroidVerifiedBootSignature ::= SEQUENCE {
- *       formatVersion INTEGER,
- *       certificate ::= Certificate OPTIONAL
- *       algorithmId AlgorithmIdentifier,
- *       attributes AuthenticatedAttributes,
- *       signature OCTET STRING
- *   }
- *
- * END
- */
-
 struct algorithm_identifier {
 	int nid;
 	void *parameters;
@@ -65,7 +35,6 @@ struct auth_attributes {
 };
 
 struct boot_signature {
-	long format_version;
 	X509 *certificate;
 	struct algorithm_identifier id;
 	struct auth_attributes attributes;

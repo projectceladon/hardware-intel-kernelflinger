@@ -66,7 +66,6 @@ LOCAL_SRC_FILES := \
 	lib.c \
 	options.c \
 	security.c \
-	asn1.c \
 	signature.c \
 	vars.c \
 	ui.c \
@@ -99,6 +98,14 @@ endif
 
 ifeq ($(TARGET_USE_TRUSTY),true)
     LOCAL_SRC_FILES += trusty.c
+endif
+
+ifeq ($(TARGET_BOOT_SIGNER),)
+    LOCAL_SRC_FILES += \
+	aosp_sig.c \
+	asn1.c
+else
+    LOCAL_SRC_FILES += $(TARGET_BOOT_SIGNER)_sig.c
 endif
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
