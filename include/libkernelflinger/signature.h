@@ -78,10 +78,6 @@ struct boot_signature *get_boot_signature(const void *data, long size);
 
 void free_boot_signature(struct boot_signature *bs);
 
-#ifndef KERNELFLINGER
-void dump_boot_signature(struct boot_signature *bs);
-#endif
-
 #endif	/* _SIGNATURE_H_ */
 
 /* vim: cindent:noexpandtab:softtabstop=8:shiftwidth=8:noshiftround
