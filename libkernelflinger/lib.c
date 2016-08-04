@@ -934,7 +934,7 @@ UINT64 efi_time_to_ctime(EFI_TIME *time)
                 + (time->Minute * 60) + time->Second;
 }
 
-VOID cpuid(UINT32 op, UINT32 reg[4])
+static inline void cpuid(uint32_t op, uint32_t reg[4])
 {
 #if __LP64__
         asm volatile("xchg{q}\t{%%}rbx, %q1\n\t"

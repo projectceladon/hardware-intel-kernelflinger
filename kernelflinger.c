@@ -56,7 +56,6 @@
 #include "blobstore.h"
 #endif
 #include "oemvars.h"
-#include "silentlake.h"
 #include "slot.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
@@ -904,13 +903,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
                          * check just to make sure */
                         if (device_is_unlocked()) {
                                 set_image_oemvars_nocheck(bootimage, NULL);
-#ifdef USE_SILENTLAKE
-                                ret = silentlake_bind_root_of_trust(UNLOCKED, NULL);
-                                if (EFI_ERROR(ret)) {
-                                        efi_perror(ret, L"Failed to provide a root of trust to SilentLake");
-                                        die();
-                                }
-#endif
                                 load_image(bootimage, BOOT_STATE_ORANGE, MEMORY, NULL);
                         }
                         FreePool(bootimage);
@@ -1279,14 +1271,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         default:
                 break;
         }
-
-#ifdef USE_SILENTLAKE
-        ret = silentlake_bind_root_of_trust(get_current_state(), verifier_cert);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Failed to provide a root of trust to SilentLake");
-                die();
-        }
-#endif
 
         ret = load_image(bootimage, boot_state, boot_target, verifier_cert);
         if (EFI_ERROR(ret))
