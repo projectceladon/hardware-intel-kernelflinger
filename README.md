@@ -96,10 +96,6 @@ Kerneflinger specific configuration flags:
 * `KERNELFLINGER_IGNORE_NOT_APPLICABLE_RESET`: makes Kernelflinger
    ignore the ACPI table RSCI reset source "not_applicable" when
    setting the bootreason.
-* `KERNELFLINGER_SL_BIND_ROOT_TRUST`: makes Kernelflinger passing the
-  devices state along with the SHA256 sum of the certificate used to
-  verify the bootimage to Silent Lake Sec VMM that will use it as a
-  root of trust for the Android Keychain API.
 * `KERNELFLINGER_SSL_LIBRARY`: either 'openssl' or 'boringssl', makes
    Kernelflinger build against the OpenSSL library, respectively, the
    BoringSSL library.  Note: the `TARGET_BOOTLOADER_POLICY` flag

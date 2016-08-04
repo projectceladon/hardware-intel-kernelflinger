@@ -183,6 +183,4 @@ BOOLEAN no_device_unlock();
 
 UINT8 min_boot_state();
 
-VOID cpuid(UINT32 op, UINT32 reg[4]);
-
 #endif
