@@ -1,5 +1,5 @@
 KERNELFLINGER_LOCAL_PATH := $(call my-dir)
-KERNELFLINGER_CFLAGS := -Wall -Wextra -Werror -mrdrnd -DKERNELFLINGER
+KERNELFLINGER_CFLAGS := -Wall -Wextra -Werror -mrdrnd
 
 ifeq ($(TARGET_USE_TRUSTY),true)
     KERNELFLINGER_CFLAGS += -DUSE_TRUSTY
