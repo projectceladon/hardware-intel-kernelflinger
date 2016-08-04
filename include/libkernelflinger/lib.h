@@ -150,6 +150,9 @@ CHAR8 *strncpy(CHAR8 *dest, const CHAR8 *src, size_t n)
 size_t strlen(const CHAR8 *s)
     __attribute__((weak));
 
+size_t strnlen(const CHAR8 *s, size_t maxlen)
+    __attribute__((weak));
+
 void *memcpy(void *dest, const void *source, size_t count)
     __attribute__((weak));
 

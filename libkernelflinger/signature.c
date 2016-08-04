@@ -15,14 +15,15 @@
  */
 
 
-#include <openssl/asn1.h>
-#include <openssl/err.h>
 #include <openssl/x509.h>
-#include <openssl/objects.h>
 
 #include "signature.h"
-#include "asn1.h"
 #include "lib.h"
+
+/* This function must be defined by the module which support the
+   compilation time selected signature format.  */
+extern EFI_STATUS decode_boot_signature(const unsigned char *data, long size,
+					struct boot_signature *bs);
 
 void free_boot_signature(struct boot_signature *bs)
 {
@@ -30,136 +31,29 @@ void free_boot_signature(struct boot_signature *bs)
 		return;
 
 	FreePool(bs->signature);
-	FreePool(bs->id.parameters);
+	if (bs->id.parameters)
+		FreePool(bs->id.parameters);
 	if (bs->certificate)
 		X509_free(bs->certificate);
 	FreePool(bs);
 }
 
-static int decode_algorithm_identifier(const unsigned char **datap, long *sizep,
-		struct algorithm_identifier *ai)
-{
-	long seq_size = *sizep;
-	const unsigned char *orig = *datap;
-
-	if (consume_sequence(datap, &seq_size) < 0)
-		return -1;
-
-	if (decode_object(datap, &seq_size, &ai->nid))
-		return -1;
-
-	if (seq_size) {
-		error(L"parameters not supported yet");
-		return -1;
-	} else {
-		ai->parameters = NULL;
-	}
-
-	*sizep = *sizep - (*datap - orig);
-	return 0;
-}
-
-static int decode_auth_attributes(const unsigned char **datap, long *sizep,
-		struct auth_attributes *aa)
-{
-	long seq_size = *sizep;
-	const unsigned char *orig = *datap;
-
-	if (consume_sequence(datap, &seq_size) < 0)
-		return -1;
-
-	if (decode_printable_string(datap, &seq_size, aa->target,
-				sizeof(aa->target)))
-		return -1;
-
-	if (decode_integer(datap, &seq_size, 0, &aa->length,
-				NULL, NULL))
-		return -1;
-
-	/* Note the address and size of auth_attributes block,
-	 * as this blob needs to be appended to the boot image
-	 * before generating a signature */
-	aa->data = orig;
-	aa->data_sz = *datap - orig;
-
-	*sizep = *sizep - (*datap - orig);
-	return 0;
-}
-
-static int decode_boot_signature(const unsigned char **datap, long *sizep,
-		struct boot_signature *bs)
-{
-	long seq_size = *sizep;
-	const unsigned char *orig = *datap;
-
-	if (consume_sequence(datap, &seq_size) < 0)
-		return -1;
-
-	if (decode_integer(datap, &seq_size, 0, &bs->format_version,
-				NULL, NULL))
-		return -1;
-
-	debug(L"BootSignature format version %ld", bs->format_version);
-	switch (bs->format_version) {
-	case 0:
-		break;
-	case 1:
-	{
-		BIO *bio;
-		bio = BIO_new_mem_buf((void *)*datap, seq_size);
-		if (!bio) {
-			error(L"Failed to allocate BIO ressources");
-			return -1;
-		}
-		bs->certificate = d2i_X509_bio(bio, NULL);
-		if (bs->certificate) {
-			seq_size -= BIO_number_read(bio);
-			*datap += BIO_number_read(bio);
-		}
-		BIO_free(bio);
-		break;
-	}
-	default:
-		error(L"unsupported boot signature format %ld",
-		      bs->format_version);
-		return -1;
-	}
-
-	if (decode_algorithm_identifier(datap, &seq_size, &bs->id)) {
-		error(L"bad algorithm identifier");
-		return -1;
-	}
-
-	if (decode_auth_attributes(datap, &seq_size, &bs->attributes)) {
-		error(L"bad authenticated attributes");
-		FreePool(bs->id.parameters);
-		return -1;
-	}
-
-	if (decode_octet_string(datap, &seq_size, (unsigned char **)&bs->signature,
-				&bs->signature_len)) {
-		error(L"bad signature data");
-		FreePool(bs->id.parameters);
-		return -1;
-	}
-
-	bs->total_size = (*datap - orig);
-	*sizep = *sizep - (*datap - orig);
-	return 0;
-}
-
 struct boot_signature *get_boot_signature(const void *data, long size)
 {
-	const unsigned char *pos = data;
-	long remain = size;
-	struct boot_signature *bs = AllocatePool(sizeof(*bs));
+	EFI_STATUS ret;
+	struct boot_signature *bs;
+
+	bs = AllocatePool(sizeof(*bs));
 	if (!bs)
 		return NULL;
 
-	if (decode_boot_signature(&pos, &remain, bs)) {
+	ret = decode_boot_signature(data, size, bs);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to decode signature");
 		FreePool(bs);
 		return NULL;
 	}
+
 	return bs;
 }
 
