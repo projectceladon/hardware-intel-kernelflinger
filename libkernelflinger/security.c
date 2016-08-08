@@ -39,6 +39,7 @@
 #include <openssl/rsa.h>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
+#include <openssl/crypto.h>
 
 #include "security.h"
 #include "android.h"

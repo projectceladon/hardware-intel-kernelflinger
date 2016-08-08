@@ -56,7 +56,7 @@ KERNELFLINGER_STATIC_LIBRARIES := \
 	libuefi_ssl_static \
 	libuefi_crypto_static \
 	libgnuefi \
-	libopensslsupport \
+	libsslsupport \
 	libefi
 
 include $(call all-subdir-makefiles)

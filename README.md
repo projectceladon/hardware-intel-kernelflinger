@@ -100,6 +100,13 @@ Kerneflinger specific configuration flags:
   devices state along with the SHA256 sum of the certificate used to
   verify the bootimage to Silent Lake Sec VMM that will use it as a
   root of trust for the Android Keychain API.
+* `KERNELFLINGER_SSL_LIBRARY`: either 'openssl' or 'boringssl', makes
+   Kernelflinger build against the OpenSSL library, respectively, the
+   BoringSSL library.  Note: the `TARGET_BOOTLOADER_POLICY` flag
+   cannot be used if `KERNELFLINGER_SSL_LIBRARY` is set to 'boringssl'
+   because the BoringSSL does not support the PKCS7 message format
+   which is used by the RMA force unlock feature
+   (Cf. [Bootloader Policy and Factory Reset Protection](./doc/FRP.md)).
 
 Command line parameters
 -----------------------
