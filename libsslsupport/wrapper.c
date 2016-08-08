@@ -53,6 +53,51 @@ sighandler_t bsd_signal(int signum, sighandler_t handler)
 	return NULL;
 }
 
+void __assert2(const char *file, int line, const char *function,
+	       const char *failed_expression)
+{
+	error(L"Assertion '%a' failed at %a:%a:%d",
+	      failed_expression, file, function, line);
+}
+
+void *bsearch(const void *key, const void *base,
+	      size_t nmemb, size_t size,
+	      int (*compar)(const void *, const void *))
+{
+	UINTN start, end, middle;
+	void *current;
+	int ret;
+
+	for (start = 0, end = nmemb ; start < end;) {
+		middle = start + (end - start) / 2;
+
+		current = (void *)base + (middle * size);
+		ret = compar(key, current);
+		if (ret < 0) {
+			end = middle;
+			continue;
+		}
+		if (ret > 0) {
+			start = middle + 1;
+			continue;
+		}
+
+		return current;
+	}
+
+	return NULL;
+}
+
+int fcntl(int fd, int cmd, ... /* arg */ )
+{
+	return -1;
+}
+
+int dup(int oldfd)
+{
+	return -1;
+}
+
 static const char __ctype_[256];
 const char *_ctype_ = __ctype_;
 
