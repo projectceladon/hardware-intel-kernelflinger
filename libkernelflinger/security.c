@@ -491,6 +491,7 @@ EFI_STATUS set_os_secure_boot(BOOLEAN secure)
                                 &value, FALSE, TRUE);
 }
 
+#ifdef BOOTLOADER_POLICY
 static X509 *find_cert_in_pkcs7(PKCS7 *p7, const unsigned char *cert_sha256)
 {
         STACK_OF(X509) *certs = NULL;
@@ -677,6 +678,7 @@ done:
 
         return payload ? EFI_SUCCESS : EFI_INVALID_PARAMETER;
 }
+#endif  /* BOOTLOADER_POLICY */
 
 static EFI_STATUS get_x509_name_entry(X509 *cert, int nid, char **value)
 {
