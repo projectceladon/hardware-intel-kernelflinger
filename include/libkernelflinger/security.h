@@ -78,6 +78,7 @@ BOOLEAN is_efi_secure_boot_enabled(VOID);
 
 EFI_STATUS set_os_secure_boot(BOOLEAN secure);
 
+#ifdef BOOTLOADER_POLICY
 /* Given a PKCS7 (DER encoded), look for the root certificate based on
  * CERT_SHA256 and verify the PKCS7.  On success, EFI_SUCCESS is
  * return and the PKCS7 payload is returned in DATA as a dynamically
@@ -86,6 +87,7 @@ EFI_STATUS set_os_secure_boot(BOOLEAN secure);
 EFI_STATUS verify_pkcs7(const unsigned char *cert_sha256, UINTN cert_size,
 			const VOID *pkcs7, UINTN pkcs7_size,
 			VOID **data, int *size);
+#endif  /* BOOTLOADER_POLICY */
 
 /* Given a X509 certificate, build the following string:
  * COMMON_NAME:#PUBLIC_KEY_SHA1
