@@ -877,8 +877,6 @@ static VOID die(VOID)
 static VOID enter_fastboot_mode(UINT8 boot_state)
         __attribute__ ((noreturn));
 
-/* Enter Fastboot mode. If fastboot_start() returns a valid pointer,
- * try to start the bootimage pointed to. */
 static VOID enter_fastboot_mode(UINT8 boot_state)
 {
         EFI_STATUS ret = EFI_SUCCESS;
@@ -887,7 +885,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
         void *efiimage = NULL;
         UINTN imagesize;
         VOID *bootimage;
-        X509 *verifier_cert = NULL;
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
@@ -914,8 +911,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
                                         die();
                                 }
 #endif
-                                validate_bootimage(MEMORY, bootimage, &verifier_cert);
-                                load_image(bootimage, BOOT_STATE_ORANGE, MEMORY, verifier_cert);
+                                load_image(bootimage, BOOT_STATE_ORANGE, MEMORY, NULL);
                         }
                         FreePool(bootimage);
                         bootimage = NULL;
