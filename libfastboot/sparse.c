@@ -136,10 +136,11 @@ static EFI_STATUS flash_raw_data(void *data, unsigned size)
 static EFI_STATUS flash_chunk(struct sparse_header *sph, struct chunk_header *ckh, CHAR8 *data, unsigned int size)
 {
 	EFI_STATUS ret;
+	UINT64 chunk_szb = (UINT64)ckh->chunk_sz * (UINT64)sph->blk_sz;
 
 	switch (ckh->chunk_type) {
 	case CHUNK_TYPE_RAW:
-		if (size % sph->blk_sz || size != ckh->chunk_sz * sph->blk_sz) {
+		if (size % sph->blk_sz || size != chunk_szb) {
 			error(L"inconsistent raw chunk");
 			return EFI_INVALID_PARAMETER;
 		}
@@ -148,12 +149,12 @@ static EFI_STATUS flash_chunk(struct sparse_header *sph, struct chunk_header *ck
 		ret = flush_buffer();
 		if (EFI_ERROR(ret))
 			return ret;
-		return flash_skip(ckh->chunk_sz * sph->blk_sz);
+		return flash_skip(chunk_szb);
 	case CHUNK_TYPE_FILL:
 		ret = flush_buffer();
 		if (EFI_ERROR(ret))
 			return ret;
-		return flash_fill(*((UINT32 *) data), ckh->chunk_sz * sph->blk_sz);
+		return flash_fill(*((UINT32 *) data), chunk_szb);
 	case CHUNK_TYPE_CRC32:
 		debug(L"crc chunk not implemented yet %d", size);
 		break;
