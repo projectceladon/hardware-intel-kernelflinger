@@ -52,6 +52,9 @@ enum boot_target {
         CRASHMODE
 };
 
+#define is_bootimg_target(target) \
+        (target == NORMAL_BOOT || target == CHARGER || target == RECOVERY)
+
 const CHAR16 *boot_target_name(enum boot_target bt);
 const CHAR16 *boot_target_description(enum boot_target bt);
 enum boot_target name_to_boot_target(const CHAR16 *str);
