@@ -817,10 +817,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 #endif
 
 #ifdef USE_TRUSTY
-        if (boot_target == NORMAL_BOOT ||
-            boot_target == RECOVERY ||
-            boot_target == CHARGER ||
-            boot_target == MEMORY) {
+        if (is_bootimg_target(boot_target) || boot_target == MEMORY) {
 
                 if (boot_state == BOOT_STATE_RED) {
 #ifndef USERDEBUG
