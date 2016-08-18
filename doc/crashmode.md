@@ -180,8 +180,8 @@ Record Table) region prepended by `BERR` magic.
 $ adb pull acpi:DSDT DSDT
 580 KB/s (131324 bytes in 0.220s)
 
-$ adb pull efivar:LoaderVersion LoaderVersion
-0 KB/s (60 bytes in 0.110s)
+$ adb pull efivar:OEMLock OEMLock
+0 KB/s (4 bytes in 0.50s)
 
 $ adb pull ram:9F000:0F0000 ram.simg
 947 KB/s (585792 bytes in 0.603s)
