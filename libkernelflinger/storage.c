@@ -36,7 +36,7 @@
 #include "pci.h"
 
 static struct storage *cur_storage;
-static PCI_DEVICE_PATH boot_device;
+static PCI_DEVICE_PATH boot_device = { .Function = -1, .Device = -1 };
 static enum storage_type boot_device_type;
 static BOOLEAN initialized = FALSE;
 
@@ -95,6 +95,7 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 	struct storage *storage;
 	enum storage_type type;
 
+	cur_storage = NULL;
 	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol,
 				&BlockIoProtocol, NULL, &nb_handle, &handles);
 	if (EFI_ERROR(ret)) {
@@ -105,8 +106,10 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 	boot_device.Header.Type = 0;
 	for (i = 0; i < nb_handle; i++) {
 		device_path = DevicePathFromHandle(handles[i]);
-		pci = get_pci_device_path(device_path);
+		if (!device_path)
+			continue;
 
+		pci = get_pci_device_path(device_path);
 		if (!pci)
 			continue;
 
@@ -136,7 +139,7 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 
 	FreePool(handles);
 
-	if (!pci) {
+	if (!cur_storage) {
 		error(L"No PCI storage found");
 		return EFI_UNSUPPORTED;
 	}
