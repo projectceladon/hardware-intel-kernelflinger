@@ -188,6 +188,9 @@ EFI_STATUS ui_display_vendor_splash(VOID)
 	UINTN width, height, x, y, max_size;
 	ui_image_t *vendor;
 
+	if (!ui_is_ready())
+		return EFI_UNSUPPORTED;
+
 	ui_clear_screen();
 
 	/* Vendor splash */
