@@ -54,7 +54,6 @@ static fastboot_handle fastboot_flash_cmd;
 static fastboot_handle fastboot_erase_cmd;
 static EFI_FILE_IO_INTERFACE *file_io_interface;
 static data_callback_t fastboot_rx_cb, fastboot_tx_cb;
-static CHAR8 DEFAULT_OPTIONS[] = "--batch installer.cmd";
 static BOOLEAN need_tx_cb;
 static char *fastboot_cmd_buf;
 static UINTN fastboot_cmd_buf_len;
@@ -672,6 +671,33 @@ static void batch(INTN argc, CHAR8 **argv)
 		fastboot_okay("");
 }
 
+static CHAR8 *build_default_options()
+{
+	static CHAR8 options[64];
+	const char cmd_prefix[] = "--batch installer";
+	const char file_suffix[] = ".cmd";
+	char *str;
+
+	if (*options)
+		return options;
+
+	memcpy(options, cmd_prefix, sizeof(cmd_prefix) - 1);
+	str = (char *)options + strlen(options);
+
+#ifdef HAL_AUTODETECT
+	char *device = get_property_device();
+	if (device) {
+		*str++ = '_';
+		while (*device)
+			*str++ = *device++;
+	}
+#endif
+
+	memcpy(str, file_suffix, sizeof(file_suffix) - 1);
+
+	return options;
+}
+
 static void usage(__attribute__((__unused__)) INTN argc,
 		  __attribute__((__unused__)) CHAR8 **argv)
 {
@@ -681,7 +707,7 @@ static void usage(__attribute__((__unused__)) INTN argc,
 	Print(L" --help, -h             print this help and exit\n");
 	Print(L" --version, -v          print Installer version and exit\n");
 	Print(L" --batch, -b FILE       run all the fastboot commands of FILE\n");
-	Print(L"If no option is provided, the installer assumes '%a'\n", DEFAULT_OPTIONS);
+	Print(L"If no option is provided, the installer assumes '%a'\n", build_default_options());
 	Print(L"Note: 'update', 'flash-raw' and 'flashall' commands are NOT supported\n");
 
 	fastboot_okay("");
@@ -812,7 +838,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 		skip_whitespace((char **)&options);
 
 	if (!options || *options == '\0')
-		options = DEFAULT_OPTIONS;
+		options = build_default_options();
 	store_command((char *)options, NULL);
 
 	/* Initialize slot management. */
