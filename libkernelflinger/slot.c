@@ -252,8 +252,8 @@ EFI_STATUS slot_init(void)
 
 	for (i = 0; i < MAX_NB_SLOT; i++) {
 		suffixes[i] = _suffixes + i * sizeof(SUFFIX_FMT);
-		snprintf((CHAR8 *)suffixes[i], sizeof(suffixes[i]),
-			 (CHAR8 *)SUFFIX_FMT, SLOT_START_CHAR + i);
+		efi_snprintf((CHAR8 *)suffixes[i], sizeof(suffixes[i]),
+			     (CHAR8 *)SUFFIX_FMT, SLOT_START_CHAR + i);
 	}
 
 	ret = read_boot_ctrl();
@@ -429,8 +429,8 @@ const char *slot_get_retry_count(const char *suffix)
 	if (!slot)
 		return NULL;
 
-	len = snprintf((CHAR8 *)res, sizeof(res), (CHAR8 *)"%d",
-		       slot->tries_remaining);
+	len = efi_snprintf((CHAR8 *)res, sizeof(res), (CHAR8 *)"%d",
+			   slot->tries_remaining);
 	if (len < 0 || len >= (int)sizeof(res))
 		return NULL;
 

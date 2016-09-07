@@ -751,8 +751,8 @@ EFI_STATUS get_android_verity_key_id(X509 *cert, char **value)
         if (!keyid)
                 goto out;
 
-        len = snprintf((CHAR8 *)keyid, prefix_len + 1,
-                       (CHAR8 *)"%a" KEY_ID_SEPARATOR, common_name);
+        len = efi_snprintf((CHAR8 *)keyid, prefix_len + 1,
+                           (CHAR8 *)"%a" KEY_ID_SEPARATOR, common_name);
         if (len != (int)prefix_len) {
                 ret = EFI_BAD_BUFFER_SIZE;
                 goto out;

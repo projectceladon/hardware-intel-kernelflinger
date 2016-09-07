@@ -199,8 +199,8 @@ static UINTN fastboot_ui_info_draw(UINTN x, UINTN y, UINTN width, UINTN height)
 			goto exit;
 		}
 
-		len = snprintf((CHAR8 *)line->str, len, (CHAR8 *)"%a - %a",
-			       info->header, value);
+		len = efi_snprintf((CHAR8 *)line->str, len, (CHAR8 *)"%a - %a",
+				   info->header, value);
 		if (len < 0) {
 			error(L"Failed to format fastboot info line %d", i);
 			goto exit;

@@ -567,8 +567,8 @@ char *get_property_bootloader(void)
 
 		buf[0] = 0;
 		SMBIOS_TO_BUFFER(buf, TYPE_BIOS, BiosVersion);
-		snprintf((CHAR8 *)loader, ANDROID_PROP_VALUE_MAX,
-			 (CHAR8 *)"%a_%a", buf,
+		efi_snprintf((CHAR8 *)loader, ANDROID_PROP_VALUE_MAX,
+			     (CHAR8 *)"%a_%a", buf,
 			 KERNELFLINGER_VERSION_8);
 		CDD_clean_string(loader);
 	}
@@ -665,11 +665,11 @@ char *get_property_device(void)
 		SMBIOS_TO_BUFFER(board_version, TYPE_BOARD, Version);
 
 		if (board_version[0]) {
-			snprintf((CHAR8 *)device, ANDROID_PROP_VALUE_MAX,
-				 (CHAR8 *)"%a_%a", board_name, board_version);
+			efi_snprintf((CHAR8 *)device, ANDROID_PROP_VALUE_MAX,
+				     (CHAR8 *)"%a_%a", board_name, board_version);
 		} else {
-			snprintf((CHAR8 *)device, ANDROID_PROP_VALUE_MAX,
-				 (CHAR8*)"%a", board_name);
+			efi_snprintf((CHAR8 *)device, ANDROID_PROP_VALUE_MAX,
+				     (CHAR8*)"%a", board_name);
 		}
 		CDD_clean_string(device);
 		debug(L"Detected product device '%a'", device);
@@ -682,9 +682,9 @@ char *get_device_id(void)
 {
 	static char deviceid[ANDROID_PROP_VALUE_MAX];
 	if (!deviceid[0]) {
-		snprintf((CHAR8 *)deviceid, sizeof(deviceid),
-			 (CHAR8 *)"%a/%a/%a", get_property_brand(),
-			 get_property_name(), get_property_device());
+		efi_snprintf((CHAR8 *)deviceid, sizeof(deviceid),
+			     (CHAR8 *)"%a/%a/%a", get_property_brand(),
+			     get_property_name(), get_property_device());
 	}
 	return deviceid;
 }

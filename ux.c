@@ -200,8 +200,8 @@ static ui_textline_t *build_error_code_text(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *ecolo
 	};
 
 	code_text[0].color = ecolor;
-	snprintf((CHAR8 *)buf, sizeof(buf),
-		 (CHAR8 *)"BOOTLOADER ERROR CODE %02x", error_code);
+	efi_snprintf((CHAR8 *)buf, sizeof(buf),
+		     (CHAR8 *)"BOOTLOADER ERROR CODE %02x", error_code);
 
 	return code_text;
 }
@@ -281,9 +281,9 @@ static const ui_textline_t *format_hash(UINT8 *hash, UINTN hash_size) {
 	if (hash_size < MIN_HASH_SIZE)
 		return NULL;
 
-	len = snprintf((CHAR8 *)buf, sizeof(buf),
-		       (CHAR8 *)"ID: " HASH_FORMAT,
-		       hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
+	len = efi_snprintf((CHAR8 *)buf, sizeof(buf),
+			   (CHAR8 *)"ID: " HASH_FORMAT,
+			   hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]);
 	if (len != sizeof(buf) - 1)
 		return NULL;
 
@@ -350,14 +350,14 @@ enum boot_target ux_prompt_user(enum ux_error_code code, BOOLEAN power_off, UINT
 		goto out;
 	}
 
-	snprintf(msg, sizeof(msg), fmt, button, boot);
+	efi_snprintf(msg, sizeof(msg), fmt, button, boot);
 
 	display_text(code, prompt->color, prompt->text, text, footer_text);
 	if (ui_wait_for_event(FIRST_TIMEOUT_SECS, expected) == EV_TIMEOUT)
 		goto out;
 
 	fmt = (CHAR8 *)PRESS_TO_CONTINUE_FMT;
-	snprintf(msg, sizeof(msg), fmt, button);
+	efi_snprintf(msg, sizeof(msg), fmt, button);
 
 	display_text(code, prompt->color, prompt->text, text, footer_text);
 	ui_wait_for_event(SECOND_TIMEOUT_SECS, expected);
