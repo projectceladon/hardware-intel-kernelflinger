@@ -146,3 +146,22 @@ LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,libfastboot)
 include $(BUILD_EFI_EXECUTABLE)
 
+include $(CLEAR_VARS)
+LOCAL_MODULE := kf4abl-$(TARGET_BUILD_VARIANT)
+LOCAL_MODULE_STEM := kf4abl
+LOCAL_CFLAGS := $(SHARED_CFLAGS)
+LOCAL_STATIC_LIBRARIES += \
+	libfastboot-$(TARGET_BUILD_VARIANT) \
+	libefiusb-$(TARGET_BUILD_VARIANT) \
+	libefitcp-$(TARGET_BUILD_VARIANT) \
+	libtransport-$(TARGET_BUILD_VARIANT) \
+	$(SHARED_STATIC_LIBRARIES) \
+	libpayload \
+	libefiwrapper-$(TARGET_BUILD_VARIANT) \
+	libefiwrapper_drivers-$(TARGET_BUILD_VARIANT) \
+	efiwrapper-$(TARGET_BUILD_VARIANT)
+LOCAL_C_INCLUDES := \
+	$(addprefix $(LOCAL_PATH)/,libfastboot)
+LOCAL_SRC_FILES := \
+	kf4abl.c
+include $(BUILD_ABL_EXECUTABLE)
