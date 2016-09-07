@@ -118,44 +118,61 @@ UINTN strtoul16(const CHAR16 *nptr, CHAR16 **endptr, UINTN base);
 
 char *strcasestr(const char *s, const char *find);
 
-char *strdup(const char *s);
+char *strdup(const char *s)
+    __attribute__((weak));
 
 EFI_STATUS bytes_to_hex_stra(CHAR8 *bytes, UINTN length,
                              CHAR8 *str, UINTN str_size);
 
-char *strtok_r(char *str, const char *delim, char **saveptr);
+char *strtok_r(char *str, const char *delim, char **saveptr)
+    __attribute__((weak));
 
 CHAR16 *StrStr(const CHAR16 *s, const CHAR16 *find);
 
-CHAR8 *strchr(const CHAR8 *s, int c);
+CHAR8 *strchr(const CHAR8 *s, int c)
+    __attribute__((weak));
 
-int strcmp(const CHAR8 *s1, const CHAR8 *s2);
+int strcmp(const CHAR8 *s1, const CHAR8 *s2)
+    __attribute__((weak));
 
-int strncasecmp(const char *s1, const char *s2, size_t n);
+int strncasecmp(const char *s1, const char *s2, size_t n)
+    __attribute__((weak));
 
-int strncmp(const CHAR8 *s1, const CHAR8 *s2, size_t n);
+int strncmp(const CHAR8 *s1, const CHAR8 *s2, size_t n)
+    __attribute__((weak));
 
-CHAR8 *strcpy(CHAR8 *dest, const CHAR8 *src);
+CHAR8 *strcpy(CHAR8 *dest, const CHAR8 *src)
+    __attribute__((weak));
 
-CHAR8 *strncpy(CHAR8 *dest, const CHAR8 *src, size_t n);
+CHAR8 *strncpy(CHAR8 *dest, const CHAR8 *src, size_t n)
+    __attribute__((weak));
 
-size_t strlen(const CHAR8 *s);
+size_t strlen(const CHAR8 *s)
+    __attribute__((weak));
 
-void *memcpy(void *dest, const void *source, size_t count);
+void *memcpy(void *dest, const void *source, size_t count)
+    __attribute__((weak));
 
-unsigned long strtoul(const char *nptr, char **endptr, int base);
+unsigned long strtoul(const char *nptr, char **endptr, int base)
+    __attribute__((weak));
 
-int isalnum(int c);
+int isalnum(int c)
+    __attribute__((weak));
 
-int isspace(int c);
+int isspace(int c)
+    __attribute__((weak));
 
-int isdigit(int c);
+int isdigit(int c)
+    __attribute__((weak));
 
-int isupper(int c);
+int isupper(int c)
+    __attribute__((weak));
 
-int isxdigit(int c);
+int isxdigit(int c)
+    __attribute__((weak));
 
-int tolower(int c);
+int tolower(int c)
+    __attribute__((weak));
 
 /*
  * misc
@@ -168,9 +185,11 @@ VOID pause(UINTN seconds);
 
 VOID reboot(CHAR16 *target) __attribute__ ((noreturn));
 
-void *memset(void *s, int c, size_t n);
+void *memset(void *s, int c, size_t n)
+    __attribute__((weak));
 
-int memcmp(const void *s1, const void *s2, size_t n);
+int memcmp(const void *s1, const void *s2, size_t n)
+    __attribute__((weak));
 
 EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
                          UINTN size, UINTN align);

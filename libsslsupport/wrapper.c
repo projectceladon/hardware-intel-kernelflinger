@@ -7,12 +7,17 @@ FILE  *__sF = NULL;
 typedef UINT32 uid_t;
 typedef int pid_t;
 
+int errno __attribute__((weak));
 int errno = 0;
+int *__errno(void)
+	__attribute__((weak));
 int *__errno(void)
 {
 	return &errno;
 }
 
+int atoi(const char *str)
+	__attribute__((weak));
 int atoi(const char *str)
 {
 	int u;
@@ -35,11 +40,15 @@ int atoi(const char *str)
 }
 
 int fprintf(FILE *f, const char *s, ...)
+	__attribute__((weak));
+int fprintf(FILE *f, const char *s, ...)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+int ioctl(int d, int request, ...)
+	__attribute__((weak));
 int ioctl(int d, int request, ...)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -89,10 +98,14 @@ void *bsearch(const void *key, const void *base,
 }
 
 int fcntl(int fd, int cmd, ... /* arg */ )
+	__attribute__((weak));
+int fcntl(int fd, int cmd, ... /* arg */ )
 {
 	return -1;
 }
 
+int dup(int oldfd)
+	__attribute__((weak));
 int dup(int oldfd)
 {
 	return -1;
@@ -159,6 +172,8 @@ static void quick_sort_worker(
 
 /* Performs a quick sort */
 void qsort(void *base, size_t num, size_t width, int (*compare)(const void *, const void *))
+	__attribute__((weak));
+void qsort(void *base, size_t num, size_t width, int (*compare)(const void *, const void *))
 {
 	VOID  *Buffer;
 
@@ -177,11 +192,15 @@ void qsort(void *base, size_t num, size_t width, int (*compare)(const void *, co
 }
 
 int strcasecmp(const char *c, const char *s)
+	__attribute__((weak));
+int strcasecmp(const char *c, const char *s)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+int sscanf(const char *buffer, const char *format, ...)
+	__attribute__((weak));
 int sscanf(const char *buffer, const char *format, ...)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -189,11 +208,15 @@ int sscanf(const char *buffer, const char *format, ...)
 }
 
 size_t fwrite(const void *buffer, size_t size, size_t count, FILE *stream)
+	__attribute__((weak));
+size_t fwrite(const void *buffer, size_t size, size_t count, FILE *stream)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+size_t __strlen_chk(const char *s, size_t slen)
+	__attribute__((weak));
 size_t __strlen_chk(const char *s, size_t slen)
 {
 	size_t len = strlen(s);
@@ -203,11 +226,15 @@ size_t __strlen_chk(const char *s, size_t slen)
 }
 
 void * __memset_chk(void* dest, int c, size_t n, size_t dest_len)
+	__attribute__((weak));
+void * __memset_chk(void* dest, int c, size_t n, size_t dest_len)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return NULL;
 }
 
+char *fgets(char * dest, int size, FILE* stream)
+	__attribute__((weak));
 char *fgets(char * dest, int size, FILE* stream)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -215,11 +242,15 @@ char *fgets(char * dest, int size, FILE* stream)
 }
 
 int fclose(FILE *f)
+	__attribute__((weak));
+int fclose(FILE *f)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+size_t fread(void *b, size_t c, size_t i, FILE *f)
+	__attribute__((weak));
 size_t fread(void *b, size_t c, size_t i, FILE *f)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -227,11 +258,15 @@ size_t fread(void *b, size_t c, size_t i, FILE *f)
 }
 
 int ferror(FILE *f)
+	__attribute__((weak));
+int ferror(FILE *f)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+FILE *fopen(const char *c, const char *m)
+	__attribute__((weak));
 FILE *fopen(const char *c, const char *m)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -239,11 +274,15 @@ FILE *fopen(const char *c, const char *m)
 }
 
 int fseek(FILE *fp, long offset, int whence)
+	__attribute__((weak));
+int fseek(FILE *fp, long offset, int whence)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+int feof(FILE *f)
+	__attribute__((weak));
 int feof(FILE *f)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -251,11 +290,15 @@ int feof(FILE *f)
 }
 
 int fflush(FILE *fp)
+	__attribute__((weak));
+int fflush(FILE *fp)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+char *strrchr(const char *str, int c)
+	__attribute__((weak));
 char *strrchr(const char *str, int c)
 {
 	char *save;
@@ -270,16 +313,22 @@ char *strrchr(const char *str, int c)
 }
 
 char *getenv(const char *varname)
+	__attribute__((weak));
+char *getenv(const char *varname)
 {
 	return NULL;
 }
 
+pid_t getpid(void)
+	__attribute__((weak));
 pid_t getpid(void)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+int vfprintf(FILE *stream, const char *format, va_list arg)
+	__attribute__((weak));
 int vfprintf(FILE *stream, const char *format, va_list arg)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -291,6 +340,8 @@ void abort(void)
 	error(L"Error: STUBBED %a", __func__);
 }
 
+char *strerror(int errnum)
+	__attribute__((weak));
 char *strerror(int errnum)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -373,6 +424,8 @@ struct tm
 	char *tm_zone;		/* Timezone abbreviation.  */
 };
 
+struct tm *gmtime_r(const time_t *timep, struct tm *tmp)
+	__attribute__((weak));
 struct tm *gmtime_r(const time_t *timep, struct tm *tmp)
 {
 	time_t tdays;
@@ -501,6 +554,8 @@ UINTN CumulativeDays[2][14] = {
 };
 
 time_t time(time_t *timer)
+	__attribute__((weak));
+time_t time(time_t *timer)
 {
 	EFI_TIME  Time;
 	UINTN     Year;
@@ -526,6 +581,8 @@ time_t time(time_t *timer)
 }
 
 char *strcat(char *dest, const char *src)
+	__attribute__((weak));
+char *strcat(char *dest, const char *src)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return NULL;
@@ -539,11 +596,15 @@ char * __strcat_chk(char* __restrict dest, const char* __restrict src,
 }
 
 void *memmove(void *dest, const void *src, size_t n)
+	__attribute__((weak));
+void *memmove(void *dest, const void *src, size_t n)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return NULL;
 }
 
+int open(const char * pathname, int flags, ...)
+	__attribute__((weak));
 int open(const char * pathname, int flags, ...)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -551,11 +612,15 @@ int open(const char * pathname, int flags, ...)
 }
 
 int poll(void)
+	__attribute__((weak));
+int poll(void)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+ssize_t read(int f, void *b, size_t c)
+	__attribute__((weak));
 ssize_t read(int f, void *b, size_t c)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -563,11 +628,15 @@ ssize_t read(int f, void *b, size_t c)
 }
 
 uid_t getuid(void)
+	__attribute__((weak));
+uid_t getuid(void)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+long strtol(const char *nptr, char **endptr, int base)
+	__attribute__((weak));
 long strtol(const char *nptr, char **endptr, int base)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -575,11 +644,15 @@ long strtol(const char *nptr, char **endptr, int base)
 }
 
 int socket(int domain, int type, int protocol)
+	__attribute__((weak));
+int socket(int domain, int type, int protocol)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+int connect(void)
+	__attribute__((weak));
 int connect(void)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -587,11 +660,15 @@ int connect(void)
 }
 
 ssize_t write(int f, const void *b, size_t l)
+	__attribute__((weak));
+ssize_t write(int f, const void *b, size_t l)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+int close(int f)
+	__attribute__((weak));
 int close(int f)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -599,11 +676,15 @@ int close(int f)
 }
 
 int fputs(const char *s, FILE *f)
+	__attribute__((weak));
+int fputs(const char *s, FILE *f)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+void *signal(int i, void *s)
+	__attribute__((weak));
 void *signal(int i, void *s)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -618,6 +699,8 @@ int sigaction(int signum, const void *act,
 }
 
 int fileno(FILE *stream)
+	__attribute__((weak));
+int fileno(FILE *stream)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
@@ -631,11 +714,15 @@ int tcsetattr(int fd, int optional_actions,
 }
 
 long int ftell(FILE *__stream)
+	__attribute__((weak));
+long int ftell(FILE *__stream)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
+void* localtime(const void* t)
+	__attribute__((weak));
 void* localtime(const void* t)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -643,17 +730,24 @@ void* localtime(const void* t)
 }
 
 int fstat(int __fd, void *__buf)
+	__attribute__((weak));
+int fstat(int __fd, void *__buf)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
 }
 
 char* __strchr_chk(const char* p, int ch, size_t s_len)
+	__attribute__((weak));
+char* __strchr_chk(const char* p, int ch, size_t s_len)
+
 {
 	error(L"Error: STUBBED %a", __func__);
 	return NULL;
 }
 
+int tcgetattr(int fd, void *termios_p)
+	__attribute__((weak));
 int tcgetattr(int fd, void *termios_p)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -685,6 +779,8 @@ static inline mem_chunk_t *search_mem(void *addr)
 }
 
 void *malloc(size_t size)
+	__attribute__((weak));
+void *malloc(size_t size)
 {
 	mem_chunk_t *mc;
 
@@ -699,6 +795,8 @@ void *malloc(size_t size)
 	return mc->addr;
 }
 
+void free(void *addr)
+	__attribute__((weak));
 void free(void *addr)
 {
 	mem_chunk_t *mc;
@@ -717,6 +815,8 @@ void free(void *addr)
 }
 
 void *realloc(void *ptr, size_t size)
+	__attribute__((weak));
+void *realloc(void *ptr, size_t size)
 {
 	mem_chunk_t *mc;
 
@@ -731,6 +831,8 @@ void *realloc(void *ptr, size_t size)
 	return mc->addr;
 }
 
+void *memchr(const void *s, int c, size_t n)
+	__attribute__((weak));
 void *memchr(const void *s, int c, size_t n)
 {
 	const unsigned char *p = s;
