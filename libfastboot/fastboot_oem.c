@@ -197,7 +197,7 @@ static struct oem_hash {
 #ifdef USE_TRUSTY
 	{ TOS_LABEL,		get_boot_image_hash,	TRUE },
 #endif
-	{ BOOTLOADER_LABEL,	get_esp_hash,		TRUE },
+	{ BOOTLOADER_LABEL,	get_esp_hash,		FALSE },
 	{ SYSTEM_LABEL,		get_fs_hash,		TRUE },
 	{ VENDOR_LABEL,		get_fs_hash,		FALSE }
 };
