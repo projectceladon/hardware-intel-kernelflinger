@@ -111,9 +111,9 @@ char *authenticated_action_new_nonce(char *action_name)
 
 	current_action = action;
 	expiration_ctime = efi_time_to_ctime(&now) + NONCE_EXPIRATION_SEC;
-	snprintf(current_nonce, sizeof(current_nonce),
-		 (CHAR8 *)"%02x:%a:%02x:%a", VERSION, (CHAR8 *)get_serial_number(),
-		 action->id, randomstr);
+	efi_snprintf(current_nonce, sizeof(current_nonce),
+		     (CHAR8 *)"%02x:%a:%02x:%a", VERSION, (CHAR8 *)get_serial_number(),
+		     action->id, randomstr);
 
 	return (char *)current_nonce;
 }

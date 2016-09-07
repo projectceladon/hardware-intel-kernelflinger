@@ -63,10 +63,10 @@ static EFI_STATUS publish_firmware(void)
 {
 	int len;
 
-	len = snprintf((CHAR8 *)firmware_str, sizeof(firmware_str) - 1,
-		       (CHAR8 *)"%a %a",
-		       SMBIOS_GET_STRING(0, Vendor),
-		       SMBIOS_GET_STRING(0, BiosVersion));
+	len = efi_snprintf((CHAR8 *)firmware_str, sizeof(firmware_str) - 1,
+			   (CHAR8 *)"%a %a",
+			   SMBIOS_GET_STRING(0, Vendor),
+			   SMBIOS_GET_STRING(0, BiosVersion));
 	if (len == -1)
 		return EFI_INVALID_PARAMETER;
 
@@ -107,11 +107,11 @@ static EFI_STATUS publish_board(void)
 {
 	int len;
 
-	len = snprintf((CHAR8 *)board_str, sizeof(board_str),
-		       (CHAR8 *)"%a %a %a",
-		       SMBIOS_GET_STRING(2, Manufacturer),
-		       SMBIOS_GET_STRING(2, ProductName),
-		       SMBIOS_GET_STRING(2, Version));
+	len = efi_snprintf((CHAR8 *)board_str, sizeof(board_str),
+			   (CHAR8 *)"%a %a %a",
+			   SMBIOS_GET_STRING(2, Manufacturer),
+			   SMBIOS_GET_STRING(2, ProductName),
+			   SMBIOS_GET_STRING(2, Version));
 	if (len < 0)
 		return EFI_INVALID_PARAMETER;
 

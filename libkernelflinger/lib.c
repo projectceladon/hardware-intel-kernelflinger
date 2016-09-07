@@ -268,7 +268,7 @@ EFI_STATUS stra_to_guid(const char *str, EFI_GUID *g)
         return EFI_SUCCESS;
 }
 
-int vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
+int efi_vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap)
 {
         EFI_STATUS ret;
         int len = -1;
@@ -299,13 +299,13 @@ free_format16:
 }
 
 
-int snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...)
+int efi_snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...)
 {
         va_list args;
         int ret;
 
         va_start(args, format);
-        ret = vsnprintf(str, size, format, args);
+        ret = efi_vsnprintf(str, size, format, args);
         va_end(args);
         return ret;
 }

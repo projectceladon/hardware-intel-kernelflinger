@@ -104,9 +104,9 @@ EFI_STATUS str_to_stra(CHAR8 *dst, const CHAR16 *src, UINTN len);
 
 EFI_STATUS stra_to_guid(const char *str, EFI_GUID *g);
 
-int vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap);
+int efi_vsnprintf(CHAR8 *dst, UINTN size, const CHAR8 *format, va_list ap);
 
-int snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...);
+int efi_snprintf(CHAR8 *str, UINTN size, const CHAR8 *format, ...);
 
 VOID StrNCpy(OUT CHAR16 *dest, IN const CHAR16 *src, UINT32 n);
 

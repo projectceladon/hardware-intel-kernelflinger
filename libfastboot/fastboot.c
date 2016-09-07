@@ -286,8 +286,8 @@ static const char *get_psize_str(UINT64 size)
 	static char part_size[MAX_VARIABLE_LENGTH];
 	int len;
 
-	len = snprintf((CHAR8 *)part_size, sizeof(part_size),
-		       (CHAR8 *)"0x%lX", size);
+	len = efi_snprintf((CHAR8 *)part_size, sizeof(part_size),
+			   (CHAR8 *)"0x%lX", size);
 	if (len < 0 || len >= (int)sizeof(part_size))
 		return NULL;
 
@@ -313,8 +313,9 @@ static EFI_STATUS publish_part(CHAR16 *part_name, UINT64 size, EFI_GUID *guid)
 
 	parent_label = slot_base(part_name);
 	if (parent_label) {
-		len = snprintf((CHAR8 *)var, sizeof(var), (CHAR8 *)"has-slot:%s",
-			       parent_label);
+		len = efi_snprintf((CHAR8 *)var, sizeof(var),
+				   (CHAR8 *)"has-slot:%s",
+				   parent_label);
 		if (len < 0 || len >= (int)sizeof(var))
 			return EFI_INVALID_PARAMETER;
 
@@ -328,8 +329,8 @@ static EFI_STATUS publish_part(CHAR16 *part_name, UINT64 size, EFI_GUID *guid)
 		if (!desc->value)
 			return EFI_INVALID_PARAMETER;
 
-		len = snprintf((CHAR8 *)var, sizeof(var), (CHAR8 *)"%a:%s",
-			       desc->name, part_name);
+		len = efi_snprintf((CHAR8 *)var, sizeof(var), (CHAR8 *)"%a:%s",
+				   desc->name, part_name);
 		if (len < 0 || len >= (int)sizeof(var))
 			return EFI_INVALID_PARAMETER;
 
@@ -367,9 +368,9 @@ static EFI_STATUS publish_slots(void)
 		return ret;
 
 	for (i = 0, j = 0; i < nb_slots; i++) {
-		len = snprintf((CHAR8 *)var + j, sizeof(var) - j,
-			       i == 0 ? (CHAR8 *)"%a" : (CHAR8 *)",%a",
-			       suffixes[i]);
+		len = efi_snprintf((CHAR8 *)var + j, sizeof(var) - j,
+				   i == 0 ? (CHAR8 *)"%a" : (CHAR8 *)",%a",
+				   suffixes[i]);
 		if (len < 0 || len >= (int)(sizeof(var) - j))
 			return EFI_INVALID_PARAMETER;
 		j += len;
@@ -383,8 +384,8 @@ static EFI_STATUS publish_slots(void)
 		for (j = 0; j < ARRAY_SIZE(descriptors); j++) {
 			desc = &descriptors[j];
 
-			len = snprintf((CHAR8 *)var, sizeof(var), (CHAR8 *)"%a:%a",
-				       desc->name, suffixes[i]);
+			len = efi_snprintf((CHAR8 *)var, sizeof(var), (CHAR8 *)"%a:%a",
+					   desc->name, suffixes[i]);
 			if (len < 0 || len >= (int)sizeof(var))
 				return EFI_INVALID_PARAMETER;
 
@@ -445,8 +446,8 @@ static const char *get_battery_voltage_var()
 	if (EFI_ERROR(ret))
 		return NULL;
 
-	len = snprintf((CHAR8 *)battery_voltage, sizeof(battery_voltage),
-		       (CHAR8 *)"%dmV", voltage);
+	len = efi_snprintf((CHAR8 *)battery_voltage, sizeof(battery_voltage),
+			   (CHAR8 *)"%dmV", voltage);
 	if (len < 0) {
 		error(L"Failed to format voltage string");
 		return NULL;
@@ -463,7 +464,7 @@ static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char
 	CopyMem(msg, code, CODE_LENGTH);
 	response = &msg[CODE_LENGTH];
 
-	len = vsnprintf((CHAR8 *)response, INFO_PAYLOAD, (CHAR8 *)fmt, ap);
+	len = efi_vsnprintf((CHAR8 *)response, INFO_PAYLOAD, (CHAR8 *)fmt, ap);
 	if (len < 0) {
 		error(L"Failed to build reason string");
 		return EFI_INVALID_PARAMETER;
@@ -885,7 +886,7 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 	}
 	dlsize = newdlsize;
 
-	len = snprintf(response, sizeof(response), (CHAR8 *)"DATA%08x", dlsize);
+	len = efi_snprintf(response, sizeof(response), (CHAR8 *)"DATA%08x", dlsize);
 	if (len < 0) {
 		error(L"Failed to format DATA response");
 		fastboot_fail("Failed to format DATA response");
@@ -1078,8 +1079,8 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
-	if (snprintf((CHAR8 *)download_max_str, sizeof(download_max_str),
-		     (CHAR8 *)"0x%lX", MAX_DOWNLOAD_SIZE) < 0) {
+	if (efi_snprintf((CHAR8 *)download_max_str, sizeof(download_max_str),
+			 (CHAR8 *)"0x%lX", MAX_DOWNLOAD_SIZE) < 0) {
 		error(L"Failed to set download_max_str string");
 		ret = EFI_INVALID_PARAMETER;
 		goto error;
