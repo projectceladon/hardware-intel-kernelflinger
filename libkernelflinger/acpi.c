@@ -171,7 +171,7 @@ EFI_STATUS get_rsdt_table(struct RSDT_TABLE **rsdt)
 		goto out;
 	}
 
-	ret = acpi_verify_checksum((struct ACPI_DESC_HEADER *)rsdt);
+	ret = acpi_verify_checksum((struct ACPI_DESC_HEADER *)*rsdt);
 	if (EFI_ERROR(ret)) {
 		error(L"Invalid checksum for RSDT table");
 		goto out;
