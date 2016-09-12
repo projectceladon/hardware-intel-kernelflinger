@@ -41,8 +41,10 @@ static struct RSCI_TABLE *RSCI_table = NULL;
 #endif
 static struct OEM1_TABLE *OEM1_table = NULL;
 
-#define XSDT_SIG "XSDT"
-#define RSDP_SIG "RSD PTR "
+#define SIG_SIZE (sizeof(((struct ACPI_DESC_HEADER *)0)->signature))
+
+static const char XSDT_SIG[SIG_SIZE] = "XSDT";
+static const char RSDP_SIG[8] = "RSD PTR ";
 
 #ifndef ALLOW_UNSUPPORTED_ACPI_TABLE
 static const struct ACPI_DESC_HEADER SUPPORTED_TABLES[] = {
@@ -91,7 +93,7 @@ static EFI_STATUS acpi_table_is_supported(struct ACPI_DESC_HEADER *t)
 	UINTN i;
 
 	for (i = 0; i < ARRAY_SIZE(SUPPORTED_TABLES); i++)
-		if (!memcmp(SUPPORTED_TABLES[i].signature, t->signature, sizeof(t->signature))) {
+		if (!memcmp(SUPPORTED_TABLES[i].signature, t->signature, SIG_SIZE)) {
 			id = &SUPPORTED_TABLES[i];
 			break;
 		}
@@ -160,13 +162,13 @@ EFI_STATUS get_xsdt_table(struct XSDT_TABLE **xsdt)
 		goto out;
 	}
 
-	if (strncmpa((CHAR8 *)rsdp->signature, (CHAR8 *)RSDP_SIG, sizeof(RSDP_SIG) - 1)) {
+	if (memcmp(rsdp->signature, RSDP_SIG, sizeof(RSDP_SIG))) {
 		ret = EFI_COMPROMISED_DATA;
 		goto out;
 	}
 
 	*xsdt = (struct XSDT_TABLE *)(UINTN)rsdp->xsdt_address;
-	if (strncmpa((CHAR8 *)(*xsdt)->header.signature, (CHAR8 *)XSDT_SIG, sizeof(XSDT_SIG) - 1)) {
+	if (memcmp((*xsdt)->header.signature, XSDT_SIG, SIG_SIZE)) {
 		ret = EFI_COMPROMISED_DATA;
 		goto out;
 	}
@@ -187,9 +189,8 @@ EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table)
 	EFI_STATUS ret;
 	UINTN i, nb_acpi_tables, sign_count = 1;
 	char *end;
-	UINTN max_sign_len = sizeof(((struct ACPI_DESC_HEADER *)0)->signature);
 
-	if (!strcmp((CHAR8 *)"DSDT", signature)) {
+	if (!memcmp("DSDT", signature, SIG_SIZE)) {
 		UINT64 dsdt = get_acpi_field(FACP, DSDT);
 		if (dsdt == (UINT64)-1)
 			return EFI_NOT_FOUND;
@@ -201,13 +202,13 @@ EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	if (!strcmp((CHAR8 *)XSDT_SIG, signature)) {
+	if (!memcmp(XSDT_SIG, signature, SIG_SIZE)) {
 		*table = xsdt;
 		goto out;
 	}
 
-	if (strlen(signature) > max_sign_len) {
-		sign_count = strtoul((char *)signature + max_sign_len, &end, 10);
+	if (strlen(signature) > SIG_SIZE) {
+		sign_count = strtoul((char *)signature + SIG_SIZE, &end, 10);
 		if (*end != '\0' || sign_count == 0)
 			return EFI_INVALID_PARAMETER;
 	}
@@ -216,7 +217,7 @@ EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table)
 	ret = EFI_NOT_FOUND;
 	for (i = 0; i < nb_acpi_tables; i++) {
 		struct ACPI_DESC_HEADER *header = (VOID *)(UINTN)xsdt->entry[i];
-		if (!strncmpa(header->signature, signature, max_sign_len)) {
+		if (!memcmp(header->signature, signature, SIG_SIZE)) {
 			if (sign_count > 1) {
 				sign_count--;
 				continue;
