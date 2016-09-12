@@ -62,9 +62,9 @@ struct RSDP_TABLE {
 	CHAR8	reserved[3];		/* Reserved */
 };
 
-struct RSDT_TABLE {
+struct XSDT_TABLE {
 	struct ACPI_DESC_HEADER header;
-	UINT32 entry[1];		/* Table Entries */
+	UINT64 entry[1];		/* Table Entries */
 };
 
 /* Minimal definition of the FACP to get the DSDT memory address. */

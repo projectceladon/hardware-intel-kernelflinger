@@ -41,7 +41,7 @@ static struct RSCI_TABLE *RSCI_table = NULL;
 #endif
 static struct OEM1_TABLE *OEM1_table = NULL;
 
-#define RSDT_SIG "RSDT"
+#define XSDT_SIG "XSDT"
 #define RSDP_SIG "RSD PTR "
 
 #ifndef ALLOW_UNSUPPORTED_ACPI_TABLE
@@ -149,7 +149,7 @@ static EFI_STATUS acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
 	return sum == 0 ? EFI_SUCCESS : EFI_CRC_ERROR;
 }
 
-EFI_STATUS get_rsdt_table(struct RSDT_TABLE **rsdt)
+EFI_STATUS get_xsdt_table(struct XSDT_TABLE **xsdt)
 {
 	EFI_GUID acpi2_guid = ACPI_20_TABLE_GUID;
 	struct RSDP_TABLE *rsdp;
@@ -165,15 +165,15 @@ EFI_STATUS get_rsdt_table(struct RSDT_TABLE **rsdt)
 		goto out;
 	}
 
-	*rsdt = (struct RSDT_TABLE *)(UINTN)rsdp->rsdt_address;
-	if (strncmpa((CHAR8 *)(*rsdt)->header.signature, (CHAR8 *)RSDT_SIG, sizeof(RSDT_SIG) - 1)) {
+	*xsdt = (struct XSDT_TABLE *)(UINTN)rsdp->xsdt_address;
+	if (strncmpa((CHAR8 *)(*xsdt)->header.signature, (CHAR8 *)XSDT_SIG, sizeof(XSDT_SIG) - 1)) {
 		ret = EFI_COMPROMISED_DATA;
 		goto out;
 	}
 
-	ret = acpi_verify_checksum((struct ACPI_DESC_HEADER *)*rsdt);
+	ret = acpi_verify_checksum((struct ACPI_DESC_HEADER *)*xsdt);
 	if (EFI_ERROR(ret)) {
-		error(L"Invalid checksum for RSDT table");
+		error(L"Invalid checksum for XSDT table");
 		goto out;
 	}
 
@@ -183,7 +183,7 @@ out:
 
 EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table)
 {
-	struct RSDT_TABLE *rsdt;
+	struct XSDT_TABLE *xsdt;
 	EFI_STATUS ret;
 	UINTN i, nb_acpi_tables, sign_count = 1;
 	char *end;
@@ -197,12 +197,12 @@ EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table)
 		goto out;
 	}
 
-	ret = get_rsdt_table(&rsdt);
+	ret = get_xsdt_table(&xsdt);
 	if (EFI_ERROR(ret))
 		return ret;
 
-	if (!strcmp((CHAR8 *)"RSDT", signature)) {
-		*table = rsdt;
+	if (!strcmp((CHAR8 *)XSDT_SIG, signature)) {
+		*table = xsdt;
 		goto out;
 	}
 
@@ -212,10 +212,10 @@ EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table)
 			return EFI_INVALID_PARAMETER;
 	}
 
-	nb_acpi_tables = (rsdt->header.length - sizeof(rsdt->header)) / sizeof(rsdt->entry[1]);
+	nb_acpi_tables = (xsdt->header.length - sizeof(xsdt->header)) / sizeof(xsdt->entry[1]);
 	ret = EFI_NOT_FOUND;
 	for (i = 0; i < nb_acpi_tables; i++) {
-		struct ACPI_DESC_HEADER *header = (VOID *)(UINTN)rsdt->entry[i];
+		struct ACPI_DESC_HEADER *header = (VOID *)(UINTN)xsdt->entry[i];
 		if (!strncmpa(header->signature, signature, max_sign_len)) {
 			if (sign_count > 1) {
 				sign_count--;
