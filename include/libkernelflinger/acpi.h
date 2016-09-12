@@ -61,7 +61,7 @@ struct RSDP_TABLE {
 };
 
 struct RSDT_TABLE {
-	struct ACPI_DESC_HEADER header;	/* System Description Table Header */
+	struct ACPI_DESC_HEADER header;
 	UINT32 entry[1];		/* Table Entries */
 };
 
@@ -74,7 +74,7 @@ struct FACP_TABLE {
 };
 
 struct RSCI_TABLE {
-	struct ACPI_DESC_HEADER header;	/* System Description Table Header */
+	struct ACPI_DESC_HEADER header;
 	CHAR8 wake_source;		/* How system woken up from S4 or S5 */
 	CHAR8 reset_source;		/* How system was reset */
 	CHAR8 reset_type;		/* Identify type of reset */
@@ -89,7 +89,7 @@ enum {
 };
 
 struct OEM1_TABLE {
-	struct ACPI_DESC_HEADER header;	/* System Description Table Header */
+	struct ACPI_DESC_HEADER header;
 	UINT8 fixedoptions0;		/* Fixed Platform Options 0 */
 	UINT8 fixedoptions1;		/* Fixed Platform Options 1*/
 	UINT8 dbiingpio;		/* DBIIN GPIO number */
