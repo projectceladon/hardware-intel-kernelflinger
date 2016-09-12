@@ -518,7 +518,7 @@ struct tm *gmtime_r(const time_t *timep, struct tm *tmp)
 	return tmp;
 }
 
-UINTN CumulativeDays[2][14] = {
+static UINTN CumulativeDays[2][14] = {
 	{
 		0,
 		0,
