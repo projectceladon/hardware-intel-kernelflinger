@@ -160,6 +160,9 @@ LOCAL_STATIC_LIBRARIES += \
 	libefiwrapper-$(TARGET_BUILD_VARIANT) \
 	libefiwrapper_drivers-$(TARGET_BUILD_VARIANT) \
 	efiwrapper-$(TARGET_BUILD_VARIANT)
+ifneq ($(TARGET_BUILD_VARIANT),user)
+    LOCAL_STATIC_LIBRARIES += libadb-$(TARGET_BUILD_VARIANT)
+endif
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,libfastboot)
 LOCAL_SRC_FILES := \

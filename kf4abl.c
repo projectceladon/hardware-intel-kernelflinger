@@ -34,6 +34,42 @@
 #include <efiapi.h>
 #include <lib.h>
 #include <fastboot.h>
+#ifdef CRASHMODE_USE_ADB
+#include <adb.h>
+#endif
+
+#include "options.h"
+
+#ifdef CRASHMODE_USE_ADB
+static EFI_STATUS enter_crashmode(enum boot_target *target)
+{
+	EFI_STATUS ret;
+
+#ifdef USER
+#error "adb in crashmode MUST be disabled on a USER build"
+#endif
+
+	ret = adb_init();
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to initialize adb");
+		return ret;
+	}
+
+	debug(L"adb implementation is initialized");
+	for (;;) {
+		ret = adb_run();
+		if (EFI_ERROR(ret))
+			break;
+
+		*target = adb_get_boot_target();
+		if (*target != UNKNOWN_TARGET)
+			break;
+	}
+	adb_exit();
+
+	return ret;
+}
+#endif
 
 static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 {
@@ -59,18 +95,54 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 	return ret;
 }
 
+static enum boot_target check_command_line(EFI_HANDLE image)
+{
+	EFI_STATUS ret;
+	enum boot_target target = FASTBOOT;
+	static EFI_LOADED_IMAGE *limg;
+	UINTN argc, i;
+        CHAR16 **argv;
+
+        ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
+				&LoadedImageProtocol, (VOID **)&limg,
+				image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to open LoadedImageProtocol");
+		return FASTBOOT;
+	}
+
+	ret = get_argv(limg, &argc, &argv);
+	if (EFI_ERROR(ret))
+		return FASTBOOT;
+
+	for (i = 0; i < argc; i++)
+		if (!StrCmp(argv[i], L"-c"))
+			target = CRASHMODE;
+
+	return target;
+}
+
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
-	enum boot_target target = FASTBOOT;
+	enum boot_target target;
 
 	InitializeLib(image, sys_table);
+	target = check_command_line(image);
 
 	for (;;) {
 		switch (target) {
 		case UNKNOWN_TARGET:
+#ifndef CRASHMODE_USE_ADB
+		case CRASHMODE:
+#endif
 		case FASTBOOT:
 			enter_fastboot_mode(&target);
 			break;
+#ifdef CRASHMODE_USE_ADB
+		case CRASHMODE:
+			enter_crashmode(&target);
+			break;
+#endif
 		default:
 			reboot_to_target(target);
 		}
