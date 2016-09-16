@@ -206,7 +206,8 @@ static EFI_STATUS verify_image(EFI_HANDLE handle, CHAR16 *path)
 	return EFI_ERROR(ret) ? ret : unload_ret;
 }
 
-/* Safe flash bootloader:
+/* If the bootloader partition is the EFI System partition, we perform
+ * a "safe flash procedure":
  * 1. write data to the BOOTLOADER_TMP_PART partition
  * 2. perform sanity check on BOOTLOADER_TMP_PART partition files
  * 3. swap BOOTLOADER_PART and BOOTLOADER_TMP_PART partition
@@ -217,7 +218,16 @@ EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 {
 	EFI_STATUS ret, erase_ret;
 	EFI_HANDLE handle;
+	EFI_GUID type;
 	UINTN i;
+
+	ret = gpt_get_partition_type(BOOTLOADER_LABEL, &type, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	/* Not the EFI System Partition. */
+	if (memcmp(&type, &EfiPartTypeSystemPartitionGuid, sizeof(type)))
+		return flash_partition(data, size, BOOTLOADER_LABEL);
 
 	ret = flash_partition(data, size, BOOTLOADER_TMP_PART);
 	if (EFI_ERROR(ret))

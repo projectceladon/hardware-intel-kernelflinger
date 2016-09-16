@@ -37,6 +37,7 @@
 #include <lib.h>
 #include <openssl/evp.h>
 
+#include "hashes.h"
 #include "fastboot.h"
 #include "uefi_utils.h"
 #include "gpt.h"
@@ -283,7 +284,7 @@ static void popdir(void)
 	freepath();
 }
 
-EFI_STATUS get_esp_hash(__attribute__((__unused__)) const CHAR16 *label)
+static EFI_STATUS get_esp_hash(void)
 {
 	EFI_STATUS ret;
 	EFI_FILE_IO_INTERFACE *io;
@@ -349,6 +350,22 @@ EFI_STATUS get_esp_hash(__attribute__((__unused__)) const CHAR16 *label)
 		}
 	} while (size || subdir >= 0);
 	return EFI_SUCCESS;
+}
+
+EFI_STATUS get_bootloader_hash(__attribute__((__unused__)) const CHAR16 *label)
+{
+	EFI_STATUS ret;
+	EFI_GUID type;
+
+	ret = gpt_get_partition_type(BOOTLOADER_LABEL, &type, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	if (!memcmp(&type, &EfiPartTypeSystemPartitionGuid, sizeof(type)))
+		return get_esp_hash();
+
+	/* Not the EFI System Partition. */
+	return get_fs_hash(BOOTLOADER_LABEL);
 }
 
 /*
@@ -470,8 +487,8 @@ static EFI_STATUS read_partition(struct gpt_partition_interface *gparti, UINT64 
 	partoffset = gparti->part.starting_lba * gparti->bio->Media->BlockSize;
 
 	if (len + offset > partlen) {
-		error(L"attempt to read outside of partition %s, (len %lld offset %lld partition len %lld)", gparti->part.name, len, offset, partlen);
-		return EFI_INVALID_PARAMETER;
+		debug(L"attempt to read outside of partition %s, (len %lld offset %lld partition len %lld)", gparti->part.name, len, offset, partlen);
+		return EFI_END_OF_MEDIA;
 	}
 	ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio, gparti->bio->Media->MediaId, partoffset + offset, len, data);
 	if (EFI_ERROR(ret))
@@ -573,6 +590,8 @@ static EFI_STATUS check_verity_header(struct gpt_partition_interface *gparti, UI
 	struct ext4_verity_header vh;
 
 	ret = read_partition(gparti, *fs_len, sizeof(vh), &vh);
+	if (ret == EFI_END_OF_MEDIA)
+		return EFI_NOT_FOUND;
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -601,6 +620,8 @@ static EFI_STATUS check_fec_header(struct gpt_partition_interface *gparti, UINT6
 
 	ret = read_partition(gparti, part_size(gparti) - FEC_BLOCK_SIZE,
 			     sizeof(fec), &fec);
+	if (ret == EFI_END_OF_MEDIA)
+		return EFI_NOT_FOUND;
 	if (EFI_ERROR(ret))
 		return ret;
 
