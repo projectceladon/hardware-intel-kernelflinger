@@ -881,12 +881,12 @@ static EFI_STATUS add_bootvars(VOID *bootimage, CHAR16 **cmdline16)
 
 static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_cert)
 {
-        EFI_GUID system_guid;
+        EFI_GUID system_uuid;
         EFI_STATUS ret;
         char *key_id = NULL;
 
-        ret = gpt_get_partition_guid(slot_label(SYSTEM_LABEL),
-                                     &system_guid, LOGICAL_UNIT_USER);
+        ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
+                                     &system_uuid, LOGICAL_UNIT_USER);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
                 return ret;
@@ -898,7 +898,7 @@ static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_c
                 return EFI_INVALID_PARAMETER;
 #else
                 ret = prepend_command_line(cmdline16, ROOTFS_PREFIX "PARTUUID=%g",
-                                           &system_guid);
+                                           &system_uuid);
                 return ret;
 #endif
         }
@@ -909,7 +909,7 @@ static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_c
 
         ret = prepend_command_line(cmdline16, ROOTFS_PREFIX "/dev/dm-0 dm=\"system "
                                    "none ro,0 1 android-verity %a PARTUUID=%g\"",
-                                   key_id, &system_guid);
+                                   key_id, &system_uuid);
         FreePool(key_id);
 
         return ret;

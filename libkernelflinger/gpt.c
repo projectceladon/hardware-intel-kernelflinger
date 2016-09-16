@@ -724,7 +724,8 @@ out:
 	return gpt_write_partition_tables();
 }
 
-EFI_STATUS gpt_get_partition_guid(const CHAR16 *label, EFI_GUID *guid, logical_unit_t log_unit)
+static EFI_STATUS get_partition_guid(const CHAR16 *label, EFI_GUID *guid,
+				     logical_unit_t log_unit, BOOLEAN uuid)
 {
 	EFI_STATUS ret;
 	struct gpt_partition *part;
@@ -742,9 +743,19 @@ EFI_STATUS gpt_get_partition_guid(const CHAR16 *label, EFI_GUID *guid, logical_u
 		return EFI_NOT_FOUND;
 	}
 
-	CopyMem(guid, &part->unique, sizeof(*guid));
+	CopyMem(guid, uuid ? &part->unique : &part->type, sizeof(*guid));
 
 	return EFI_SUCCESS;
+}
+
+EFI_STATUS gpt_get_partition_type(const CHAR16 *label, EFI_GUID *type, logical_unit_t log_unit)
+{
+	return get_partition_guid(label, type, log_unit, FALSE);
+}
+
+EFI_STATUS gpt_get_partition_uuid(const CHAR16 *label, EFI_GUID *uuid, logical_unit_t log_unit)
+{
+	return get_partition_guid(label, uuid, log_unit, TRUE);
 }
 
 EFI_STATUS gpt_swap_partition(const CHAR16 *label1, const CHAR16 *label2, logical_unit_t log_unit)
