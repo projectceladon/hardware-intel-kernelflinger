@@ -728,43 +728,6 @@ out:
         return value;
 }
 
-/*
- * Parameters Passed : nptr  : Pointer to the string to be converted to int
- *                     base  : the base of conversion ( hex, dec etc)
- *               endptr: Reference to the next character after the converted string
- * Returns           : value : coverted unsigned long int
- *
- * This function converts String to unsigned long int.
- */
-UINTN strtoul16(const CHAR16 *nptr, CHAR16 **endptr, UINTN base)
-{
-        UINTN value = 0;
-
-        if (!nptr)
-                goto out;
-
-        if ((base == 0 || base == 16) &&
-            (StrLen(nptr) > 2 && nptr[0] == '0' && (nptr[1] == 'x' || nptr[1] == 'X'))) {
-                nptr += 2;
-                base = 16;
-        }
-
-        if (base == 0)
-                base = 10;
-
-        for (; *nptr != '\0' ; nptr++) {
-                INTN t = to_digit(*nptr, base);
-                if (t == -1)
-                        goto out;
-                value = (value * base) + t;
-        }
-
-out:
-        if (endptr)
-                *endptr = (CHAR16 *)nptr;
-        return value;
-}
-
 
 EFI_STATUS bytes_to_hex_stra(CHAR8 *bytes, UINTN length, CHAR8 *str, UINTN strsize)
 {
