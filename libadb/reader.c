@@ -238,13 +238,13 @@ static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 
 	/* Parse argv  */
 	if (argc > 0) {
-		priv->start = strtoul(argv[0], &endptr, 16);
+		priv->start = strtoull(argv[0], &endptr, 16);
 		if (*endptr != '\0')
 			goto err;
 	}
 
 	if (argc == 2) {
-		length = strtoul(argv[1], &endptr, 16);
+		length = strtoull(argv[1], &endptr, 16);
 		if (*endptr != '\0')
 			goto err;
 		priv->end = priv->start + length;
@@ -383,13 +383,13 @@ static EFI_STATUS _part_open(reader_ctx_t *ctx, UINTN argc, char **argv, logical
 	ctx->len = length;
 
 	if (argc > 1) {
-		ctx->cur = strtoul(argv[1], NULL, 16);
+		ctx->cur = strtoull(argv[1], NULL, 16);
 		if (ctx->cur >= length)
 			goto err;
 	}
 
 	if (argc == 3) {
-		ctx->len = strtoul(argv[2], NULL, 16);
+		ctx->len = strtoull(argv[2], NULL, 16);
 		if (ctx->len == 0 || ctx->len > length || ctx->cur >= length - ctx->len)
 			goto err;
 	}

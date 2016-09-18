@@ -59,6 +59,9 @@ typedef INTN ssize_t;
 #define _CONVERT_TO_WIDE(x) L ## x
 #define CONVERT_TO_WIDE(x) _CONVERT_TO_WIDE(x)
 
+#define ULONG_MAX ((unsigned long)-1)
+#define ULLONG_MAX ((unsigned long long)-1)
+
 /* Current EFI image handle.  To be use as parent image with the
    LoadImage boot service */
 extern EFI_HANDLE g_parent_image;
@@ -152,6 +155,9 @@ size_t strnlen(const CHAR8 *s, size_t maxlen)
     __attribute__((weak));
 
 void *memcpy(void *dest, const void *source, size_t count)
+    __attribute__((weak));
+
+unsigned long long strtoull(const char *nptr, char **endptr, int base)
     __attribute__((weak));
 
 unsigned long strtoul(const char *nptr, char **endptr, int base)

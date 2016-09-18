@@ -698,10 +698,10 @@ static INTN to_digit(CHAR16 character, UINTN base)
         return value < base ? (INTN)value : -1;
 }
 
-/* Convert strings to an unsigned long-integer value */
-unsigned long strtoul(const char *nptr, char **endptr, int base)
+/* Convert strings to an unsigned long long-integer value */
+unsigned long long strtoull(const char *nptr, char **endptr, int base)
 {
-        unsigned long value = 0;
+        unsigned long long value = 0;
 
         if (!nptr)
                 goto out;
@@ -719,12 +719,31 @@ unsigned long strtoul(const char *nptr, char **endptr, int base)
                 int t = to_digit(*nptr, base);
                 if (t == -1)
                         goto out;
+                if (value * base < value) {
+                        value = ULLONG_MAX;
+                        goto out;
+                }
                 value = (value * base) + t;
         }
 
 out:
         if (endptr)
                 *endptr = (char *)nptr;
+        return value;
+}
+
+/* Convert strings to an unsigned long-integer value */
+unsigned long strtoul(const char *nptr, char **endptr, int base)
+{
+        unsigned long long value;
+
+        value = strtoull(nptr, endptr, base);
+        if (value > ULONG_MAX) {
+                if (value != ULLONG_MAX)
+                        *endptr = (char *)nptr;
+                return ULONG_MAX;
+        }
+
         return value;
 }
 
