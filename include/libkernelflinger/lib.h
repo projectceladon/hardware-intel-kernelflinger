@@ -203,6 +203,8 @@ EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
 
 UINT64 efi_time_to_ctime(EFI_TIME *time);
 
+VOID cpuid(UINT32 op, UINT32 reg[4]);
+
 EFI_STATUS generate_random_numbers(CHAR8 *data, UINTN size);
 
 BOOLEAN no_device_unlock();
