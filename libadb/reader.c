@@ -33,8 +33,11 @@
 #include <lib.h>
 #include <slot.h>
 
-#include "reader.h"
 #include "acpi.h"
+#ifndef __LP64__
+#include "pae.h"
+#endif
+#include "reader.h"
 #include "sparse_format.h"
 
 /* RAM reader avoid dynamic memory allocation to avoid RAM corruption
@@ -55,8 +58,8 @@ static struct ram_priv {
 	EFI_PHYSICAL_ADDRESS end;
 
 	/* Current memory region */
-	UINTN cur;
-	UINTN cur_end;
+	EFI_PHYSICAL_ADDRESS cur;
+	EFI_PHYSICAL_ADDRESS cur_end;
 
 	/* Sparse format */
 	UINTN chunk_nb;
@@ -279,6 +282,12 @@ static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	if (EFI_ERROR(ret))
 		goto err;
 
+#ifndef __LP64__
+	ret = pae_init(priv->memmap, nr_descr, descr_sz);
+	if (EFI_ERROR(ret))
+		return ret;
+#endif
+
 	ctx->len += sizeof(priv->sheader);
 
 	return EFI_SUCCESS;
@@ -290,6 +299,9 @@ err:
 
 static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
 {
+#ifndef __LP64__
+	EFI_STATUS ret;
+#endif
 	struct ram_priv *priv = ctx->private;
 	struct chunk_header *chunk;
 
@@ -322,7 +334,13 @@ static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
 
 	/* Continue to send the current memory region */
 	*len = min(*len, priv->cur_end - priv->cur);
+#ifdef __LP64__
 	*buf = (unsigned char *)priv->cur;
+#else
+	ret = pae_map(priv->cur, buf, len);
+	if (EFI_ERROR(ret))
+		return ret;
+#endif
 	priv->cur += *len;
 
 	return EFI_SUCCESS;
@@ -331,6 +349,9 @@ static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
 static void ram_close(reader_ctx_t *ctx)
 {
 	((struct ram_priv *)ctx->private)->is_in_used = FALSE;
+#ifndef __LP64__
+	pae_exit();
+#endif
 }
 
 /* Partition reader */
