@@ -56,9 +56,15 @@ static UINTN pos, last_pos;
 
 EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 {
+	static volatile BOOLEAN running;
 	EFI_STATUS ret;
 	CHAR8 *buf, *cur;
 	UINTN size;
+
+	if (running)
+		return EFI_ALREADY_STARTED;
+
+	running = TRUE;
 
 #ifdef USER
 	if (!device_is_provisioning())
@@ -69,8 +75,10 @@ EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 		size = last_pos < pos ? pos : last_pos;
 
 		cur = buf = AllocatePool(size);
-		if (!buf)
-			return EFI_OUT_OF_RESOURCES;
+		if (!buf) {
+			ret = EFI_OUT_OF_RESOURCES;
+			goto out;
+		}
 
 		if (pos < last_pos) {
 			memcpy(buf, log_buf + pos, last_pos - pos);
@@ -86,6 +94,9 @@ EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 			       size, buf, nonvol, TRUE);
 	if (last_pos)
 		FreePool(buf);
+
+out:
+	running = FALSE;
 	return ret;
 }
 
