@@ -110,3 +110,7 @@ Command line parameters
 * `-f`: enforce kernelfliner to enter Fastboot mode
 * `-U` [test-suite-name]: run unittest test (see
   [unittest.c](./unittest.c)).
+
+Copyright and Licence
+---------------------
+Kernelflinger is licensed under the terms of the BSD 2-Clause.
