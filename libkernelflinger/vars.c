@@ -263,7 +263,7 @@ enum device_state get_current_state()
 
 			ret = life_cycle_is_enduser(&enduser);
 			if (EFI_ERROR(ret)) {
-				if (ret == EFI_UNSUPPORTED) {
+				if (ret == EFI_NOT_FOUND) {
 					debug(L"OEMLock not set, device is in provisioning mode");
 					set_provisioning_mode(TRUE);
 				}
