@@ -287,7 +287,7 @@ static const char *get_psize_str(UINT64 size)
 	int len;
 
 	len = efi_snprintf((CHAR8 *)part_size, sizeof(part_size),
-			   (CHAR8 *)"0x%lX", size);
+			   (CHAR8 *)"0x%llX", size);
 	if (len < 0 || len >= (int)sizeof(part_size))
 		return NULL;
 
