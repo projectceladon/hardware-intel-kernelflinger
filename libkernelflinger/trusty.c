@@ -311,13 +311,13 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage, IN struct rot_data_t *rot_
                 efi_perror(ret, L"Alloc memory for TOS startup structure failed");
                 goto cleanup;
         }
-        startup_info = (struct tos_startup_info *)startup_info_phy_addr;
+        startup_info = (struct tos_startup_info *)(UINTN)startup_info_phy_addr;
         memset(startup_info, 0, sizeof(*startup_info));
 
         debug(L"TOS Loadtime memory address = 0x%x", load_base);
 
         /* Relocate to Loadtime region for TOS header + TOS */
-        memcpy((VOID *)load_base, (VOID *)tos_header, tos_header->tos_image_size);
+        memcpy((VOID *)(UINTN)load_base, (VOID *)tos_header, tos_header->tos_image_size);
 
         /* Get EFI memory map */
         memory_map = (CHAR8 *)LibMemoryMap(&nr_entries, &map_key, &desc_size, &desc_ver);
