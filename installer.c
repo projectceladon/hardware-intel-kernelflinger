@@ -59,6 +59,7 @@ static char *fastboot_cmd_buf;
 static UINTN fastboot_cmd_buf_len;
 static char command_buffer[256]; /* Large enough to fit long filename
 				    on flash command.  */
+static struct download_buffer *dl;
 
 #define inst_perror(ret, x, ...) do { \
 	fastboot_fail(x ": %r", ##__VA_ARGS__, ret); \
@@ -155,10 +156,16 @@ static void installer_erase(INTN argc, CHAR8 **argv)
 static void installer_flash_buffer(void *data, unsigned size,
 				   INTN argc, CHAR8 **argv)
 {
-	fastboot_set_dlbuffer(data, size);
+	void *data_save = dl->data;
+
+	dl->data = data;
+	dl->size = size;
+
 	fastboot_flash_cmd(argc, argv);
 	flush_tx_buffer();
-	fastboot_set_dlbuffer(NULL, 0);
+
+	dl->data = data_save;
+	dl->size = 0;
 }
 
 static EFI_STATUS read_file(EFI_FILE *file, UINTN size, void *data)
@@ -191,13 +198,13 @@ typedef struct flash_buffer {
 } __attribute__((__packed__)) flash_buffer_t;
 
 /* This function splits a chunk too large to fit into a
-   MAX_DOWNLOAD_SIZE buffer into smaller chunks and flash them. */
+   dl->max_size buffer into smaller chunks and flash them. */
 static EFI_STATUS installer_flash_big_chunk(EFI_FILE *file, UINTN *remaining_data,
 					    flash_buffer_t *fb, UINTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret = EFI_INVALID_PARAMETER;
 	UINTN payload_size, read_size, already_read, ckh_blks, data_size;
-	const UINTN MAX_DATA_SIZE = MAX_DOWNLOAD_SIZE - offsetof(flash_buffer_t, ckh_data);
+	const UINTN MAX_DATA_SIZE = dl->max_size - offsetof(flash_buffer_t, ckh_data);
 	const UINTN MAX_BLKS = MAX_DATA_SIZE / fb->sph.blk_sz;
 	const UINTN HEADER_SIZE = offsetof(flash_buffer_t, d);
 	struct chunk_header *ckh;
@@ -255,14 +262,13 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 	flash_buffer_t *fb;
 	struct sparse_header sph;
 	struct chunk_header *ckh;
-	void *buf;
 	UINTN read_size, flash_size, already_read, remaining_data = size;
 	void *read_ptr;
 	INTN nb_chunks;
 	EFI_FILE *file;
 	UINT32 blk_count;
 	const UINTN HEADER_SIZE = offsetof(flash_buffer_t, d);
-	const UINTN MAX_DATA_SIZE = MAX_DOWNLOAD_SIZE - HEADER_SIZE;
+	const UINTN MAX_DATA_SIZE = dl->max_size - HEADER_SIZE;
 
 	ret = uefi_open_file(file_io_interface, filename, &file);
 	if (EFI_ERROR(ret)) {
@@ -280,12 +286,7 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 		return;
 	}
 
-	buf = AllocatePool(MAX_DOWNLOAD_SIZE);
-	if (!buf) {
-		fastboot_fail("Failed to allocate %d bytes", MAX_DOWNLOAD_SIZE);
-		return;
-	}
-	fb = buf;
+	fb = dl->data;
 
 	/* New sparse header. */
 	memcpy(&fb->sph, &sph, sizeof(sph));
@@ -351,13 +352,13 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 			continue;
 		}
 
-		installer_flash_buffer(buf, flash_size, argc, argv);
+		installer_flash_buffer(dl->data, flash_size, argc, argv);
 		if (!last_cmd_succeeded)
 			goto exit;
 
 		/* Move the incomplete chunk from the end to the
 		   beginning of the buffer. */
-		if (buf + flash_size < read_ptr + read_size) {
+		if (dl->data + flash_size < read_ptr + read_size) {
 			already_read = read_ptr + read_size - (void *)ckh;
 			memcpy(fb->d.data, ckh, already_read);
 			read_size = MAX_DATA_SIZE - already_read;
@@ -370,7 +371,6 @@ static void installer_split_and_flash(CHAR16 *filename, UINTN size,
 
 exit:
 	uefi_call_wrapper(file->Close, 1, file);
-	FreePool(buf);
 }
 
 static void installer_flash_cmd(INTN argc, CHAR8 **argv)
@@ -418,7 +418,7 @@ static void installer_flash_cmd(INTN argc, CHAR8 **argv)
 		goto exit;
 	}
 
-	if (size > MAX_DOWNLOAD_SIZE) {
+	if (size > dl->max_size) {
 		installer_split_and_flash(filename, size, argc, argv);
 		goto exit;
 	}
@@ -882,6 +882,10 @@ EFI_STATUS installer_transport_start(start_callback_t start_cb,
 
 	if (!fastboot_cmd_buf)
 		return EFI_INVALID_PARAMETER;
+
+	dl = fastboot_download_buffer();
+	if (!dl || !dl->data || !dl->max_size)
+		return EFI_NOT_READY;
 
 	return EFI_SUCCESS;
 }
