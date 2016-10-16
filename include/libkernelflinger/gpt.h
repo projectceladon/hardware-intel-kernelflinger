@@ -36,10 +36,10 @@
 #define _GPT_H_
 
 #include <efi.h>
+#include <efigpt.h>
 #include "gpt_bin.h"
 
 #define MBR_CODE_SIZE	440
-#define GPT_SIGNATURE  "EFI PART"
 
 struct gpt_header {
 	char signature[8];
