@@ -127,7 +127,7 @@ static EFI_STATUS read_gpt_header(struct gpt_disk *disk)
 
 static BOOLEAN is_gpt_device(struct gpt_header *gpt)
 {
-	return CompareMem(gpt->signature, GPT_SIGNATURE, sizeof(gpt->signature)) == 0;
+	return CompareMem(gpt->signature, EFI_PTAB_HEADER_ID, sizeof(gpt->signature)) == 0;
 }
 
 static EFI_STATUS read_gpt_partitions(struct gpt_disk *disk)
@@ -689,7 +689,7 @@ EFI_STATUS gpt_create(struct gpt_header *gh, UINTN gh_size,
 		return ret;
 
 	if (gh) {
-		if (CompareMem(gh->signature, GPT_SIGNATURE, sizeof(gh->signature)) ||
+		if (CompareMem(gh->signature, EFI_PTAB_HEADER_ID, sizeof(gh->signature)) ||
 		    gh_size != GPT_HEADER_SIZE + sizeof(sdisk.partitions))
 			return EFI_INVALID_PARAMETER;
 

@@ -152,7 +152,7 @@ static EFI_STATUS get_full_gpt_header(VOID **data_p, UINTN *size_p)
 	size -= MBR_SIZE;
 
 	if (size != 2 * (GPT_HEADER_SIZE + (GPT_ENTRIES * GPT_ENTRY_SIZE)) ||
-	    CompareMem(gh->signature, GPT_SIGNATURE, sizeof(gh->signature)))
+	    CompareMem(gh->signature, EFI_PTAB_HEADER_ID, sizeof(gh->signature)))
 		return EFI_NOT_FOUND;
 
 	*data_p = gh;
