@@ -97,9 +97,10 @@ static struct fastboot_tx_buffer *txbuf_head;
 static enum fastboot_states fastboot_state;
 static enum fastboot_states next_state;
 
-/* Download buffer and size, for download and flash commands */
-static void *dlbuffer;
-static unsigned dlsize, bufsize;
+/* Download buffer structure and size limits */
+static struct download_buffer dl;
+static const UINTN MIN_DLSIZE = 8 * 1024 * 1024;
+static const UINTN MAX_DLSIZE = 256 * 1024 * 1024;
 
 static const char *flash_locked_whitelist[] = {
 #ifdef BOOTLOADER_POLICY
@@ -108,10 +109,9 @@ static const char *flash_locked_whitelist[] = {
 	NULL
 };
 
-void fastboot_set_dlbuffer(void *buffer, unsigned size)
+struct download_buffer *fastboot_download_buffer(void)
 {
-	dlbuffer = buffer;
-	dlsize = size;
+	return &dl;
 }
 
 EFI_STATUS fastboot_set_command_buffer(char *buffer, UINTN size)
@@ -643,7 +643,7 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 	}
 	ui_print(L"Flashing %s ...", label);
 
-	ret = flash(dlbuffer, dlsize, label);
+	ret = flash(dl.data, dl.size, label);
 	FreePool(label);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Flash failure: %r", ret);
@@ -702,7 +702,7 @@ static void cmd_boot(__attribute__((__unused__)) INTN argc,
 {
 	EFI_STATUS ret;
 
-	ret = fastboot_stop(dlbuffer, NULL, dlsize, UNKNOWN_TARGET);
+	ret = fastboot_stop(dl.data, NULL, dl.size, UNKNOWN_TARGET);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to stop transport");
 		return;
@@ -854,39 +854,28 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 	EFI_STATUS ret;
 	int len;
 	UINTN newdlsize;
+	char *endptr;
 
 	if (argc != 2) {
 		fastboot_fail("Invalid parameter");
 		return;
 	}
 
-	newdlsize = strtoul((const char *)argv[1], NULL, 16);
-
-	ui_print(L"Receiving %d bytes ...", newdlsize);
-	if (newdlsize == 0) {
-		fastboot_fail("no data to download");
+	newdlsize= strtoul((const char *)argv[1], &endptr, 16);
+	if (newdlsize == 0 || *endptr != '\0') {
+		fastboot_fail("Failed to parse the download size");
 		return;
-	} else if (newdlsize > MAX_DOWNLOAD_SIZE) {
+	}
+
+	ui_print(L"Receiving %d bytes ...", dl.size);
+	if (dl.size > dl.max_size) {
 		fastboot_fail("data too large");
 		return;
 	}
+	dl.size = newdlsize;
 
-	if (newdlsize > bufsize) {
-		if (dlbuffer)
-			FreePool(dlbuffer);
-		dlbuffer = AllocatePool(newdlsize);
-		if (!dlbuffer) {
-			error(L"Failed to allocate download buffer (0x%x bytes)",
-			      newdlsize);
-			fastboot_fail("Memory allocation failure");
-			dlsize = bufsize = 0;
-			return;
-		}
-		bufsize = newdlsize;
-	}
-	dlsize = newdlsize;
-
-	len = efi_snprintf(response, sizeof(response), (CHAR8 *)"DATA%08x", dlsize);
+	len = efi_snprintf(response, sizeof(response), (CHAR8 *)"DATA%08x",
+			   dl.size);
 	if (len < 0) {
 		error(L"Failed to format DATA response");
 		fastboot_fail("Failed to format DATA response");
@@ -905,9 +894,9 @@ static void worker_download(void)
 {
 	EFI_STATUS ret;
 
-	ret = transport_read(dlbuffer, dlsize);
+	ret = transport_read(dl.data, dl.size);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to receive %d bytes", dlsize);
+		efi_perror(ret, L"Failed to receive %d bytes", dl.size);
 		fastboot_fail("Transport receive failed");
 		return;
 	}
@@ -993,15 +982,15 @@ static void fastboot_process_rx(void *buf, unsigned len)
 		received_len += len;
 		if (received_len / DATA_PROGRESS_THRESHOLD >
 		    last_received_len / DATA_PROGRESS_THRESHOLD) {
-			if (dlsize > MiB)
-				debug(L"\rRX %d MiB / %d MiB", received_len/MiB, dlsize / MiB);
+			if (dl.size > MiB)
+				debug(L"\rRX %d MiB / %d MiB", received_len/MiB, dl.size / MiB);
 			else
-				debug(L"\rRX %d KiB / %d KiB", received_len/1024, dlsize / 1024);
+				debug(L"\rRX %d KiB / %d KiB", received_len/1024, dl.size / 1024);
 		}
 		last_received_len = received_len;
-		if (received_len < dlsize) {
+		if (received_len < dl.size) {
 			s = buf;
-			transport_read(&s[len], dlsize - received_len);
+			transport_read(&s[len], dl.size - received_len);
 		} else {
 			fastboot_state = STATE_COMMAND;
 			fastboot_okay("");
@@ -1027,6 +1016,23 @@ static void fastboot_start_callback(void)
 {
 	fastboot_state = next_state;
 	fastboot_read_command();
+}
+
+static EFI_STATUS init_download_buffer(void)
+{
+	UINTN size;
+
+	for (size = MAX_DLSIZE; size >= MIN_DLSIZE; size /= 2) {
+		dl.data = AllocatePool(size);
+		if (!dl.data)
+			continue;
+
+		dl.max_size = size;
+		return EFI_SUCCESS;
+	}
+
+	error(L"Failed to initialize the download buffer");
+	return EFI_OUT_OF_RESOURCES;
 }
 
 static struct fastboot_cmd COMMANDS[] = {
@@ -1079,16 +1085,20 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
+	ret = init_download_buffer();
+	if (EFI_ERROR(ret))
+		goto error;
+
 	if (efi_snprintf((CHAR8 *)download_max_str, sizeof(download_max_str),
-			 (CHAR8 *)"0x%lX", MAX_DOWNLOAD_SIZE) < 0) {
+			 (CHAR8 *)"0x%lX", dl.max_size) < 0) {
 		error(L"Failed to set download_max_str string");
 		ret = EFI_INVALID_PARAMETER;
 		goto error;
-	} else {
-		ret = fastboot_publish("max-download-size", download_max_str);
-		if (EFI_ERROR(ret))
-			goto error;
 	}
+
+	ret = fastboot_publish("max-download-size", download_max_str);
+	if (EFI_ERROR(ret))
+		goto error;
 
 	ret = publish_partsize();
 	if (EFI_ERROR(ret))
@@ -1232,10 +1242,10 @@ EFI_STATUS fastboot_stop(void *bootimage, void *efiimage, UINTN imagesize,
 
 void fastboot_free()
 {
-	if (dlbuffer) {
-		FreePool(dlbuffer);
-		dlbuffer = NULL;
-		bufsize = dlsize = 0;
+	if (dl.data) {
+		FreePool(dl.data);
+		dl.data = NULL;
+		dl.max_size = dl.size = 0;
 	}
 
 	fastboot_unpublish_all();

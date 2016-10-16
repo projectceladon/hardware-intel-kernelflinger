@@ -39,7 +39,6 @@
 #include <lib.h>
 #include <vars.h>
 
-#define MAX_DOWNLOAD_SIZE (256 * 1024 * 1024)
 #define MAGIC_LENGTH 64
 
 /* GUID for variables used to communicate with Fastboot */
@@ -55,7 +54,13 @@ struct fastboot_cmd {
 
 typedef struct cmdlist *cmdlist_t;
 
-void fastboot_set_dlbuffer(void *buffer, unsigned size);
+struct download_buffer {
+	void *data;
+	UINTN size;
+	UINTN max_size;
+};
+
+struct download_buffer *fastboot_download_buffer(void);
 
 struct fastboot_cmd *fastboot_get_root_cmd(const char *name);
 EFI_STATUS fastboot_register(struct fastboot_cmd *cmd);
