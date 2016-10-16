@@ -87,8 +87,6 @@ enum fastboot_states {
 	STATE_ERROR,
 };
 
-EFI_GUID guid_linux_data = {0x0fc63daf, 0x8483, 0x4772, {0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4}};
-
 static cmdlist_t cmdlist;
 static char *command_buffer;
 static UINTN command_buffer_size;
@@ -270,13 +268,24 @@ EFI_STATUS fastboot_publish(const char *name, const char *value)
 	return EFI_SUCCESS;
 }
 
+#define EXT4_PART_GUID	\
+	{ 0x0fc63daf, 0x8483, 0x4772, \
+	  { 0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4 } }
+
 static const char *get_ptype_str(EFI_GUID *guid)
 {
-	if (!CompareGuid(guid, &guid_linux_data))
-		return "ext4";
+	static const struct part_type {
+		const char *type;
+		const EFI_GUID guid;
+	} PART_TYPE[] = {
+		{ .type = "ext4", .guid = EXT4_PART_GUID },
+		{ .type = "vfat", .guid = EFI_PART_TYPE_EFI_SYSTEM_PART_GUID }
+	};
+	UINTN i;
 
-	if (!CompareGuid(guid, &EfiPartTypeSystemPartitionGuid))
-		return "vfat";
+	for (i = 0; i < ARRAY_SIZE(PART_TYPE); i++)
+		if (!CompareGuid(guid, (EFI_GUID *)&PART_TYPE[i].guid))
+			return PART_TYPE[i].type;
 
 	return "none";
 }
