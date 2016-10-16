@@ -335,6 +335,33 @@ int vfprintf(FILE *stream, const char *format, va_list arg)
 	return 0;
 }
 
+int vsnprintf(char *str, size_t size, const char *format, va_list ap)
+	__attribute__((weak));
+int vsnprintf(char *str, size_t size, const char *format, va_list ap)
+{
+	char *efi_format;
+	size_t i;
+	int ret;
+
+	efi_format = strdup(format);
+	if (!efi_format)
+		return -1;
+
+	/* Replace "%s" with "%a" */
+	for (i = 0; i < strlen(efi_format) - 2; i++) {
+		if (!memcmp("%%", &efi_format[i], 2)) {
+			i++;
+			continue;
+		}
+		if (!memcmp("%s", &efi_format[i], 2))
+			efi_format[++i] = 'a';
+	}
+
+	ret = efi_vsnprintf(str, size, efi_format, ap);
+	FreePool(efi_format);
+	return ret;
+}
+
 void abort(void)
 {
 	error(L"Error: STUBBED %a", __func__);
