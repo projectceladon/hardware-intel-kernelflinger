@@ -79,7 +79,7 @@ static EFI_STATUS init_buffer()
 {
 	buffer = AllocatePool(BUFFER_SIZE);
 	if (!buffer) {
-		error(L"Allocation failed, sparse file buffer is disabled");
+		debug(L"Allocation failed, sparse file buffer is disabled");
 		return EFI_OUT_OF_RESOURCES;
 	}
 
