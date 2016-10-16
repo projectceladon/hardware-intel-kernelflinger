@@ -111,87 +111,6 @@ static EFI_STATUS report_hash(const CHAR16 *base, const CHAR16 *name, CHAR8 *has
 	return EFI_SUCCESS;
 }
 
-static UINTN get_bootimage_len(CHAR8 *buffer, UINTN buffer_len)
-{
-	struct boot_img_hdr *hdr;
-	struct boot_signature *bs;
-	UINTN len;
-
-	if (buffer_len < sizeof(*hdr)) {
-		error(L"boot image too small");
-		return 0;
-	}
-	hdr = (struct boot_img_hdr *) buffer;
-
-	if (strncmp((CHAR8 *) BOOT_MAGIC, hdr->magic, BOOT_MAGIC_SIZE)) {
-		error(L"bad boot magic");
-		return 0;
-	}
-
-	len = bootimage_size(hdr);
-	debug(L"len %lld", len);
-
-	if (len > buffer_len + BOOT_SIGNATURE_MAX_SIZE) {
-		error(L"boot image too big");
-		return 0;
-	}
-
-	bs = get_boot_signature(&buffer[len], BOOT_SIGNATURE_MAX_SIZE);
-
-	if (bs) {
-		len += bs->total_size;
-		free_boot_signature(bs);
-	} else {
-		debug(L"boot image doesn't seem to have a signature");
-	}
-
-	debug(L"total boot image size %d", len);
-	return len;
-}
-
-EFI_STATUS get_boot_image_hash(const CHAR16 *label)
-{
-	struct gpt_partition_interface gparti;
-	CHAR8 *data;
-	UINT64 len;
-	UINT64 offset;
-	CHAR8 hash[EVP_MAX_MD_SIZE];
-	EFI_STATUS ret;
-
-	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get partition %s", label);
-		return ret;
-	}
-
-	len = (gparti.part.ending_lba + 1 - gparti.part.starting_lba) * gparti.bio->Media->BlockSize;
-	offset = gparti.part.starting_lba * gparti.bio->Media->BlockSize;
-
-	if (len > 100 * MiB) {
-		error(L"partition too large to contain a boot image");
-		return EFI_INVALID_PARAMETER;
-	}
-	data = AllocatePool(len);
-	if (!data) {
-		return EFI_OUT_OF_RESOURCES;
-	}
-
-	ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio, gparti.bio->Media->MediaId, offset, len, data);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to read partition");
-		FreePool(data);
-		return ret;
-	}
-
-	len = get_bootimage_len(data, len);
-	if (len) {
-		hash_buffer(data, len, hash);
-		ret = report_hash(L"/", label, hash);
-	}
-	FreePool(data);
-	return ret;
-}
-
 #define MAX_DIR 10
 #define MAX_FILENAME_LEN (256 * sizeof(CHAR16))
 #define DIR_BUFFER_SIZE (MAX_DIR * MAX_FILENAME_LEN)
@@ -529,6 +448,90 @@ free:
 	EVP_MD_CTX_cleanup(&mdctx);
 	FreePool(buffer);
 	return ret;
+}
+
+static EFI_STATUS get_bootimage_len(struct gpt_partition_interface *gparti,
+				    UINT64 *len)
+{
+	EFI_STATUS ret;
+	struct boot_img_hdr hdr;
+	struct boot_signature *bs;
+	UINT64 part_off, part_len;
+	void *footer;
+
+	part_off = gparti->part.starting_lba * gparti->bio->Media->BlockSize;
+	part_len = (gparti->part.ending_lba + 1 - gparti->part.starting_lba) *
+		gparti->bio->Media->BlockSize;
+
+	ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
+				gparti->bio->Media->MediaId, part_off,
+				sizeof(hdr), &hdr);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read the boot image header");
+		return ret;
+	}
+
+	if (strncmp((CHAR8 *)BOOT_MAGIC, hdr.magic, BOOT_MAGIC_SIZE)) {
+		error(L"bad boot magic");
+		return EFI_COMPROMISED_DATA;
+	}
+
+	*len = bootimage_size(&hdr);
+	debug(L"len %lld", len);
+
+	if (*len + BOOT_SIGNATURE_MAX_SIZE > part_len) {
+		error(L"boot image is bigger than the partition");
+		return EFI_COMPROMISED_DATA;
+	}
+
+	footer = AllocatePool(BOOT_SIGNATURE_MAX_SIZE);
+	if (!footer)
+		return EFI_OUT_OF_RESOURCES;
+
+	ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
+				gparti->bio->Media->MediaId, part_off + *len,
+				BOOT_SIGNATURE_MAX_SIZE, footer);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read the boot image footer");
+		goto out;
+	}
+
+	bs = get_boot_signature(footer, BOOT_SIGNATURE_MAX_SIZE);
+	if (bs) {
+		*len += bs->total_size;
+		free_boot_signature(bs);
+	} else
+		debug(L"boot image doesn't seem to have a signature");
+
+	debug(L"total boot image size %d", *len);
+
+out:
+	FreePool(footer);
+	return ret;
+}
+
+EFI_STATUS get_boot_image_hash(const CHAR16 *label)
+{
+	struct gpt_partition_interface gparti;
+	UINT64 len;
+	CHAR8 hash[EVP_MAX_MD_SIZE];
+	EFI_STATUS ret;
+
+	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get partition %s", label);
+		return ret;
+	}
+
+	ret = get_bootimage_len(&gparti, &len);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = hash_partition(&gparti, len, hash);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	return report_hash(L"/", label, hash);
 }
 
 static EFI_STATUS get_ext4_len(struct gpt_partition_interface *gparti, UINT64 *len)
