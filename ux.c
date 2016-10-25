@@ -166,7 +166,6 @@ static EFI_STATUS ux_init_screen() {
 	static BOOLEAN initialized;
 	EFI_STATUS ret;
 
-
 	if (!initialized) {
 		uefi_call_wrapper(ST->ConOut->Reset, 2, ST->ConOut, FALSE);
 	        uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut,
