@@ -80,11 +80,10 @@ EFI_STATUS parse_text_buffer(VOID *data, UINTN size,
 		ret = parse_line(line, context);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed at line %d", lineno);
-			goto exit;
+			break;
 		}
 	}
 
-exit:
 	FreePool(buf);
 	return ret;
 }
