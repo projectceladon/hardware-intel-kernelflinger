@@ -104,6 +104,7 @@ Crashmode adb implementation is limited to the following commands:
 - reboot [TARGET]: reboot to TARGET.  If TARGET parameter is not
   supplied it reboots to Android<sup>TM</sup>.
 - pull ram:[:START[:LENGTH]]: retrieve RAM content.
+- pull vmcore:[:START[:LENGTH]]: retrieve crash dump vmcore.
 - pull acpi:TABLE_NAME: retrieve TABLE_NAME ACPI table.
 - pull part:PART_NAME[:START[:LENGTH]]: retrieve PART_NAME partition
   content.
@@ -153,18 +154,38 @@ The `pull efivar:VAR_NAME[:GUID]` command retrieves `VAR_NAME` EFI
 variable. If several instances of `VAR_NAME` exist, the `GUID`
 argument must be supplied.
 
-### RAM
+### RAM and VMCORE
 
-*Important*: ram dump generates an
-[Android<sup>TM</sup> sparse file](http://www.2net.co.uk/tutorial/android-sparse-image-format)
-with `DONT_CARE` chunk for non conventional memory regions.  Use the
-`simg2img` command from the AOSP tree (`make simg2img_host`) to obtain
-the flat file you are looking for manual analysis.
+* `ram` dump generates an
+  [Android<sup>TM</sup> sparse file](http://www.2net.co.uk/tutorial/android-sparse-image-format)
+  with `DONT_CARE` chunk for non conventional memory regions.  Use the
+  `simg2img` command from the AOSP tree (`make simg2img-host`) to
+  obtain the flat file you are looking for manual analysis.
+
+* `vmcore` dump generates an image of the main memory, exported as
+  [Executable and Linkable Format (ELF)](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format)
+  object. This `vmcore` file can be loaded into the
+  [RedHat<sup>TM</sup> Linux crash utility](http://people.redhat.com/anderson/crash_whitepaper/)
+  to perform a crash analysis.  This `vmcore` file is a 64-bits ELF,
+  it only works with a 64-bits Linux kernel.
+
+*Memory flush and preservation*
+
+Crashmode runs after the system has crashed, rebooted and the IAFW has
+fully re-initialized.  Hence:
+
+1. The platform must preserve the memory accross reboot due to crash.
+2. The system should flush the CPU cache before rebooting.
+3. The memory regions used by the IAFW must not be released to the OS.
+   The Linux kernel `memmap` command line parameter can be used to
+   prevent it to use some memory regions
+   (cf. [kernel-parameters.txt](https://www.kernel.org/doc/Documentation/kernel-parameters.txt)).
 
 *Note*:
 
-* RAM data retrieval is limited to one `pull` command at a time.
-* `START` is a physical address.
+* `ram` and `vmcore` commands are limited to one `pull` command at a
+  time.
+* The `START` parameter is a physical address.
 
 ### BERT region
 
