@@ -233,7 +233,7 @@ static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 		return EFI_INVALID_PARAMETER;
 
 	if (ram_priv.is_in_used)
-		return EFI_UNSUPPORTED;
+		return EFI_ALREADY_STARTED;
 
 	ctx->private = priv = &ram_priv;
 	memset(priv, 0, sizeof(*priv));
