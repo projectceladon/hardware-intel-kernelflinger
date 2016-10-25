@@ -124,6 +124,7 @@ static const ui_textline_t adb_message[] = {
 	{ &COLOR_LIGHTGRAY,	"A minimal implementation of adb is running",	FALSE },
 	{ &COLOR_LIGHTGRAY,	"and allows reboot [TARGET] and pull commands:",FALSE },
 	{ &COLOR_LIGHTGRAY,	"- ram:[:START[:LENGTH]]",			FALSE },
+	{ &COLOR_LIGHTGRAY,     "- vmcore[:START[:LENGTH]]",			FALSE },
 	{ &COLOR_LIGHTGRAY,	"- acpi:TABLE_NAME",				FALSE },
 	{ &COLOR_LIGHTGRAY,	"- part:PART_NAME[:START[:LENGTH]]",		FALSE },
 	{ &COLOR_LIGHTGRAY,	"- factory-part:PART_NAME[:START[:LENGTH]]",	FALSE },

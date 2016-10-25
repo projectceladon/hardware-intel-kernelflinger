@@ -40,18 +40,18 @@
 #include "reader.h"
 #include "sparse_format.h"
 
-/* RAM reader avoid dynamic memory allocation to avoid RAM corruption
-   during the dump.  */
+/* Memory dump shared functions.  These functions do not make any
+   dynamic memory allocation to avoid RAM corruption during the
+   dump.  */
 #define MAX_MEMORY_REGION_NB 256
 
-#define SIZEOF_TOTALSZ		sizeof(((chunk_header_t *)0)->total_sz)
-#define MAX_CHUNK_SIZE		(((UINT64)1 << (SIZEOF_TOTALSZ * 8)) - EFI_PAGE_SIZE)
-
-static struct ram_priv {
+typedef struct memory_priv {
 	BOOLEAN is_in_used;
 
 	/* Memory map */
 	UINT8 memmap[MAX_MEMORY_REGION_NB * sizeof(EFI_MEMORY_DESCRIPTOR)];
+	UINTN nr_descr;
+	UINTN descr_sz;
 
 	/* Boundaries */
 	EFI_PHYSICAL_ADDRESS start;
@@ -60,13 +60,7 @@ static struct ram_priv {
 	/* Current memory region */
 	EFI_PHYSICAL_ADDRESS cur;
 	EFI_PHYSICAL_ADDRESS cur_end;
-
-	/* Sparse format */
-	UINTN chunk_nb;
-	UINTN cur_chunk;
-	struct sparse_header sheader;
-	struct chunk_header chunks[MAX_MEMORY_REGION_NB];
-} ram_priv;
+} memory_t;
 
 static VOID sort_memory_map(UINT8 *entries, UINTN nr_entries, UINTN entry_sz)
 {
@@ -94,6 +88,136 @@ static VOID sort_memory_map(UINT8 *entries, UINTN nr_entries, UINTN entry_sz)
 		nr_entries--;
 	} while (swapped);
 }
+
+static EFI_STATUS get_sorted_memory_map(memory_t *mem)
+{
+	EFI_STATUS ret;
+	UINT32 descr_ver;
+	UINTN key, memmap_sz;
+
+	memmap_sz = sizeof(mem->memmap);
+	ret = uefi_call_wrapper(BS->GetMemoryMap, 5, &memmap_sz,
+				(EFI_MEMORY_DESCRIPTOR *)mem->memmap,
+				&key, &mem->descr_sz, &descr_ver);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get the current memory map");
+		return ret;
+	}
+
+	mem->nr_descr = memmap_sz / mem->descr_sz;
+	sort_memory_map(mem->memmap, mem->nr_descr, mem->descr_sz);
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS memory_open(reader_ctx_t *ctx, memory_t *mem,
+			      EFI_STATUS (*init)(reader_ctx_t *, void *),
+			      UINTN argc, char **argv)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	char *endptr;
+	UINT64 length;
+
+	if (argc > 2)
+		return EFI_INVALID_PARAMETER;
+
+	if (mem->is_in_used)
+		return EFI_ALREADY_STARTED;
+
+	mem->is_in_used = TRUE;
+	ctx->private = mem;
+
+	/* Parse argv  */
+	if (argc > 0) {
+		mem->start = strtoull(argv[0], &endptr, 16);
+		if (*endptr != '\0')
+			goto err;
+	} else
+		mem->start = 0;
+
+	if (argc == 2) {
+		length = strtoull(argv[1], &endptr, 16);
+		if (*endptr != '\0')
+			goto err;
+		mem->end = mem->start + length;
+	} else
+		mem->end = 0;
+
+	if (mem->start % EFI_PAGE_SIZE || mem->end % EFI_PAGE_SIZE) {
+		error(L"Boundaries must be multiple of %d bytes", EFI_PAGE_SIZE);
+		goto err;
+	}
+
+	ret = get_sorted_memory_map(mem);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = init(ctx, mem);
+	if (EFI_ERROR(ret))
+		goto err;
+
+#ifndef __LP64__
+	ret = pae_init(mem->memmap, mem->nr_descr, mem->descr_sz);
+	if (EFI_ERROR(ret))
+		goto err;
+#endif
+
+	return EFI_SUCCESS;
+
+err:
+	mem->is_in_used = FALSE;
+	return EFI_ERROR(ret) ? ret : EFI_INVALID_PARAMETER;
+}
+
+static EFI_STATUS memory_read_current(memory_t *mem, unsigned char **buf, UINTN *len)
+{
+#ifndef __LP64__
+	EFI_STATUS ret;
+#endif
+
+	*len = min(*len, mem->cur_end - mem->cur);
+#ifdef __LP64__
+	*buf = (unsigned char *)mem->cur;
+#else
+	ret = pae_map(mem->cur, buf, len);
+	if (EFI_ERROR(ret))
+		return ret;
+#endif
+	mem->cur += *len;
+
+	return EFI_SUCCESS;
+}
+
+static void memory_close(reader_ctx_t *ctx)
+{
+	((memory_t *)ctx->private)->is_in_used = FALSE;
+#ifndef __LP64__
+	pae_exit();
+#endif
+}
+
+/* RAM reader */
+#define SIZEOF_TOTALSZ		sizeof(((chunk_header_t *)0)->total_sz)
+#define MAX_CHUNK_SIZE		(((UINT64)1 << (SIZEOF_TOTALSZ * 8)) - EFI_PAGE_SIZE)
+
+static struct ram_priv {
+	memory_t m;
+
+	/* Sparse format */
+	UINTN chunk_nb;
+	UINTN cur_chunk;
+	struct sparse_header sheader;
+	struct chunk_header chunks[MAX_MEMORY_REGION_NB];
+} ram_priv = {
+	.sheader = {
+		.magic = SPARSE_HEADER_MAGIC,
+		.major_version = 0x1,
+		.minor_version = 0,
+		.file_hdr_sz = sizeof(struct sparse_header),
+		.chunk_hdr_sz = sizeof(struct chunk_header),
+		.blk_sz = EFI_PAGE_SIZE
+	}
+};
 
 static EFI_STATUS ram_add_chunk(reader_ctx_t *ctx, struct ram_priv *priv, UINT16 type, UINT64 size)
 {
@@ -137,25 +261,27 @@ static EFI_STATUS ram_add_chunk(reader_ctx_t *ctx, struct ram_priv *priv, UINT16
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS ram_build_chunks(reader_ctx_t *ctx, struct ram_priv *priv,
-				   UINTN nr_entries, UINTN entry_sz)
+static EFI_STATUS ram_build_chunks(reader_ctx_t *ctx, void *priv_p)
 {
+	struct ram_priv *priv = priv_p;
 	EFI_STATUS ret = EFI_SUCCESS;
 	UINT16 type;
 	UINTN i;
 	EFI_MEMORY_DESCRIPTOR *entry;
 	UINT64 entry_len, length;
 	EFI_PHYSICAL_ADDRESS entry_end, prev_end;
-	UINT8 *entries = priv->memmap;
+	UINT8 *entries = priv->m.memmap;
 
+	priv->sheader.total_chunks = priv->sheader.total_blks = 0;
+	priv->chunk_nb = priv->cur_chunk = 0;
 	prev_end = ctx->cur = ctx->len = 0;
 
-	for (i = 0; i < nr_entries; entries += entry_sz, i++) {
+	for (i = 0; i < priv->m.nr_descr; entries += priv->m.descr_sz, i++) {
 		entry = (EFI_MEMORY_DESCRIPTOR *)entries;
 		entry_len = entry->NumberOfPages * EFI_PAGE_SIZE;
 		entry_end = entry->PhysicalStart + entry_len;
 
-		if (priv->start >= entry_end)
+		if (priv->m.start >= entry_end)
 			goto next;
 
 		/* Memory hole between two memory regions */
@@ -167,40 +293,40 @@ static EFI_STATUS ram_build_chunks(reader_ctx_t *ctx, struct ram_priv *priv,
 
 			length = entry->PhysicalStart - prev_end;
 
-			if (priv->start > prev_end && priv->start < entry->PhysicalStart)
-				length -= priv->start - prev_end;
+			if (priv->m.start > prev_end && priv->m.start < entry->PhysicalStart)
+				length -= priv->m.start - prev_end;
 
-			if (priv->end && entry->PhysicalStart > priv->end)
-				length -= entry->PhysicalStart - priv->end;
+			if (priv->m.end && entry->PhysicalStart > priv->m.end)
+				length -= entry->PhysicalStart - priv->m.end;
 
 			ret = ram_add_chunk(ctx, priv, CHUNK_TYPE_DONT_CARE, length);
 			if (EFI_ERROR(ret))
 				goto err;
 
-			if (priv->end && priv->end < entry->PhysicalStart)
+			if (priv->m.end && priv->m.end < entry->PhysicalStart)
 				break;
 		}
 
 		length = entry_len;
-		if (priv->start > entry->PhysicalStart && priv->start < entry_end)
-			length -= priv->start - entry->PhysicalStart;
+		if (priv->m.start > entry->PhysicalStart && priv->m.start < entry_end)
+			length -= priv->m.start - entry->PhysicalStart;
 
-		if (priv->end && priv->end < entry_end)
-			length -= entry_end - priv->end;
+		if (priv->m.end && priv->m.end < entry_end)
+			length -= entry_end - priv->m.end;
 
 		type = entry->Type == EfiConventionalMemory ? CHUNK_TYPE_RAW : CHUNK_TYPE_DONT_CARE;
 		ret = ram_add_chunk(ctx, priv, type, length);
 		if (EFI_ERROR(ret))
 			goto err;
 
-		if (priv->end && priv->end <= entry_end)
+		if (priv->m.end && priv->m.end <= entry_end)
 			break;
 
 next:
 		prev_end = entry_end;
 	}
 
-	if (priv->end && i == nr_entries) {
+	if (priv->m.end && i == priv->m.nr_descr) {
 		error(L"End boundary is in unreachable memory region (>= 0x%lx)",
 		      prev_end);
 		return EFI_INVALID_PARAMETER;
@@ -211,9 +337,10 @@ next:
 		return EFI_INVALID_PARAMETER;
 	}
 
-	if (!priv->end)
-		priv->end = prev_end;
+	if (!priv->m.end)
+		priv->m.end = prev_end;
 
+	ctx->len += sizeof(priv->sheader);
 	return EFI_SUCCESS;
 
 err:
@@ -222,86 +349,11 @@ err:
 
 static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 {
-	EFI_STATUS ret = EFI_SUCCESS;
-	struct ram_priv *priv;
-	char *endptr;
-	UINT32 descr_ver;
-	UINTN descr_sz, key, memmap_sz, nr_descr;
-	UINT64 length;
-
-	if (argc > 2)
-		return EFI_INVALID_PARAMETER;
-
-	if (ram_priv.is_in_used)
-		return EFI_ALREADY_STARTED;
-
-	ctx->private = priv = &ram_priv;
-	memset(priv, 0, sizeof(*priv));
-	priv->is_in_used = TRUE;
-
-	/* Parse argv  */
-	if (argc > 0) {
-		priv->start = strtoull(argv[0], &endptr, 16);
-		if (*endptr != '\0')
-			goto err;
-	}
-
-	if (argc == 2) {
-		length = strtoull(argv[1], &endptr, 16);
-		if (*endptr != '\0')
-			goto err;
-		priv->end = priv->start + length;
-	} else
-		priv->end = 0;
-
-	if (priv->start % EFI_PAGE_SIZE || priv->end % EFI_PAGE_SIZE) {
-		error(L"Boundaries must be multiple of %d bytes", EFI_PAGE_SIZE);
-		goto err;
-	}
-
-	/* Initialize sparse header */
-	priv->sheader.magic = SPARSE_HEADER_MAGIC;
-	priv->sheader.major_version = 0x1;
-	priv->sheader.minor_version = 0;
-	priv->sheader.file_hdr_sz = sizeof(priv->sheader);
-	priv->sheader.chunk_hdr_sz = sizeof(*priv->chunks);
-	priv->sheader.blk_sz = EFI_PAGE_SIZE;
-
-	memmap_sz = sizeof(priv->memmap);
-	ret = uefi_call_wrapper(BS->GetMemoryMap, 5, &memmap_sz,
-				(EFI_MEMORY_DESCRIPTOR *)priv->memmap,
-				&key, &descr_sz, &descr_ver);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get the current memory map");
-		goto err;
-	}
-	nr_descr = memmap_sz / descr_sz;
-	sort_memory_map(priv->memmap, nr_descr, descr_sz);
-
-	ret = ram_build_chunks(ctx, priv, nr_descr, descr_sz);
-	if (EFI_ERROR(ret))
-		goto err;
-
-#ifndef __LP64__
-	ret = pae_init(priv->memmap, nr_descr, descr_sz);
-	if (EFI_ERROR(ret))
-		return ret;
-#endif
-
-	ctx->len += sizeof(priv->sheader);
-
-	return EFI_SUCCESS;
-
-err:
-	priv->is_in_used = FALSE;
-	return EFI_ERROR(ret) ? ret : EFI_INVALID_PARAMETER;
+	return memory_open(ctx, &ram_priv.m, ram_build_chunks, argc, argv);
 }
 
 static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
 {
-#ifndef __LP64__
-	EFI_STATUS ret;
-#endif
 	struct ram_priv *priv = ctx->private;
 	struct chunk_header *chunk;
 
@@ -312,12 +364,12 @@ static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
 
 		*buf = (unsigned char *)&priv->sheader;
 		*len = sizeof(priv->sheader);
-		priv->cur = priv->cur_end = priv->start;
+		priv->m.cur = priv->m.cur_end = priv->m.start;
 		return EFI_SUCCESS;
 	}
 
 	/* Start new chunk */
-	if (priv->cur == priv->cur_end) {
+	if (priv->m.cur == priv->m.cur_end) {
 		if (priv->cur_chunk == priv->chunk_nb || *len < sizeof(*priv->chunks)) {
 			error(L"Invalid parameter in %a", __func__);
 			return EFI_INVALID_PARAMETER;
@@ -326,32 +378,243 @@ static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
 		chunk = &priv->chunks[priv->cur_chunk++];
 		*buf = (unsigned char *)chunk;
 		*len = sizeof(*chunk);
-		priv->cur_end = priv->cur + chunk->chunk_sz * EFI_PAGE_SIZE;
+		priv->m.cur_end = priv->m.cur + chunk->chunk_sz * EFI_PAGE_SIZE;
 		if (chunk->chunk_type != CHUNK_TYPE_RAW)
-			priv->cur = priv->cur_end;
+			priv->m.cur = priv->m.cur_end;
 		return EFI_SUCCESS;
 	}
 
 	/* Continue to send the current memory region */
-	*len = min(*len, priv->cur_end - priv->cur);
-#ifdef __LP64__
-	*buf = (unsigned char *)priv->cur;
-#else
-	ret = pae_map(priv->cur, buf, len);
-	if (EFI_ERROR(ret))
-		return ret;
-#endif
-	priv->cur += *len;
+	return memory_read_current(&priv->m, buf, len);
+}
+
+/* VMCore reader */
+#pragma pack(1)
+enum elf_ident {
+	EI_MAG0,		/* File identification */
+	EI_MAG1,
+	EI_MAG2,
+	EI_MAG3,
+	EI_CLASS,		/* File class */
+	EI_DATA,		/* Data encoding */
+	EI_VERSION,		/* File version */
+	EI_OSABI,		/* OS/ABI identification */
+	EI_ABIVERSION,		/* ABI version */
+	EI_PAD,			/* Start of padding bytes */
+	EI_NIDENT = 16		/* Size of ident[] */
+};
+
+typedef struct elf64_hdr {
+	unsigned char ident[EI_NIDENT];	/* ELF identification */
+	UINT16 type;		  	/* Object file type */
+	UINT16 machine;	  		/* Machine type */
+	UINT32 version;	  		/* Object file version */
+	EFI_PHYSICAL_ADDRESS entry;	/* Entry point address */
+	UINT64 phoff;		  	/* Program header offset */
+	UINT64 shoff;		  	/* Section header offset */
+	UINT32 flags;		  	/* Processor-specific flags */
+	UINT16 ehsize;		  	/* ELF header size */
+	UINT16 phentsize;	  	/* Size of program header entry */
+	UINT16 phnum;		  	/* Number of program header entries */
+	UINT16 shentsize;	  	/* Size of section header entry */
+	UINT16 shnum;		  	/* Number of section header entries */
+	UINT16 shstrndx;	  	/* Section name string table index */
+} elf64_hdr_t;
+
+enum ident_ei_class {
+	ELFCLASS32 = 1,		/* 32-bit objects */
+	ELFCLASS64		/* 64-bit objects */
+};
+
+enum ident_ei_data {
+	ELFDATA2LSB = 1,	/* Object file data structures are
+				   little-endian */
+	ELFDATA2MSB = 2		/* Object-file data structures are
+				   big-endian*/
+};
+
+enum elf_type {
+	ET_NONE,		/* No file type */
+	ET_REL,			/* Relocatable object file */
+	ET_EXEC,		/* Executable file */
+	ET_DYN,			/* Shared object file */
+	ET_CORE,		/* Core file */
+	ET_LOOS	  = 0xfe00,	/* Environment-specific use */
+	ET_HIOS	  = 0xfeff,
+	ET_LOPROC = 0xff00,	/* Processor-specific use */
+	ET_HIPROC = 0xffff
+};
+
+enum elf_machine {
+	EM_NONE,		/* No machine */
+	EM_X86_64 = 62		/* AMD x86-64 architecture */
+};
+
+typedef struct elf64_phdr
+{
+	UINT32 type;			/* Type of segment */
+	UINT32 flags;			/* Segment attributes */
+	UINT64 offset;			/* Offset in file */
+	EFI_PHYSICAL_ADDRESS vaddr;	/* Virtual address in memory */
+	EFI_PHYSICAL_ADDRESS paddr;	/* Reserved */
+	UINT64 filesz;			/* Size of segment in file */
+	UINT64 memsz;			/* Size of segment in memory */
+	UINT64 align;			/* Alignment of segment */
+} elf64_phdr_t;
+
+enum elfp_type {
+	PT_NULL,		/* Unused entry */
+	PT_LOAD, 		/* Loadable segment */
+	PT_DYNAMIC,		/* Dynamic linking tables */
+	PT_INTERP,		/* Program interpreter path name */
+	PT_NOTE			/* Note sections */
+};
+
+#define ELF_VERSION		1
+#define KERNEL_PAGE_FLAGS	7 /* Executable, writable and readable */
+/* The Linux kernel maps all the physical memory from this offset
+   (cf. https://www.kernel.org/doc/Documentation/x86/x86_64/mm.txt) */
+#define KERNEL_PAGE_OFFSET	0xffff880000000000
+
+static struct vmcore_priv {
+	memory_t m;
+
+	/* Current program header */
+	INTN cur_phdr;
+
+	/* ELF header and ELF program headers */
+	UINTN hdr_sz;
+	elf64_hdr_t hdr;
+	elf64_phdr_t phdr[MAX_MEMORY_REGION_NB];
+} vmcore_priv = {
+	.hdr = {
+		.ident = {
+			[EI_MAG0] = 0x7f,
+			[EI_MAG1] = 'E',
+			[EI_MAG2] = 'L',
+			[EI_MAG3] = 'F',
+			[EI_CLASS] = ELFCLASS64,
+			[EI_DATA] = ELFDATA2LSB,
+			[EI_VERSION] = ELF_VERSION
+		},
+		.type = ET_CORE,
+		.machine = EM_X86_64,
+		.version = ELF_VERSION,
+		.phoff = sizeof(elf64_hdr_t),
+		.ehsize = sizeof(elf64_hdr_t),
+		.phentsize = sizeof(elf64_phdr_t)
+	},
+	.phdr = {
+		[0] = { .type = PT_NOTE } /* First program header is
+					     reserved to notes */
+	}
+};
+#pragma pack()
+
+static EFI_STATUS vmcore_build_header(reader_ctx_t *ctx, void *priv_p)
+
+{
+	struct vmcore_priv *priv = priv_p;
+	UINTN i;
+	EFI_MEMORY_DESCRIPTOR *entry;
+	elf64_phdr_t *phdr;
+	UINT8 *entries = priv->m.memmap;
+	EFI_PHYSICAL_ADDRESS start, end;
+	UINT64 length;
+
+	ctx->cur = 0;
+	priv->hdr_sz = sizeof(priv->hdr) + sizeof(priv->phdr[0]);
+	priv->hdr.phnum = 1;
+
+	for (i = 0; i < priv->m.nr_descr; entries += priv->m.descr_sz, i++) {
+		entry = (EFI_MEMORY_DESCRIPTOR *)entries;
+		if (entry->Type != EfiConventionalMemory)
+			continue;
+
+		start = entry->PhysicalStart;
+		length = entry->NumberOfPages * EFI_PAGE_SIZE;
+		end = start + length;
+
+		if (end <= priv->m.start)
+			continue;
+
+		if (start < priv->m.start) {
+			length -= priv->m.start - start;
+			start = priv->m.start;
+		}
+
+		if (priv->m.end && end > priv->m.end) {
+			length -= end - priv->m.end;
+			end = priv->m.end;
+		}
+
+		priv->hdr.phnum++;
+		if (priv->hdr.phnum == ARRAY_SIZE(priv->phdr)) {
+			error(L"Not enough program headers");
+			return EFI_OUT_OF_RESOURCES;
+		}
+
+		phdr = &priv->phdr[priv->hdr.phnum - 1];
+		phdr->type = PT_LOAD;
+		phdr->paddr = start;
+		phdr->vaddr = KERNEL_PAGE_OFFSET + start;
+		phdr->filesz = phdr->memsz = length;
+		phdr->flags = KERNEL_PAGE_FLAGS;
+
+		priv->hdr_sz += sizeof(*phdr);
+	}
+
+	if (priv->hdr.phnum == 1) {
+		error(L"No memory region to dump found");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	ctx->len = priv->hdr_sz;
+	for (i = 1; i < priv->hdr.phnum; i++) {
+		phdr = &priv->phdr[i];
+		phdr->offset = ctx->len;
+		ctx->len += phdr->memsz;
+	}
 
 	return EFI_SUCCESS;
 }
 
-static void ram_close(reader_ctx_t *ctx)
+static EFI_STATUS vmcore_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 {
-	((struct ram_priv *)ctx->private)->is_in_used = FALSE;
-#ifndef __LP64__
-	pae_exit();
-#endif
+	return memory_open(ctx, &vmcore_priv.m, vmcore_build_header, argc, argv);
+}
+
+static EFI_STATUS vmcore_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
+{
+	struct vmcore_priv *priv = ctx->private;
+
+	/* First byte, send the ELF headers */
+	if (ctx->cur == 0) {
+		if (*len < priv->hdr_sz)
+			return EFI_INVALID_PARAMETER;
+
+		*buf = (unsigned char *)&priv->hdr;
+		*len = priv->hdr_sz;
+
+		priv->m.cur = priv->m.cur_end = 0;
+		priv->cur_phdr = 0;
+		return EFI_SUCCESS;
+	}
+
+	/* Start new memory region */
+	if (priv->m.cur == priv->m.cur_end) {
+		if (priv->cur_phdr == priv->hdr.phnum - 1) {
+			error(L"Invalid parameter in %a", __func__);
+			return EFI_INVALID_PARAMETER;
+		}
+
+		priv->cur_phdr++;
+		priv->m.cur = priv->phdr[priv->cur_phdr].paddr;
+		priv->m.cur_end = priv->m.cur + priv->phdr[priv->cur_phdr].memsz;
+	}
+
+	/* Continue to send the current memory region */
+	return memory_read_current(&priv->m, buf, len);
 }
 
 /* Partition reader */
@@ -770,7 +1033,8 @@ struct reader {
 	EFI_STATUS (*read)(reader_ctx_t *ctx, unsigned char **buf, UINTN *len);
 	void (*close)(reader_ctx_t *ctx);
 } READERS[] = {
-	{ "ram",		ram_open,			ram_read,		ram_close },
+	{ "ram",		ram_open,			ram_read,		memory_close },
+	{ "vmcore",		vmcore_open,			vmcore_read,		memory_close },
 	{ "acpi",		acpi_open,			read_from_private,	NULL },
 	{ "part",		part_open,			part_read,		free_private },
 	{ "factory-part",	factory_part_open,		part_read,		free_private },
