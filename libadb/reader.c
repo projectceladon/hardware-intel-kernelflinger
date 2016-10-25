@@ -68,7 +68,7 @@ static struct ram_priv {
 	struct chunk_header chunks[MAX_MEMORY_REGION_NB];
 } ram_priv;
 
-static VOID sort_memory_map(CHAR8 *entries, UINTN nr_entries, UINTN entry_sz)
+static VOID sort_memory_map(UINT8 *entries, UINTN nr_entries, UINTN entry_sz)
 {
 	BOOLEAN swapped;
 	EFI_MEMORY_DESCRIPTOR *cur, *next;
@@ -84,7 +84,7 @@ static VOID sort_memory_map(CHAR8 *entries, UINTN nr_entries, UINTN entry_sz)
 			cur = (EFI_MEMORY_DESCRIPTOR *)(entries + entry_sz * i);
 			next = (EFI_MEMORY_DESCRIPTOR *)(entries + entry_sz * (i + 1));
 			if (cur->PhysicalStart > next->PhysicalStart) {
-				CHAR8 save[entry_sz];
+				UINT8 save[entry_sz];
 				memcpy(save, cur, entry_sz);
 				memcpy(cur, next, entry_sz);
 				memcpy(next, save, entry_sz);
@@ -146,7 +146,7 @@ static EFI_STATUS ram_build_chunks(reader_ctx_t *ctx, struct ram_priv *priv,
 	EFI_MEMORY_DESCRIPTOR *entry;
 	UINT64 entry_len, length;
 	EFI_PHYSICAL_ADDRESS entry_end, prev_end;
-	CHAR8 *entries = priv->memmap;
+	UINT8 *entries = priv->memmap;
 
 	prev_end = ctx->cur = ctx->len = 0;
 
