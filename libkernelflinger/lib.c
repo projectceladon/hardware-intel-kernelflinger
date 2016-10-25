@@ -172,7 +172,7 @@ int isalnum(int c)
 
 int isspace(int c)
 {
-        return c == ' ';
+        return c == ' ' || (c >= '\t' && c <= '\r');
 }
 
 int isdigit(int c)
