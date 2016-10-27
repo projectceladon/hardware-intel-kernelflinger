@@ -1077,6 +1077,14 @@ static EFI_STATUS fastboot_init()
 		/* Might as well continue even though this failed ... */
 	}
 
+	ret = fastboot_publish("version", "0.4");
+	if (EFI_ERROR(ret))
+		goto error;
+
+	ret = fastboot_publish("secure", "no");
+	if (EFI_ERROR(ret))
+		goto error;
+
 	ret = fastboot_publish("product", info_product());
 	if (EFI_ERROR(ret))
 		goto error;
