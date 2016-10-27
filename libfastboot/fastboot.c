@@ -765,7 +765,8 @@ void fastboot_reboot(enum boot_target target, CHAR16 *msg)
 		fastboot_fail("Failed to stop transport");
 		return;
 	}
-	ui_print(msg);
+	if (msg)
+		ui_print(msg);
 	fastboot_okay("");
 }
 
