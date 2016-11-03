@@ -62,17 +62,6 @@ typedef struct memory_priv {
 	EFI_PHYSICAL_ADDRESS cur_end;
 } memory_t;
 
-static int compare_memory_descriptor(const void *a, const void *b)
-{
-	const EFI_MEMORY_DESCRIPTOR *m1 = a, *m2 = b;
-
-	if (m1->PhysicalStart < m2->PhysicalStart)
-		return -1;
-	if (m1->PhysicalStart > m2->PhysicalStart)
-		return 1;
-	return 0;
-}
-
 static EFI_STATUS get_sorted_memory_map(memory_t *mem)
 {
 	EFI_STATUS ret;
@@ -89,7 +78,7 @@ static EFI_STATUS get_sorted_memory_map(memory_t *mem)
 	}
 
 	mem->nr_descr = memmap_sz / mem->descr_sz;
-	qsort(mem->memmap, mem->nr_descr, mem->descr_sz, compare_memory_descriptor);
+	sort_memory_map(mem->memmap, mem->nr_descr, mem->descr_sz);
 
 	return EFI_SUCCESS;
 }
