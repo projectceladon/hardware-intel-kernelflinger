@@ -102,6 +102,10 @@ ifeq ($(TARGET_USE_TRUSTY),true)
     LOCAL_SRC_FILES += trusty.c
 endif
 
+ifneq ($(TARGET_UEFI_ARCH),x86_64)
+    LOCAL_SRC_FILES += pae.c
+endif
+
 ifeq ($(TARGET_BOOT_SIGNER),)
     LOCAL_SRC_FILES += \
 	aosp_sig.c \
