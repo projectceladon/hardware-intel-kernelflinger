@@ -243,12 +243,14 @@ static EFI_STATUS memmap(EFI_PHYSICAL_ADDRESS addr)
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS pae_map(EFI_PHYSICAL_ADDRESS addr, unsigned char **to, UINTN *len)
+EFI_STATUS pae_map(EFI_PHYSICAL_ADDRESS addr, unsigned char **to, UINT64 *len)
 {
 	EFI_STATUS ret;
 
 	if (addr <= UINT32_MAX) {
 		*to = (unsigned char *)(UINT32)addr;
+		if (*len > UINT32_MAX)
+			*len = UINT32_MAX;
 		if (addr > UINT32_MAX - *len)
 			*len = UINT32_MAX - addr;
 		return EFI_SUCCESS;

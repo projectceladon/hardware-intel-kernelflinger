@@ -34,7 +34,7 @@
 #define _PAE_H_
 
 EFI_STATUS pae_init(CHAR8 *entries, UINTN nr_entries, UINTN entry_sz);
-EFI_STATUS pae_map(EFI_PHYSICAL_ADDRESS addr, unsigned char **to, UINTN *len);
+EFI_STATUS pae_map(EFI_PHYSICAL_ADDRESS addr, unsigned char **to, UINT64 *len);
 EFI_STATUS pae_exit(void);
 
 #endif	/* _PAE_H_ */

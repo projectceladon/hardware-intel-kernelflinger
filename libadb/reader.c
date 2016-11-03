@@ -153,7 +153,7 @@ err:
 	return EFI_ERROR(ret) ? ret : EFI_INVALID_PARAMETER;
 }
 
-static EFI_STATUS memory_read_current(memory_t *mem, unsigned char **buf, UINTN *len)
+static EFI_STATUS memory_read_current(memory_t *mem, unsigned char **buf, UINT64 *len)
 {
 #ifndef __LP64__
 	EFI_STATUS ret;
@@ -336,7 +336,7 @@ static EFI_STATUS ram_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	return memory_open(ctx, &ram_priv.m, ram_build_chunks, argc, argv);
 }
 
-static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
+static EFI_STATUS ram_read(reader_ctx_t *ctx, unsigned char **buf, UINT64 *len)
 {
 	struct ram_priv *priv = ctx->private;
 	struct chunk_header *chunk;
@@ -568,7 +568,7 @@ static EFI_STATUS vmcore_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	return memory_open(ctx, &vmcore_priv.m, vmcore_build_header, argc, argv);
 }
 
-static EFI_STATUS vmcore_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
+static EFI_STATUS vmcore_read(reader_ctx_t *ctx, unsigned char **buf, UINT64 *len)
 {
 	struct vmcore_priv *priv = ctx->private;
 
@@ -683,7 +683,7 @@ static EFI_STATUS factory_part_open(reader_ctx_t *ctx, UINTN argc, char **argv)
 	return _part_open(ctx, argc, argv, LOGICAL_UNIT_FACTORY);
 }
 
-static EFI_STATUS part_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
+static EFI_STATUS part_read(reader_ctx_t *ctx, unsigned char **buf, UINT64 *len)
 {
 	EFI_STATUS ret;
 	struct part_priv *priv = ctx->private;
@@ -978,7 +978,7 @@ static EFI_STATUS bert_region_open(reader_ctx_t *ctx, UINTN argc,
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS bert_region_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
+static EFI_STATUS bert_region_read(reader_ctx_t *ctx, unsigned char **buf, UINT64 *len)
 {
 	struct BERT_TABLE *bert_table = ctx->private;
 
@@ -1000,7 +1000,7 @@ static EFI_STATUS bert_region_read(reader_ctx_t *ctx, unsigned char **buf, UINTN
 
 /* Interface */
 static EFI_STATUS read_from_private(reader_ctx_t *ctx, unsigned char **buf,
-				    __attribute__((__unused__)) UINTN *len)
+				    __attribute__((__unused__)) UINT64 *len)
 {
 	*buf = (unsigned char *)ctx->private + ctx->cur;
 	return EFI_SUCCESS;
@@ -1014,7 +1014,7 @@ static void free_private(reader_ctx_t *ctx)
 struct reader {
 	const char *name;
 	EFI_STATUS (*open)(reader_ctx_t *ctx, UINTN argc, char **argv);
-	EFI_STATUS (*read)(reader_ctx_t *ctx, unsigned char **buf, UINTN *len);
+	EFI_STATUS (*read)(reader_ctx_t *ctx, unsigned char **buf, UINT64 *len);
 	void (*close)(reader_ctx_t *ctx);
 } READERS[] = {
 	{ "ram",		ram_open,			ram_read,		memory_close },
@@ -1071,7 +1071,7 @@ EFI_STATUS reader_open(reader_ctx_t *ctx, char *args)
 	return reader->open(ctx, argc - 1, argv + 1);
 }
 
-EFI_STATUS reader_read(reader_ctx_t *ctx, unsigned char **buf, UINTN *len)
+EFI_STATUS reader_read(reader_ctx_t *ctx, unsigned char **buf, UINT64 *len)
 {
 	EFI_STATUS ret;
 

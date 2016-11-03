@@ -76,8 +76,8 @@ typedef struct {
 	reader_ctx_t reader_ctx;
 	BOOLEAN need_more_data;
 	unsigned char *buf;
-	UINTN buf_cur;
-	UINTN buf_len;
+	UINT64 buf_cur;
+	UINT64 buf_len;
 	UINT64 sent;
 } sync_ctx_t;
 static sync_ctx_t CONTEXTS[MAX_ADB_SOCKET];
