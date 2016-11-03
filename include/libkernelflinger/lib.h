@@ -205,6 +205,8 @@ int memcmp(const void *s1, const void *s2, size_t n)
 EFI_STATUS alloc_aligned(VOID **free_addr, VOID **aligned_addr,
                          UINTN size, UINTN align);
 
+void sort_memory_map(void *descr, UINTN nr_descr, UINTN descr_sz);
+
 UINT64 efi_time_to_ctime(EFI_TIME *time);
 
 VOID cpuid(UINT32 op, UINT32 reg[4]);

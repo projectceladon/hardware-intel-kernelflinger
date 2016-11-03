@@ -50,6 +50,7 @@
 #include "blobstore.h"
 #endif
 #include "slot.h"
+#include "pae.h"
 
 #define OS_INITIATED L"os_initiated"
 
@@ -1513,6 +1514,7 @@ EFI_STATUS write_bcb(
 
 EFI_STATUS android_clear_memory()
 {
+        EFI_STATUS ret = EFI_SUCCESS;
         UINTN nr_entries, key, entry_sz;
         CHAR8 *mem_entries;
         UINT32 entry_ver;
@@ -1526,21 +1528,50 @@ EFI_STATUS android_clear_memory()
                 uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
                 return EFI_OUT_OF_RESOURCES;
         }
+
+        sort_memory_map(mem_entries, nr_entries, entry_sz);
         mem_map = mem_entries;
+
+#ifndef __LP64__
+        ret = pae_init(mem_entries, nr_entries, entry_sz);
+        if (EFI_ERROR(ret))
+                goto err;
+#endif
+
         for (i = 0; i < nr_entries; mem_entries += entry_sz, i++) {
                 EFI_MEMORY_DESCRIPTOR *entry;
-                UINT64 map_sz;
+                EFI_PHYSICAL_ADDRESS start;
+                UINT64 map_sz, len;
+                void *buf;
 
                 entry = (EFI_MEMORY_DESCRIPTOR *)mem_entries;
+                if (entry->Type != EfiConventionalMemory)
+                        continue;
+
+                start = entry->PhysicalStart;
                 map_sz = entry->NumberOfPages * EFI_PAGE_SIZE;
 
-                if (entry->Type == EfiConventionalMemory)
-                        uefi_call_wrapper(BS->SetMem, 3, (void *) (UINTN)entry->PhysicalStart, map_sz, 0);
+                for (; map_sz > 0; map_sz -= len, start += len) {
+                        len = map_sz;
+#ifdef __LP64__
+                        buf = (void *)start;
+#else
+                        ret = pae_map(start, (unsigned char **)&buf, &len);
+                        if (EFI_ERROR(ret))
+                                goto pae_err;
+#endif
+                        uefi_call_wrapper(BS->SetMem, 3, buf, len, 0);
+                }
         }
-        uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
 
+#ifndef __LP64__
+pae_err:
+        pae_exit();
+err:
+#endif
+        uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
         FreePool((void *)mem_map);
-        return EFI_SUCCESS;
+        return ret;
 }
 
 BOOLEAN recovery_in_boot_partition(void)

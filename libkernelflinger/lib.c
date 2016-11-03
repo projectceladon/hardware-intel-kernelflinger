@@ -897,6 +897,21 @@ void *memcpy(void *dest, const void *source, size_t count)
         return dest;
 }
 
+static int compare_memory_descriptor(const void *a, const void *b)
+{
+        const EFI_MEMORY_DESCRIPTOR *m1 = a, *m2 = b;
+
+        if (m1->PhysicalStart < m2->PhysicalStart)
+                return -1;
+        if (m1->PhysicalStart > m2->PhysicalStart)
+                return 1;
+        return 0;
+}
+
+void sort_memory_map(void *descr, UINTN nr_descr, UINTN descr_sz)
+{
+        qsort(descr, nr_descr, descr_sz, compare_memory_descriptor);
+}
 
 static BOOLEAN is_a_leap_year(INTN year)
 {
