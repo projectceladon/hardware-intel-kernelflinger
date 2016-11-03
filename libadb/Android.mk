@@ -20,8 +20,4 @@ LOCAL_SRC_FILES := \
 	sync_service.c \
 	reader.c
 
-ifneq ($(TARGET_UEFI_ARCH),x86_64)
-    LOCAL_SRC_FILES += pae.c
-endif
-
 include $(BUILD_EFI_STATIC_LIBRARY)
