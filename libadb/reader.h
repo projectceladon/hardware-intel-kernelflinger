@@ -43,7 +43,7 @@ typedef struct reader_context {
 } reader_ctx_t;
 
 EFI_STATUS reader_open(reader_ctx_t *reader, char *args);
-EFI_STATUS reader_read(reader_ctx_t *reader, unsigned char **buf, UINTN *len);
+EFI_STATUS reader_read(reader_ctx_t *reader, unsigned char **buf, UINT64 *len);
 void reader_close(reader_ctx_t *reader);
 
 #endif	/* _READER_H_ */
