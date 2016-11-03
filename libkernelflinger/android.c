@@ -1517,7 +1517,6 @@ EFI_STATUS android_clear_memory()
         CHAR8 *mem_entries;
         UINT32 entry_ver;
         UINTN i;
-        UINTN counter;
         CHAR8 *mem_map;
         EFI_TPL OldTpl;
 
@@ -1527,7 +1526,6 @@ EFI_STATUS android_clear_memory()
                 uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
                 return EFI_OUT_OF_RESOURCES;
         }
-        counter = 0;
         mem_map = mem_entries;
         for (i = 0; i < nr_entries; mem_entries += entry_sz, i++) {
                 EFI_MEMORY_DESCRIPTOR *entry;
@@ -1536,10 +1534,8 @@ EFI_STATUS android_clear_memory()
                 entry = (EFI_MEMORY_DESCRIPTOR *)mem_entries;
                 map_sz = entry->NumberOfPages * EFI_PAGE_SIZE;
 
-                if (entry->Type == EfiConventionalMemory) {
+                if (entry->Type == EfiConventionalMemory)
                         uefi_call_wrapper(BS->SetMem, 3, (void *) (UINTN)entry->PhysicalStart, map_sz, 0);
-                        counter += entry->NumberOfPages;
-                }
         }
         uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
 
