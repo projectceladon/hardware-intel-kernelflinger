@@ -181,6 +181,10 @@ int isxdigit(int c)
 int tolower(int c)
     __attribute__((weak));
 
+void qsort(void *base, size_t num, size_t width,
+           int (*compare)(const void *, const void *))
+    __attribute__((weak));
+
 /*
  * misc
  */
