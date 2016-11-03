@@ -62,31 +62,15 @@ typedef struct memory_priv {
 	EFI_PHYSICAL_ADDRESS cur_end;
 } memory_t;
 
-static VOID sort_memory_map(UINT8 *entries, UINTN nr_entries, UINTN entry_sz)
+static int compare_memory_descriptor(const void *a, const void *b)
 {
-	BOOLEAN swapped;
-	EFI_MEMORY_DESCRIPTOR *cur, *next;
-	UINTN i;
+	const EFI_MEMORY_DESCRIPTOR *m1 = a, *m2 = b;
 
-	if (nr_entries <= 1)
-		return;
-
-	/* Bubble sort algorithm */
-	do {
-		swapped = FALSE;
-		for (i = 0; i < nr_entries - 1; i++) {
-			cur = (EFI_MEMORY_DESCRIPTOR *)(entries + entry_sz * i);
-			next = (EFI_MEMORY_DESCRIPTOR *)(entries + entry_sz * (i + 1));
-			if (cur->PhysicalStart > next->PhysicalStart) {
-				UINT8 save[entry_sz];
-				memcpy(save, cur, entry_sz);
-				memcpy(cur, next, entry_sz);
-				memcpy(next, save, entry_sz);
-				swapped = TRUE;
-			}
-		}
-		nr_entries--;
-	} while (swapped);
+	if (m1->PhysicalStart < m2->PhysicalStart)
+		return -1;
+	if (m1->PhysicalStart > m2->PhysicalStart)
+		return 1;
+	return 0;
 }
 
 static EFI_STATUS get_sorted_memory_map(memory_t *mem)
@@ -105,7 +89,7 @@ static EFI_STATUS get_sorted_memory_map(memory_t *mem)
 	}
 
 	mem->nr_descr = memmap_sz / mem->descr_sz;
-	sort_memory_map(mem->memmap, mem->nr_descr, mem->descr_sz);
+	qsort(mem->memmap, mem->nr_descr, mem->descr_sz, compare_memory_descriptor);
 
 	return EFI_SUCCESS;
 }

@@ -91,7 +91,8 @@ LOCAL_SRC_FILES := \
 	text_parser.c \
 	watchdog.c \
 	slot.c \
-	life_cycle.c
+	life_cycle.c \
+	qsort.c
 
 ifeq ($(HAL_AUTODETECT),true)
     LOCAL_SRC_FILES += blobstore.c
