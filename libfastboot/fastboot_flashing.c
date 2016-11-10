@@ -181,14 +181,22 @@ static enum unlock_ability get_unlock_ability(void)
 static void cmd_unlock(__attribute__((__unused__)) INTN argc,
 		       __attribute__((__unused__)) CHAR8 **argv)
 {
+#ifdef USER
+	EFI_STATUS ret;
+#endif
+
 	if (is_already_in_state(UNLOCKED))
 		return;
 
 	if (get_unlock_ability() == UNLOCK_ALLOWED) {
-		change_device_state(UNLOCKED, TRUE);
 #ifdef USER
-		android_clear_memory();
+		ret = android_clear_memory();
+		if (EFI_ERROR(ret)) {
+			fastboot_fail("Failed to clear memory.  Unlock aborted.");
+			return;
+		}
 #endif
+		change_device_state(UNLOCKED, TRUE);
 	} else {
 #ifdef USER
 		fastboot_fail("Unlocking device not allowed");

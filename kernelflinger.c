@@ -803,8 +803,13 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 #endif
 #ifdef USER
         /* per bootloaderequirements.pdf */
-        if (boot_state == BOOT_STATE_ORANGE)
-                android_clear_memory();
+        if (boot_state == BOOT_STATE_ORANGE) {
+                ret = android_clear_memory();
+                if (EFI_ERROR(ret)) {
+                        error(L"Failed to clear memory. Load image aborted.");
+                        return ret;
+                }
+        }
 #endif
 
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
