@@ -157,6 +157,9 @@ size_t strnlen(const CHAR8 *s, size_t maxlen)
 void *memcpy(void *dest, const void *source, size_t count)
     __attribute__((weak));
 
+void *memmove(void *dst, const void *src, size_t n)
+    __attribute__((weak));
+
 unsigned long long strtoull(const char *nptr, char **endptr, int base)
     __attribute__((weak));
 

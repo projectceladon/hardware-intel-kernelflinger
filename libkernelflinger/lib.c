@@ -897,6 +897,25 @@ void *memcpy(void *dest, const void *source, size_t count)
         return dest;
 }
 
+void *memmove(void *dst, const void *src, size_t n)
+{
+        size_t offs;
+        ssize_t i;
+
+        if (src > dst)
+                return memcpy(dst, src, n);
+
+        offs = n - (n % sizeof(unsigned long));
+
+        for (i = (n % sizeof(unsigned long)) - 1; i >= 0; i--)
+                ((UINT8 *)dst)[i + offs] = ((UINT8 *)src)[i + offs];
+
+        for (i = n / sizeof(unsigned long) - 1; i >= 0; i--)
+                ((unsigned long *)dst)[i] = ((unsigned long *)src)[i];
+
+        return dst;
+}
+
 static int compare_memory_descriptor(const void *a, const void *b)
 {
         const EFI_MEMORY_DESCRIPTOR *m1 = a, *m2 = b;

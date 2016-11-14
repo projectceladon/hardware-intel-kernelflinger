@@ -545,14 +545,6 @@ char * __strcat_chk(char* __restrict dest, const char* __restrict src,
 	return NULL;
 }
 
-void *memmove(void *dest, const void *src, size_t n)
-	__attribute__((weak));
-void *memmove(void *dest, const void *src, size_t n)
-{
-	error(L"Error: STUBBED %a", __func__);
-	return NULL;
-}
-
 int open(const char * pathname, int flags, ...)
 	__attribute__((weak));
 int open(const char * pathname, int flags, ...)
