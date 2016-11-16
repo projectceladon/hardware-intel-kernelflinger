@@ -1087,6 +1087,10 @@ static EFI_STATUS fastboot_init()
 		goto error;
 #endif
 
+	ret = fastboot_publish("hw-revision", info_hw_revision());
+	if (EFI_ERROR(ret))
+		goto error;
+
 	ret = fastboot_publish("version-bootloader", info_bootloader_version());
 	if (EFI_ERROR(ret))
 		goto error;

@@ -115,11 +115,6 @@ static EFI_GRAPHICS_OUTPUT_BLT_PIXEL *fastboot_ui_default_color(void)
 	return &COLOR_WHITE;
 }
 
-static const char *fastboot_ui_info_hw_version(void)
-{
-	return SMBIOS_GET_STRING(1, Version);
-}
-
 static const char *fastboot_ui_info_ifwi_version(void)
 {
 	return SMBIOS_GET_STRING(0, BiosVersion);
@@ -148,7 +143,7 @@ struct info_text_fun {
 } const FASTBOOT_INFOS[] = {
 	{ "PRODUCT NAME",	info_product,			fastboot_ui_default_color },
 	{ "VARIANT",		info_variant,			fastboot_ui_default_color },
-	{ "HW_VERSION",		fastboot_ui_info_hw_version,	fastboot_ui_default_color },
+	{ "HW-REVISION",	info_hw_revision,		fastboot_ui_default_color },
 	{ "BOOTLOADER VERSION",	info_bootloader_version,	fastboot_ui_default_color },
 	{ "IFWI VERSION",	fastboot_ui_info_ifwi_version,	fastboot_ui_default_color },
 	{ "SERIAL NUMBER",	fastboot_ui_info_serial_number,	fastboot_ui_default_color },
