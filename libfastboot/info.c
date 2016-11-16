@@ -32,6 +32,8 @@
 
 #include <vars.h>
 #include <version.h>
+#include <smbios.h>
+#include <lib.h>
 
 #include "info.h"
 
@@ -55,3 +57,7 @@ const char *info_product(void)
 	return TARGET_BOOTLOADER_BOARD_NAME;
 }
 
+const char *info_hw_revision(void)
+{
+	return SMBIOS_GET_STRING(1, Version);
+}

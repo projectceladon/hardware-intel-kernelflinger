@@ -36,5 +36,6 @@
 const char *info_bootloader_version(void);
 const char *info_variant(void);
 const char *info_product(void);
+const char *info_hw_revision(void);
 
 #endif	/* __INFO_H__ */
