@@ -95,6 +95,7 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define SYSTEM_LABEL		L"system"
 #define OEM_LABEL		L"oem"
 #define BOOTLOADER_LABEL	L"bootloader"
+#define MULTIBOOT_LABEL		L"multiboot"
 #define TOS_LABEL		L"tos"
 
 BOOLEAN device_is_unlocked(void);

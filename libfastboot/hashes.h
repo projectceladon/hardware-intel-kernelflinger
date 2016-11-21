@@ -35,6 +35,9 @@
 #ifndef _HASHES_H_
 #define _HASHES_H_
 
+#ifdef USE_MULTIBOOT
+EFI_STATUS get_ias_image_hash(const CHAR16 *label);
+#endif
 EFI_STATUS get_boot_image_hash(const CHAR16 *label);
 EFI_STATUS get_bootloader_hash(const CHAR16 *label);
 EFI_STATUS get_fs_hash(const CHAR16 *label);

@@ -195,7 +195,11 @@ static struct oem_hash {
 	{ BOOT_LABEL,		get_boot_image_hash,	TRUE },
 	{ RECOVERY_LABEL,	get_boot_image_hash,	FALSE },
 #ifdef USE_TRUSTY
+#ifdef USE_MULTIBOOT
+	{ MULTIBOOT_LABEL,	get_ias_image_hash,	TRUE },
+#else
 	{ TOS_LABEL,		get_boot_image_hash,	TRUE },
+#endif
 #endif
 	{ BOOTLOADER_LABEL,	get_bootloader_hash,	FALSE },
 	{ SYSTEM_LABEL,		get_fs_hash,		TRUE },

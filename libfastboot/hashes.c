@@ -510,6 +510,97 @@ out:
 	return ret;
 }
 
+#ifdef USE_MULTIBOOT
+static const unsigned char IAS_IMAGE_MAGIC[4] = "ipk.";
+static const unsigned char MULTIBOOT_MAGIC[4] = "\x02\xb0\xad\x1b";
+
+/* 28 Bytes header, 4 Bytes payload CRC, 256 Bytes RSA signature, 260 Bytes RSA public key */
+#define IAS_IMAGE_WRAP_SIZE (28 + 4 + 256 + 260)
+
+struct ias_img_hdr {
+	unsigned char magic[ARRAY_SIZE(IAS_IMAGE_MAGIC)];
+	UINT32 img_compress_type;
+	UINT32 version;
+	UINT32 data_len;
+	UINT32 data_off;
+	UINT32 uncompressed_data_len;
+	UINT32 hdr_CRC;
+};
+
+static EFI_STATUS get_iasimage_len(struct gpt_partition_interface *gparti,
+				    UINT64 *len)
+{
+	EFI_STATUS ret;
+	struct ias_img_hdr hdr;
+	unsigned char tos_magic[ARRAY_SIZE(MULTIBOOT_MAGIC)];
+	UINT64 part_off, part_len;
+
+	part_off = gparti->part.starting_lba * gparti->bio->Media->BlockSize;
+	part_len = (gparti->part.ending_lba + 1 - gparti->part.starting_lba) *
+		gparti->bio->Media->BlockSize;
+
+	ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
+				gparti->bio->Media->MediaId, part_off,
+				sizeof(hdr), &hdr);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read the ias image header");
+		return ret;
+	}
+
+	/* Verify ias image magic. */
+	if (memcmp(IAS_IMAGE_MAGIC, hdr.magic, sizeof(hdr.magic))) {
+		error(L"Bad ias magic");
+		return EFI_COMPROMISED_DATA;
+	}
+
+	ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
+				gparti->bio->Media->MediaId, part_off + hdr.data_off,
+				sizeof(tos_magic), &tos_magic);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read the multiboot magic");
+		return ret;
+	}
+
+	/* Verify multiboot-tos magic. */
+	if (memcmp(MULTIBOOT_MAGIC, tos_magic, sizeof(MULTIBOOT_MAGIC))) {
+		error(L"Bad multiboot magic");
+		return EFI_COMPROMISED_DATA;
+	}
+
+	*len = hdr.data_len + IAS_IMAGE_WRAP_SIZE;
+	if (*len > part_len) {
+		error(L"Ias-multiboot image is bigger than the partition");
+		return EFI_COMPROMISED_DATA;
+	}
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS get_ias_image_hash(const CHAR16 *label)
+{
+	struct gpt_partition_interface gparti;
+	UINT64 len;
+	CHAR8 hash[EVP_MAX_MD_SIZE];
+	EFI_STATUS ret;
+
+	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get partition %s", label);
+		return ret;
+	}
+
+	ret = get_iasimage_len(&gparti, &len);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = hash_partition(&gparti, len, hash);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	return report_hash(L"/", label, hash);
+}
+#endif
+
 EFI_STATUS get_boot_image_hash(const CHAR16 *label)
 {
 	struct gpt_partition_interface gparti;
