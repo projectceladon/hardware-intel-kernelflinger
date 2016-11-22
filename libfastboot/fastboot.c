@@ -1077,9 +1077,10 @@ static struct fastboot_cmd COMMANDS[] = {
 static EFI_STATUS fastboot_init()
 {
 	EFI_STATUS ret;
-	UINTN i;
+	UINTN i, size;
 	char download_max_str[30];
 	static char default_command_buffer[MAGIC_LENGTH];
+	char* data = NULL;
 
 	ret = fastboot_set_command_buffer(default_command_buffer,
 					  sizeof(default_command_buffer));
@@ -1105,6 +1106,16 @@ static EFI_STATUS fastboot_init()
 	ret = fastboot_publish("product", info_product());
 	if (EFI_ERROR(ret))
 		goto error;
+
+	/* publish serial number*/
+	ret = get_efi_variable(&loader_guid, SERIAL_NUM_VAR, &size, (VOID **)&data,
+		NULL);
+	if (EFI_ERROR(ret) || !data || !size)
+		fastboot_publish("SerialNum", NULL);
+	else
+		fastboot_publish("SerialNum", data);
+
+	data = NULL;
 
 #ifdef HAL_AUTODETECT
 	ret = fastboot_publish("variant", info_variant());
