@@ -57,6 +57,8 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 
 #define SERIAL_PORT_VAR         L"SerialPort"
 
+#define SERIAL_NUM_VAR		L"SerialNum"
+
 /* EFI variable which stores the max timeout for checking whether the
  * magic key was pressed at startup */
 #define MAGIC_KEY_TIMEOUT_VAR   L"MagicKeyTimeout"

@@ -721,10 +721,27 @@ char *get_device_id(void)
 }
 #endif
 
+char *get_serialno_var()
+{
+	CHAR8 *data;
+	EFI_STATUS ret;
+	UINTN size;
+
+	ret = get_efi_variable(&loader_guid, SERIAL_NUM_VAR, &size, (VOID **)&data,NULL);
+	if (EFI_ERROR(ret) || !data || !size)
+		return NULL;
+	if (data[size - 1] != '\0') {
+		FreePool(data);
+		return NULL;
+	}
+	return (char *)data;
+}
+
 /* Per Android CDD, the value must be 7-bit ASCII and match the regex
  * ^[a-zA-Z0-9](6,20)$  */
 char *get_serial_number(void)
 {
+	static char bios_serialno[SERIALNO_MAX_SIZE + 1];
 	static char serialno[SERIALNO_MAX_SIZE + 1];
 	char *pos;
 	unsigned int zeroes = 0;
@@ -733,12 +750,12 @@ char *get_serial_number(void)
 	if (serialno[0] != '\0')
 		return serialno;
 
-	SMBIOS_TO_BUFFER(serialno, TYPE_PRODUCT, SerialNumber);
-	SMBIOS_TO_BUFFER(serialno, TYPE_CHASSIS, SerialNumber);
-	SMBIOS_TO_BUFFER(serialno, TYPE_BOARD, SerialNumber);
-	SMBIOS_TO_BUFFER(serialno, TYPE_CHASSIS, AssetTag);
+	SMBIOS_TO_BUFFER(bios_serialno, TYPE_PRODUCT, SerialNumber);
+	SMBIOS_TO_BUFFER(bios_serialno, TYPE_CHASSIS, SerialNumber);
+	SMBIOS_TO_BUFFER(bios_serialno, TYPE_BOARD, SerialNumber);
+	SMBIOS_TO_BUFFER(bios_serialno, TYPE_CHASSIS, AssetTag);
 
-	if (!serialno[0]) {
+	if (!bios_serialno[0]) {
 		error(L"couldn't read serial number from SMBIOS");
 		goto bad;
 	}
@@ -747,13 +764,14 @@ char *get_serial_number(void)
 	 * Check for stuff like "System Serial Number",
 	 * "To be filled by O.E.M,, common non-random number.
 	 * Not intended to be exhaustive */
-	if ((strcasestr(serialno, "serial") != NULL) ||
-	    (strcasestr(serialno, "filled") != NULL) ||
-	    (strcasestr(serialno, "12345678") != NULL)) {
+	if ((strcasestr(bios_serialno, "serial") != NULL) ||
+	    (strcasestr(bios_serialno, "filled") != NULL) ||
+	    (strcasestr(bios_serialno, "12345678") != NULL)) {
 		error(L"SMBIOS has a bad serial number");
 		goto bad;
 	}
 
+	efi_snprintf((CHAR8*)serialno, SERIALNO_MAX_SIZE, (CHAR8*) "%a%a", TARGET_BOOTLOADER_BOARD_NAME, bios_serialno);
 	for (pos = serialno; *pos; pos++) {
 		/* Replace foreign characters with zeroes */
 		if (!((*pos >= '0' && *pos <= '9') ||
@@ -778,8 +796,15 @@ char *get_serial_number(void)
 
 	return serialno;
 bad:
-	strncpy((CHAR8 *)serialno, (CHAR8 *)"00badbios00badbios00",
-		SERIALNO_MAX_SIZE);
+	pos = get_serialno_var();
+	if (pos == NULL) {
+		error(L"SERIAL number is NULL\n");
+		strncpy((CHAR8 *)serialno, (CHAR8 *)"00badbios00badbios00", SERIALNO_MAX_SIZE);
+	} else {
+		error(L"Valid serial number read from EFI vars\n");
+		strncpy((CHAR8 *)serialno, (CHAR8 *)pos, SERIALNO_MAX_SIZE);
+		FreePool(pos);
+	}
 	return serialno;
 }
 
