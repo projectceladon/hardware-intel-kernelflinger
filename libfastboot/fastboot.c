@@ -294,9 +294,15 @@ EFI_STATUS fastboot_publish(const char *name, const char *value)
 	return EFI_SUCCESS;
 }
 
+#ifdef BUILD_ANDROID_THINGS
+#define EXT4_PART_GUID	\
+	{ 0x0bb7e6ed, 0x4424, 0x49c0, \
+	  { 0x93, 0x72, 0x7f, 0xba, 0xb4, 0x65, 0xab, 0x4c } }
+#else
 #define EXT4_PART_GUID	\
 	{ 0x0fc63daf, 0x8483, 0x4772, \
 	  { 0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4 } }
+#endif
 
 static const char *get_ptype_str(EFI_GUID *guid)
 {
