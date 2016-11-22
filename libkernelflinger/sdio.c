@@ -164,12 +164,23 @@ EFI_STATUS sdio_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, EFI_BLOCK_IO *bio,
 		      UINT16 card_address, UINTN erase_grp_size, UINTN erase_timeout,
 		      BOOLEAN emmc)
 {
-	EFI_STATUS ret;
+	EFI_STATUS ret = EFI_SUCCESS;
 	EFI_LBA left;
 	UINTN timeout;
 
 	if (!sdio || !bio)
 		return EFI_INVALID_PARAMETER;
+
+
+	/* check if space to be erased is lesser than group size
+	in such a case we cannot afford a group erase*/
+
+	if ((end - start + 1) < erase_grp_size) {
+		ret = fill_zero(bio, start, end);
+		if (EFI_ERROR(ret))
+			error(L"Failed to fill with zeros");
+		return ret;
+	}
 
 	left = start % erase_grp_size;
 	if (left) {
@@ -190,6 +201,9 @@ EFI_STATUS sdio_erase(EFI_SD_HOST_IO_PROTOCOL *sdio, EFI_BLOCK_IO *bio,
 		}
 		end -= left;
 	}
+
+	if (start > end)
+		return ret;
 
 	timeout = erase_timeout * ((end + 1 - start) / erase_grp_size);
 	return sdio_erase_group(sdio, start, end, timeout, card_address, emmc);
