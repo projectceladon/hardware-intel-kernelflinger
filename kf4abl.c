@@ -119,6 +119,7 @@ static enum boot_target check_command_line(EFI_HANDLE image)
 		if (!StrCmp(argv[i], L"-c"))
 			target = CRASHMODE;
 
+	FreePool(argv);
 	return target;
 }
 
