@@ -1144,9 +1144,11 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
+#ifdef USE_UI
 	ret = fastboot_ui_init();
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Fastboot UI initialization failed, continue anyway.");
+#endif
 
 	fastboot_state = STATE_OFFLINE;
 	next_state = STATE_COMPLETE;
@@ -1198,9 +1200,11 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 	}
 
 	for (;;) {
+#ifdef USE_UI
 		*target = fastboot_ui_event_handler();
 		if (*target != UNKNOWN_TARGET)
 			break;
+#endif
 
 		/* Keeping this for:
 		 * - retro-compatibility with previous USB device mode
@@ -1274,6 +1278,8 @@ void fastboot_free()
 	fastboot_cmdlist_unregister(&cmdlist);
 	fastboot_oem_free();
 	fastboot_flashing_free();
+#ifdef USE_UI
 	fastboot_ui_destroy();
+#endif
 	gpt_free_cache();
 }

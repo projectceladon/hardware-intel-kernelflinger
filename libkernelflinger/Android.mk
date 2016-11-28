@@ -68,12 +68,6 @@ LOCAL_SRC_FILES := \
 	security.c \
 	signature.c \
 	vars.c \
-	ui.c \
-	ui_font.c \
-	ui_textarea.c \
-	ui_image.c \
-	ui_boot_menu.c \
-	ui_confirm.c \
 	log.c \
 	em.c \
 	gpt.c \
@@ -93,6 +87,21 @@ LOCAL_SRC_FILES := \
 	slot.c \
 	life_cycle.c \
 	qsort.c
+
+ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
+    LOCAL_SRC_FILES += \
+	ui.c \
+	ui_color.c \
+	ui_font.c \
+	ui_textarea.c \
+	ui_image.c \
+	ui_boot_menu.c \
+	ui_confirm.c
+else
+    LOCAL_SRC_FILES += \
+	no_ui.c \
+	ui_color.c
+endif
 
 ifeq ($(HAL_AUTODETECT),true)
     LOCAL_SRC_FILES += blobstore.c

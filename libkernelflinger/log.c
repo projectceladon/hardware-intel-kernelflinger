@@ -137,28 +137,34 @@ static EFI_STATUS serial_init()
 	return EFI_SUCCESS;
 }
 
-void log(const CHAR16 *fmt, ...)
+void vlog(const CHAR16 *fmt, va_list args)
 {
-	va_list args;
 	UINTN length;
 
 	if (!serial && EFI_ERROR(serial_init()))
 		return;
 
-	va_start(args, fmt);
-
 	length = VSPrint(buf16, sizeof(buf16), (CHAR16 *)fmt, args) + 1;
 
 	if (EFI_ERROR(str_to_stra(buf8, buf16, length)))
-		goto exit;
+		return;
 
 	/* Drop the NUL termination character */
 	length--;
 	if (EFI_ERROR(uefi_call_wrapper(serial->Write, 3, serial, &length, buf8)))
-		goto exit;
+		return;
 
 	log_append_to_buffer(buf8, length);
+}
 
-exit:
+void log(const CHAR16 *fmt, ...)
+{
+	va_list args;
+
+	if (!serial && EFI_ERROR(serial_init()))
+		return;
+
+	va_start(args, fmt);
+	vlog(fmt, args);
 	va_end(args);
 }

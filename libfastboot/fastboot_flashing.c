@@ -70,11 +70,13 @@ EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
 	if (!device_is_provisioning()) {
 		/* 'eng' or 'userdebug' bootloaders skip the prompts
 		 * to make CI automation easier */
+#ifdef USE_UI
 #ifdef USER
 		if (interactive && !fastboot_ui_confirm_for_state(new_state)) {
 			fastboot_fail("Refusing to change device state");
 			return EFI_ACCESS_DENIED;
 		}
+#endif
 #endif
 		ui_print(L"Erasing userdata...");
 		ret = erase_by_label(L"data");
@@ -98,7 +100,9 @@ EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
 		return ret;
 	}
 
+#ifdef USE_UI
 	fastboot_ui_refresh();
+#endif
 	ret = fastboot_flashing_publish();
 	if (EFI_ERROR(ret)) {
 		if (interactive)
