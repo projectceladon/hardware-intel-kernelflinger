@@ -39,6 +39,10 @@ ifneq ($(TARGET_BUILD_VARIANT),user)
     KERNELFLINGER_CFLAGS += -DCRASHMODE_USE_ADB
 endif
 
+ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
+    KERNELFLINGER_CFLAGS += -DUSE_UI
+endif
+
 ifneq ($(strip $(TARGET_BOOTLOADER_POLICY)),)
     KERNELFLINGER_CFLAGS += -DBOOTLOADER_POLICY=$(TARGET_BOOTLOADER_POLICY)
     # Double negation to enforce the use of the EFI variable storage

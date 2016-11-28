@@ -1,13 +1,15 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
  *
- * Author: Jeremy Compostella <jeremy.compostella@intel.com>
+ * Authors:  Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  *
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
  *    * Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *    * Redistributions in binary form must reproduce the above copyright
@@ -30,53 +32,16 @@
  *
  */
 
-#ifndef _LOG_H_
-#define _LOG_H_
-
 #include <efi.h>
+#include <efilib.h>
 #include <ui.h>
-#include <vars.h>
 
-EFI_STATUS log_flush_to_var(BOOLEAN nonvol);
-
-void log(const CHAR16 *fmt, ...);
-void vlog(const CHAR16 *fmt, va_list args);
-
-#ifdef USER
-#define DEBUG_MESSAGES 0
-#else
-#define DEBUG_MESSAGES 1
-#endif
-
-#if DEBUG_MESSAGES
-#define debug(fmt, ...) do { \
-    log(fmt "\n", ##__VA_ARGS__); \
-} while(0)
-
-#define debug_pause(x) pause(x)
-#else
-#define debug(fmt, ...) (void)0
-#define debug_pause(x) (void)(x)
-#endif
-
-#ifdef USE_UI
-#define error(x, ...) do { \
-  log(x "\n", ##__VA_ARGS__); \
-  if (ui_is_ready()) { \
-    ui_error(x, ##__VA_ARGS__); \
-  } else \
-    Print(x "\n", ##__VA_ARGS__); \
-  log_flush_to_var(TRUE); \
-} while(0)
-#else
-#define error(x, ...) do { \
-  log(x "\n", ##__VA_ARGS__); \
-  log_flush_to_var(TRUE); \
-} while(0)
-#endif  /* USE_UI */
-
-#define efi_perror(ret, x, ...) do { \
-  error(x ": %r", ##__VA_ARGS__, ret); \
-} while (0)
-
-#endif	/* _LOG_H_ */
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_BLACK	= { 0, 0, 0, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_WHITE	= { 255, 255, 255, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_LIGHTGRAY = { 127, 127, 127, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_LIGHTRED  = { 0, 0, 127, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_YELLOW	= { 0, 255, 255, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_RED	= { 0, 0, 255, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_GREEN	= { 0, 255, 0, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_HIGHLIGHT	= { 157, 106, 0, 0 };
+EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_ORANGE	= { 0, 157, 255, 0 };
