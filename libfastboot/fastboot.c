@@ -1077,10 +1077,14 @@ static struct fastboot_cmd COMMANDS[] = {
 static EFI_STATUS fastboot_init()
 {
 	EFI_STATUS ret;
-	UINTN i, size;
+	UINTN i;
 	char download_max_str[30];
 	static char default_command_buffer[MAGIC_LENGTH];
+
+#ifdef BUILD_ANDROID_THINGS
+	UINTN size;
 	char* data = NULL;
+#endif
 
 	ret = fastboot_set_command_buffer(default_command_buffer,
 					  sizeof(default_command_buffer));
@@ -1107,6 +1111,7 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
+#ifdef BUILD_ANDROID_THINGS
 	/* publish serial number*/
 	ret = get_efi_variable(&loader_guid, SERIAL_NUM_VAR, &size, (VOID **)&data,
 		NULL);
@@ -1116,6 +1121,7 @@ static EFI_STATUS fastboot_init()
 		fastboot_publish("SerialNum", data);
 
 	data = NULL;
+#endif
 
 #ifdef HAL_AUTODETECT
 	ret = fastboot_publish("variant", info_variant());
