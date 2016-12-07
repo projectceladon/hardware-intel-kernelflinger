@@ -1002,7 +1002,7 @@ static void fastboot_process_rx(void *buf, unsigned len)
 			s = buf;
 			transport_read(&s[len], dl.size - received_len);
 		} else {
-			fastboot_state = STATE_COMMAND;
+			fastboot_state = STATE_COMPLETE;
 			fastboot_okay("");
 		}
 		break;
