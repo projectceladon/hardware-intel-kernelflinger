@@ -584,7 +584,7 @@ EFI_STATUS tcp_stop(void)
 
 	if (tcp_srv_binding) {
 		ret = uefi_call_wrapper(tcp_srv_binding->DestroyChild, 2,
-					tcp_srv_binding, &tcp_handle);
+					tcp_srv_binding, tcp_handle);
 		if (EFI_ERROR(ret) && ret != EFI_UNSUPPORTED) {
 			efi_perror(ret, L"TCP service DestroyChild failed");
 			return ret;
