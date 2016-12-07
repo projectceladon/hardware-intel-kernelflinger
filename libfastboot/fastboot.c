@@ -863,7 +863,6 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 	static CHAR8 response[MAGIC_LENGTH];
 	EFI_STATUS ret;
 	int len;
-	UINTN newdlsize;
 	char *endptr;
 
 	if (argc != 2) {
@@ -871,18 +870,17 @@ static void cmd_download(INTN argc, CHAR8 **argv)
 		return;
 	}
 
-	newdlsize= strtoul((const char *)argv[1], &endptr, 16);
-	if (newdlsize == 0 || *endptr != '\0') {
+	dl.size = strtoul((const char *)argv[1], &endptr, 16);
+	if (dl.size == 0 || *endptr != '\0') {
 		fastboot_fail("Failed to parse the download size");
 		return;
 	}
 
-	ui_print(L"Receiving %d bytes ...", dl.size);
 	if (dl.size > dl.max_size) {
 		fastboot_fail("data too large");
 		return;
 	}
-	dl.size = newdlsize;
+	ui_print(L"Receiving %ld bytes ...", dl.size);
 
 	len = efi_snprintf(response, sizeof(response), (CHAR8 *)"DATA%08x",
 			   dl.size);
