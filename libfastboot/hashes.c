@@ -515,7 +515,11 @@ static const unsigned char IAS_IMAGE_MAGIC[4] = "ipk.";
 static const unsigned char MULTIBOOT_MAGIC[4] = "\x02\xb0\xad\x1b";
 
 /* 28 Bytes header, 4 Bytes payload CRC, 256 Bytes RSA signature, 260 Bytes RSA public key */
-#define IAS_IMAGE_WRAP_SIZE (28 + 4 + 256 + 260)
+#define IAS_HEADER_SIZE		(28)
+#define IAS_CRC_SIZE		(4)
+#define IAS_RSA_SIGNATURE_SIZE	(256)
+#define IAS_RSA_PUBLIC_KEY_SIZE	(260)
+#define IAS_ALIGN		(256)
 
 struct ias_img_hdr {
 	unsigned char magic[ARRAY_SIZE(IAS_IMAGE_MAGIC)];
@@ -567,7 +571,8 @@ static EFI_STATUS get_iasimage_len(struct gpt_partition_interface *gparti,
 		return EFI_COMPROMISED_DATA;
 	}
 
-	*len = hdr.data_len + IAS_IMAGE_WRAP_SIZE;
+	*len = ALIGN((hdr.data_len + IAS_HEADER_SIZE + IAS_CRC_SIZE), IAS_ALIGN);
+	*len += IAS_RSA_SIGNATURE_SIZE + IAS_RSA_PUBLIC_KEY_SIZE;
 	if (*len > part_len) {
 		error(L"Ias-multiboot image is bigger than the partition");
 		return EFI_COMPROMISED_DATA;
