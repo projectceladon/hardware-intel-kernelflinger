@@ -563,6 +563,13 @@ EFI_STATUS tcp_stop(void)
 			return close_token.CompletionToken.Status;
 		}
 
+		ret = uefi_call_wrapper(BS->CloseEvent, 1,
+					close_token.CompletionToken.Event);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to close TCP Close event");
+			return ret;
+		}
+
 		ret = uefi_call_wrapper(tcp_connection->Configure, 2,
 					tcp_connection, NULL);
 		if (EFI_ERROR(ret)) {
