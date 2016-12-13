@@ -24,7 +24,7 @@ int atoi(const char *str)
 	char c;
 
 	/* skip preceding white space */
-	while (*str && *str == ' ')
+	while (*str == ' ')
 		str ++;
 
 	/* convert digits */
