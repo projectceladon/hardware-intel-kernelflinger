@@ -194,8 +194,8 @@ EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table)
 		return EFI_INVALID_PARAMETER;
 
 	if (!memcmp("DSDT", signature, SIG_SIZE)) {
-		UINT64 dsdt = get_acpi_field(FACP, DSDT);
-		if (dsdt == (UINT64)-1)
+		UINT32 dsdt = get_acpi_field(FACP, DSDT);
+		if (dsdt == (UINT32)-1)
 			return EFI_NOT_FOUND;
 		*table = (VOID *)(UINTN)dsdt;
 		goto out;
