@@ -151,7 +151,7 @@ static EFI_STATUS acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
 	return sum == 0 ? EFI_SUCCESS : EFI_CRC_ERROR;
 }
 
-EFI_STATUS get_xsdt_table(struct XSDT_TABLE **xsdt)
+static EFI_STATUS get_xsdt_table(struct XSDT_TABLE **xsdt)
 {
 	EFI_GUID acpi2_guid = ACPI_20_TABLE_GUID;
 	struct RSDP_TABLE *rsdp;
@@ -189,6 +189,9 @@ EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table)
 	EFI_STATUS ret;
 	UINTN i, nb_acpi_tables, sign_count = 1;
 	char *end;
+
+	if (!signature || !table || strlen(signature) != SIG_SIZE)
+		return EFI_INVALID_PARAMETER;
 
 	if (!memcmp("DSDT", signature, SIG_SIZE)) {
 		UINT64 dsdt = get_acpi_field(FACP, DSDT);
