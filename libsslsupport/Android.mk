@@ -98,6 +98,9 @@ endif
 ifneq (,$(filter boringssl, $(KERNELFLINGER_SSL_LIBRARY)))
 include $(LOCAL_PATH)/sources.mk
 LOCAL_SRC_FILES := $(crypto_sources) $(linux_$(LOCAL_ARCH)_sources)
+ifeq ($(FIRST_BUILD_ID),O)
+LOCAL_CFLAGS += -I$(LOCAL_PATH)/../../hardware/intel/kernelflinger/libsslsupport/borningssl
+endif
 endif
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := libuefi_ssl_static
