@@ -787,7 +787,10 @@ static void cmd_getvar(INTN argc, CHAR8 **argv)
 	}
 
 	var = fastboot_getvar((char *)argv[1]);
-	fastboot_okay("%a", var ? fastboot_var_value(var) : "");
+	if (NULL == var)
+		fastboot_fail("Unknown variable");
+	else
+		fastboot_okay("%a", fastboot_var_value(var));
 }
 
 void fastboot_reboot(enum boot_target target, CHAR16 *msg)
