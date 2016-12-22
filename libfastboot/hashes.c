@@ -477,7 +477,7 @@ static EFI_STATUS get_bootimage_len(struct gpt_partition_interface *gparti,
 	}
 
 	*len = bootimage_size(&hdr);
-	debug(L"len %lld", len);
+	debug(L"len %lld", *len);
 
 	if (*len + BOOT_SIGNATURE_MAX_SIZE > part_len) {
 		error(L"boot image is bigger than the partition");
