@@ -63,6 +63,8 @@ KERNELFLINGER_STATIC_LIBRARIES := \
 	libsslsupport \
 	libefi
 
+LOCAL_CLANG_EXCEPTION_PROJECTS += $(KERNELFLINGER_LOCAL_PATH)
+
 include $(call all-subdir-makefiles)
 LOCAL_PATH := $(KERNELFLINGER_LOCAL_PATH)
 
