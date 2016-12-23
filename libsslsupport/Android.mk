@@ -3,7 +3,14 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := wrapper.c
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)
+FIRST_BUILD_ID := $(shell echo $(BUILD_ID) | cut -c 1)
+ifeq ($(FIRST_BUILD_ID),O)
+LOCAL_CFLAGS := -I $(LOCAL_PATH)/../include/libkernelflinger
+LOCAL_STATIC_LIBRARIES := libgnuefi libefi
+#libkernelflinger-$(TARGET_BUILD_VARIANT) #cause dependency cycle error in Android O
+else
 LOCAL_STATIC_LIBRARIES := libgnuefi libefi libkernelflinger-$(TARGET_BUILD_VARIANT)
+endif
 LOCAL_MODULE := libsslsupport
 include $(BUILD_EFI_STATIC_LIBRARY)
 
@@ -37,7 +44,15 @@ endif
 
 # The static library should be used in only unbundled apps
 # and we don't have clang in unbundled build yet.
+# in Android O, include in ../r11/platforms/android-$(LOCAL_SDK_VERSION)/
+FIRST_BUILD_ID := $(shell echo $(BUILD_ID) | cut -c 1)
+ifeq ($(FIRST_BUILD_ID),O)
+LOCAL_SDK_VERSION := 24
+NDK_DIR := r11
+else
 LOCAL_SDK_VERSION := 9
+NDK_DIR := current
+endif
 
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := libuefi_crypto_static
@@ -61,7 +76,7 @@ LOCAL_CFLAGS_64 :=
 LOCAL_CFLAGS_x86 :=
 LOCAL_CFLAGS_x86_64 :=
 
-LOCAL_CFLAGS += -isystem $(HISTORICAL_NDK_VERSIONS_ROOT)/current/platforms/android-$(LOCAL_SDK_VERSION)/arch-$(LOCAL_ARCH)/usr/include
+LOCAL_CFLAGS += -isystem $(HISTORICAL_NDK_VERSIONS_ROOT)/$(NDK_DIR)/platforms/android-$(LOCAL_SDK_VERSION)/arch-$(LOCAL_ARCH)/usr/include
 include $(BUILD_EFI_STATIC_LIBRARY)
 
 #######################################
@@ -84,7 +99,15 @@ endif
 
 # The static library should be used in only unbundled apps
 # and we don't have clang in unbundled build yet.
+# in Android O, include in ../r11/platforms/android-$(LOCAL_SDK_VERSION)/
+FIRST_BUILD_ID := $(shell echo $(BUILD_ID) | cut -c 1)
+ifeq ($(FIRST_BUILD_ID),O)
+LOCAL_SDK_VERSION := 24
+NDK_DIR := r11
+else
 LOCAL_SDK_VERSION := 9
+NDK_DIR := current
+endif
 
 ifneq (,$(filter openssl, $(KERNELFLINGER_SSL_LIBRARY)))
 LOCAL_SRC_FILES += $(target_src_files)
@@ -113,7 +136,8 @@ LOCAL_CFLAGS_64 :=
 LOCAL_CFLAGS_x86 :=
 LOCAL_CFLAGS_x86_64 :=
 
+LOCAL_CFLAGS += -std=c99
 LOCAL_CFLAGS += -I$(LOCAL_PATH)/include
 LOCAL_CFLAGS += -DOPENSSL_NO_THREADS
-LOCAL_CFLAGS += -isystem $(HISTORICAL_NDK_VERSIONS_ROOT)/current/platforms/android-$(LOCAL_SDK_VERSION)/arch-$(LOCAL_ARCH)/usr/include
+LOCAL_CFLAGS += -isystem $(HISTORICAL_NDK_VERSIONS_ROOT)/$(NDK_DIR)/platforms/android-$(LOCAL_SDK_VERSION)/arch-$(LOCAL_ARCH)/usr/include
 include $(BUILD_EFI_STATIC_LIBRARY)
