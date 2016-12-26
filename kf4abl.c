@@ -39,6 +39,7 @@
 #endif
 
 #include "options.h"
+#include "ioc_can.h"
 
 #ifdef CRASHMODE_USE_ADB
 static EFI_STATUS enter_crashmode(enum boot_target *target)
@@ -77,6 +78,11 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 	void *efiimage, *bootimage;
 	UINTN imagesize;
 
+	ret = notify_ioc_ready();
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"notify ioc ready failed");
+	}
+
 	for (;;) {
 		*target = UNKNOWN_TARGET;
 		bootimage = NULL;
@@ -88,8 +94,12 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 			break;
 		}
 
-		if (*target != UNKNOWN_TARGET)
-			break;
+		if (*target == UNKNOWN_TARGET)
+			continue;
+
+		if ((*target == NORMAL_BOOT) || (*target == FASTBOOT))
+			reboot_to_target(*target);
+		break;
 	}
 
 	return ret;
