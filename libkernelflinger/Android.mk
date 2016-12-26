@@ -86,6 +86,7 @@ LOCAL_SRC_FILES := \
 	watchdog.c \
 	slot.c \
 	life_cycle.c \
+	ioc_can.c \
 	qsort.c
 
 ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)

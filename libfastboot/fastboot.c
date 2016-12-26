@@ -52,11 +52,13 @@
 #include "info.h"
 #include "authenticated_action.h"
 #include "fastboot_transport.h"
+#include "ioc_can.h"
 
 /* size of "INFO" "OKAY" or "FAIL" */
 #define CODE_LENGTH 4
 #define INFO_PAYLOAD (MAGIC_LENGTH - CODE_LENGTH)
 #define MAX_VARIABLE_LENGTH 64
+#define TIMEOUT 5
 
 struct fastboot_var {
 	struct fastboot_var *next;
@@ -1168,6 +1170,9 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 			  enum boot_target *target)
 {
 	EFI_STATUS ret;
+	EFI_TIME now;
+	UINT64 expiration_time = 0;
+	UINT64 current_time;
 
 	if (!bootimage || !efiimage || !imagesize || !target)
 		return EFI_INVALID_PARAMETER;
@@ -1203,6 +1208,17 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 		if (*target != UNKNOWN_TARGET)
 			break;
 #endif
+		ret = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to get the current time");
+		}
+		else {
+			current_time = efi_time_to_ctime(&now);
+			if (current_time >= expiration_time) {
+				set_suppress_heart_beat_timeout(5);
+				expiration_time = TIMEOUT + current_time;
+			}
+		}
 
 		/* Keeping this for:
 		 * - retro-compatibility with previous USB device mode
