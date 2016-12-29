@@ -115,8 +115,11 @@ endif
 endif # PRODUCT_SUPPORTS_VERITY
 
 LOCAL_SRC_FILES := \
-	kernelflinger.c \
+	kernelflinger.c
+ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
+	LOCAL_SRC_FILES += \
 	ux.c
+endif
 
 LOCAL_STATIC_LIBRARIES += \
 	libfastboot-$(TARGET_BUILD_VARIANT) \

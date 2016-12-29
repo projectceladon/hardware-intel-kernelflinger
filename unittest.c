@@ -84,6 +84,7 @@ static VOID test_keys(VOID)
         }
 }
 
+#ifdef USE_UI
 static UINT8 fake_hash[] = {0x12, 0x34, 0x56, 0x78, 0x90, 0xAB};
 
 static VOID test_ux(VOID)
@@ -104,12 +105,15 @@ static VOID test_ux(VOID)
         ux_prompt_user_for_boot_target(NOT_BOOTABLE_CODE);
         ux_display_low_battery(3);
 }
+#endif
 
 static struct test_suite {
         CHAR16 *name;
         VOID (*fun)(VOID);
 } TEST_SUITES[] = {
+#ifdef USE_UI
         { L"ux", test_ux },
+#endif
         { L"keys", test_keys },
         { L"watchdog", test_watchdog }
 };
