@@ -387,7 +387,12 @@ static enum boot_target check_watchdog(VOID)
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Failed to reset the watchdog status");
 
+#ifdef USE_UI
         return ux_prompt_user_for_boot_target(CRASH_EVENT_CODE);
+#else
+        debug(L"NO_UI,CRASH_EVENT,rebooting");
+        return NORMAL_BOOT;
+#endif
 
 error:
         return NORMAL_BOOT;
@@ -567,8 +572,14 @@ static enum boot_target choose_boot_target(CHAR16 **target_path, BOOLEAN *onesho
 
         debug(L"Bootlogic: Check battery level...");
         ret = check_battery();
+
+#ifdef USE_UI
         if (ret == POWER_OFF)
                 ux_display_low_battery(3);
+#else
+        if (ret == POWER_OFF)
+                debug(L"NO_UI: low battery");
+#endif
         if (ret != NORMAL_BOOT)
                 goto out;
 
@@ -932,9 +943,15 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
                 /* Offer a fast path between crashmode and fastboot
                    mode to keep the RAM state.  */
                 if (target == CRASHMODE) {
+#ifdef USE_UI
                         target = ux_prompt_user_for_boot_target(NO_ERROR_CODE);
                         if (target == FASTBOOT)
                                 continue;
+#else
+                        debug(L"NO_UI,only support fastboot");
+                        target = FASTBOOT;
+                        continue;
+#endif
                 }
 
                 if (target != UNKNOWN_TARGET)
@@ -1024,10 +1041,14 @@ static void bootloader_recover_mode(UINT8 boot_state)
 {
         enum boot_target target;
 
+#ifdef USE_UI
         target = ux_prompt_user_for_boot_target(NOT_BOOTABLE_CODE);
         if (target == FASTBOOT)
                 enter_fastboot_mode(boot_state);
-
+#else
+        debug(L"NO_UI,rebooting,boot_state: %d", boot_state);
+        target = NORMAL_BOOT;
+#endif
         reboot_to_target(target, EfiResetCold);
         die();
 }
@@ -1049,14 +1070,20 @@ static VOID boot_error(enum ux_error_code error_code, UINT8 boot_state,
 #endif
 #endif
         }
-
+#ifdef USE_UI
         bt = ux_prompt_user(error_code, power_off, boot_state, hash, hash_size);
 
         if (bt == CRASHMODE) {
                 debug(L"Rebooting to bootloader recover mode");
                 bootloader_recover_mode(boot_state);
         }
-
+#else
+        debug(L"NO_UI,%d %d %d", error_code, hash, hash_size);
+        if (power_off)
+                bt = POWER_OFF;
+        else
+                bt = NORMAL_BOOT;
+#endif
         if (power_off || bt == POWER_OFF)
                 halt_system();
 }
@@ -1112,7 +1139,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
         /* gnu-efi initialization */
         InitializeLib(image, sys_table);
+
+#ifdef USE_UI
         ux_display_vendor_splash();
+#endif
 
         debug(KERNELFLINGER_VERSION);
 
@@ -1156,16 +1186,25 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (boot_target == EXIT_SHELL)
                 return EFI_SUCCESS;
         if (boot_target == CRASHMODE) {
+#ifdef USE_UI
                 boot_target = ux_prompt_user_for_boot_target(NO_ERROR_CODE);
                 if (boot_target != FASTBOOT)
                         reboot_to_target(boot_target, EfiResetCold);
+#else
+                debug(L"NO_UI,only support fastboot");
+                reboot_to_target(FASTBOOT);
+#endif
         }
 
         if (boot_target == POWER_OFF)
                 halt_system();
 
+#ifdef USE_UI
         if (boot_target == CHARGER)
                 ux_display_empty_battery();
+#else
+        debug(L"NO_UI,empty battery");
+#endif
 
         if (boot_target == DNX || boot_target == CRASHMODE)
                 reboot_to_target(boot_target, EfiResetCold);
