@@ -35,7 +35,7 @@
 #include <log.h>
 #include <lib.h>
 #include "ioc_can.h"
-#include "protocol/ioc_uart_protocol.h"
+#include "ioc_uart_protocol.h"
 
 EFI_STATUS notify_ioc_ready()
 {

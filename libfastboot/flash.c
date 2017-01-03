@@ -49,6 +49,7 @@
 #include "vars.h"
 #include "bootloader.h"
 #include "authenticated_action.h"
+#include "ioc_uart_protocol.h"
 
 static struct gpt_partition_interface gparti;
 static UINT64 cur_offset;
@@ -240,6 +241,29 @@ static EFI_STATUS flash_ifwi(VOID *data, UINTN size)
 	return flash_into_esp(data, size, L"ifwi.bin");
 }
 
+static EFI_STATUS flash_ioc(VOID *data, UINTN size)
+{
+	EFI_STATUS ret;
+	EFI_GUID guid = EFI_IOC_UART_PROTOCOL_GUID;
+	IOC_UART_PROTOCOL *iocprotocal;
+
+	ret = LibLocateProtocol(&guid, (void **)&iocprotocal);
+	if (EFI_ERROR(ret)) {
+		debug(L"IOC UART Protocol is not supported");
+		return EFI_UNSUPPORTED;
+	}
+
+	if (!EFI_ERROR(ret)) {
+		ret = uefi_call_wrapper(iocprotocal->flash_ioc_firmware, 3, iocprotocal, data, size);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to flash ioc firmware");
+			return ret;
+		}
+	}
+
+	return EFI_SUCCESS;
+}
+
 static EFI_STATUS flash_new_bootimage(VOID *kernel, UINTN kernel_size,
 				      VOID *ramdisk, UINTN ramdisk_size)
 {
@@ -421,6 +445,7 @@ static struct label_exception {
 	{ L"kernel", flash_kernel },
 	{ L"ramdisk", flash_ramdisk },
 	{ BOOTLOADER_LABEL, flash_bootloader },
+	{ L"ioc", flash_ioc },
 #ifdef BOOTLOADER_POLICY
 	{ CONVERT_TO_WIDE(ACTION_AUTHORIZATION), authenticated_action }
 #endif
