@@ -40,6 +40,18 @@
 
 #include "options.h"
 #include "ioc_can.h"
+#include "android.h"
+
+struct abl_boot_info {
+	UINT32 magic;
+	UINT32 bootimage_len;
+	UINT32 bootimage_crc;
+	UINT32 bootimage_pos;
+	UINT32 reserved1;
+	UINT32 reserved2;
+	UINT32 reserved3;
+	UINT32 reserved4;
+};
 
 #ifdef CRASHMODE_USE_ADB
 static EFI_STATUS enter_crashmode(enum boot_target *target)
@@ -72,6 +84,49 @@ static EFI_STATUS enter_crashmode(enum boot_target *target)
 }
 #endif
 
+static EFI_STATUS process_bootimage(void* bootimage, UINTN imagesize)
+{
+	EFI_STATUS ret;
+
+	if (bootimage) {
+		/* 'fastboot boot' case, only allowed on unlocked devices.*/
+		if (device_is_unlocked()) {
+			struct bootloader_message bcb;
+			struct abl_boot_info *p;
+			UINT32 crc;
+
+			ret = uefi_call_wrapper(BS->CalculateCrc32, 3, bootimage, imagesize, &crc);
+
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"CalculateCrc32 failed");
+				return ret;
+			}
+
+			memset(&bcb, 0, sizeof(struct bootloader_message));
+
+			p = (struct abl_boot_info *)bcb.abl;
+			p->magic = 0xABCDABCD;
+			p->bootimage_len = imagesize;
+			p->bootimage_crc = crc;
+			p->bootimage_pos = (UINT32)bootimage;
+
+			ret = write_bcb(MISC_LABEL, &bcb);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"Unable to update BCB contents!");
+				return ret;
+			}
+
+			ret = reboot_to_target(NORMAL_BOOT, EfiResetWarm);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"Warm reset failed!");
+				return ret;
+			}
+		}
+	}
+
+	return EFI_SUCCESS;
+}
+
 static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 {
 	EFI_STATUS ret;
@@ -94,11 +149,21 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 			break;
 		}
 
+		ret = process_bootimage(bootimage, imagesize);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Process bootimage failed");
+			if (bootimage) {
+				FreePool(bootimage);
+				bootimage = NULL;
+			}
+			break;
+		}
+
 		if (*target == UNKNOWN_TARGET)
 			continue;
 
 		if ((*target == NORMAL_BOOT) || (*target == FASTBOOT))
-			reboot_to_target(*target);
+			reboot_to_target(*target, EfiResetCold);
 		break;
 	}
 
@@ -155,7 +220,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 			break;
 #endif
 		default:
-			reboot_to_target(target);
+			reboot_to_target(target, EfiResetCold);
 		}
 	}
 

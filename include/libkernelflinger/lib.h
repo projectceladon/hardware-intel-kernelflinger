@@ -197,7 +197,7 @@ VOID halt_system(VOID) __attribute__ ((noreturn));
 
 VOID pause(UINTN seconds);
 
-VOID reboot(CHAR16 *target) __attribute__ ((noreturn));
+VOID reboot(CHAR16 *target, EFI_RESET_TYPE type) __attribute__ ((noreturn));
 
 void *memset(void *s, int c, size_t n)
     __attribute__((weak));

@@ -938,7 +938,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
                 }
 
                 if (target != UNKNOWN_TARGET)
-                        reboot_to_target(target);
+                        reboot_to_target(target, EfiResetCold);
         }
 
         die();
@@ -1028,7 +1028,7 @@ static void bootloader_recover_mode(UINT8 boot_state)
         if (target == FASTBOOT)
                 enter_fastboot_mode(boot_state);
 
-        reboot_to_target(target);
+        reboot_to_target(target, EfiResetCold);
         die();
 }
 
@@ -1158,7 +1158,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (boot_target == CRASHMODE) {
                 boot_target = ux_prompt_user_for_boot_target(NO_ERROR_CODE);
                 if (boot_target != FASTBOOT)
-                        reboot_to_target(boot_target);
+                        reboot_to_target(boot_target, EfiResetCold);
         }
 
         if (boot_target == POWER_OFF)
@@ -1168,7 +1168,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 ux_display_empty_battery();
 
         if (boot_target == DNX || boot_target == CRASHMODE)
-                reboot_to_target(boot_target);
+                reboot_to_target(boot_target, EfiResetCold);
 
 #ifdef USERDEBUG
         debug(L"checking device state");
@@ -1209,7 +1209,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         pause(3);
                 }
                 FreePool(target_path);
-                reboot(NULL);
+                reboot(NULL, EfiResetCold);
         }
 
 #ifdef BOOTLOADER_POLICY_EFI_VAR
@@ -1282,14 +1282,14 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         case NORMAL_BOOT:
         case CHARGER:
                 if (slot_get_active())
-                        reboot_to_target(boot_target);
+                        reboot_to_target(boot_target, EfiResetCold);
                 break;
         case RECOVERY:
                 if (recovery_in_boot_partition()) {
                         if (slot_get_active())
-                                reboot_to_target(boot_target);
+                                reboot_to_target(boot_target, EfiResetCold);
                 } else if (slot_recovery_tries_remaining())
-                        reboot_to_target(boot_target);
+                        reboot_to_target(boot_target, EfiResetCold);
                 break;
         default:
                 break;

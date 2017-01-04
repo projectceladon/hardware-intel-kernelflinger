@@ -95,7 +95,7 @@ enum boot_target name_to_boot_target(const CHAR16 *str)
         return UNKNOWN_TARGET;
 }
 
-EFI_STATUS reboot_to_target(enum boot_target bt)
+EFI_STATUS reboot_to_target(enum boot_target bt, EFI_RESET_TYPE type)
 {
         const CHAR16 *name;
 
@@ -108,7 +108,7 @@ EFI_STATUS reboot_to_target(enum boot_target bt)
         if (!name)
                 return EFI_UNSUPPORTED;
 
-        reboot((CHAR16 *)name);
+        reboot((CHAR16 *)name, type);
 
         return EFI_DEVICE_ERROR;
 };
