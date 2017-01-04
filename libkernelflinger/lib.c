@@ -835,7 +835,7 @@ VOID halt_system(VOID)
 }
 
 
-VOID reboot(CHAR16 *target)
+VOID reboot(CHAR16 *target, EFI_RESET_TYPE type)
 {
         EFI_STATUS ret;
 
@@ -849,7 +849,7 @@ VOID reboot(CHAR16 *target)
                 }
         }
 
-        uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS,
+        uefi_call_wrapper(RT->ResetSystem, 4, type, EFI_SUCCESS,
                           0, target);
         error(L"Failed to reboot the device ... looping forever");
         while (1) { }

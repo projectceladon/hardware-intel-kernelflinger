@@ -129,16 +129,16 @@ struct bootloader_message {
     // The 'recovery' field used to be 1024 bytes.  It has only ever
     // been used to store the recovery command line, so 768 bytes
     // should be plenty.  We carve off the last 256 bytes to store the
-    // stage string (for multistage packages) and possible future
-    // expansion.
+    // stage string (for multistage packages), abl boot info (for ivi abl
+    // platform usage) and possible future expansion.
     char stage[32];
+    char abl[32];
 
-
-    // The 'reserved' field used to be 224 bytes when it was initially
+    // The 'reserved' field used to be 192 bytes when it was initially
     // carved off from the 1024-byte recovery field. Bump it up to
-    // 1184-byte so that the entire bootloader_message struct rounds up
+    // 1152-byte so that the entire bootloader_message struct rounds up
     // to 2048-byte.
-    char reserved[1184];
+    char reserved[1152];
 };
 
 /*

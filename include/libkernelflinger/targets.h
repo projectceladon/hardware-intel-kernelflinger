@@ -58,6 +58,6 @@ enum boot_target {
 const CHAR16 *boot_target_name(enum boot_target bt);
 const CHAR16 *boot_target_description(enum boot_target bt);
 enum boot_target name_to_boot_target(const CHAR16 *str);
-EFI_STATUS reboot_to_target(enum boot_target bt);
+EFI_STATUS reboot_to_target(enum boot_target bt, EFI_RESET_TYPE type);
 
 #endif	/* _TARGETS_H_ */

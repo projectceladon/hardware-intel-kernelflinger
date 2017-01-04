@@ -854,7 +854,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 		goto exit;
 
 	if (target != UNKNOWN_TARGET)
-		reboot_to_target(target);
+		reboot_to_target(target, EfiResetCold);
 
 exit:
 	FreePool(buf);
