@@ -41,6 +41,7 @@
 #include "options.h"
 #include "ioc_can.h"
 #include "android.h"
+#include "slot.h"
 
 struct abl_boot_info {
 	UINT32 magic;
@@ -201,9 +202,16 @@ static enum boot_target check_command_line(EFI_HANDLE image)
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
 	enum boot_target target;
+	EFI_STATUS ret;
 
 	InitializeLib(image, sys_table);
 	target = check_command_line(image);
+
+	ret = slot_init();
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Slot management initialization failed");
+		return ret;
+	}
 
 	for (;;) {
 		switch (target) {
