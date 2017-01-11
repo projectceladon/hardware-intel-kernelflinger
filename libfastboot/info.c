@@ -42,6 +42,11 @@ const char *info_bootloader_version(void)
 	return KERNELFLINGER_VERSION_8;
 }
 
+const char *info_baseband_version(void)
+{
+	return "N/A";
+}
+
 const char *info_variant(void)
 {
 #ifdef HAL_AUTODETECT
