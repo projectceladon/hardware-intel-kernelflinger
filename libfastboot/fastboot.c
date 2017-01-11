@@ -1103,6 +1103,10 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
+	ret = fastboot_publish("version-baseband", info_baseband_version());
+	if (EFI_ERROR(ret))
+		goto error;
+
 	ret = fastboot_publish_dynamic("battery-voltage", get_battery_voltage_var);
 	if (EFI_ERROR(ret))
 		goto error;

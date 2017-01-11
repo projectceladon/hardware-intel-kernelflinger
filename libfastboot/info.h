@@ -34,6 +34,7 @@
 #define __INFO_H__
 
 const char *info_bootloader_version(void);
+const char *info_baseband_version(void);
 const char *info_variant(void);
 const char *info_product(void);
 const char *info_hw_revision(void);
