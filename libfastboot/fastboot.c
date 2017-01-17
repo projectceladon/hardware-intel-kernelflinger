@@ -109,6 +109,26 @@ static const char *flash_locked_whitelist[] = {
 	NULL
 };
 
+void printProgress(int x, int y) {
+
+        int percentage = (x * 100) / y;
+
+        if (percentage < 10)
+                log(L"10%% [========                                                                        ]\r");
+        else if (percentage <= 25)
+                log(L"25%% [================                                                                ]\r");
+        else if (percentage <= 50)
+                log(L"50%% [========================================                                        ]\r");
+        else if (percentage <= 75)
+                log(L"75%% [========================================================                        ]\r");
+        else if (percentage <= 95)
+                log(L"95%% [==================================================================              ]\r");
+        else if (percentage < 100)
+                log(L"100%%[================================================================================]\r");
+        else
+                log(L"Download Complete[================================================================================]\n");
+}
+
 struct download_buffer *fastboot_download_buffer(void)
 {
 	return &dl;
@@ -992,10 +1012,7 @@ static void fastboot_process_rx(void *buf, unsigned len)
 		received_len += len;
 		if (received_len / DATA_PROGRESS_THRESHOLD >
 		    last_received_len / DATA_PROGRESS_THRESHOLD) {
-			if (dl.size > MiB)
-				debug(L"\rRX %d MiB / %d MiB", received_len/MiB, dl.size / MiB);
-			else
-				debug(L"\rRX %d KiB / %d KiB", received_len/1024, dl.size / 1024);
+			printProgress((received_len / MiB), (dl.size / MiB));
 		}
 		last_received_len = received_len;
 		if (received_len < dl.size) {
