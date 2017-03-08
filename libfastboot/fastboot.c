@@ -426,6 +426,7 @@ static EFI_STATUS publish_slots(void)
 	if (EFI_ERROR(ret))
 		return ret;
 
+#ifndef BUILD_ANDROID_THINGS
 	for (i = 0, j = 0; i < nb_slots; i++) {
 		len = efi_snprintf((CHAR8 *)var + j, sizeof(var) - j,
 				   i == 0 ? (CHAR8 *)"%a" : (CHAR8 *)",%a",
@@ -438,6 +439,7 @@ static EFI_STATUS publish_slots(void)
 	ret = fastboot_publish("slot-suffixes", var);
 	if (EFI_ERROR(ret))
 		return ret;
+#endif
 
 	for (i = 0; i < nb_slots; i++)
 		for (j = 0; j < ARRAY_SIZE(descriptors); j++) {
