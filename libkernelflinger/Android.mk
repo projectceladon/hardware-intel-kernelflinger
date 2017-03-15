@@ -135,6 +135,7 @@ else
 endif
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
+		$(LOCAL_PATH)/../avb \
 		$(res_intermediates)
 
 include $(BUILD_EFI_STATIC_LIBRARY)
