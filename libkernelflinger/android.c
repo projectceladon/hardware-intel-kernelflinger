@@ -1629,11 +1629,20 @@ void cmdline_add_item (CHAR8 *cmd_buf, UINTN max_cmd_size, const CHAR8 *item, co
         cmd_buf[pos] = 0;
 }
 
+#ifdef USE_AVB
+static EFI_STATUS setup_command_line_abl(
+                IN UINT8 *bootimage,
+                IN enum boot_target boot_target,
+                const CHAR8 *abl_cmd_line,
+                AvbSlotVerifyData *slot_data,
+                UINT8 boot_state)
+#else
 static EFI_STATUS setup_command_line_abl(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
                 const CHAR8 *abl_cmd_line,
                 UINT8 boot_state)
+#endif
 {
         CHAR16 *cmdline16 = NULL;
         EFI_PHYSICAL_ADDRESS cmdline_addr;
@@ -1643,6 +1652,9 @@ static EFI_STATUS setup_command_line_abl(
         EFI_STATUS ret;
         struct boot_params *buf;
         struct boot_img_hdr *aosp_header;
+#ifdef USE_AVB
+        UINTN avb_cmd_len = 0;
+#endif
         UINTN abl_cmd_len = 0;
         CHAR16 *boot_str16;
         CHAR8 boot_str8[64] = "";
@@ -1660,8 +1672,14 @@ static EFI_STATUS setup_command_line_abl(
         }
 
         cmdlen = StrLen(cmdline16);
+#ifdef USE_AVB
+        avb_cmd_len = strlen((const CHAR8 *)slot_data->cmdline);
+        /* +256: for extra cmd line */
+        cmdsize = cmdlen + avb_cmd_len + abl_cmd_len + 256;
+#else
         /* +256: for extra cmd line */
         cmdsize = cmdlen + abl_cmd_len + 256;
+#endif
         cmdline_addr = (EFI_PHYSICAL_ADDRESS)((UINTN)AllocatePool(cmdsize));
         if (cmdline_addr == 0) {
                 ret = EFI_OUT_OF_RESOURCES;
@@ -1675,6 +1693,14 @@ static EFI_STATUS setup_command_line_abl(
                 free_pages(cmdline_addr, EFI_SIZE_TO_PAGES(cmdlen + 1));
                 goto out;
         }
+#ifdef USE_AVB
+        if (avb_cmd_len > 0)
+        {
+            cmdline[cmdlen] = ' ';
+            memcpy(cmdline + cmdlen + 1, slot_data->cmdline, avb_cmd_len);
+            cmdlen += avb_cmd_len + 1;
+        }
+#endif
 
         /* append command line from ABL */
         if (abl_cmd_len > 0)
@@ -1792,6 +1818,15 @@ out:
 }
 
 
+#ifdef USE_AVB
+EFI_STATUS android_image_start_buffer_abl(
+                IN VOID *bootimage,
+                IN enum boot_target boot_target,
+                IN UINT8 boot_state,
+                IN EFI_GUID *swap_guid,
+                AvbSlotVerifyData *slot_data,
+                IN const CHAR8 *abl_cmd_line)
+#else
 EFI_STATUS android_image_start_buffer_abl(
                 IN VOID *bootimage,
                 IN enum boot_target boot_target,
@@ -1799,6 +1834,7 @@ EFI_STATUS android_image_start_buffer_abl(
                 IN EFI_GUID *swap_guid,
                 IN X509 *verity_cert,
                 IN const CHAR8 *abl_cmd_line)
+#endif
 {
         struct boot_img_hdr *aosp_header;
         struct boot_params *buf;
@@ -1806,7 +1842,9 @@ EFI_STATUS android_image_start_buffer_abl(
 
         boot_state = boot_state;
         swap_guid = swap_guid;
+#ifndef USE_AVB
         verity_cert = verity_cert;
+#endif
         if (!bootimage)
                 return EFI_INVALID_PARAMETER;
 
@@ -1841,7 +1879,11 @@ EFI_STATUS android_image_start_buffer_abl(
         }
 
         debug(L"Creating command line");
+#ifdef USE_AVB
+        ret = setup_command_line_abl(bootimage, boot_target, abl_cmd_line, slot_data, boot_state);
+#else
         ret = setup_command_line_abl(bootimage, boot_target, abl_cmd_line, boot_state);
+#endif
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"setup_command_line");
                 return ret;

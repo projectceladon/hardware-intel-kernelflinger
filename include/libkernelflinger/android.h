@@ -24,6 +24,9 @@
 #include "blobstore.h"
 #endif
 #include "targets.h"
+#ifdef USE_AVB
+#include "libavb/libavb.h"
+#endif
 
 #define BOOT_MAGIC "ANDROID!"
 #define BOOT_MAGIC_SIZE 8
@@ -248,6 +251,15 @@ EFI_STATUS android_image_start_buffer(
                 IN EFI_GUID *swap,
                 IN X509 *verity_cert);
 
+#ifdef USE_AVB
+EFI_STATUS android_image_start_buffer_abl(
+                IN VOID *bootimage,
+                IN enum boot_target boot_target,
+                IN UINT8 boot_state,
+                IN EFI_GUID *swap_guid,
+                AvbSlotVerifyData *slot_data,
+                IN const CHAR8 *abl_cmd_line);
+#else
 EFI_STATUS android_image_start_buffer_abl(
                 IN VOID *bootimage,
                 IN enum boot_target boot_target,
@@ -255,6 +267,7 @@ EFI_STATUS android_image_start_buffer_abl(
                 IN EFI_GUID *swap_guid,
                 IN X509 *verity_cert,
                 IN const CHAR8 *abl_cmd_line);
+#endif
 
 EFI_STATUS android_image_load_partition(
                 IN const CHAR16 *label,
