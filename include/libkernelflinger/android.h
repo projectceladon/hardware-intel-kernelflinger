@@ -248,6 +248,14 @@ EFI_STATUS android_image_start_buffer(
                 IN EFI_GUID *swap,
                 IN X509 *verity_cert);
 
+EFI_STATUS android_image_start_buffer_abl(
+                IN VOID *bootimage,
+                IN enum boot_target boot_target,
+                IN UINT8 boot_state,
+                IN EFI_GUID *swap_guid,
+                IN X509 *verity_cert,
+                IN const CHAR8 *abl_cmd_line);
+
 EFI_STATUS android_image_load_partition(
                 IN const CHAR16 *label,
                 OUT VOID **bootimage_p);
