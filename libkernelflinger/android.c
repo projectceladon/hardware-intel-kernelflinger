@@ -232,6 +232,10 @@ typedef void(*kernel_func)(void *, struct boot_params *);
 #define SEGMENT_GRANULARITY_4KB       1
 #define DESCRIPTOR_TYPE_CODE_OR_DATA  1
 
+#ifdef __SUPPORPT_ABL_BOOT
+#define KERNEL_DEST 0x100000
+#endif
+
 static EFI_STATUS setup_gdt(void)
 {
         EFI_STATUS ret;
@@ -810,7 +814,7 @@ EFI_STATUS get_bootimage_2nd(VOID *bootimage, VOID **second, UINT32 *size)
 
         offset = bh->page_size + pagealign(bh, bh->kernel_size) +
                  pagealign(bh, bh->ramdisk_size);
-        *second = (UINT8*)bootimage + offset;
+        *second = (UINT8 *)bootimage + offset;
         *size = bh->second_size;
         return EFI_SUCCESS;
 }
@@ -1585,5 +1589,283 @@ BOOLEAN recovery_in_boot_partition(void)
         ret = gpt_get_partition_by_label(RECOVERY_LABEL, &gpart, LOGICAL_UNIT_USER);
         return ret == EFI_NOT_FOUND;
 }
+
+
+#ifdef  __SUPPORPT_ABL_BOOT
+static UINTN cmd_line_add_str (CHAR8 *cmd_buf, UINTN max_cmd_size, UINTN pos, CHAR8 prefix, const CHAR8 *str)
+{
+        UINTN len;
+
+        if (str == NULL)
+                return pos;
+
+        len = strlen (str);
+        if (pos + len + 1 >= max_cmd_size - 1)
+                return pos;
+
+        if (pos > 0)
+                cmd_buf[pos++] = prefix;
+        memcpy (&cmd_buf[pos], str, len);
+
+        return pos + len;
+}
+
+/*
+ *  Add entry "item=value" to the command line.
+ *  If value is null, just add item, without the equal
+ */
+void cmdline_add_item (CHAR8 *cmd_buf, UINTN max_cmd_size, const CHAR8 *item, const CHAR8 *value)
+{
+        UINTN pos = strlen(cmd_buf);
+
+        pos = cmd_line_add_str (cmd_buf, max_cmd_size, pos, ' ', item);
+        if (value)
+                pos = cmd_line_add_str (cmd_buf, max_cmd_size, pos, '=', value);
+
+        cmd_buf[pos] = 0;
+}
+
+static EFI_STATUS setup_command_line_abl(
+                IN UINT8 *bootimage,
+                IN enum boot_target boot_target,
+                const CHAR8 *abl_cmd_line,
+                UINT8 boot_state)
+{
+        CHAR16 *cmdline16 = NULL;
+        EFI_PHYSICAL_ADDRESS cmdline_addr;
+        CHAR8 *cmdline;
+        UINTN cmdsize;
+        UINTN cmdlen;
+        EFI_STATUS ret;
+        struct boot_params *buf;
+        struct boot_img_hdr *aosp_header;
+        UINTN abl_cmd_len = 0;
+        CHAR16 *boot_str16;
+        CHAR8 boot_str8[64] = "";
+
+        if (abl_cmd_line != NULL)
+               abl_cmd_len = strlen(abl_cmd_line);
+
+        aosp_header = (struct boot_img_hdr *)bootimage;
+        buf = (struct boot_params *)(bootimage + aosp_header->page_size);
+
+        cmdline16 = get_command_line(aosp_header, boot_target);
+        if (!cmdline16) {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto out;
+        }
+
+        cmdlen = StrLen(cmdline16);
+        /* +256: for extra cmd line */
+        cmdsize = cmdlen + abl_cmd_len + 256;
+        cmdline_addr = (EFI_PHYSICAL_ADDRESS)((UINTN)AllocatePool(cmdsize));
+        if (cmdline_addr == 0) {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto out;
+        }
+
+        cmdline = (CHAR8 *)(UINTN)cmdline_addr;
+        ret = str_to_stra(cmdline, cmdline16, cmdlen + 1);
+        if (EFI_ERROR(ret)) {
+                error(L"Non-ascii characters in command line");
+                free_pages(cmdline_addr, EFI_SIZE_TO_PAGES(cmdlen + 1));
+                goto out;
+        }
+
+        /* append command line from ABL */
+        if (abl_cmd_len > 0)
+        {
+                cmdline[cmdlen] = ' ';
+                memcpy(cmdline + cmdlen + 1, abl_cmd_line, abl_cmd_len + 1);
+        }
+
+        /* append verified boot state */
+        boot_str16 = boot_state_to_string(boot_state);
+        str_to_stra(boot_str8, boot_str16, StrLen(boot_str16) + 1);
+        cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.verifiedbootstate", boot_str8);
+
+        buf->hdr.cmd_line_ptr = (UINT32)(UINTN)cmdline;
+        ret = EFI_SUCCESS;
+out:
+        FreePool(cmdline16);
+        return ret;
+}
+
+static EFI_STATUS setup_ramdisk_abl(UINT8 *bootimage)
+{
+        struct boot_img_hdr *aosp_header;
+        struct boot_params *bp;
+        UINT32 roffset, rsize;
+
+        aosp_header = (struct boot_img_hdr *)bootimage;
+        bp = (struct boot_params *)(bootimage + aosp_header->page_size);
+
+        roffset = aosp_header->page_size + pagealign(aosp_header,
+                        aosp_header->kernel_size);
+        rsize = aosp_header->ramdisk_size;
+        if (!rsize) {
+                debug(L"boot image has no ramdisk");
+                return EFI_SUCCESS; // no ramdisk, so nothing to do
+        }
+
+        debug(L"ramdisk size %d", rsize);
+        bp->hdr.ramdisk_len = rsize;
+        bp->hdr.ramdisk_start = (UINT32)(UINTN)bootimage + roffset;
+        return EFI_SUCCESS;
+}
+
+
+static inline EFI_STATUS handover_jump_abl(struct boot_params *boot_params,
+                                       EFI_PHYSICAL_ADDRESS kernel_start)
+{
+        EFI_STATUS ret = EFI_LOAD_ERROR;
+        UINTN map_key;
+
+        ret = setup_memory_map(boot_params, &map_key);
+        if (EFI_ERROR(ret)) {
+             efi_perror(ret, L"Failed to setup memory map");
+             return ret;
+        }
+
+        log(L"jmp 0x%X (setup @0x%x)\n", (UINTN)kernel_start, (UINTN)boot_params);
+        __asm__ __volatile__ ("cli;  jmp *%0"
+                                  : /* no outputs */
+                                  : "m" (kernel_start), "a" (0), "S" (boot_params), "D"(0)
+                                  : "memory");
+
+        /* Shouldn't get here. */
+        return EFI_LOAD_ERROR;
+}
+
+
+static EFI_STATUS handover_kernel_abl(CHAR8 *bootimage)
+{
+        EFI_PHYSICAL_ADDRESS kernel_start;
+        struct boot_params *boot_params;
+        EFI_STATUS ret;
+        struct boot_img_hdr *aosp_header;
+        struct boot_params *buf;
+        UINT8 setup_sectors;
+        UINT32 setup_size;
+        UINT32 ksize;
+        UINT32 koffset;
+
+        aosp_header = (struct boot_img_hdr *)bootimage;
+        buf = (struct boot_params *)(bootimage + aosp_header->page_size);
+
+        koffset = aosp_header->page_size;
+        setup_sectors = buf->hdr.setup_secs;
+        setup_sectors++; /* Add boot sector */
+        setup_size = (UINT32)setup_sectors * 512;
+        ksize = aosp_header->kernel_size - setup_size;
+        kernel_start = buf->hdr.pref_address;
+        buf->hdr.loader_id = 0x1;
+        memset(&buf->screen_info, 0x0, sizeof(buf->screen_info));
+
+        memcpy ((void *)KERNEL_DEST, bootimage + koffset + setup_size, ksize);
+        kernel_start = (EFI_PHYSICAL_ADDRESS)((UINTN)KERNEL_DEST);
+        boot_params = (struct boot_params *)AllocatePool(sizeof(struct boot_params));
+        if (boot_params == NULL)
+        {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto out;
+        }
+        memset(boot_params, 0x0, sizeof(struct boot_params));
+
+        /* Copy first two sectors to boot_params */
+        memcpy(&boot_params->hdr, (CHAR8 *)(&buf->hdr), sizeof(struct setup_header));
+        boot_params->hdr.code32_start = (UINT32)((UINT64)kernel_start);
+
+        boot_params->hdr.loader_id = 0xFF;
+        boot_params->hdr.load_flags = 1;
+
+        ret = handover_jump_abl(boot_params, kernel_start);
+        /* Shouldn't get here */
+        efi_perror(ret, L"handover to Linux kernel has failed");
+
+out:
+        return ret;
+}
+
+
+EFI_STATUS android_image_start_buffer_abl(
+                IN VOID *bootimage,
+                IN enum boot_target boot_target,
+                IN UINT8 boot_state,
+                IN EFI_GUID *swap_guid,
+                IN X509 *verity_cert,
+                IN const CHAR8 *abl_cmd_line)
+{
+        struct boot_img_hdr *aosp_header;
+        struct boot_params *buf;
+        EFI_STATUS ret;
+
+        boot_state = boot_state;
+        swap_guid = swap_guid;
+        verity_cert = verity_cert;
+        if (!bootimage)
+                return EFI_INVALID_PARAMETER;
+
+        aosp_header = (struct boot_img_hdr *)bootimage;
+        if (memcmp(aosp_header->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
+                error(L"buffer does not appear to contain an Android boot image");
+                return EFI_INVALID_PARAMETER;
+        }
+
+        buf = (struct boot_params *)(bootimage + aosp_header->page_size);
+
+        /* Check boot sector signature */
+        if (buf->hdr.signature != 0xAA55) {
+                error(L"bzImage kernel corrupt");
+                return EFI_INVALID_PARAMETER;
+        }
+
+        if (buf->hdr.header != SETUP_HDR) {
+                error(L"Setup code version is invalid");
+                return EFI_INVALID_PARAMETER;
+        }
+
+        if (buf->hdr.version < 0x20c) {
+                /* Protocol 2.12, kernel 3.8 required */
+                error(L"Kernel header version %x too old", buf->hdr.version);
+                return EFI_INVALID_PARAMETER;
+        }
+
+        if (!buf->hdr.relocatable_kernel) {
+                error(L"Expected relocatable kernel\n");
+                return EFI_INVALID_PARAMETER;
+        }
+
+        debug(L"Creating command line");
+        ret = setup_command_line_abl(bootimage, boot_target, abl_cmd_line, boot_state);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"setup_command_line");
+                return ret;
+        }
+
+        if (!recovery_in_boot_partition() || boot_target == RECOVERY) {
+                debug(L"Loading the ramdisk");
+                ret = setup_ramdisk_abl(bootimage);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"setup_ramdisk");
+                        goto out_cmdline;
+                }
+        }
+
+        debug(L"Loading the kernel_abl");
+        ret = handover_kernel_abl(bootimage);
+        efi_perror(ret, L"handover_kernel_abl");
+
+        efree(buf->hdr.ramdisk_start, buf->hdr.ramdisk_len);
+        buf->hdr.ramdisk_start = 0;
+        buf->hdr.ramdisk_len = 0;
+out_cmdline:
+        free_pages(buf->hdr.cmd_line_ptr,
+                        strlena((CHAR8 *)(UINTN)buf->hdr.cmd_line_ptr) + 1);
+        buf->hdr.cmd_line_ptr = 0;
+        return ret;
+}
+#endif  // __SUPPORPT_ABL_BOOT
+
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */

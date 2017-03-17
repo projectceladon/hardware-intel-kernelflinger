@@ -42,6 +42,37 @@
 #include "ioc_can.h"
 #include "android.h"
 #include "slot.h"
+#ifdef __SUPPORPT_ABL_BOOT
+#include "security.h"
+
+#define MAX_CMD_BUF 0x1000
+static CHAR8 cmd_buf[MAX_CMD_BUF];
+
+typedef struct {
+	/* version of the struct. 0x0001 for this version */
+	uint16_t 			Version;
+	/* Trusty’s mem base address */
+	uint32_t 			TrustyMemBase;
+	/* assumed to be 16MB */
+	uint32_t 			TrustyMemSize;
+	/* seed value retrieved from CSE */
+	uint8_t 			seed[32];
+	struct rot_data_t 	RotData;
+}__attribute__((packed)) trusty_boot_params_t;
+
+typedef union {
+	uint32_t raw;
+	struct {
+		uint32_t patch_M:4;
+		uint32_t patch_Y:7;
+		uint32_t version_C:7;
+		uint32_t version_B:7;
+		uint32_t version_A:7;
+	};
+} os_version_t;
+
+static trusty_boot_params_t *p_trusty_boot_params = NULL;
+#endif
 
 struct abl_boot_info {
 	UINT32 magic;
@@ -85,7 +116,36 @@ static EFI_STATUS enter_crashmode(enum boot_target *target)
 }
 #endif
 
-static EFI_STATUS process_bootimage(void* bootimage, UINTN imagesize)
+#ifdef __SUPPORPT_ABL_BOOT
+static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
+{
+	EFI_STATUS ret;
+
+	if (bootimage) {
+		/* 'fastboot boot' case, only allowed on unlocked devices.*/
+		if (device_is_unlocked()) {
+			UINT32 crc;
+
+			ret = uefi_call_wrapper(BS->CalculateCrc32, 3, bootimage, imagesize, &crc);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"CalculateCrc32 failed");
+				return ret;
+			}
+
+			ret = android_image_start_buffer_abl(bootimage,
+								NORMAL_BOOT, BOOT_STATE_GREEN, NULL,
+								NULL, (const CHAR8 *)cmd_buf);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"Couldn't load Boot image");
+				return ret;
+			}
+		}
+	}
+
+	return EFI_SUCCESS;
+}
+#else
+static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 {
 	EFI_STATUS ret;
 
@@ -127,6 +187,7 @@ static EFI_STATUS process_bootimage(void* bootimage, UINTN imagesize)
 
 	return EFI_SUCCESS;
 }
+#endif
 
 static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 {
@@ -171,17 +232,87 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 	return ret;
 }
 
+#ifdef __SUPPORPT_ABL_BOOT
+static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UINTN max_cmd_size)
+{
+	EFI_STATUS ret;
+	enum boot_target target = FASTBOOT;
+	static EFI_LOADED_IMAGE *limg;
+	UINTN argc, i;
+	CHAR16 **argv;
+	UINTN cmd_len = 0;
+	CHAR8 arg8[256] = "";
+	UINTN arglen;
+	CHAR8 *trusty_str = (CHAR8 *)"trusty.param_addr=";
+	UINTN trusty_str_len;
+
+	ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
+				&LoadedImageProtocol, (VOID **)&limg,
+				image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to open LoadedImageProtocol");
+		return FASTBOOT;
+	}
+
+	ret = get_argv(limg, &argc, &argv);
+	if (EFI_ERROR(ret))
+		return FASTBOOT;
+
+	cmd_buf[0] = 0;
+	trusty_str_len = strlen((CHAR8 *)trusty_str);
+
+	/*Parse boot target*/
+	for (i = 0; i < argc; i++) {
+		log(L" abl cmd %02d: ", i);
+		log(L"%s\n", argv[i]);
+		if (!StrCmp(argv[i], L"ABL.boot_target=CRASHMODE"))
+			target = CRASHMODE;
+		else if (!StrCmp(argv[i], L"ABL.boot_target=NORMAL_BOOT"))
+			target = NORMAL_BOOT;
+		else if (!StrCmp(argv[i], L"ABL.boot_target=RECOVERY"))
+			target = RECOVERY;
+
+		arglen = StrLen(argv[i]);
+		if (arglen > (int)sizeof(arg8) - 2)
+			arglen = sizeof(arg8) - 2;
+		str_to_stra((CHAR8 *)arg8, argv[i], arglen + 1);
+		if (cmd_len + arglen + 1 < max_cmd_size) {
+			if (cmd_buf[0] != 0) {
+				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)" ", 1);
+				cmd_len ++;
+			}
+
+			//Parse "trusty.param_addr=xxxxx"
+			if ((arglen > trusty_str_len) && (!strncmp(arg8, (CHAR8 *)trusty_str, trusty_str_len))) {
+				UINT32 num;
+				CHAR8 *nptr = (CHAR8 *)(arg8 + trusty_str_len);
+				num = strtoul((char *)nptr, 0, 16);
+				debug(L"Parsed trusty param addr is 0x%x", num);
+				p_trusty_boot_params = (trusty_boot_params_t *)num;
+			} else {
+				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
+				cmd_len += arglen;
+			}
+		}
+	}
+
+	debug(L"boot target: %d", target);
+	FreePool(argv);
+	return target;
+}
+#else
 static enum boot_target check_command_line(EFI_HANDLE image)
 {
 	EFI_STATUS ret;
 	enum boot_target target = FASTBOOT;
 	static EFI_LOADED_IMAGE *limg;
 	UINTN argc, i;
-        CHAR16 **argv;
+	CHAR16 **argv;
 
-        ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
-				&LoadedImageProtocol, (VOID **)&limg,
-				image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+	ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
+			&LoadedImageProtocol, (VOID **)&limg,
+			image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to open LoadedImageProtocol");
 		return FASTBOOT;
@@ -198,6 +329,206 @@ static enum boot_target check_command_line(EFI_HANDLE image)
 	FreePool(argv);
 	return target;
 }
+#endif
+
+#ifdef __SUPPORPT_ABL_BOOT
+/* Load a boot image into RAM.
+ *
+ * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
+ *                and ESP_BOOTIMAGE (for 'fastboot boot')
+ * target_path  - Path to load boot image from for ESP_BOOTIMAGE case, ignored
+ *                otherwise.
+ * bootimage    - Returned allocated pointer value for the loaded boot image.
+ * oneshot      - For ESP_BOOTIMAGE case, flag indicating that the image should
+ *                be deleted.
+ *
+ * Return values:
+ * EFI_INVALID_PARAMETER - Unsupported boot target type, key is not well-formed,
+ *                         or loaded boot image was missing or corrupt
+ * EFI_ACCESS_DENIED     - Validation failed against OEM or embedded certificate,
+ *                         boot image still usable
+ */
+static EFI_STATUS load_boot_image(
+				IN enum boot_target boot_target,
+				IN CHAR16 *target_path,
+				OUT VOID **bootimage,
+				IN BOOLEAN oneshot)
+{
+	EFI_STATUS ret;
+
+	switch (boot_target) {
+	case NORMAL_BOOT:
+	case CHARGER:
+		ret = EFI_NOT_FOUND;
+		if (use_slot() && !slot_get_active())
+			break;
+		do {
+			const CHAR16 *label = slot_label(BOOT_LABEL);
+			ret = android_image_load_partition(label, bootimage);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"Failed to load boot image from %s partition",
+						label);
+				if (use_slot())
+					slot_boot_failed(boot_target);
+			}
+		} while (EFI_ERROR(ret) && slot_get_active());
+		break;
+
+	case RECOVERY:
+		if (recovery_in_boot_partition()) {
+			ret = load_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot);
+			break;
+		}
+		if (use_slot() && !slot_recovery_tries_remaining()) {
+			ret = EFI_NOT_FOUND;
+			break;
+		}
+		ret = android_image_load_partition(RECOVERY_LABEL, bootimage);
+		break;
+	default:
+		*bootimage = NULL;
+		return EFI_INVALID_PARAMETER;
+	}
+
+	if (!EFI_ERROR(ret))
+		debug(L"boot image loaded");
+
+	return ret;
+}
+
+
+static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
+				enum boot_target boot_target,
+				X509 *verifier_cert,
+				CHAR8 *abl_cmd_line)
+{
+	EFI_STATUS ret;
+#ifdef USER
+	/* per bootloaderequirements.pdf */
+	if (boot_state == BOOT_STATE_ORANGE) {
+		ret = android_clear_memory();
+		if (EFI_ERROR(ret)) {
+			error(L"Failed to clear memory. Load image aborted.");
+			return ret;
+		}
+	}
+#endif
+
+	set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
+					&boot_state, FALSE, TRUE);
+
+#ifdef OS_SECURE_BOOT
+	ret = set_os_secure_boot(boot_state == BOOT_STATE_GREEN);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to set os secure boot");
+#endif
+
+	ret = slot_boot(boot_target);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to write slot boot");
+		return ret;
+	}
+
+	debug(L"chainloading boot image, boot state is %s",
+	boot_state_to_string(boot_state));
+	ret = android_image_start_buffer_abl(bootimage,
+						boot_target, boot_state, NULL,
+						verifier_cert, (const CHAR8 *)abl_cmd_line);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Couldn't load Boot image");
+
+	ret = slot_boot_failed(boot_target);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to write slot failure");
+
+	return ret;
+}
+
+static EFI_STATUS init_trusty_rot_params(trusty_boot_params_t *param, UINT8 boot_state, VOID *image)
+{
+	EFI_STATUS ret;
+	struct rot_data_t rot;
+
+	ret = get_rot_data(image, boot_state, NULL, &rot);
+
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get rot data");
+		return ret;
+	}
+
+	if (!param)
+		return EFI_INVALID_PARAMETER;
+
+	param->RotData.version = rot.version;
+	param->RotData.deviceLocked = rot.deviceLocked;
+	param->RotData.verifiedBootState = rot.verifiedBootState;
+	param->RotData.osVersion = rot.osVersion;
+	param->RotData.patchMonthYear = rot.patchMonthYear;
+	//key_size is initialized in ABL for now
+	//key_hash256 is initialized in ABL for now
+
+	debug(L"RotData.version = %d", param->RotData.version);
+	debug(L"RotData.deviceLocked = %d", param->RotData.deviceLocked);
+	debug(L"RotData.verifiedBootState = %d", param->RotData.verifiedBootState);
+	debug(L"RotData.osVersion = %d", param->RotData.osVersion);
+	debug(L"RotData.patchMonthYear = %d", param->RotData.patchMonthYear);
+	debug(L"RotData.key_size = %d", param->RotData.key_size);
+	return EFI_SUCCESS;
+}
+
+#define TRUSTY_VMCALL_SMC 0x74727500
+static EFI_STATUS launch_trusty_os(trusty_boot_params_t *param)
+{
+	if (!param)
+		return EFI_INVALID_PARAMETER;
+
+	asm volatile(
+		"vmcall; \n"
+		: : "a"(TRUSTY_VMCALL_SMC), "D"((uint32_t)&param->RotData));
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
+{
+	EFI_STATUS ret;
+	CHAR16 *target_path = NULL;
+	VOID *bootimage = NULL;
+	BOOLEAN oneshot = FALSE;
+	UINT8 boot_state = BOOT_STATE_GREEN;
+	X509 *verifier_cert = NULL;
+
+	debug(L"Loading boot image");
+	ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
+	FreePool(target_path);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to load boot image");
+		return ret;
+	}
+
+	if (boot_target == NORMAL_BOOT) {
+		ret = init_trusty_rot_params(p_trusty_boot_params, boot_state, bootimage);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to init trusty rot params");
+			return ret;
+		}
+
+		ret = launch_trusty_os(p_trusty_boot_params);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to launch trusty os");
+			return ret;
+		}
+	}
+
+	ret = start_boot_image(bootimage, boot_state, boot_target, verifier_cert, abl_cmd_line);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to start boot image");
+		return ret;
+	}
+
+	return EFI_INVALID_PARAMETER;
+}
+#endif	// __SUPPORPT_ABL_BOOT
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
@@ -205,7 +536,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	EFI_STATUS ret;
 
 	InitializeLib(image, sys_table);
+#ifdef __SUPPORPT_ABL_BOOT
+	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
+#else
 	target = check_command_line(image);
+#endif
 
 	ret = slot_init();
 	if (EFI_ERROR(ret)) {
@@ -215,6 +550,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 	for (;;) {
 		switch (target) {
+#ifdef __SUPPORPT_ABL_BOOT
+		case NORMAL_BOOT:
+		case RECOVERY:
+			boot_android(target, cmd_buf);
+			break;
+#endif
 		case UNKNOWN_TARGET:
 #ifndef CRASHMODE_USE_ADB
 		case CRASHMODE:
