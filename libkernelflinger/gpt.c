@@ -114,15 +114,42 @@ static EFI_STATUS set_header_crc32(struct gpt_header *gh)
 	return ret;
 }
 
-static EFI_STATUS read_gpt_header(struct gpt_disk *disk)
+static EFI_STATUS read_gpt_header(struct gpt_disk *disk, UINT64 offset)
 {
 	EFI_STATUS ret;
+	UINT32 saved_crc, crc;
 
-	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio, disk->bio->Media->MediaId, disk->bio->Media->BlockSize, sizeof(disk->gpt_hd), (VOID *)&disk->gpt_hd);
+	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio,
+				disk->bio->Media->MediaId,
+				offset, sizeof(disk->gpt_hd), (VOID *)&disk->gpt_hd);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read disk for GPT header at %lld",
+			   offset);
+		return ret;
+	}
+
+	saved_crc = disk->gpt_hd.header_crc32;
+	disk->gpt_hd.header_crc32 = 0;
+	ret = calculate_crc32((void *)&disk->gpt_hd, sizeof(disk->gpt_hd), &crc);
+	disk->gpt_hd.header_crc32 = saved_crc;
 	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Failed to read disk for GPT header");
+		return ret;
 
-	return ret;
+	if (crc != disk->gpt_hd.header_crc32)
+		return EFI_COMPROMISED_DATA;
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS read_master_gpt_header(struct gpt_disk *disk)
+{
+	return read_gpt_header(disk, disk->bio->Media->BlockSize);
+}
+
+static EFI_STATUS read_backup_gpt_header(struct gpt_disk *disk)
+{
+	return read_gpt_header(disk, sdisk.bio->Media->LastBlock *
+			       disk->bio->Media->BlockSize);
 }
 
 static BOOLEAN is_gpt_device(struct gpt_header *gpt)
@@ -135,6 +162,7 @@ static EFI_STATUS read_gpt_partitions(struct gpt_disk *disk)
 	EFI_STATUS ret;
 	UINTN offset;
 	UINTN size;
+	UINT32 crc;
 
 	if (disk->gpt_hd.number_of_entries > GPT_ENTRIES) {
 		error(L"Maximum number of partition supported is %d", GPT_ENTRIES);
@@ -145,10 +173,18 @@ static EFI_STATUS read_gpt_partitions(struct gpt_disk *disk)
 	size = disk->gpt_hd.number_of_entries * disk->gpt_hd.size_of_entry;
 
 	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio, disk->bio->Media->MediaId, offset, size, disk->partitions);
-	if (EFI_ERROR(ret))
+	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read GPT partitions");
+		return ret;
+	}
 
-	return ret;
+	ret = calculate_crc32(disk->partitions, size, &crc);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to compute partition entries CRC32");
+		return ret;
+	}
+
+	return disk->gpt_hd.entries_crc32 == crc ? EFI_SUCCESS : EFI_COMPROMISED_DATA;
 }
 
 static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
@@ -177,11 +213,15 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 		return ret;
 	}
 
-	ret = read_gpt_header(disk);
+	ret = read_master_gpt_header(disk);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to read GPT header");
-		return ret;
+		if (ret != EFI_COMPROMISED_DATA)
+			return ret;
+
+		debug(L"Master GPT header is corrupted");
+		ret = read_backup_gpt_header(disk);
 	}
+
 	return ret;
 }
 
@@ -260,11 +300,22 @@ static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
 
 	if (!is_gpt_device(&disk->gpt_hd))
 		return EFI_NOT_FOUND;
+
 	ret = read_gpt_partitions(disk);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to read GPT partitions");
-		return ret;
+		if (ret != EFI_COMPROMISED_DATA)
+			return ret;
+
+		debug(L"Master GPT entries array is corrupted");
+		ret = read_backup_gpt_header(disk);
+		if (EFI_ERROR(ret))
+			return ret;
 	}
+
+	ret = read_gpt_partitions(disk);
+	if (EFI_ERROR(ret))
+		return ret;
+
 	ret = gpt_remove_prefix();
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to remove prefix of partition label");
@@ -305,7 +356,7 @@ static EFI_STATUS gpt_cache_partition(logical_unit_t log_unit)
 
 		ZeroMem(&sdisk, sizeof(sdisk));
 		ret = gpt_prepare_disk(handles[i], &sdisk);
-		if (EFI_ERROR(ret))
+		if (EFI_ERROR(ret) && ret != EFI_COMPROMISED_DATA)
 			continue;
 		debug(L"Found disk as block io %d for logical unit %d", i, log_unit);
 
