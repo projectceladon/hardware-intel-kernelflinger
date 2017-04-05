@@ -52,6 +52,9 @@
 #ifdef USE_SLOT
 #include "libavb/libavb.h"
 #include "libavb/uefi_avb_ops.h"
+#ifdef USE_TPM
+#include "tpm2_security.h"
+#endif
 
 #define VBMETA_LABEL		L"vbmeta"
 #endif
@@ -63,6 +66,9 @@
 #endif
 
 static cmdlist_t cmdlist;
+#ifdef USE_TPM
+static cmdlist_t cmdlist_fuse;
+#endif
 
 static EFI_STATUS fastboot_oem_publish(void)
 {
@@ -520,6 +526,62 @@ static void cmd_oem_get_action_nonce(INTN argc, __attribute__((__unused__)) CHAR
 }
 #endif
 
+#ifdef USE_TPM
+static void cmd_fuse(INTN argc, CHAR8 **argv)
+{
+	if (argc < 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	fastboot_run_cmd(cmdlist_fuse, (char *)argv[1], argc - 1, argv + 1);
+}
+
+#ifdef BUILD_ANDROID_THINGS
+static void cmd_fuse_atperm(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	struct download_buffer *dl;
+
+	if (argc != 1) {
+		fastboot_fail("Invalid parameters");
+		return;
+	}
+
+	dl = fastboot_download_buffer();
+
+	ret = tpm2_fuse_perm_attr(dl->data, dl->size);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Fusing AT PERM failed, %r", ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
+#endif  // BUILD_ANDROID_THINGS
+
+static void cmd_fuse_vbmeta_key_hash(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	struct download_buffer *dl;
+
+	if (argc != 1) {
+		fastboot_fail("Invalid parameters");
+		return;
+	}
+
+	dl = fastboot_download_buffer();
+
+	ret = tpm2_fuse_vbmeta_key_hash(dl->data, dl->size);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Tee keyhash fuse failed, %r", ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
+#endif
+
 static struct fastboot_cmd COMMANDS[] = {
 	{ OFF_MODE_CHARGE,		LOCKED,		cmd_oem_off_mode_charge  },
 	/* The following commands are not part of the Google
@@ -546,9 +608,21 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "get-hashes",			LOCKED,		cmd_oem_gethashes  },
 	{ "get-provisioning-logs",	LOCKED,		cmd_oem_get_logs },
 #ifdef BOOTLOADER_POLICY
-	{ "get-action-nonce",		LOCKED,		cmd_oem_get_action_nonce }
+	{ "get-action-nonce",		LOCKED,		cmd_oem_get_action_nonce },
+#endif
+#ifdef USE_TPM
+	{ "fuse",			LOCKED,		cmd_fuse }
 #endif
 };
+
+#ifdef USE_TPM
+static struct fastboot_cmd COMMANDS_FUSE[] = {
+#ifdef BUILD_ANDROID_THINGS
+	{ "at-perm-attr",		LOCKED,		cmd_fuse_atperm },
+#endif
+	{ "vbmeta-key-hash",		UNLOCKED,	cmd_fuse_vbmeta_key_hash }
+};
+#endif
 
 static struct fastboot_cmd oem = { "oem", LOCKED, cmd_oem };
 
@@ -567,6 +641,14 @@ EFI_STATUS fastboot_oem_init(void)
 			return ret;
 	}
 
+#ifdef USE_TPM
+	for (i = 0; i < ARRAY_SIZE(COMMANDS_FUSE); i++) {
+		ret = fastboot_register_into(&cmdlist_fuse, &COMMANDS_FUSE[i]);
+		if (EFI_ERROR(ret))
+			return ret;
+	}
+#endif
+
 	fastboot_register(&oem);
 
 	return EFI_SUCCESS;
@@ -575,4 +657,9 @@ EFI_STATUS fastboot_oem_init(void)
 void fastboot_oem_free()
 {
 	fastboot_cmdlist_unregister(&cmdlist);
+
+#ifdef USE_TPM
+	fastboot_cmdlist_unregister(&cmdlist_fuse);
+#endif
+
 }
