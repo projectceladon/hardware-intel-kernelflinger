@@ -1054,6 +1054,10 @@ static EFI_STATUS setup_command_line(
                 }
         }
 
+        ret = prepend_command_line(&cmdline16, L"gpt");
+        if (EFI_ERROR(ret))
+                goto out;
+
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */
         cmdline_addr = 0xA0000;

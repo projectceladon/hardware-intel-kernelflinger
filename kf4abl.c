@@ -39,7 +39,9 @@
 #endif
 
 #include "options.h"
+#ifdef IOC_USE_SLCAN
 #include "ioc_can.h"
+#endif
 #include "android.h"
 #include "slot.h"
 #ifdef __SUPPORPT_ABL_BOOT
@@ -195,10 +197,12 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 	void *efiimage, *bootimage;
 	UINTN imagesize;
 
+#ifdef IOC_USE_SLCAN
 	ret = notify_ioc_ready();
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"notify ioc ready failed");
 	}
+#endif
 
 	for (;;) {
 		*target = UNKNOWN_TARGET;

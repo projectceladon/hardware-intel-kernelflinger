@@ -56,6 +56,9 @@ static struct algorithm {
 static const EVP_MD *selected_md;
 static unsigned int hash_len;
 
+#define BOOTLOADER_2ND_IAS_OFFSET  0x7D0000
+static UINT64 iasoffset = 0;
+
 EFI_STATUS set_hash_algorithm(const CHAR8 *algo)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
@@ -284,7 +287,12 @@ EFI_STATUS get_bootloader_hash(__attribute__((__unused__)) const CHAR16 *label)
 		return get_esp_hash();
 
 	/* Not the EFI System Partition. */
-	return get_fs_hash(BOOTLOADER_LABEL);
+	/* bootloader with two ias image (ifwi + osloader)*/
+	iasoffset = BOOTLOADER_2ND_IAS_OFFSET;
+	ret = get_fs_hash(BOOTLOADER_LABEL);
+	iasoffset = 0;
+
+	return ret;
 }
 
 /*
@@ -510,7 +518,6 @@ out:
 	return ret;
 }
 
-#ifdef USE_MULTIBOOT
 static const unsigned char IAS_IMAGE_MAGIC[4] = "ipk.";
 static const unsigned char MULTIBOOT_MAGIC[4] = "\x02\xb0\xad\x1b";
 
@@ -544,7 +551,7 @@ static EFI_STATUS get_iasimage_len(struct gpt_partition_interface *gparti,
 		gparti->bio->Media->BlockSize;
 
 	ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
-				gparti->bio->Media->MediaId, part_off,
+				gparti->bio->Media->MediaId, part_off + iasoffset,
 				sizeof(hdr), &hdr);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read the ias image header");
@@ -557,22 +564,24 @@ static EFI_STATUS get_iasimage_len(struct gpt_partition_interface *gparti,
 		return EFI_COMPROMISED_DATA;
 	}
 
-	ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
-				gparti->bio->Media->MediaId, part_off + hdr.data_off,
-				sizeof(tos_magic), &tos_magic);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to read the multiboot magic");
-		return ret;
-	}
+	if (iasoffset == 0) {
+		ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
+					gparti->bio->Media->MediaId, part_off + hdr.data_off,
+					sizeof(tos_magic), &tos_magic);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to read the multiboot magic");
+			return ret;
+		}
 
-	/* Verify multiboot-tos magic. */
-	if (memcmp(MULTIBOOT_MAGIC, tos_magic, sizeof(MULTIBOOT_MAGIC))) {
-		error(L"Bad multiboot magic");
-		return EFI_COMPROMISED_DATA;
+		/* Verify multiboot-tos magic. */
+		if (memcmp(MULTIBOOT_MAGIC, tos_magic, sizeof(MULTIBOOT_MAGIC))) {
+			error(L"Bad multiboot magic");
+			return EFI_COMPROMISED_DATA;
+		}
 	}
 
 	*len = ALIGN((hdr.data_len + IAS_HEADER_SIZE + IAS_CRC_SIZE), IAS_ALIGN);
-	*len += IAS_RSA_SIGNATURE_SIZE + IAS_RSA_PUBLIC_KEY_SIZE;
+	*len += IAS_RSA_SIGNATURE_SIZE + IAS_RSA_PUBLIC_KEY_SIZE + iasoffset;
 	if (*len > part_len) {
 		error(L"Ias-multiboot image is bigger than the partition");
 		return EFI_COMPROMISED_DATA;
@@ -581,6 +590,7 @@ static EFI_STATUS get_iasimage_len(struct gpt_partition_interface *gparti,
 	return EFI_SUCCESS;
 }
 
+#ifdef USE_MULTIBOOT
 EFI_STATUS get_ias_image_hash(const CHAR16 *label)
 {
 	struct gpt_partition_interface gparti;
@@ -740,7 +750,8 @@ EFI_STATUS get_fs_hash(const CHAR16 *label)
 		EFI_STATUS (*get_len)(struct gpt_partition_interface *gparti, UINT64 *len);
 	} SUPPORTED_FS[] = {
 		{ "Ext4", get_ext4_len },
-		{ "SquashFS", get_squashfs_len }
+		{ "SquashFS", get_squashfs_len },
+		{ "Ias", get_iasimage_len }
 	};
 	struct gpt_partition_interface gparti;
 	CHAR8 hash[EVP_MAX_MD_SIZE];
@@ -755,6 +766,7 @@ EFI_STATUS get_fs_hash(const CHAR16 *label)
 	}
 
 	for (i = 0; i < ARRAY_SIZE(SUPPORTED_FS); i++) {
+		debug(L"Checking %d of %a", i, SUPPORTED_FS[i].name);
 		ret = SUPPORTED_FS[i].get_len(&gparti, &fs_len);
 		if (EFI_ERROR(ret))
 			continue;

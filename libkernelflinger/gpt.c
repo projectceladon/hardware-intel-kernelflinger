@@ -114,15 +114,42 @@ static EFI_STATUS set_header_crc32(struct gpt_header *gh)
 	return ret;
 }
 
-static EFI_STATUS read_gpt_header(struct gpt_disk *disk)
+static EFI_STATUS read_gpt_header(struct gpt_disk *disk, UINT64 offset)
 {
 	EFI_STATUS ret;
+	UINT32 saved_crc, crc;
 
-	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio, disk->bio->Media->MediaId, disk->bio->Media->BlockSize, sizeof(disk->gpt_hd), (VOID *)&disk->gpt_hd);
+	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio,
+				disk->bio->Media->MediaId,
+				offset, sizeof(disk->gpt_hd), (VOID *)&disk->gpt_hd);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read disk for GPT header at %lld",
+			   offset);
+		return ret;
+	}
+
+	saved_crc = disk->gpt_hd.header_crc32;
+	disk->gpt_hd.header_crc32 = 0;
+	ret = calculate_crc32((void *)&disk->gpt_hd, sizeof(disk->gpt_hd), &crc);
+	disk->gpt_hd.header_crc32 = saved_crc;
 	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Failed to read disk for GPT header");
+		return ret;
 
-	return ret;
+	if (crc != disk->gpt_hd.header_crc32)
+		return EFI_COMPROMISED_DATA;
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS read_master_gpt_header(struct gpt_disk *disk)
+{
+	return read_gpt_header(disk, disk->bio->Media->BlockSize);
+}
+
+static EFI_STATUS read_backup_gpt_header(struct gpt_disk *disk)
+{
+	return read_gpt_header(disk, sdisk.bio->Media->LastBlock *
+			       disk->bio->Media->BlockSize);
 }
 
 static BOOLEAN is_gpt_device(struct gpt_header *gpt)
@@ -135,6 +162,7 @@ static EFI_STATUS read_gpt_partitions(struct gpt_disk *disk)
 	EFI_STATUS ret;
 	UINTN offset;
 	UINTN size;
+	UINT32 crc;
 
 	if (disk->gpt_hd.number_of_entries > GPT_ENTRIES) {
 		error(L"Maximum number of partition supported is %d", GPT_ENTRIES);
@@ -145,10 +173,18 @@ static EFI_STATUS read_gpt_partitions(struct gpt_disk *disk)
 	size = disk->gpt_hd.number_of_entries * disk->gpt_hd.size_of_entry;
 
 	ret = uefi_call_wrapper(disk->dio->ReadDisk, 5, disk->dio, disk->bio->Media->MediaId, offset, size, disk->partitions);
-	if (EFI_ERROR(ret))
+	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read GPT partitions");
+		return ret;
+	}
 
-	return ret;
+	ret = calculate_crc32(disk->partitions, size, &crc);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to compute partition entries CRC32");
+		return ret;
+	}
+
+	return disk->gpt_hd.entries_crc32 == crc ? EFI_SUCCESS : EFI_COMPROMISED_DATA;
 }
 
 static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
@@ -177,81 +213,16 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 		return ret;
 	}
 
-	ret = read_gpt_header(disk);
+	ret = read_master_gpt_header(disk);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to read GPT header");
-		return ret;
+		if (ret != EFI_COMPROMISED_DATA)
+			return ret;
+
+		debug(L"Master GPT header is corrupted");
+		ret = read_backup_gpt_header(disk);
 	}
+
 	return ret;
-}
-
-/* Gmin adds the "android_" prefix to the partition label.  Most of
-   the fastboot command relies on the partition name/label.  The
-   following functions get rid of this prefix and put it if previously
-   removed.  */
-const CHAR16 *ANDROID_PREFIX = L"android_";
-
-static EFI_STATUS gpt_remove_prefix(void)
-{
-	UINTN prefix_len = StrLen(ANDROID_PREFIX);
-	BOOLEAN removed = FALSE;
-	BOOLEAN not_removed = FALSE;
-	UINTN p;
-
-	if (sdisk.label_prefix_removed)
-		return EFI_SUCCESS;
-
-	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
-		struct gpt_partition *part;
-
-		part = &sdisk.partitions[p];
-		if (!CompareGuid(&part->type, &NullGuid))
-			continue;
-
-		if (!StrnCmp(part->name, ANDROID_PREFIX, prefix_len)) {
-			if (not_removed)
-				goto error;
-			CopyMem(part->name, &part->name[prefix_len],
-				sizeof(part->name) - (prefix_len * sizeof(CHAR16)));
-			removed = TRUE;
-			continue;
-		}
-		if (removed == TRUE)
-			goto error;
-
-		not_removed = TRUE;
-	}
-
-	sdisk.label_prefix_removed = removed;
-	return EFI_SUCCESS;
-error:
-	error(L"Not all the partition have the '%s' prefix", ANDROID_PREFIX);
-	return EFI_INVALID_PARAMETER;
-}
-
-static void gpt_put_prefix_back(void)
-{
-	UINTN prefix_len = StrLen(ANDROID_PREFIX);
-	struct gpt_partition save;
-	UINTN p;
-
-	if (!sdisk.label_prefix_removed)
-		return;
-
-	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
-		struct gpt_partition *part;
-
-		part = &sdisk.partitions[p];
-		if (!CompareGuid(&part->type, &NullGuid))
-			continue;
-
-		CopyMem(save.name, part->name, sizeof(part->name));
-		CopyMem(&part->name[prefix_len], save.name,
-			sizeof(part->name) - (prefix_len * sizeof(CHAR16)));
-		CopyMem(part->name, ANDROID_PREFIX, prefix_len * sizeof(CHAR16));
-	}
-
-	sdisk.label_prefix_removed = FALSE;
 }
 
 static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
@@ -260,16 +231,21 @@ static EFI_STATUS gpt_list_partition_on_disk(struct gpt_disk *disk)
 
 	if (!is_gpt_device(&disk->gpt_hd))
 		return EFI_NOT_FOUND;
+
 	ret = read_gpt_partitions(disk);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to read GPT partitions");
-		return ret;
+		if (ret != EFI_COMPROMISED_DATA)
+			return ret;
+
+		debug(L"Master GPT entries array is corrupted");
+		ret = read_backup_gpt_header(disk);
+		if (EFI_ERROR(ret))
+			return ret;
 	}
-	ret = gpt_remove_prefix();
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to remove prefix of partition label");
+
+	ret = read_gpt_partitions(disk);
+	if (EFI_ERROR(ret))
 		return ret;
-	}
 
 	return EFI_SUCCESS;
 }
@@ -305,7 +281,7 @@ static EFI_STATUS gpt_cache_partition(logical_unit_t log_unit)
 
 		ZeroMem(&sdisk, sizeof(sdisk));
 		ret = gpt_prepare_disk(handles[i], &sdisk);
-		if (EFI_ERROR(ret))
+		if (EFI_ERROR(ret) && ret != EFI_COMPROMISED_DATA)
 			continue;
 		debug(L"Found disk as block io %d for logical unit %d", i, log_unit);
 
@@ -392,15 +368,47 @@ EFI_STATUS gpt_get_root_disk(struct gpt_partition_interface *gpart, logical_unit
 	return EFI_SUCCESS;
 }
 
+/* OneAndroid adds the "android_" prefix to the Android partition
+   labels for the android partitions. However, we also have to support
+   non-android partitions which are not prefixed with the "android_"
+   string.  To support both case at the same time,
+   gpt_find_partition(LABEL) looks for both the requested LABEL and
+   L"android_" LABEL strings. */
+
+static const CHAR16 ANDROID_PREFIX[] = L"android_";
+
+static CHAR16 *make_android_label(const CHAR16 *label)
+{
+	static CHAR16 android_label[GPT_NAME_LEN];
+	static CHAR16 *suffix = &android_label[ARRAY_SIZE(ANDROID_PREFIX) - 1];
+	UINTN label_size = StrLen(label) * sizeof(CHAR16);
+
+	if (!*android_label)
+		memcpy(android_label, ANDROID_PREFIX, sizeof(ANDROID_PREFIX));
+
+	if (label_size + sizeof(ANDROID_PREFIX) > sizeof(android_label))
+		return NULL;
+
+	memcpy(suffix, label, label_size + sizeof(CHAR16));
+	return android_label;
+}
+
 static struct gpt_partition *gpt_find_partition(const CHAR16 *label)
 {
 	UINTN p;
+	CHAR16 *android_label;
+
+	android_label = make_android_label(label);
 
 	for (p = 0; p < sdisk.gpt_hd.number_of_entries; p++) {
 		struct gpt_partition *part;
 
 		part = &sdisk.partitions[p];
-		if (!CompareGuid(&part->type, &NullGuid) || StrCmp(part->name, label))
+		if (!CompareGuid(&part->type, &NullGuid))
+			continue;
+
+		if (StrCmp(part->name, label) &&
+		    (!android_label || StrCmp(part->name, android_label)))
 			continue;
 
 		debug(L"Found label %s in partition %d", label, p);
@@ -408,6 +416,22 @@ static struct gpt_partition *gpt_find_partition(const CHAR16 *label)
 	}
 
 	return NULL;
+}
+
+/* OneAndroid adds the "android_" prefix to the Android partition
+   labels for the android partitions.  When exposing the partition
+   information outside of this module we have to make sure that this
+   prefix has been removed.  */
+
+static void copy_part(struct gpt_partition *in, struct gpt_partition *out)
+{
+	static const UINTN PREFIX_LEN = ARRAY_SIZE(ANDROID_PREFIX) - 1;
+
+	CopyMem(out, in, sizeof(*in));
+	if (!memcmp(in->name, ANDROID_PREFIX, PREFIX_LEN * sizeof(CHAR16)))
+		CopyMem(out->name,
+			&in->name[PREFIX_LEN],
+			sizeof(out->name) - PREFIX_LEN * sizeof(CHAR16));
 }
 
 EFI_STATUS gpt_get_partition_by_label(const CHAR16 *label,
@@ -426,7 +450,7 @@ EFI_STATUS gpt_get_partition_by_label(const CHAR16 *label,
 
 	part = gpt_find_partition(label);
 	if (part) {
-		CopyMem(&gpart->part, part, sizeof(*part));
+		copy_part(part, &gpart->part);
 		gpart->bio = sdisk.bio;
 		gpart->dio = sdisk.dio;
 		gpart->handle = sdisk.handle;
@@ -470,7 +494,7 @@ EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN 
 		parti = &(*gpartlist)[(*part_count)];
 		parti->bio = sdisk.bio;
 		parti->dio = sdisk.dio;
-		CopyMem(&parti->part, part, sizeof(*part));
+		copy_part(part, &parti->part);
 		(*part_count)++;
 	}
 
@@ -618,8 +642,6 @@ static EFI_STATUS gpt_write_partition_tables(void)
 	struct gpt_header *gh;
 	struct gpt_header *gh_backup;
 	UINT32 crc;
-
-	gpt_put_prefix_back();
 
 	gh = &sdisk.gpt_hd;
 
