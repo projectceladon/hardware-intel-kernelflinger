@@ -40,6 +40,7 @@
 #include "gpt_bin.h"
 
 #define MBR_CODE_SIZE	440
+#define GPT_NAME_LEN	36
 
 struct gpt_header {
 	char signature[8];
@@ -71,7 +72,7 @@ struct gpt_partition {
 		} __attribute__((packed)) fields;
 		UINT64 whole;
 	} attrs;
-	UINT16 name[36];                    /* UTF-16 encoded partition name */
+	UINT16 name[GPT_NAME_LEN]; /* UTF-16 encoded partition name */
 	/* Remainder of entry is reserved and should be 0 */
 } __attribute__((packed));
 
