@@ -557,7 +557,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #ifdef __SUPPORT_ABL_BOOT
 		case NORMAL_BOOT:
 		case RECOVERY:
-			boot_android(target, cmd_buf);
+			ret = boot_android(target, cmd_buf);
+			if (EFI_ERROR(ret))
+				target = FASTBOOT;
 			break;
 #endif
 		case UNKNOWN_TARGET:
