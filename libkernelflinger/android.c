@@ -232,7 +232,7 @@ typedef void(*kernel_func)(void *, struct boot_params *);
 #define SEGMENT_GRANULARITY_4KB       1
 #define DESCRIPTOR_TYPE_CODE_OR_DATA  1
 
-#ifdef __SUPPORPT_ABL_BOOT
+#ifdef __SUPPORT_ABL_BOOT
 #define KERNEL_DEST 0x100000
 #endif
 
@@ -1595,7 +1595,7 @@ BOOLEAN recovery_in_boot_partition(void)
 }
 
 
-#ifdef  __SUPPORPT_ABL_BOOT
+#ifdef  __SUPPORT_ABL_BOOT
 static UINTN cmd_line_add_str (CHAR8 *cmd_buf, UINTN max_cmd_size, UINTN pos, CHAR8 prefix, const CHAR8 *str)
 {
         UINTN len;
@@ -1869,7 +1869,7 @@ out_cmdline:
         buf->hdr.cmd_line_ptr = 0;
         return ret;
 }
-#endif  // __SUPPORPT_ABL_BOOT
+#endif  // __SUPPORT_ABL_BOOT
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
