@@ -44,7 +44,7 @@
 #endif
 #include "android.h"
 #include "slot.h"
-#ifdef __SUPPORPT_ABL_BOOT
+#ifdef __SUPPORT_ABL_BOOT
 #include "security.h"
 
 #define MAX_CMD_BUF 0x1000
@@ -118,7 +118,7 @@ static EFI_STATUS enter_crashmode(enum boot_target *target)
 }
 #endif
 
-#ifdef __SUPPORPT_ABL_BOOT
+#ifdef __SUPPORT_ABL_BOOT
 static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 {
 	EFI_STATUS ret;
@@ -236,7 +236,7 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 	return ret;
 }
 
-#ifdef __SUPPORPT_ABL_BOOT
+#ifdef __SUPPORT_ABL_BOOT
 static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UINTN max_cmd_size)
 {
 	EFI_STATUS ret;
@@ -335,7 +335,7 @@ static enum boot_target check_command_line(EFI_HANDLE image)
 }
 #endif
 
-#ifdef __SUPPORPT_ABL_BOOT
+#ifdef __SUPPORT_ABL_BOOT
 /* Load a boot image into RAM.
  *
  * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
@@ -532,7 +532,7 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 
 	return EFI_INVALID_PARAMETER;
 }
-#endif	// __SUPPORPT_ABL_BOOT
+#endif	// __SUPPORT_ABL_BOOT
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
@@ -540,7 +540,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	EFI_STATUS ret;
 
 	InitializeLib(image, sys_table);
-#ifdef __SUPPORPT_ABL_BOOT
+#ifdef __SUPPORT_ABL_BOOT
 	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
 #else
 	target = check_command_line(image);
@@ -554,7 +554,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 	for (;;) {
 		switch (target) {
-#ifdef __SUPPORPT_ABL_BOOT
+#ifdef __SUPPORT_ABL_BOOT
 		case NORMAL_BOOT:
 		case RECOVERY:
 			boot_android(target, cmd_buf);
