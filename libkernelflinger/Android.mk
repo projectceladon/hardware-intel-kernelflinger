@@ -96,7 +96,8 @@ LOCAL_SRC_FILES := \
 	slot.c \
 	life_cycle.c \
 	ioc_can.c \
-	qsort.c
+	qsort.c \
+	rpmb.c
 
 ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
     LOCAL_SRC_FILES += \
