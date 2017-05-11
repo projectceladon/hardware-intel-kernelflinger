@@ -185,4 +185,32 @@ ifneq ($(TARGET_BUILD_VARIANT),user)
 endif
 LOCAL_SRC_FILES := \
 	kf4abl.c
+kf4abl_intermediates := $(call intermediates-dir-for,ABL,kf4abl)
+
+ABL_VERITY_CERT := $(kf4abl_intermediates)/verity.cer
+ABL_PADDED_VERITY_CERT := $(kf4abl_intermediates)/verity.padded.cer
+ABL_OEMCERT_OBJ := $(kf4abl_intermediates)/oemcert.o
+
+$(ABL_VERITY_CERT): $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $(OPENSSL)
+	$(transform-pem-cert-to-der-cert)
+
+$(ABL_PADDED_VERITY_CERT): $(ABL_VERITY_CERT)
+	$(call pad-binary, 4096)
+
+ifeq ($(TARGET_IAFW_ARCH),x86_64)
+    ELF_OUTPUT := elf64-x86-64
+else
+    ELF_OUTPUT := elf32-i386
+endif
+
+abl_sym_binary := $(shell echo _binary_$(ABL_PADDED_VERITY_CERT) | sed "s/[\/\.-]/_/g")
+$(ABL_OEMCERT_OBJ): $(ABL_PADDED_VERITY_CERT)
+	mkdir -p $(@D) && \
+	$(EFI_OBJCOPY) --input binary --output $(ELF_OUTPUT) --binary-architecture i386 $< $@ && \
+	$(EFI_OBJCOPY) --redefine-sym $(abl_sym_binary)_start=_binary_oemcert_start \
+                       --redefine-sym $(abl_sym_binary)_end=_binary_oemcert_end \
+                       --redefine-sym $(abl_sym_binary)_size=_binary_oemcert_size \
+                       --rename-section .data=.oemkeys $@ $@
+
+LOCAL_GENERATED_SOURCES := $(ABL_OEMCERT_OBJ)
 include $(BUILD_ABL_EXECUTABLE)

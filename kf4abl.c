@@ -493,6 +493,71 @@ static EFI_STATUS launch_trusty_os(trusty_boot_params_t *param)
 	return EFI_SUCCESS;
 }
 
+/* Validate an image.
+ *
+ * Parameters:
+ * boot_target    - Boot image to load. Values supported are NORMAL_BOOT,
+ *                  RECOVERY, and ESP_BOOTIMAGE (for 'fastboot boot')
+ * bootimage      - Bootimage to validate
+ * verifier_cert  - Return the certificate that validated the boot image
+ *
+ * Return values:
+ * BOOT_STATE_GREEN  - Boot image is valid against provided certificate
+ * BOOT_STATE_YELLOW - Boot image is valid against embedded certificate
+ * BOOT_STATE_RED    - Boot image is not valid
+ */
+static UINT8 validate_bootimage(
+		IN enum boot_target boot_target,
+		IN VOID *bootimage,
+		OUT X509 **verifier_cert)
+{
+	CHAR16 target[BOOT_TARGET_SIZE];
+	CHAR16 *expected;
+	CHAR16 *expected2 = NULL;
+	UINT8 boot_state;
+
+	boot_state = verify_android_boot_image(bootimage, oem_cert,
+						oem_cert_size, target,
+						verifier_cert);
+
+	if (boot_state == BOOT_STATE_RED) {
+		debug(L"boot image doesn't verify");
+		return boot_state;
+	}
+
+	switch (boot_target) {
+	case NORMAL_BOOT:
+	case MEMORY:
+		expected = L"/boot";
+		/* in case of multistage ota */
+		expected2 = L"/recovery";
+		break;
+	case CHARGER:
+		expected = L"/boot";
+		break;
+	case RECOVERY:
+		if (recovery_in_boot_partition())
+			expected = L"/boot";
+		else
+			expected = L"/recovery";
+		break;
+	case ESP_BOOTIMAGE:
+		/* "live" bootable image */
+		expected = L"/boot";
+		break;
+	default:
+		expected = NULL;
+	}
+
+	if ((!expected || StrCmp(expected, target)) &&
+		(!expected2 || StrCmp(expected2, target))) {
+		debug(L"boot image has unexpected target name");
+		return BOOT_STATE_RED;
+	}
+
+	return boot_state;
+}
+
 EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
 	EFI_STATUS ret;
@@ -509,7 +574,7 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		efi_perror(ret, L"Failed to load boot image");
 		return ret;
 	}
-
+	boot_state = validate_bootimage(boot_target, bootimage, &verifier_cert);
 	if (boot_target == NORMAL_BOOT) {
 		ret = init_trusty_rot_params(p_trusty_boot_params, boot_state, bootimage);
 		if (EFI_ERROR(ret)) {
@@ -552,6 +617,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		return ret;
 	}
 
+	debug(L"target=%d", target);
 	for (;;) {
 		switch (target) {
 #ifdef __SUPPORT_ABL_BOOT
