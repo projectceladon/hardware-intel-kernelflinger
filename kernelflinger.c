@@ -857,8 +857,13 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                 }
                 ret = start_trusty(&rot_data);
                 if (EFI_ERROR(ret)) {
+#ifndef BUILD_ANDROID_THINGS
                         efi_perror(ret, L"Unable to start trusty; stop.");
                         die();
+#else
+                        efi_perror(ret, L"Unable to start trusty");
+                        efi_perror(ret, L"Continue to boot");
+#endif
                 }
         }
 #endif

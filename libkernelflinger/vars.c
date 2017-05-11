@@ -291,7 +291,7 @@ enum device_state get_current_state()
 
 #ifndef USER
 			debug(L"Life Cycle state is ENDUSER");
-			debug(L"Not a USER build, enforcing provisionning mode");
+			debug(L"Not a USER build, enforcing provisioning mode");
 			set_provisioning_mode(TRUE);
 #endif
 			goto exit;
