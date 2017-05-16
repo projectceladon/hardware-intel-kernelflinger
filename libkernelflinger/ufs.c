@@ -35,11 +35,19 @@
 #include "protocol/ufs.h"
 #include "protocol/ScsiPassThruExt.h"
 
-static EFI_DEVICE_PATH *get_scsi_device_path(EFI_DEVICE_PATH *p)
+/* Latest gnu-efi still does not define 'MSG_UFS_DP', Add this
+ * macro definition here for adapt to UFS storage detect in
+ * BIOS (which build under EDK2).
+ */
+#ifndef MSG_UFS_DP
+#define MSG_UFS_DP	0x19
+#endif
+
+static EFI_DEVICE_PATH *get_ufs_device_path(EFI_DEVICE_PATH *p)
 {
 	for (; !IsDevicePathEndType(p); p = NextDevicePathNode(p))
 		if (DevicePathType(p) == MESSAGING_DEVICE_PATH
-		    && DevicePathSubType(p) == MSG_SCSI_DP)
+		    && DevicePathSubType(p) == MSG_UFS_DP)
 			return p;
 	return NULL;
 }
@@ -77,7 +85,7 @@ static EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EF
 		return ret;
 	}
 
-	scsi_dp = get_scsi_device_path(dp);
+	scsi_dp = get_ufs_device_path(dp);
 	if (!scsi_dp) {
 		error(L"Failed to get SCSI device path");
 		return EFI_NOT_FOUND;
@@ -141,18 +149,27 @@ static EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_
 	UINT8 *target = target_bytes;
 	UINT64 target_lun;
 	UINT64 lun;
+	EFI_HANDLE scsi_handle;
 
 	lun = log_unit_to_ufs_lun(log_unit);
 	if (lun == LUN_UNKNOWN)
 		return EFI_NOT_FOUND;
 
-	ret = LibLocateProtocol(&ScsiPassThruProtocolGuid, (void **)&scsi);
+	ret = uefi_call_wrapper(BS->LocateDevicePath, 3, &ScsiPassThruProtocolGuid,
+				&p, &scsi_handle);
+	if (EFI_ERROR(ret)) {
+		error(L"Failed to locate SCSI root device");
+		return ret;
+	}
+
+	ret = uefi_call_wrapper(BS->HandleProtocol, 3, scsi_handle,
+				&ScsiPassThruProtocolGuid, (void *)&scsi);
 	if (EFI_ERROR(ret)) {
 		error(L"failed to get scsi protocol");
 		return ret;
 	}
 
-	p = get_scsi_device_path(p);
+	p = get_ufs_device_path(p);
 	if (!p)
 		return EFI_NOT_FOUND;
 
@@ -173,7 +190,7 @@ static EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_
 
 static BOOLEAN is_ufs(EFI_DEVICE_PATH *p)
 {
-	return get_scsi_device_path(p) != NULL;
+	return get_ufs_device_path(p) != NULL;
 }
 
 struct storage STORAGE(STORAGE_UFS) = {
