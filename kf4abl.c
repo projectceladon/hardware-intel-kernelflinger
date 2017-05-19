@@ -249,6 +249,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	UINTN arglen;
 	CHAR8 *trusty_str = (CHAR8 *)"trusty.param_addr=";
 	UINTN trusty_str_len;
+	CHAR8 *secureboot_str = (CHAR8 *)"ABL.secureboot=";
+	UINTN secureboot_str_len;
 
 	ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
 				&LoadedImageProtocol, (VOID **)&limg,
@@ -264,6 +266,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 
 	cmd_buf[0] = 0;
 	trusty_str_len = strlen((CHAR8 *)trusty_str);
+	secureboot_str_len = strlen((CHAR8 *)secureboot_str);
 
 	/*Parse boot target*/
 	for (i = 0; i < argc; i++) {
@@ -292,6 +295,13 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				num = strtoul((char *)nptr, 0, 16);
 				debug(L"Parsed trusty param addr is 0x%x", num);
 				p_trusty_boot_params = (trusty_boot_params_t *)num;
+			} else if ((arglen > secureboot_str_len) && (!strncmp(arg8, (CHAR8 *)secureboot_str, secureboot_str_len))) {
+				UINT8 val;
+				CHAR8 *nptr = (CHAR8 *)(arg8 + secureboot_str_len);
+                                val = (UINT8)strtoul((char *)nptr, 0, 10);
+				ret = set_abl_secure_boot(val);
+				if (EFI_ERROR(ret))
+					efi_perror(ret, L"Failed to set secure boot");
 			} else {
 				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
 				cmd_len += arglen;
