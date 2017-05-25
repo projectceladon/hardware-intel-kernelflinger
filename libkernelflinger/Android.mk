@@ -63,6 +63,10 @@ ifeq ($(KERNELFLINGER_SUPPORT_ABL_BOOT),true)
     LOCAL_CFLAGS += -D__SUPPORT_ABL_BOOT
 endif
 
+ifeq ($(KERNELFLINGER_DISABLE_DEBUG_PRINT),true)
+    LOCAL_CFLAGS += -D__DISABLE_DEBUG_PRINT
+endif
+
 LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \
