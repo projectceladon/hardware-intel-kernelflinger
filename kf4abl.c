@@ -267,8 +267,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 
 	/*Parse boot target*/
 	for (i = 0; i < argc; i++) {
-		log(L" abl cmd %02d: ", i);
-		log(L"%s\n", argv[i]);
+		debug(L" abl cmd %02d: %s", i, argv[i]);
 		if (!StrCmp(argv[i], L"ABL.boot_target=CRASHMODE"))
 			target = CRASHMODE;
 		else if (!StrCmp(argv[i], L"ABL.boot_target=NORMAL_BOOT"))
@@ -433,7 +432,7 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 		return ret;
 	}
 
-	debug(L"chainloading boot image, boot state is %s",
+	log(L"chainloading boot image, boot state is %s\n",
 	boot_state_to_string(boot_state));
 	ret = android_image_start_buffer_abl(bootimage,
 						boot_target, boot_state, NULL,
@@ -521,7 +520,7 @@ static UINT8 validate_bootimage(
 						verifier_cert);
 
 	if (boot_state == BOOT_STATE_RED) {
-		debug(L"boot image doesn't verify");
+		error(L"boot image doesn't verify");
 		return boot_state;
 	}
 
@@ -551,7 +550,7 @@ static UINT8 validate_bootimage(
 
 	if ((!expected || StrCmp(expected, target)) &&
 		(!expected2 || StrCmp(expected2, target))) {
-		debug(L"boot image has unexpected target name");
+		error(L"boot image has unexpected target name");
 		return BOOT_STATE_RED;
 	}
 

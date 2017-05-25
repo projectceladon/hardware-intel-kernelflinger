@@ -668,7 +668,7 @@ static CHAR16 *get_boot_reason(void)
         /* in case of an OS initiated reboot => get reason from efi var */
         bootreason = get_reboot_reason();
         if (!bootreason) {
-                debug(L"Error while trying to read the reboot reason");
+                error(L"Error while trying to read the reboot reason");
                 bootreason = L"unknown";
                 goto done;
         }
@@ -679,7 +679,7 @@ static CHAR16 *get_boot_reason(void)
                 if (!((*pos >= L'0' && *pos <= L'9') ||
                             (*pos >= L'a' && *pos <= L'z') ||
                             *pos == L'_')) {
-                        debug(L"Error, reboot reason contains non-alphanumeric characters");
+                        error(L"Error, reboot reason contains non-alphanumeric characters");
                         bootreason = L"unknown";
                         goto done;
                 }
@@ -1203,7 +1203,7 @@ EFI_STATUS android_image_load_partition(
         *bootimage_p = NULL;
         ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
         if (EFI_ERROR(ret)) {
-                debug(L"Partition %s not found", label);
+                error(L"Partition %s not found", label);
                 return ret;
         }
         MediaId = gpart.bio->Media->MediaId;
