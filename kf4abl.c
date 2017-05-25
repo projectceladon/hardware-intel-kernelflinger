@@ -267,8 +267,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 
 	/*Parse boot target*/
 	for (i = 0; i < argc; i++) {
-		log(L" abl cmd %02d: ", i);
-		log(L"%s\n", argv[i]);
+		debug(L" abl cmd %02d: %s", i, argv[i]);
 		if (!StrCmp(argv[i], L"ABL.boot_target=CRASHMODE"))
 			target = CRASHMODE;
 		else if (!StrCmp(argv[i], L"ABL.boot_target=NORMAL_BOOT"))
@@ -433,7 +432,7 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 		return ret;
 	}
 
-	debug(L"chainloading boot image, boot state is %s",
+	log(L"chainloading boot image, boot state is %s\n",
 	boot_state_to_string(boot_state));
 	ret = android_image_start_buffer_abl(bootimage,
 						boot_target, boot_state, NULL,

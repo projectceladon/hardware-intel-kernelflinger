@@ -42,10 +42,14 @@ EFI_STATUS log_flush_to_var(BOOLEAN nonvol);
 void log(const CHAR16 *fmt, ...);
 void vlog(const CHAR16 *fmt, va_list args);
 
+#ifdef __DISABLE_DEBUG_PRINT
+#define DEBUG_MESSAGES 0
+#else
 #ifdef USER
 #define DEBUG_MESSAGES 0
 #else
 #define DEBUG_MESSAGES 1
+#endif
 #endif
 
 #if DEBUG_MESSAGES
