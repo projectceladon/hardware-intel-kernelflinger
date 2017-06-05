@@ -482,6 +482,38 @@ BOOLEAN is_efi_secure_boot_enabled(VOID)
         return value == 1;
 }
 
+#ifdef __SUPPORT_ABL_BOOT
+BOOLEAN is_abl_secure_boot_enabled(VOID)
+{
+        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+        EFI_STATUS ret;
+        UINT8 value;
+        UINTN cursize;
+        UINT8 *curdata;
+
+        ret = get_efi_variable(&global_guid, SECURE_BOOT_VAR, &cursize, (VOID **)&curdata, NULL);
+        if (EFI_ERROR(ret))
+        {
+                efi_perror(ret, L"Failed to get secure boot var");
+                return FALSE;
+        }
+        value = curdata[0];
+
+        debug(L"Getting abl secure boot to value[%d], size[%d]", value, cursize);
+
+        return value == 1;
+}
+
+EFI_STATUS set_abl_secure_boot(UINT8 secure)
+{
+        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+
+        debug(L"Setting abl secure boot to %d", secure);
+        return set_efi_variable(&global_guid, SECURE_BOOT_VAR, sizeof(secure),
+                                &secure, FALSE, FALSE);
+}
+#endif
+
 EFI_STATUS set_os_secure_boot(BOOLEAN secure)
 {
         EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
