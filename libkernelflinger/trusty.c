@@ -65,8 +65,6 @@ struct tos_startup_info {
         UINT32 version;
         /* Size of this structure for mismatching check */
         UINT32 size;
-        /* Address of region where TOS loader will use at loader time */
-        UINT64 tos_ldr_addr;
         /* root of trust fields */
          struct rot_data_t rot;
         /* UEFI memory map address */
@@ -94,16 +92,12 @@ struct tos_image_header {
         UINT32 tos_version;
         /* entry offset */
         UINT32 entry_offset;
-        /* TOS image size in bytes */
-        UINT32 tos_image_size;
         /* Bootloader allocates a memory region with this specified size, and copies TOS image to
         *  this allocated space
         */
         UINT32 tos_ldr_size;
         /* Trusty IMR base + seed_msg_dst_offset */
         UINT32 seed_msg_dst_offset;
-        /* this's reserved for future usage */
-        UINT32 reserved;
 };
 
 
@@ -268,10 +262,6 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage, IN struct rot_data_t *rot_
         }
 
         boot_image_header = (struct boot_img_hdr *)bootimage;
-        if (tos_header->tos_image_size != boot_image_header->kernel_size) {
-                error(L"TOS image size mismatches in tos header and boot img header");
-                return EFI_INVALID_PARAMETER;
-        }
 
         if (tos_header->size != sizeof(struct tos_image_header)){
                 error(L"TOS header size mismatches in tos header");
@@ -317,7 +307,7 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage, IN struct rot_data_t *rot_
         debug(L"TOS Loadtime memory address = 0x%x", load_base);
 
         /* Relocate to Loadtime region for TOS header + TOS */
-        memcpy((VOID *)(UINTN)load_base, (VOID *)tos_header, tos_header->tos_image_size);
+        memcpy((VOID *)(UINTN)load_base, (VOID *)tos_header, boot_image_header->kernel_size);
 
         /* Get EFI memory map */
         memory_map = (CHAR8 *)LibMemoryMap(&nr_entries, &map_key, &desc_size, &desc_ver);
@@ -329,7 +319,6 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage, IN struct rot_data_t *rot_
         /* Initialize startup struct */
         startup_info->version = TOS_STARTUP_VERSION;
         startup_info->size = sizeof(struct tos_startup_info);
-        startup_info->tos_ldr_addr = (UINT64)load_base;
         memcpy(&startup_info->rot, rot_data, sizeof(*rot_data));
         startup_info->efi_memmap = (UINT64)(UINTN)memory_map;
         startup_info->efi_memmap_size = desc_size * nr_entries;

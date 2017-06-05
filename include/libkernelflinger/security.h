@@ -76,6 +76,10 @@ UINT8 verify_android_boot_image(
 /* Determines if UEFI Secure Boot is enabled or not. */
 BOOLEAN is_efi_secure_boot_enabled(VOID);
 
+#ifdef __SUPPORT_ABL_BOOT
+BOOLEAN is_abl_secure_boot_enabled(VOID);
+EFI_STATUS set_abl_secure_boot(UINT8 secure);
+#endif
 EFI_STATUS set_os_secure_boot(BOOLEAN secure);
 
 #ifdef BOOTLOADER_POLICY

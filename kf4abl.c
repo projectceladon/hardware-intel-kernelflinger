@@ -249,6 +249,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	UINTN arglen;
 	CHAR8 *trusty_str = (CHAR8 *)"trusty.param_addr=";
 	UINTN trusty_str_len;
+	CHAR8 *secureboot_str = (CHAR8 *)"ABL.secureboot=";
+	UINTN secureboot_str_len;
 
 	ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
 				&LoadedImageProtocol, (VOID **)&limg,
@@ -264,6 +266,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 
 	cmd_buf[0] = 0;
 	trusty_str_len = strlen((CHAR8 *)trusty_str);
+	secureboot_str_len = strlen((CHAR8 *)secureboot_str);
 
 	/*Parse boot target*/
 	for (i = 0; i < argc; i++) {
@@ -292,6 +295,13 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				num = strtoul((char *)nptr, 0, 16);
 				debug(L"Parsed trusty param addr is 0x%x", num);
 				p_trusty_boot_params = (trusty_boot_params_t *)num;
+			} else if ((arglen > secureboot_str_len) && (!strncmp(arg8, (CHAR8 *)secureboot_str, secureboot_str_len))) {
+				UINT8 val;
+				CHAR8 *nptr = (CHAR8 *)(arg8 + secureboot_str_len);
+                                val = (UINT8)strtoul((char *)nptr, 0, 10);
+				ret = set_abl_secure_boot(val);
+				if (EFI_ERROR(ret))
+					efi_perror(ret, L"Failed to set secure boot");
 			} else {
 				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
 				cmd_len += arglen;
@@ -492,6 +502,71 @@ static EFI_STATUS launch_trusty_os(trusty_boot_params_t *param)
 	return EFI_SUCCESS;
 }
 
+/* Validate an image.
+ *
+ * Parameters:
+ * boot_target    - Boot image to load. Values supported are NORMAL_BOOT,
+ *                  RECOVERY, and ESP_BOOTIMAGE (for 'fastboot boot')
+ * bootimage      - Bootimage to validate
+ * verifier_cert  - Return the certificate that validated the boot image
+ *
+ * Return values:
+ * BOOT_STATE_GREEN  - Boot image is valid against provided certificate
+ * BOOT_STATE_YELLOW - Boot image is valid against embedded certificate
+ * BOOT_STATE_RED    - Boot image is not valid
+ */
+static UINT8 validate_bootimage(
+		IN enum boot_target boot_target,
+		IN VOID *bootimage,
+		OUT X509 **verifier_cert)
+{
+	CHAR16 target[BOOT_TARGET_SIZE];
+	CHAR16 *expected;
+	CHAR16 *expected2 = NULL;
+	UINT8 boot_state;
+
+	boot_state = verify_android_boot_image(bootimage, oem_cert,
+						oem_cert_size, target,
+						verifier_cert);
+
+	if (boot_state == BOOT_STATE_RED) {
+		error(L"boot image doesn't verify");
+		return boot_state;
+	}
+
+	switch (boot_target) {
+	case NORMAL_BOOT:
+	case MEMORY:
+		expected = L"/boot";
+		/* in case of multistage ota */
+		expected2 = L"/recovery";
+		break;
+	case CHARGER:
+		expected = L"/boot";
+		break;
+	case RECOVERY:
+		if (recovery_in_boot_partition())
+			expected = L"/boot";
+		else
+			expected = L"/recovery";
+		break;
+	case ESP_BOOTIMAGE:
+		/* "live" bootable image */
+		expected = L"/boot";
+		break;
+	default:
+		expected = NULL;
+	}
+
+	if ((!expected || StrCmp(expected, target)) &&
+		(!expected2 || StrCmp(expected2, target))) {
+		error(L"boot image has unexpected target name");
+		return BOOT_STATE_RED;
+	}
+
+	return boot_state;
+}
+
 EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
 	EFI_STATUS ret;
@@ -508,7 +583,7 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		efi_perror(ret, L"Failed to load boot image");
 		return ret;
 	}
-
+	boot_state = validate_bootimage(boot_target, bootimage, &verifier_cert);
 	if (boot_target == NORMAL_BOOT) {
 		ret = init_trusty_rot_params(p_trusty_boot_params, boot_state, bootimage);
 		if (EFI_ERROR(ret)) {
@@ -551,12 +626,15 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		return ret;
 	}
 
+	debug(L"target=%d", target);
 	for (;;) {
 		switch (target) {
 #ifdef __SUPPORT_ABL_BOOT
 		case NORMAL_BOOT:
 		case RECOVERY:
-			boot_android(target, cmd_buf);
+			ret = boot_android(target, cmd_buf);
+			if (EFI_ERROR(ret))
+				target = FASTBOOT;
 			break;
 #endif
 		case UNKNOWN_TARGET:
