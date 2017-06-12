@@ -626,6 +626,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		return ret;
 	}
 
+#ifdef __FORCE_FASTBOOT
+	target = FASTBOOT;
+#endif
 	debug(L"target=%d", target);
 	for (;;) {
 		switch (target) {
