@@ -50,6 +50,8 @@
 #endif
 #include "security.h"
 
+#include <libtipc.h>
+
 #define MAX_CMD_BUF 0x1000
 static CHAR8 cmd_buf[MAX_CMD_BUF];
 
@@ -697,6 +699,9 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			efi_perror(ret, L"Failed to launch trusty os");
 			return ret;
 		}
+
+		trusty_ipc_init();
+		trusty_ipc_shutdown();
 	}
 
 	ret = start_boot_image(bootimage, boot_state, boot_target, slot_data, abl_cmd_line);
@@ -738,6 +743,9 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			efi_perror(ret, L"Failed to launch trusty os");
 			return ret;
 		}
+
+		trusty_ipc_init();
+		trusty_ipc_shutdown();
 	}
 
 	ret = start_boot_image(bootimage, boot_state, boot_target, verifier_cert, abl_cmd_line);
