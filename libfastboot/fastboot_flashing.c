@@ -72,7 +72,7 @@ EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
 		 * to make CI automation easier */
 #ifdef USE_UI
 #ifdef USER
-		if (interactive && !fastboot_ui_confirm_for_state(new_state)) {
+		if (interactive && new_state != UNLOCKED && !fastboot_ui_confirm_for_state(new_state)) {
 			fastboot_fail("Refusing to change device state");
 			return EFI_ACCESS_DENIED;
 		}
