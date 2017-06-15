@@ -28,8 +28,6 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This file defines bootlogic data structures, try to keep it without
- * any external definitions in order to ease export of it.
  */
 
 #ifndef _RPMB_H_
@@ -51,24 +49,32 @@ typedef enum {
 
 #pragma pack(1)
 typedef struct {
-	UINT8 Stuff[196];
-	UINT8 RPMBKey[32];
-	UINT8 Data[256];
-	UINT8 Nonce[16];
-	UINT32 WriteCounter;
-	UINT16 Address;
-	UINT16 BlkCnt;
-	UINT16 Result;
-	UINT16 ReqResp;
-} RPMBDataFrame;
+	UINT8 stuff[196];
+	UINT8 key_mac[32];
+	UINT8 data[256];
+	UINT8 nonce[16];
+	UINT32 write_counter;
+	UINT16 address;
+	UINT16 block_count;
+	UINT16 result;
+	UINT16 req_resp;
+} rpmb_data_frame;
 #pragma pack()
 
-EFI_STATUS emmc_read_rpmb_data(UINT16 blkCnt, UINT16 blkAddr, VOID *buffer,
-			const VOID *key, RPMB_RESPONSE_RESULT* result);
-EFI_STATUS emmc_write_rpmb_data(UINT16 blkCnt, UINT16 blkAddr, VOID *buffer,
-			const VOID *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS emmc_program_key(const VOID *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS emmc_get_counter(UINT32 *writeCounter, const VOID *key,
-			RPMB_RESPONSE_RESULT *result);
+EFI_STATUS emmc_read_rpmb_data(UINT16 blk_count, UINT16 blk_addr, void *buffer,
+		const void *key, RPMB_RESPONSE_RESULT * result);
+EFI_STATUS emmc_write_rpmb_data(UINT16 blk_count, UINT16 blk_addr, void *buffer,
+		const void *key, RPMB_RESPONSE_RESULT *result);
+EFI_STATUS emmc_program_key(const void *key, RPMB_RESPONSE_RESULT *result);
+EFI_STATUS emmc_get_counter(UINT32 *write_counter, const void *key,
+		RPMB_RESPONSE_RESULT *result);
+EFI_STATUS get_emmc_sdio(EFI_SD_HOST_IO_PROTOCOL **sdio);
+EFI_STATUS emmc_partition_switch(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT8 part);
+EFI_STATUS emmc_rpmb_send_request(EFI_SD_HOST_IO_PROTOCOL *sdio,
+		rpmb_data_frame *data_frame, UINT8 count, BOOLEAN is_rel_write);
+EFI_STATUS emmc_rpmb_get_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
+		rpmb_data_frame *data_frame, UINT8 count);
+EFI_STATUS get_emmc_partition_num(EFI_SD_HOST_IO_PROTOCOL *sdio,
+		UINT8 *current_part);
 
 #endif	/* _RPMB_H_ */

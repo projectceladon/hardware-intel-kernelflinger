@@ -28,8 +28,6 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This file defines bootlogic data structures, try to keep it without
- * any external definitions in order to ease export of it.
  */
 
 #include <lib.h>
@@ -84,7 +82,7 @@
 
 /* length of the part of the frame used for HMAC computation */
 #define HMAC_DATA_LEN \
-	(sizeof(RPMBDataFrame) - offsetof(RPMBDataFrame, Data))
+	(sizeof(rpmb_data_frame) - offsetof(rpmb_data_frame, data))
 
 typedef union {
 	UINT32 data;
@@ -98,8 +96,8 @@ typedef union {
 	};
 } RPMB_SWITCH_ARGUMENT;
 
-static INT32 rpmb_calc_hmac_sha256(RPMBDataFrame *frames, UINT8 blocks_cnt, const UINT8 key[], UINT32 key_size,
-				   UINT8 mac[], UINT32 mac_size)
+static INT32 rpmb_calc_hmac_sha256(rpmb_data_frame *frames, UINT8 blocks_cnt, const UINT8 key[], UINT32 key_size,
+		UINT8 mac[], UINT32 mac_size)
 {
 	HMAC_CTX ctx;
 	INT32 ret = 1;
@@ -111,7 +109,7 @@ static INT32 rpmb_calc_hmac_sha256(RPMBDataFrame *frames, UINT8 blocks_cnt, cons
 		goto out;
 
 	for (i = 0; i < blocks_cnt; i++)
-		HMAC_Update(&ctx, frames[i].Data, HMAC_DATA_LEN);
+		HMAC_Update(&ctx, frames[i].data, HMAC_DATA_LEN);
 
 	ret = HMAC_Final(&ctx, mac, &mac_size);
 	if (ret == 0)
@@ -127,7 +125,7 @@ out:
 	return ret;
 }
 
-static INT32 rpmb_check_mac(const UINT8 *key, RPMBDataFrame *frames, UINT8 cnt)
+static INT32 rpmb_check_mac(const UINT8 *key, rpmb_data_frame *frames, UINT8 cnt)
 {
 	UINT8 mac[RPMB_MAC_SIZE];
 	INT32 ret = 1;
@@ -143,7 +141,7 @@ static INT32 rpmb_check_mac(const UINT8 *key, RPMBDataFrame *frames, UINT8 cnt)
 		return ret;
 	}
 
-	if (memcmp(mac, frames[cnt -1].RPMBKey, RPMB_MAC_SIZE)) {
+	if (memcmp(mac, frames[cnt - 1].key_mac, RPMB_MAC_SIZE)) {
 		debug(L"RPMB hmac mismatch resule MAC");
 		return 0;
 	}
@@ -151,10 +149,10 @@ static INT32 rpmb_check_mac(const UINT8 *key, RPMBDataFrame *frames, UINT8 cnt)
 	return ret;
 }
 
-static EFI_STATUS get_emmc_sdio(EFI_SD_HOST_IO_PROTOCOL **sdio)
+EFI_STATUS get_emmc_sdio(EFI_SD_HOST_IO_PROTOCOL **sdio)
 {
 	static BOOLEAN initialized = FALSE;
-	static EFI_SD_HOST_IO_PROTOCOL *sdio_rpmb = NULL;
+	static EFI_SD_HOST_IO_PROTOCOL *sdio_rpmb;
 	EFI_STATUS ret;
 	EFI_HANDLE *handles;
 	UINTN nb_handle = 0;
@@ -195,19 +193,19 @@ static EFI_STATUS get_emmc_sdio(EFI_SD_HOST_IO_PROTOCOL **sdio)
 
 	return ret;
 }
-static EFI_STATUS get_emmc_partition_num(EFI_SD_HOST_IO_PROTOCOL *sdio,
-					 UINT8 *currentPart)
+
+EFI_STATUS get_emmc_partition_num(EFI_SD_HOST_IO_PROTOCOL *sdio,
+		UINT8 *current_part)
 {
 	EXT_CSD *ext_csd;
 	void *rawbuffer;
 	UINT32 status;
 	EFI_STATUS ret;
 
-	if ((sdio == NULL) || (currentPart == NULL))
+	if (!sdio || !current_part)
 		return EFI_INVALID_PARAMETER;
 
-	ret = alloc_aligned(&rawbuffer, (void **)&ext_csd, sizeof(*ext_csd),
-			    8);
+	ret = alloc_aligned(&rawbuffer, (void **)&ext_csd, sizeof(*ext_csd), 8);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -219,8 +217,8 @@ static EFI_STATUS get_emmc_partition_num(EFI_SD_HOST_IO_PROTOCOL *sdio,
 		goto out;
 	}
 
-	*currentPart = ext_csd->PARTITION_CONFIG;
-	debug(L"current EMMC parition num is %d",*currentPart);
+	*current_part = ext_csd->PARTITION_CONFIG;
+	debug(L"current EMMC parition num is %d", *current_part);
 
 out:
 	FreePool(rawbuffer);
@@ -228,15 +226,15 @@ out:
 	return ret;
 }
 
-static EFI_STATUS emmc_partition_switch(EFI_SD_HOST_IO_PROTOCOL *sdio,
-			       UINT8 Part)
+EFI_STATUS emmc_partition_switch(EFI_SD_HOST_IO_PROTOCOL *sdio, UINT8 part)
 {
 	UINT32 status;
 	CARD_STATUS card_status;
 	EFI_STATUS ret = EFI_SUCCESS;
 	RPMB_SWITCH_ARGUMENT arg;
+
 	arg.CmdSet = 0;
-	arg.Value = Part;
+	arg.Value = part;
 	arg.Index = EXT_CSD_PART_CONF;
 	arg.Access = MMC_SWITCH_MODE_WRITE_BYTE;
 
@@ -268,19 +266,44 @@ static EFI_STATUS emmc_partition_switch(EFI_SD_HOST_IO_PROTOCOL *sdio,
 
 	} while (!card_status.READY_FOR_DATA);
 
-	debug(L" EMMC parition %d switching successfully", Part);
+	debug(L" EMMC parition %d switching successfully", part);
 
 	return ret;
 }
 
+static EFI_STATUS emmc_get_current_part_switch_part(EFI_SD_HOST_IO_PROTOCOL *sdio,
+		UINT8 *current_part, UINT8 switch_part)
+{
+	EFI_STATUS ret;
+
+	if (!sdio || !current_part)
+		return EFI_INVALID_PARAMETER;
+
+	ret = get_emmc_partition_num(sdio, current_part);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get current partition");
+		return ret;
+	}
+
+	if (*current_part == switch_part)
+		return ret;
+
+	ret = emmc_partition_switch(sdio, switch_part);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to switch parition %d", switch_part);
+		return ret;
+	}
+
+	return ret;
+}
 static EFI_STATUS emmc_rpmb_send_blockcount(EFI_SD_HOST_IO_PROTOCOL *sdio,
-					    UINT8 count, BOOLEAN is_rel_write)
+		UINT8 count, BOOLEAN is_rel_write)
 {
 	EFI_STATUS ret;
 	UINT32 status;
 	UINT32 arg = count;
 
-	if (sdio == NULL)
+	if (!sdio)
 		return EFI_INVALID_PARAMETER;
 
 	if (is_rel_write)
@@ -301,13 +324,13 @@ static EFI_STATUS emmc_rpmb_send_blockcount(EFI_SD_HOST_IO_PROTOCOL *sdio,
 	return ret;
 }
 
-static EFI_STATUS emmc_rpmb_send_request(EFI_SD_HOST_IO_PROTOCOL *sdio,
-				RPMBDataFrame *dataFrame, UINT8 count, BOOLEAN is_rel_write)
+EFI_STATUS emmc_rpmb_send_request(EFI_SD_HOST_IO_PROTOCOL *sdio,
+		rpmb_data_frame *data_frame, UINT8 count, BOOLEAN is_rel_write)
 {
 	EFI_STATUS ret;
 	UINT32 status;
 
-	if ((sdio == NULL) || (dataFrame == NULL))
+	if (!sdio || !data_frame)
 		return EFI_INVALID_PARAMETER;
 
 	ret = emmc_rpmb_send_blockcount(sdio, count, is_rel_write);
@@ -317,7 +340,7 @@ static EFI_STATUS emmc_rpmb_send_request(EFI_SD_HOST_IO_PROTOCOL *sdio,
 	}
 
 	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio,
-				WRITE_MULTIPLE_BLOCK, 0, OutData, (VOID *)dataFrame,
+				WRITE_MULTIPLE_BLOCK, 0, OutData, (VOID *)data_frame,
 				RPMB_DATA_FRAME_SIZE * count, ResponseR1, TIMEOUT_DATA, &status);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to send command WRITE_MULTIPLE_BLOCK");
@@ -332,15 +355,13 @@ static EFI_STATUS emmc_rpmb_send_request(EFI_SD_HOST_IO_PROTOCOL *sdio,
 	return ret;
 }
 
-static EFI_STATUS emmc_rpmb_get_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
-					 RPMBDataFrame *dataFrame, UINT8 count, UINT16 expected,
-					 RPMB_RESPONSE_RESULT *result)
+EFI_STATUS emmc_rpmb_get_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
+		rpmb_data_frame *data_frame, UINT8 count)
 {
 	EFI_STATUS ret;
 	UINT32 status;
-	UINT16 res_result;
 
-	if ((sdio == NULL) || (dataFrame == NULL) || (result == NULL))
+	if (!sdio || !data_frame)
 		return EFI_INVALID_PARAMETER;
 
 	ret = emmc_rpmb_send_blockcount(sdio, count, FALSE);
@@ -350,7 +371,7 @@ static EFI_STATUS emmc_rpmb_get_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
 	}
 
 	ret = uefi_call_wrapper(sdio->SendCommand, 9, sdio,
-				READ_MULTIPLE_BLOCK, 0, InData, (VOID *)dataFrame,
+				READ_MULTIPLE_BLOCK, 0, InData, (VOID *)data_frame,
 				RPMB_DATA_FRAME_SIZE * count, ResponseR1, TIMEOUT_DATA, &status);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to send command READ_MULTIPLE_BLOCK");
@@ -360,16 +381,39 @@ static EFI_STATUS emmc_rpmb_get_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
 		error(L"status error in READ_MULTIPLE_BLOCK, status=0x%08x", status);
 		return EFI_ABORTED;
 	}
-	if (BE16_TO_CPU_SWAP(dataFrame->ReqResp) != expected) {
-		error(L"The response is not expected, expected resp=0x%08x, returned resp =0x%08x",
-			  expected, dataFrame->ReqResp);
+
+	return ret;
+}
+
+static EFI_STATUS emmc_rpmb_request_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
+		rpmb_data_frame *request_data_frame, rpmb_data_frame *response_data_frame,
+		UINT16 expected, RPMB_RESPONSE_RESULT *result)
+{
+	EFI_STATUS ret;
+	UINT16 res_result;
+
+	ret = emmc_rpmb_send_request(sdio, request_data_frame, 1, FALSE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to send request to rpmb");
+		return ret;
+	}
+
+	ret = emmc_rpmb_get_response(sdio, response_data_frame, 1);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get rpmb response");
+		return ret;
+	}
+
+	if (BE16_TO_CPU_SWAP(response_data_frame->req_resp) != expected) {
+		error(L"The response is not expected, expected resp=0x%08x, returned resp=0x%08x",
+		expected, response_data_frame->req_resp);
 		return EFI_ABORTED;
 	}
 
-	res_result = BE16_TO_CPU_SWAP(dataFrame->Result);
+	res_result = BE16_TO_CPU_SWAP(response_data_frame->result);
 	debug(L"response result is %0x", res_result);
 	*result = (RPMB_RESPONSE_RESULT)res_result;
-	if (res_result ) {
+	if (res_result) {
 		debug(L"RPMB operation failed");
 		return EFI_ABORTED;
 	}
@@ -377,19 +421,19 @@ static EFI_STATUS emmc_rpmb_get_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
 	return ret;
 }
 
-EFI_STATUS emmc_read_rpmb_data(UINT16 blkCnt, UINT16 blkAddr, VOID *buffer,
-			       const VOID *key, RPMB_RESPONSE_RESULT* result)
+EFI_STATUS emmc_read_rpmb_data(UINT16 blk_count, UINT16 blk_addr, void *buffer,
+		const void *key, RPMB_RESPONSE_RESULT *result)
 {
-	EFI_STATUS ret = EFI_SUCCESS, retSwitchPartition;
-	UINT8 currentPart;
-	RPMBDataFrame dataInFrame;
-	RPMBDataFrame *dataOutFrame = NULL;
-	UINT32 j;
-	UINT8 Random[16] = {0};
+	EFI_STATUS ret = EFI_SUCCESS, ret_switch_partition;
+	UINT8 current_part;
+	rpmb_data_frame data_in_frame;
+	rpmb_data_frame *data_out_frame = NULL;
+	UINT32 i;
+	UINT8 random[16] = {0};
 	EFI_SD_HOST_IO_PROTOCOL *sdio = NULL;
 
-	debug(L"read rpmb data: number of block =%d from blk %d", blkCnt, blkAddr);
-	if ((buffer == NULL) || (result == NULL))
+	debug(L"read rpmb data: number of block=%d from blk %d", blk_count, blk_addr);
+	if (!buffer || !result)
 		return EFI_INVALID_PARAMETER;
 
 	ret = get_emmc_sdio(&sdio);
@@ -398,90 +442,73 @@ EFI_STATUS emmc_read_rpmb_data(UINT16 blkCnt, UINT16 blkAddr, VOID *buffer,
 		return ret;
 	}
 
-	ret = get_emmc_partition_num(sdio, &currentPart);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get emmc current part number");
+	ret = emmc_get_current_part_switch_part(sdio, &current_part, RPMB_PARTITION);
+	if (EFI_ERROR(ret))
 		return ret;
-	}
 
-	if (currentPart != RPMB_PARTITION) {
-		ret = emmc_partition_switch(sdio, RPMB_PARTITION);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to switch RPMB parition");
-			return ret;
-		}
-	}
-
-	dataOutFrame = AllocatePool(sizeof(RPMBDataFrame));
-	if (!dataOutFrame) {
+	data_out_frame = AllocatePool(sizeof(rpmb_data_frame));
+	if (!data_out_frame) {
 		ret = EFI_OUT_OF_RESOURCES;
 		goto out;
 	}
 
-	for (j = 0; j < blkCnt; j++) {
-		memset(&dataInFrame, 0, sizeof(dataInFrame));
-		memset(dataOutFrame, 0x0, sizeof(RPMBDataFrame));
-		dataInFrame.Address = CPU_TO_BE16_SWAP(blkAddr + j);
-		dataInFrame.ReqResp = CPU_TO_BE16_SWAP(RPMB_REQUEST_AUTH_READ);
-		ret = generate_random_numbers(Random, RPMB_NONCE_SIZE);
+	for (i = 0; i < blk_count; i++) {
+		memset(&data_in_frame, 0, sizeof(data_in_frame));
+		memset(data_out_frame, 0, sizeof(rpmb_data_frame));
+		data_in_frame.address = CPU_TO_BE16_SWAP(blk_addr + i);
+		data_in_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_AUTH_READ);
+		ret = generate_random_numbers(random, RPMB_NONCE_SIZE);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to generate random numbers");
 			goto out;
 		}
-		memcpy(dataInFrame.Nonce, Random, RPMB_NONCE_SIZE);
-		ret = emmc_rpmb_send_request(sdio, &dataInFrame, 1, FALSE);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to send request to rpmb");
+		memcpy(data_in_frame.nonce, random, RPMB_NONCE_SIZE);
+		ret = emmc_rpmb_request_response(sdio, &data_in_frame, data_out_frame,
+			RPMB_RESPONSE_AUTH_READ, result);
+		if (EFI_ERROR(ret))
 			goto out;
-		}
 
-		ret = emmc_rpmb_get_response(sdio, dataOutFrame, 1, RPMB_RESPONSE_AUTH_READ, result);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to get rpmb response");
-			goto out;
-		}
-
-		if (key && (rpmb_check_mac(key, dataOutFrame, 1) == 0)) {
+		if (key && (rpmb_check_mac(key, data_out_frame, 1) == 0)) {
 			debug(L"rpmb_check_mac failed");
 			ret = EFI_INVALID_PARAMETER;
 			goto out;
 		}
 
-		if (memcmp(&Random, &dataOutFrame->Nonce, RPMB_NONCE_SIZE)) {
+		if (memcmp(&random, &data_out_frame->nonce, RPMB_NONCE_SIZE)) {
 			debug(L"Random is not expected in out data frame");
 			ret = EFI_ABORTED;
 			goto out;
 		}
-		memcpy((UINT8 *)buffer + j * 256, &dataOutFrame->Data, 256);
+		memcpy((UINT8 *)buffer + i * 256, &data_out_frame->data, 256);
 	}
 
 out:
-	retSwitchPartition = emmc_partition_switch(sdio, currentPart);
-	if (EFI_ERROR(retSwitchPartition)) {
+	ret_switch_partition = emmc_partition_switch(sdio, current_part);
+	if (EFI_ERROR(ret_switch_partition)) {
 		efi_perror(ret, L"Failed to switch emmc current partition");
-		ret = retSwitchPartition;
+		ret = ret_switch_partition;
 	}
 
-	if (dataOutFrame)
-		FreePool(dataOutFrame);
+	if (data_out_frame)
+		FreePool(data_out_frame);
 
 	return ret;
 }
 
-EFI_STATUS emmc_write_rpmb_data(UINT16 blkCnt, UINT16 blkAddr, VOID *buffer,
-			const VOID *key, RPMB_RESPONSE_RESULT *result)
+EFI_STATUS emmc_write_rpmb_data(UINT16 blk_count, UINT16 blk_addr, void *buffer,
+		const void *key, RPMB_RESPONSE_RESULT *result)
 {
-	EFI_STATUS ret = EFI_SUCCESS, retSwitchPartition;
-	UINT32 writeCounter;
-	UINT8 currentPart;
-	RPMBDataFrame statusFrame;
-	RPMBDataFrame *dataInFrame = NULL;
-	UINT32 j;
+	EFI_STATUS ret = EFI_SUCCESS, ret_switch_partition;
+	UINT32 write_counter;
+	UINT8 current_part;
+	rpmb_data_frame status_frame;
+	rpmb_data_frame *data_in_frame = NULL;
+	UINT32 i;
 	UINT8 mac[RPMB_DATA_MAC];
 	EFI_SD_HOST_IO_PROTOCOL *sdio = NULL;
 
-	debug(L"write rpmb data: number of block =%d from blk %d", blkCnt, blkAddr);
-	if ((buffer == NULL)  || (result == NULL))
+	debug(L"write rpmb data: number of block =%d from blk %d", blk_count, blk_addr);
+	if (!buffer || !result)
 		return EFI_INVALID_PARAMETER;
 
 	ret = get_emmc_sdio(&sdio);
@@ -490,98 +517,82 @@ EFI_STATUS emmc_write_rpmb_data(UINT16 blkCnt, UINT16 blkAddr, VOID *buffer,
 		return ret;
 	}
 
-	ret = get_emmc_partition_num(sdio, &currentPart);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get emmc current part number");
+	ret = emmc_get_current_part_switch_part(sdio, &current_part, RPMB_PARTITION);
+	if (EFI_ERROR(ret))
 		return ret;
-	}
 
-	if (currentPart != RPMB_PARTITION) {
-		ret = emmc_partition_switch(sdio, RPMB_PARTITION);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to switch rpmb parition");
-			return ret;
-		}
-	}
-
-	dataInFrame = AllocatePool(sizeof(RPMBDataFrame));
-	if (!dataInFrame) {
+	data_in_frame = AllocatePool(sizeof(rpmb_data_frame));
+	if (!data_in_frame) {
 		ret = EFI_OUT_OF_RESOURCES;
 		goto out;
 	}
 
-	ret = emmc_get_counter(&writeCounter, key, result);
+	ret = emmc_get_counter(&write_counter, key, result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get counter");
 		goto out;
 	}
 
-	for (j = 0; j < blkCnt; j++) {
-		memset(dataInFrame, 0, sizeof(RPMBDataFrame));
-		dataInFrame->Address = CPU_TO_BE16_SWAP(blkAddr + j);
-		dataInFrame->BlkCnt = CPU_TO_BE16_SWAP(1);
-		dataInFrame->ReqResp = CPU_TO_BE16_SWAP(RPMB_REQUEST_AUTH_WRITE);
-		dataInFrame->WriteCounter = CPU_TO_BE32_SWAP(writeCounter);
-		memcpy(&dataInFrame->Data, (UINT8 *)buffer + j * 256, 256);
+	for (i = 0; i < blk_count; i++) {
+		memset(data_in_frame, 0, sizeof(rpmb_data_frame));
+		data_in_frame->address = CPU_TO_BE16_SWAP(blk_addr + i);
+		data_in_frame->block_count = CPU_TO_BE16_SWAP(1);
+		data_in_frame->req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_AUTH_WRITE);
+		data_in_frame->write_counter = CPU_TO_BE32_SWAP(write_counter);
+		memcpy(&data_in_frame->data, (UINT8 *)buffer + i * 256, 256);
 
-		if (rpmb_calc_hmac_sha256(dataInFrame, 1,
+		if (rpmb_calc_hmac_sha256(data_in_frame, 1,
 			key, RPMB_KEY_SIZE,
 			mac, RPMB_MAC_SIZE) == 0) {
 			ret = EFI_INVALID_PARAMETER;
 			goto out;
 		}
 
-		memcpy(dataInFrame->RPMBKey, mac, RPMB_DATA_MAC);
-		ret = emmc_rpmb_send_request(sdio, dataInFrame, 1, TRUE);
+		memcpy(data_in_frame->key_mac, mac, RPMB_DATA_MAC);
+		ret = emmc_rpmb_send_request(sdio, data_in_frame, 1, TRUE);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to send request to rpmb");
 			goto out;
 		}
 
-		memset(&statusFrame, 0x0, sizeof(statusFrame));
-		statusFrame.ReqResp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
-		ret = emmc_rpmb_send_request(sdio, &statusFrame, 1, FALSE);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to request rpmb");
-			return ret;
-		}
-		ret =  emmc_rpmb_get_response(sdio, &statusFrame, 1, RPMB_RESPONSE_AUTH_WRITE, result);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to get rpmb auth response");
+		memset(&status_frame, 0, sizeof(status_frame));
+		status_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
+		ret = emmc_rpmb_request_response(sdio, &status_frame, &status_frame,
+			RPMB_RESPONSE_AUTH_WRITE, result);
+		if (EFI_ERROR(ret))
 			goto out;
-		}
 
-		if (writeCounter >= BE32_TO_CPU_SWAP(statusFrame.WriteCounter)) {
+		if (write_counter >= BE32_TO_CPU_SWAP(status_frame.write_counter)) {
 			efi_perror(ret, L"RPMB write counter not incremeted returned counter is 0x%0x",
-				statusFrame.WriteCounter);
+			status_frame.write_counter);
 			ret = EFI_ABORTED;
 			goto out;
 		}
-		writeCounter++;
+		write_counter++;
 	}
 
 out:
-	retSwitchPartition = emmc_partition_switch(sdio, currentPart);
-	if (EFI_ERROR(retSwitchPartition)) {
+	ret_switch_partition = emmc_partition_switch(sdio, current_part);
+	if (EFI_ERROR(ret_switch_partition)) {
 		efi_perror(ret, L"Failed to switch emmc current partition");
-		ret = retSwitchPartition;
+		ret = ret_switch_partition;
 	}
 
-	if (dataInFrame)
-		FreePool(dataInFrame);
+	if (data_in_frame)
+		FreePool(data_in_frame);
 
 	return ret;
 }
 
-EFI_STATUS emmc_program_key(const VOID *key, RPMB_RESPONSE_RESULT *result)
+EFI_STATUS emmc_program_key(const void *key, RPMB_RESPONSE_RESULT *result)
 {
-	EFI_STATUS ret = EFI_SUCCESS, retSwitchPartition;
-	UINT8 currentPart;
-	RPMBDataFrame dataFrame, statusFrame;
+	EFI_STATUS ret = EFI_SUCCESS, ret_switch_partition;
+	UINT8 current_part;
+	rpmb_data_frame data_frame, status_frame;
 	EFI_SD_HOST_IO_PROTOCOL *sdio = NULL;
 
 	debug(L"enter emmc_program_key");
-	if ((key == NULL) || (result == NULL))
+	if (!key || !result)
 		return EFI_INVALID_PARAMETER;
 
 	ret = get_emmc_sdio(&sdio);
@@ -590,63 +601,47 @@ EFI_STATUS emmc_program_key(const VOID *key, RPMB_RESPONSE_RESULT *result)
 		return ret;
 	}
 
-	ret = get_emmc_partition_num(sdio, &currentPart);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get emmc current part number");
+	ret = emmc_get_current_part_switch_part(sdio, &current_part, RPMB_PARTITION);
+	if (EFI_ERROR(ret))
 		return ret;
-	}
 
-	if (currentPart != RPMB_PARTITION) {
-		ret = emmc_partition_switch(sdio, RPMB_PARTITION);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to switch rpmb parition");
-			return ret;
-		}
-	}
-
-	memset(&dataFrame, 0x0, sizeof(dataFrame));
-	dataFrame.ReqResp = CPU_TO_BE16_SWAP(RPMB_REQUEST_KEY_WRITE);
-	memcpy(dataFrame.RPMBKey, key, RPMB_KEY_SIZE);
-	ret = emmc_rpmb_send_request(sdio, &dataFrame, 1, TRUE);
+	memset(&data_frame, 0, sizeof(data_frame));
+	data_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_KEY_WRITE);
+	memcpy(data_frame.key_mac, key, RPMB_KEY_SIZE);
+	ret = emmc_rpmb_send_request(sdio, &data_frame, 1, TRUE);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to request rpmb");
 		goto out;
 	}
 
-	memset(&statusFrame, 0x0, sizeof(statusFrame));
-	statusFrame.ReqResp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
-	ret = emmc_rpmb_send_request(sdio, &statusFrame, 1, FALSE);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to request rpmb");
-		goto out;
-	}
+	memset(&status_frame, 0, sizeof(status_frame));
+	status_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
 
-	ret = emmc_rpmb_get_response(sdio, &statusFrame, 1, RPMB_RESPONSE_KEY_WRITE, result);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get rpmb program key response");
+	ret = emmc_rpmb_request_response(sdio, &status_frame, &status_frame,
+			RPMB_RESPONSE_KEY_WRITE, result);
+	if (EFI_ERROR(ret))
 		goto out;
-	}
 
 out:
-	retSwitchPartition = emmc_partition_switch(sdio, currentPart);
-	if (EFI_ERROR(retSwitchPartition)) {
+	ret_switch_partition = emmc_partition_switch(sdio, current_part);
+	if (EFI_ERROR(ret_switch_partition)) {
 		efi_perror(ret, L"Failed to switch emmc current partition");
-		ret = retSwitchPartition;
+		ret = ret_switch_partition;
 	}
 
 	return ret;
 }
 
-EFI_STATUS emmc_get_counter(UINT32 *writeCounter, const VOID *key,
-			    RPMB_RESPONSE_RESULT *result)
+EFI_STATUS emmc_get_counter(UINT32 *write_counter, const void *key,
+		RPMB_RESPONSE_RESULT *result)
 {
-	EFI_STATUS ret = EFI_SUCCESS, retSwitchPartition;
-	UINT8 currentPart;
-	RPMBDataFrame counterFrame;
+	EFI_STATUS ret = EFI_SUCCESS, ret_switch_partition;
+	UINT8 current_part;
+	rpmb_data_frame counter_frame;
 	EFI_SD_HOST_IO_PROTOCOL *sdio = NULL;
 
 	debug(L"enter emmc_get_counter");
-	if ((result == NULL) || (writeCounter == NULL))
+	if (!result || !write_counter)
 		return EFI_INVALID_PARAMETER;
 
 	ret = get_emmc_sdio(&sdio);
@@ -655,52 +650,36 @@ EFI_STATUS emmc_get_counter(UINT32 *writeCounter, const VOID *key,
 		return ret;
 	}
 
-	ret = get_emmc_partition_num(sdio, &currentPart);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get emmc current part number");
+	ret = emmc_get_current_part_switch_part(sdio, &current_part, RPMB_PARTITION);
+	if (EFI_ERROR(ret))
 		return ret;
-	}
 
-	if (currentPart != RPMB_PARTITION) {
-		ret = emmc_partition_switch(sdio, RPMB_PARTITION);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to switch rpmb parition");
-			return ret;
-		}
-	}
-
-	memset(&counterFrame, 0, sizeof(counterFrame));
-	counterFrame.ReqResp = CPU_TO_BE16_SWAP(RPMB_REQUEST_COUNTER_READ);
-	ret = generate_random_numbers(counterFrame.Nonce, RPMB_NONCE_SIZE);
+	memset(&counter_frame, 0, sizeof(counter_frame));
+	counter_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_COUNTER_READ);
+	ret = generate_random_numbers(counter_frame.nonce, RPMB_NONCE_SIZE);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to generate random numbers");
 		goto out;
 	}
-	ret = emmc_rpmb_send_request(sdio, &counterFrame, 1, FALSE);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to send counter frame request");
+	ret = emmc_rpmb_request_response(sdio, &counter_frame, &counter_frame,
+		RPMB_RESPONSE_COUNTER_READ, result);
+	if (EFI_ERROR(ret))
 		goto out;
-	}
 
-	ret = emmc_rpmb_get_response(sdio, &counterFrame, 1, RPMB_RESPONSE_COUNTER_READ, result);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get rpmb counter response");
-		goto out;
-	}
-	if (key && (rpmb_check_mac(key, &counterFrame, 1) == 0)) {
+	if (key && (rpmb_check_mac(key, &counter_frame, 1) == 0)) {
 		debug(L"rpmb_check_mac failed");
 		ret = EFI_ABORTED;
 		goto out;
 	}
 
-	*writeCounter = BE32_TO_CPU_SWAP(counterFrame.WriteCounter);
-	debug(L"current counter is 0x%0x", *writeCounter);
+	*write_counter = BE32_TO_CPU_SWAP(counter_frame.write_counter);
+	debug(L"current counter is 0x%0x", *write_counter);
 
 out:
-	retSwitchPartition = emmc_partition_switch(sdio, currentPart);
-	if (EFI_ERROR(retSwitchPartition)) {
+	ret_switch_partition = emmc_partition_switch(sdio, current_part);
+	if (EFI_ERROR(ret_switch_partition)) {
 		efi_perror(ret, L"Failed to switch emmc current partition");
-		ret = retSwitchPartition;
+		ret = ret_switch_partition;
 	}
 
 	return ret;
