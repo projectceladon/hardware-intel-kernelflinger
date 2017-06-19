@@ -519,6 +519,14 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 	}
 #endif
 
+#ifdef USER
+	if (boot_state == BOOT_STATE_RED) {
+		if (is_abl_secure_boot_enabled()) {
+			return EFI_SECURITY_VIOLATION;
+		}
+	}
+#endif
+
 	set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
 					&boot_state, FALSE, TRUE);
 
