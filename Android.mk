@@ -282,3 +282,54 @@ LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,avb)
 endif
 include $(BUILD_ABL_EXECUTABLE)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := fb4abl-$(TARGET_BUILD_VARIANT)
+LOCAL_MODULE_STEM := fb4abl
+LOCAL_CFLAGS := $(SHARED_CFLAGS)
+
+ifeq ($(KERNELFLINGER_SUPPORT_ABL_BOOT),true)
+    LOCAL_CFLAGS += -D__SUPPORT_ABL_BOOT
+endif
+
+LOCAL_CFLAGS += -D__FORCE_FASTBOOT
+
+LOCAL_STATIC_LIBRARIES += \
+	libfastboot-$(TARGET_BUILD_VARIANT) \
+	libefiusb-$(TARGET_BUILD_VARIANT) \
+	libefitcp-$(TARGET_BUILD_VARIANT) \
+	libtransport-$(TARGET_BUILD_VARIANT) \
+	$(SHARED_STATIC_LIBRARIES) \
+	libpayload \
+	libefiwrapper-$(TARGET_BUILD_VARIANT) \
+	libefiwrapper_drivers-$(TARGET_BUILD_VARIANT) \
+	efiwrapper-$(TARGET_BUILD_VARIANT)
+ifneq ($(TARGET_BUILD_VARIANT),user)
+    LOCAL_STATIC_LIBRARIES += libadb-$(TARGET_BUILD_VARIANT)
+endif
+LOCAL_SRC_FILES := \
+	kf4abl.c
+fb4abl_intermediates := $(call intermediates-dir-for,ABL,fb4abl)
+
+FB_ABL_VERITY_CERT := $(fb4abl_intermediates)/verity.cer
+FB_ABL_PADDED_VERITY_CERT := $(fb4abl_intermediates)/verity.padded.cer
+FB_ABL_OEMCERT_OBJ := $(fb4abl_intermediates)/oemcert.o
+
+$(FB_ABL_VERITY_CERT): $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $(OPENSSL)
+	$(transform-pem-cert-to-der-cert)
+
+$(FB_ABL_PADDED_VERITY_CERT): $(FB_ABL_VERITY_CERT)
+	$(call pad-binary, 4096)
+
+fb_abl_sym_binary := $(shell echo _binary_$(FB_ABL_PADDED_VERITY_CERT) | sed "s/[\/\.-]/_/g")
+$(FB_ABL_OEMCERT_OBJ): $(FB_ABL_PADDED_VERITY_CERT)
+	mkdir -p $(@D) && \
+	$(EFI_OBJCOPY) --input binary --output $(ELF_OUTPUT) --binary-architecture i386 $< $@ && \
+	$(EFI_OBJCOPY) --redefine-sym $(fb_abl_sym_binary)_start=_binary_oemcert_start \
+                       --redefine-sym $(fb_abl_sym_binary)_end=_binary_oemcert_end \
+                       --redefine-sym $(fb_abl_sym_binary)_size=_binary_oemcert_size \
+                       --rename-section .data=.oemkeys $@ $@
+
+LOCAL_GENERATED_SOURCES := $(FB_ABL_OEMCERT_OBJ)
+include $(BUILD_ABL_EXECUTABLE)
+
