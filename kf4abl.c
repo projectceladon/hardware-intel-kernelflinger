@@ -47,6 +47,8 @@
 #ifdef __SUPPORT_ABL_BOOT
 #ifdef USE_AVB
 #include "avb_init.h"
+#include "libavb/libavb.h"
+#include "libavb/uefi_avb_ops.h"
 #endif
 #include "security.h"
 
@@ -450,12 +452,13 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 		efi_perror(ret, L"Failed to set os secure boot");
 #endif
 
+#ifndef USE_SLOT
 	ret = slot_boot(boot_target);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to write slot boot");
 		return ret;
 	}
-
+#endif
 	log(L"chainloading boot image, boot state is %s\n",
 	boot_state_to_string(boot_state));
 #ifdef USE_AVB
@@ -593,7 +596,7 @@ static UINT8 validate_bootimage(
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
 	AvbOps *ops;
-	char *slot_suffix = "";
+	const char *slot_suffix = "";
 	AvbPartitionData *boot;
 	AvbSlotVerifyData *slot_data;
 	AvbSlotVerifyResult verify_result;
@@ -619,6 +622,15 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	else {
 		return EFI_OUT_OF_RESOURCES;
 	}
+
+#ifdef USE_SLOT
+	slot_suffix = slot_get_active();
+	if (!slot_suffix) {
+		error(L"suffix is null");
+		slot_suffix = "";
+	}
+#endif
+
         verify_result = avb_slot_verify(ops,
                                       requested_partitions,
                                       slot_suffix,

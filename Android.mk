@@ -72,6 +72,10 @@ ifeq ($(BOARD_AVB_ENABLE),true)
     endif
 endif
 
+ifeq ($(BOARD_SLOT_AB_ENABLE),true)
+    KERNELFLINGER_CFLAGS += -DUSE_SLOT
+endif
+
 KERNELFLINGER_STATIC_LIBRARIES := \
 	libuefi_ssl_static \
 	libuefi_crypto_static \

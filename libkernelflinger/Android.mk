@@ -93,11 +93,20 @@ LOCAL_SRC_FILES := \
 	oemvars.c \
 	text_parser.c \
 	watchdog.c \
-	slot.c \
 	life_cycle.c \
 	ioc_can.c \
 	qsort.c \
 	rpmb.c
+
+ifeq ($(BOARD_AVB_ENABLE),true)
+ifeq ($(BOARD_SLOT_AB_ENABLE),true)
+    LOCAL_SRC_FILES += slot_avb.c
+else
+    LOCAL_SRC_FILES += slot.c
+endif
+else
+    LOCAL_SRC_FILES += slot.c
+endif
 
 ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
     LOCAL_SRC_FILES += \
@@ -137,5 +146,11 @@ endif
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(LOCAL_PATH)/../avb \
 		$(res_intermediates)
+
+ifeq ($(BOARD_AVB_ENABLE),true)
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb/libavb
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb/libavb_ab
+endif
 
 include $(BUILD_EFI_STATIC_LIBRARY)

@@ -75,6 +75,7 @@ LOCAL_SRC_FILES := \
     libavb/uefi_avb_ops.c \
     libavb/uefi_avb_util.c \
     libavb/avb_util.c \
-    libavb/avb_vbmeta_image.c
+    libavb/avb_vbmeta_image.c \
+    libavb_ab/avb_ab_flow.c
 include $(BUILD_EFI_STATIC_LIBRARY)
 
