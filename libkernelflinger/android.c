@@ -1626,6 +1626,16 @@ void cmdline_add_item (CHAR8 *cmd_buf, UINTN max_cmd_size, const CHAR8 *item, co
 }
 
 #ifdef USE_AVB
+#ifdef USE_SLOT
+#define AVB_ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init "
+static EFI_STATUS avb_prepend_command_line_rootfs(CHAR16 **cmdline16)
+{
+        EFI_STATUS ret;
+        ret = prepend_command_line(cmdline16, AVB_ROOTFS_PREFIX);
+        return ret;
+}
+#endif
+
 static EFI_STATUS setup_command_line_abl(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
@@ -1650,6 +1660,11 @@ static EFI_STATUS setup_command_line_abl(
         struct boot_img_hdr *aosp_header;
 #ifdef USE_AVB
         UINTN avb_cmd_len = 0;
+#ifdef USE_SLOT
+        char   *serialno = NULL;
+        CHAR16 *serialport = NULL;
+        CHAR16 *bootreason = NULL;
+#endif
 #endif
         UINTN abl_cmd_len = 0;
         CHAR16 *boot_str16;
@@ -1667,6 +1682,95 @@ static EFI_STATUS setup_command_line_abl(
                 goto out;
         }
 
+#ifdef USE_SLOT
+        avb_prepend_command_line_rootfs(&cmdline16);
+
+        /* Append serial number from DMI */
+        serialno = get_serial_number();
+        if (serialno) {
+                ret = prepend_command_line(&cmdline16,
+                                L"androidboot.serialno=%a g_ffs.iSerialNumber=%a",
+                                serialno, serialno);
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+
+        if (boot_target == CHARGER) {
+                ret = prepend_command_line(&cmdline16,
+                                L"androidboot.mode=charger");
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+
+        bootreason = get_boot_reason();
+        if (!bootreason) {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto out;
+        }
+
+        ret = prepend_command_line(&cmdline16, L"androidboot.bootreason=%s", bootreason);
+        if (EFI_ERROR(ret))
+                goto out;
+
+        ret = prepend_command_line(&cmdline16, L"androidboot.verifiedbootstate=%s",
+                                   boot_state_to_string(boot_state));
+        if (EFI_ERROR(ret))
+                goto out;
+
+        serialport = get_serial_port();
+        if (serialport) {
+                ret = prepend_command_line(&cmdline16, L"console=%s", serialport);
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+
+#ifndef USER
+        if (get_disable_watchdog()) {
+                ret = prepend_command_line(&cmdline16, CONVERT_TO_WIDE(TCO_OPT_DISABLED));
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+#endif
+
+        PCI_DEVICE_PATH *boot_device = get_boot_device();
+        if (boot_device) {
+                ret = prepend_command_line(&cmdline16,
+                                           L"androidboot.diskbus=%02x.%x",
+                                           boot_device->Device,
+                                           boot_device->Function);
+                if (EFI_ERROR(ret))
+                        goto out;
+        } else
+                error(L"Boot device not found, diskbus parameter not set in the commandline!");
+
+        ret = prepend_command_line(&cmdline16, L"androidboot.bootloader=%a",
+                                   get_property_bootloader());
+        if (EFI_ERROR(ret))
+                goto out;
+
+#ifdef HAL_AUTODETECT
+        ret = prepend_command_line(&cmdline16, L"androidboot.brand=%a "
+                                   "androidboot.name=%a androidboot.device=%a "
+                                   "androidboot.model=%a", get_property_brand(),
+                                   get_property_name(), get_property_device(),
+                                   get_property_model());
+        if (EFI_ERROR(ret))
+                goto out;
+
+        ret = add_bootvars(bootimage, &cmdline16);
+        if (EFI_ERROR(ret))
+                goto out;
+#endif
+
+        if (boot_target != RECOVERY && slot_get_active()) {
+                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
+                                           slot_get_active());
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+
+
+#endif
         cmdlen = StrLen(cmdline16);
 #ifdef USE_AVB
         avb_cmd_len = strlen((const CHAR8 *)slot_data->cmdline);
