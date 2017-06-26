@@ -26,24 +26,130 @@
 #include <trusty/trusty_dev.h>
 #include <trusty/util.h>
 
+#include "../libkernelflinger/protocol/SdHostIo.h"
+#include "../include/libkernelflinger/rpmb.h"
 
-#define UNUSED(x) (void)(x)
+#define RPMB_PARTITION 3
 
 void *rpmb_storage_get_ctx(void)
 {
-    return NULL;
+    EFI_STATUS ret;
+    EFI_SD_HOST_IO_PROTOCOL *sdio;
+    uint8_t currentPart;
+
+    ret = get_emmc_sdio(&sdio);
+    if (EFI_ERROR(ret)) {
+        trusty_error("Failed to get emmc sdio.\n");
+        return NULL;
+    }
+
+    ret = get_emmc_partition_num(sdio, &currentPart);
+    if (EFI_ERROR(ret)) {
+        trusty_error("Failed to get emmc current part number.\n");
+        return NULL;
+    }
+
+    if (currentPart != RPMB_PARTITION) {
+        ret = emmc_partition_switch(sdio, RPMB_PARTITION);
+        if (EFI_ERROR(ret)) {
+            trusty_error("Failed to switch RPMB parition.\n");
+            return NULL;
+        }
+    }
+
+    return (void *)sdio;
+}
+
+static int mmc_rpmb_request(EFI_SD_HOST_IO_PROTOCOL *sdio, rpmb_data_frame *s,
+                            unsigned int count, bool is_rel_write)
+{
+    EFI_STATUS ret;
+
+    ret = emmc_rpmb_send_request(sdio, s, count, is_rel_write);
+        if (EFI_ERROR(ret)) {
+            trusty_error("Failed to send rpmb request.\n");
+            return -1;
+        }
+
+    return 0;
+}
+
+static int mmc_rpmb_response(EFI_SD_HOST_IO_PROTOCOL *sdio, rpmb_data_frame *s,
+                             unsigned int count)
+{
+    EFI_STATUS ret;
+
+    ret = emmc_rpmb_get_response(sdio, s, count);
+    if (EFI_ERROR(ret)) {
+        trusty_error("Failed to send rpmb reponse.\n");
+        return -1;
+    }
+    return 0;
 }
 
 int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
                       size_t rel_write_size, const void *write_data,
                       size_t write_size, void *read_buf, size_t read_size)
 {
-    UNUSED(rpmb_dev);
-    UNUSED(rel_write_data);
-    UNUSED(rel_write_size);
-    UNUSED(write_data);
-    UNUSED(write_size);
-    UNUSED(read_buf);
-    UNUSED(read_size);
+    uint8_t rpmb_rel_write_data[rel_write_size];
+    uint8_t rpmb_write_data[write_size];
+    uint8_t rpmb_read_data[read_size];
+    int ret;
+
+    if (rpmb_dev == NULL) {
+        trusty_error("rpmb_dev is NULL.\n");
+         return TRUSTY_ERR_INVALID_ARGS;
+    }
+
+    if (rel_write_size) {
+        if (rel_write_size % MMC_BLOCK_SIZE) {
+            trusty_error(
+                "rel_write_size is not a multiple of MMC_BLOCK_SIZE: %d\n",
+                 rel_write_size);
+            return TRUSTY_ERR_INVALID_ARGS;
+        }
+        memcpy(rpmb_rel_write_data, rel_write_data, rel_write_size);
+        ret = mmc_rpmb_request((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev,
+                               (rpmb_data_frame *)rpmb_rel_write_data,
+                                rel_write_size / MMC_BLOCK_SIZE, true);
+        if (ret) {
+            trusty_error("failed to execute rpmb reliable write\n");
+            return ret;
+        }
+    }
+
+    if (write_size) {
+        if (write_size % MMC_BLOCK_SIZE) {
+            trusty_error("write_size is not a multiple of MMC_BLOCK_SIZE: %d\n",
+                         write_size);
+            return TRUSTY_ERR_INVALID_ARGS;
+        }
+        memcpy(rpmb_write_data, write_data, write_size);
+        ret = mmc_rpmb_request((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev,
+                               (rpmb_data_frame *)rpmb_write_data,
+                                write_size / MMC_BLOCK_SIZE, false);
+        if (ret) {
+            trusty_error("failed to execute rpmb write\n");
+            return ret;
+        }
+    }
+
+    if (read_size) {
+        if (read_size % MMC_BLOCK_SIZE) {
+            trusty_error("read_size is not a multiple of MMC_BLOCK_SIZE: %d\n",
+                         read_size);
+            return TRUSTY_ERR_INVALID_ARGS;
+        }
+        ret = mmc_rpmb_response((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev,
+                                (rpmb_data_frame *)rpmb_read_data,
+                                 read_size / MMC_BLOCK_SIZE);
+        memcpy((void *)read_buf, rpmb_read_data, read_size);
+
+        if (ret < 0) {
+            trusty_error("failed to execute rpmb read\n");
+            return ret;
+        }
+    }
+
     return TRUSTY_ERR_NONE;
 }
