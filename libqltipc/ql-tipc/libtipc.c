@@ -37,6 +37,7 @@ typedef uintptr_t vaddr_t;
 
 static struct trusty_ipc_dev *_ipc_dev;
 static struct trusty_dev _tdev; /* There should only be one trusty device */
+static void *rpmb_ctx;
 
 void trusty_ipc_shutdown(void)
 {
@@ -70,14 +71,24 @@ int trusty_ipc_init(void)
         return rc;
     }
 
-/*
+    /* get storage rpmb */
+    rpmb_ctx = rpmb_storage_get_ctx();
+
+    /* start secure storage proxy service */
+    trusty_info("Initializing RPMB storage proxy service\n");
+    rc = rpmb_storage_proxy_init(_ipc_dev, rpmb_ctx);
+    if (rc != 0) {
+        trusty_error("Initlializing RPMB storage proxy service failed (%d)\n",
+                     rc);
+        return rc;
+    }
+
     trusty_info("Initializing Trusty AVB client\n");
     rc = avb_tipc_init(_ipc_dev);
     if (rc != 0) {
         trusty_error("Initlializing Trusty AVB client failed (%d)\n", rc);
         return rc;
     }
-*/
 
     trusty_info("Initializing Trusty Keymaster client\n");
     rc = km_tipc_init(_ipc_dev);
