@@ -364,6 +364,8 @@ EFI_STATUS emmc_rpmb_get_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
 	if (!sdio || !data_frame)
 		return EFI_INVALID_PARAMETER;
 
+	debug(L"enter emmc_rpmb_get_response");
+
 	ret = emmc_rpmb_send_blockcount(sdio, count, FALSE);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to set block count");
@@ -386,19 +388,19 @@ EFI_STATUS emmc_rpmb_get_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
 }
 
 static EFI_STATUS emmc_rpmb_request_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
-		rpmb_data_frame *request_data_frame, rpmb_data_frame *response_data_frame,
-		UINT16 expected, RPMB_RESPONSE_RESULT *result)
+		rpmb_data_frame *request_data_frame, rpmb_data_frame *response_data_frame, UINT8 req_count,
+		UINT8 res_count, UINT16 expected, RPMB_RESPONSE_RESULT *result)
 {
 	EFI_STATUS ret;
 	UINT16 res_result;
 
-	ret = emmc_rpmb_send_request(sdio, request_data_frame, 1, FALSE);
+	ret = emmc_rpmb_send_request(sdio, request_data_frame, req_count, FALSE);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to send request to rpmb");
 		return ret;
 	}
 
-	ret = emmc_rpmb_get_response(sdio, response_data_frame, 1);
+	ret = emmc_rpmb_get_response(sdio, response_data_frame, res_count);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get rpmb response");
 		return ret;
@@ -446,41 +448,40 @@ EFI_STATUS emmc_read_rpmb_data(UINT16 blk_count, UINT16 blk_addr, void *buffer,
 	if (EFI_ERROR(ret))
 		return ret;
 
-	data_out_frame = AllocatePool(sizeof(rpmb_data_frame));
+	data_out_frame = AllocatePool(sizeof(rpmb_data_frame) * blk_count);
 	if (!data_out_frame) {
 		ret = EFI_OUT_OF_RESOURCES;
 		goto out;
 	}
 
-	for (i = 0; i < blk_count; i++) {
-		memset(&data_in_frame, 0, sizeof(data_in_frame));
-		memset(data_out_frame, 0, sizeof(rpmb_data_frame));
-		data_in_frame.address = CPU_TO_BE16_SWAP(blk_addr + i);
-		data_in_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_AUTH_READ);
-		ret = generate_random_numbers(random, RPMB_NONCE_SIZE);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to generate random numbers");
-			goto out;
-		}
-		memcpy(data_in_frame.nonce, random, RPMB_NONCE_SIZE);
-		ret = emmc_rpmb_request_response(sdio, &data_in_frame, data_out_frame,
-			RPMB_RESPONSE_AUTH_READ, result);
-		if (EFI_ERROR(ret))
-			goto out;
-
-		if (key && (rpmb_check_mac(key, data_out_frame, 1) == 0)) {
-			debug(L"rpmb_check_mac failed");
-			ret = EFI_INVALID_PARAMETER;
-			goto out;
-		}
-
-		if (memcmp(&random, &data_out_frame->nonce, RPMB_NONCE_SIZE)) {
-			debug(L"Random is not expected in out data frame");
-			ret = EFI_ABORTED;
-			goto out;
-		}
-		memcpy((UINT8 *)buffer + i * 256, &data_out_frame->data, 256);
+	memset(&data_in_frame, 0, sizeof(data_in_frame));
+	memset(data_out_frame, 0, sizeof(rpmb_data_frame) * blk_count);
+	data_in_frame.address = CPU_TO_BE16_SWAP(blk_addr);
+	data_in_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_AUTH_READ);
+	ret = generate_random_numbers(random, RPMB_NONCE_SIZE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to generate random numbers");
+		goto out;
 	}
+	memcpy(data_in_frame.nonce, random, RPMB_NONCE_SIZE);
+	ret = emmc_rpmb_request_response(sdio, &data_in_frame, data_out_frame, 1, blk_count,
+		RPMB_RESPONSE_AUTH_READ, result);
+	if (EFI_ERROR(ret))
+		goto out;
+
+	if (key && (rpmb_check_mac(key, data_out_frame, blk_count) == 0)) {
+		debug(L"rpmb_check_mac failed");
+		ret = EFI_INVALID_PARAMETER;
+		goto out;
+	}
+
+	if (memcmp(&random, &data_out_frame[blk_count - 1].nonce, RPMB_NONCE_SIZE)) {
+		debug(L"Random is not expected in out data frame");
+		ret = EFI_ABORTED;
+		goto out;
+	}
+	for (i = 0; i < blk_count; i++)
+		memcpy((UINT8 *)buffer + i * 256, data_out_frame[i].data, 256);
 
 out:
 	ret_switch_partition = emmc_partition_switch(sdio, current_part);
@@ -557,7 +558,7 @@ EFI_STATUS emmc_write_rpmb_data(UINT16 blk_count, UINT16 blk_addr, void *buffer,
 
 		memset(&status_frame, 0, sizeof(status_frame));
 		status_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
-		ret = emmc_rpmb_request_response(sdio, &status_frame, &status_frame,
+		ret = emmc_rpmb_request_response(sdio, &status_frame, &status_frame, 1, 1,
 			RPMB_RESPONSE_AUTH_WRITE, result);
 		if (EFI_ERROR(ret))
 			goto out;
@@ -617,7 +618,7 @@ EFI_STATUS emmc_program_key(const void *key, RPMB_RESPONSE_RESULT *result)
 	memset(&status_frame, 0, sizeof(status_frame));
 	status_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
 
-	ret = emmc_rpmb_request_response(sdio, &status_frame, &status_frame,
+	ret = emmc_rpmb_request_response(sdio, &status_frame, &status_frame, 1, 1,
 			RPMB_RESPONSE_KEY_WRITE, result);
 	if (EFI_ERROR(ret))
 		goto out;
@@ -661,7 +662,7 @@ EFI_STATUS emmc_get_counter(UINT32 *write_counter, const void *key,
 		efi_perror(ret, L"Failed to generate random numbers");
 		goto out;
 	}
-	ret = emmc_rpmb_request_response(sdio, &counter_frame, &counter_frame,
+	ret = emmc_rpmb_request_response(sdio, &counter_frame, &counter_frame, 1, 1,
 		RPMB_RESPONSE_COUNTER_READ, result);
 	if (EFI_ERROR(ret))
 		goto out;
