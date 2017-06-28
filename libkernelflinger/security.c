@@ -50,6 +50,10 @@
 #define SETUP_MODE_VAR	        L"SetupMode"
 #define SECURE_BOOT_VAR         L"SecureBoot"
 
+#ifdef USE_IPP_SHA256
+#include "sha256_ipps.h"
+#endif
+
 /* OsSecureBoot is *not* a standard EFI_GLOBAL variable
  *
  * It's value will be read at ExitBootServices() by the BIOS to run
@@ -171,6 +175,18 @@ static EFI_STATUS hash_bootimage(struct boot_signature *bs,
                 return EFI_SUCCESS;
         }
         case NID_sha256WithRSAEncryption:
+#ifdef USE_IPP_SHA256
+        {
+                SHA256_IPPS_CTX ctx;
+
+                ippsSHA256_Init(&ctx);
+                ippsSHA256_Update(&ctx, bootimage, imgsize);
+                ippsSHA256_Update(&ctx, (uint8_t *)bs->attributes.data,
+                                    bs->attributes.data_sz);
+                ippsSHA256_Final(&ctx, (uint32_t *)*hash);
+                return EFI_SUCCESS;
+        }
+#else
         {
                 SHA256_CTX sha_ctx;
 
@@ -185,6 +201,7 @@ static EFI_STATUS hash_bootimage(struct boot_signature *bs,
 
                 return EFI_SUCCESS;
         }
+#endif
         case NID_sha512WithRSAEncryption:
         {
                 SHA512_CTX sha_ctx;
