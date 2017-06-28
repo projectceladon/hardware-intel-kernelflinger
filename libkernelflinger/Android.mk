@@ -105,6 +105,10 @@ LOCAL_SRC_FILES := \
 	timer.c \
 	nvme.c
 
+ifeq ($(BOARD_GPIO_ENABLE),true)
+    LOCAL_SRC_FILES += gpio.c
+endif
+
 ifeq ($(BOARD_AVB_ENABLE),true)
 ifeq ($(BOARD_SLOT_AB_ENABLE),true)
     LOCAL_SRC_FILES += slot_avb.c
