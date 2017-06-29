@@ -84,7 +84,7 @@ static int km_do_tipc(uint32_t cmd, void *req, uint32_t req_len,
 {
     int rc;
     struct keymaster_message msg = { .cmd = cmd };
-    struct km_no_response resp;
+    struct km_no_response resp = { .error = 0 };
 
     rc = km_send_request(&msg, req, req_len, data, data_len);
     if (rc < 0) {
