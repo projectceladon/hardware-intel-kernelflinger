@@ -364,6 +364,23 @@ EFI_STATUS pub_key_sha1(X509 *cert, UINT8 **hash_p)
         return pub_key_hash(cert, hash_p, EVP_sha1());
 }
 
+EFI_STATUS raw_pub_key_sha256(IN const UINT8 *pub_key,
+            IN UINTN pub_key_len,
+            OUT UINT8 **hash_p)
+{
+        int ret;
+        static UINT8 hash[SHA256_DIGEST_LENGTH];
+
+        ret = EVP_Digest(pub_key, pub_key_len, hash, NULL, EVP_sha256(), NULL);
+        if (ret == 0) {
+            error(L"Failed to hash the RoT bitstream");
+            return EFI_INVALID_PARAMETER;
+        }
+        *hash_p = hash;
+
+        return EFI_SUCCESS;
+}
+
 UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
                                 IN UINTN cert_size, OUT CHAR16 *target,
                                 OUT X509 **verifier_cert)
@@ -806,7 +823,9 @@ out:
 }
 
 /* Initialize the struct rot_data for startup_information */
-EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state, IN X509 *verifier_cert,
+EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state,
+                        IN const UINT8 *pub_key,
+                        IN UINTN pub_key_len,
                         OUT struct rot_data_t *rot_data)
 {
         EFI_STATUS ret = EFI_SUCCESS;
@@ -838,18 +857,17 @@ EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state, IN X509 *verif
         temp_version.value = boot_image_header->os_version;
         rot_data->osVersion = temp_version.split.version;
         rot_data->patchMonthYear = ((temp_version.split.year + 2000) << 4) + temp_version.split.month;
+        rot_data->keySize = SHA256_DIGEST_LENGTH;
 
-        if (verifier_cert) {
-                ret = pub_key_sha256(verifier_cert, &temp_hash);
+        if (pub_key) {
+                ret = raw_pub_key_sha256(pub_key, pub_key_len, &temp_hash);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"Failed to compute key hash");
                         return ret;
                 }
-                rot_data->key_size = SHA256_DIGEST_LENGTH;
-                CopyMem(rot_data->key_hash256, temp_hash, rot_data->key_size);
+                CopyMem(rot_data->keyHash256, temp_hash, rot_data->keySize);
         } else {
-                rot_data->key_size = 0;
-                memset(rot_data->key_hash256, 0, SHA256_DIGEST_LENGTH);
+                memset(rot_data->keyHash256, 0, SHA256_DIGEST_LENGTH);
         }
         return ret;
 }

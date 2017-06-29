@@ -124,12 +124,14 @@ struct rot_data_t{
           * key_size (in bytes) is zero: denotes no key provided by Bootloader. When key_size is
           * 32, it denotes,key_hash256 is available. Other values not defined now.
         */
-        UINT32 key_size;
-        UINT8  key_hash256[SHA256_DIGEST_LENGTH];
+        UINT32 keySize;
+        UINT8  keyHash256[SHA256_DIGEST_LENGTH];
 } ;
 
 /* Initialize the struct rot_data for startup_information */
-EFI_STATUS get_rot_data(IN VOID *bootimage, IN UINT8 boot_state, IN X509 *verifier_cert,
+EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state,
+                        IN const UINT8 *pub_key,
+                        IN UINTN pub_key_len,
                         OUT struct rot_data_t *rot_data);
 
 #endif
