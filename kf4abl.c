@@ -82,6 +82,8 @@ typedef union {
 } os_version_t;
 
 static trusty_boot_params_t *p_trusty_boot_params = NULL;
+struct rot_data_t g_rot_data = {0};
+
 #endif
 
 struct abl_boot_info {
@@ -486,7 +488,7 @@ static EFI_STATUS init_trusty_rot_params(trusty_boot_params_t *param, UINT8 boot
 	EFI_STATUS ret;
 	struct rot_data_t rot;
 
-	ret = get_rot_data(image, boot_state, NULL, &rot);
+	ret = get_rot_data(image, boot_state, NULL, 0, &rot);
 
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get rot data");
@@ -509,7 +511,7 @@ static EFI_STATUS init_trusty_rot_params(trusty_boot_params_t *param, UINT8 boot
 	debug(L"RotData.verifiedBootState = %d", param->RotData.verifiedBootState);
 	debug(L"RotData.osVersion = %d", param->RotData.osVersion);
 	debug(L"RotData.patchMonthYear = %d", param->RotData.patchMonthYear);
-	debug(L"RotData.key_size = %d", param->RotData.key_size);
+	debug(L"RotData.keySize = %d", param->RotData.keySize);
 	return EFI_SUCCESS;
 }
 
@@ -607,6 +609,9 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
         const struct boot_img_hdr *header;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	bool allow_verification_error = FALSE;
+
+	const uint8_t *vbmeta_pub_key;
+	uint32_t vbmeta_pub_key_len;
 
 	debug(L"Loading boot image");
 	if (boot_target == RECOVERY) {
@@ -710,6 +715,21 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		ret = launch_trusty_os(p_trusty_boot_params);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to launch trusty os");
+			return ret;
+		}
+
+		ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
+				slot_data->vbmeta_images[0].vbmeta_size,
+				&vbmeta_pub_key,
+				&vbmeta_pub_key_len);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to get the vbmeta_pub_key");
+			return ret;
+		}
+
+		ret = get_rot_data(bootimage, boot_state, vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to init trusty rot params");
 			return ret;
 		}
 
