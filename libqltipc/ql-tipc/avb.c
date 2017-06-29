@@ -126,7 +126,7 @@ static int avb_do_tipc(uint32_t cmd, void *req, uint32_t req_size, void *resp,
 static int avb_get_version(uint32_t *version)
 {
     int rc;
-    struct avb_get_version_resp resp;
+    struct avb_get_version_resp resp = { .version = 0 };
     uint32_t resp_size = sizeof(resp);
 
     rc = avb_do_tipc(AVB_GET_VERSION, NULL, 0, &resp, &resp_size, false);
@@ -188,7 +188,7 @@ int trusty_read_rollback_index(uint32_t slot, uint64_t *value)
 {
     int rc;
     struct avb_rollback_req req = { .slot = slot, .value = 0 };
-    struct avb_rollback_resp resp;
+    struct avb_rollback_resp resp = { .value = 0 };
     uint32_t resp_size = sizeof(resp);
 
     rc = avb_do_tipc(READ_ROLLBACK_INDEX, &req, sizeof(req), &resp,
