@@ -154,6 +154,9 @@ size_t strlen(const CHAR8 *s)
 size_t strnlen(const CHAR8 *s, size_t maxlen)
     __attribute__((weak));
 
+CHAR8 *itoa(int val, CHAR8 *buf, unsigned radix)
+    __attribute__((weak));
+
 void *memcpy(void *dest, const void *source, size_t count)
     __attribute__((weak));
 

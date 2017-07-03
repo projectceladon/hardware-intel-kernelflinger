@@ -44,6 +44,7 @@
 #endif
 #include "android.h"
 #include "slot.h"
+#include "timer.h"
 #ifdef __SUPPORT_ABL_BOOT
 #ifdef USE_AVB
 #include "avb_init.h"
@@ -776,6 +777,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	enum boot_target target;
 	EFI_STATUS ret;
 
+	set_boottime_stamp(0);
 	InitializeLib(image, sys_table);
 #ifdef __SUPPORT_ABL_BOOT
 	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
