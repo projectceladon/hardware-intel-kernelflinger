@@ -96,7 +96,8 @@ LOCAL_SRC_FILES := \
 	life_cycle.c \
 	ioc_can.c \
 	qsort.c \
-	rpmb.c
+	rpmb.c \
+	timer.c
 
 ifeq ($(BOARD_AVB_ENABLE),true)
 ifeq ($(BOARD_SLOT_AB_ENABLE),true)

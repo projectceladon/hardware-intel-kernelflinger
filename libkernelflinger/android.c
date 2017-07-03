@@ -51,6 +51,7 @@
 #endif
 #include "slot.h"
 #include "pae.h"
+#include "timer.h"
 
 #define OS_INITIATED L"os_initiated"
 
@@ -690,7 +691,6 @@ done:
         del_reboot_reason();
         return bootreason;
 }
-
 
 static EFI_STATUS prepend_command_line(CHAR16 **cmdline, CHAR16 *fmt, ...)
 {
@@ -1669,6 +1669,7 @@ static EFI_STATUS setup_command_line_abl(
         UINTN abl_cmd_len = 0;
         CHAR16 *boot_str16;
         CHAR8 boot_str8[64] = "";
+        CHAR16 time_str16[32] = L"";
 
         if (abl_cmd_line != NULL)
                abl_cmd_len = strlen(abl_cmd_line);
@@ -1813,6 +1814,12 @@ static EFI_STATUS setup_command_line_abl(
         boot_str16 = boot_state_to_string(boot_state);
         str_to_stra(boot_str8, boot_str16, StrLen(boot_str16) + 1);
         cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.verifiedbootstate", boot_str8);
+
+        /* append stages boottime */
+        set_boottime_stamp(1);
+        format_stages_boottime(time_str16);
+        str_to_stra(boot_str8, time_str16, StrLen(time_str16) + 1);
+        cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.boottime", boot_str8);
 
         buf->hdr.cmd_line_ptr = (UINT32)(UINTN)cmdline;
         ret = EFI_SUCCESS;

@@ -107,6 +107,49 @@ size_t strnlen(const CHAR8 *s, size_t maxlen)
         return i;
 }
 
+/* itoa function converts integer into string type
+ * The third parameter radix specify the conversion base
+ */
+CHAR8 *itoa(int val, CHAR8 *buf, unsigned radix)
+{
+        CHAR8 *p;
+        CHAR8 *firstdig;
+        CHAR8 temp;
+        unsigned digval;
+
+        if (buf == NULL)
+            return NULL;
+
+        p = buf;
+        if (val < 0)
+        {
+            *p++ = '-';
+            val = (unsigned long)(-(long)val);
+        }
+
+        firstdig = p;
+        do {
+                digval = (unsigned)(val % radix);
+                val /= radix;
+
+                if (digval > 9)
+                    *p++ = (CHAR8)(digval - 10 + 'a');
+                else
+                    *p++ = (CHAR8)(digval + '0');
+        } while (val > 0);
+
+        *p-- = '\0';
+        do {
+                temp = *p;
+                *p = *firstdig;
+                *firstdig = temp;
+                --p;
+                ++firstdig;
+        } while (firstdig < p);
+
+        return buf;
+}
+
 CHAR8 *strcpy(CHAR8 *dest, const CHAR8 *src)
 {
         unsigned int i;
