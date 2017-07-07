@@ -39,6 +39,16 @@
    initialization.  */
 #define CARD_ADDRESS		1
 
+static EMMC_DEVICE_PATH *get_emmc_device_path(EFI_DEVICE_PATH *p)
+{
+	for (; !IsDevicePathEndType(p); p = NextDevicePathNode(p))
+		if (DevicePathType(p) == MESSAGING_DEVICE_PATH
+		    && DevicePathSubType(p) == MSG_EMMC_DP)
+			return (EMMC_DEVICE_PATH *)p;
+
+	return NULL;
+}
+
 static EFI_STATUS get_mmc_info(EFI_SD_HOST_IO_PROTOCOL *sdio,
 			       UINTN *erase_grp_size, UINTN *timeout)
 {
@@ -122,7 +132,12 @@ static BOOLEAN is_emmc(EFI_DEVICE_PATH *p)
 	UINT16 address;
 
 	ret = sdio_get(p, &handle, &sdio);
-	if (EFI_ERROR(ret))
+
+	if (ret == EFI_NOT_FOUND )
+		/* On UEFI BIOS v2.60 and later EFI_SD_HOST_IO_PROTOCOL is not supported.
+		   Parse the device path instead */
+		return get_emmc_device_path(p) != NULL;
+	else if(EFI_ERROR(ret))
 		return FALSE;
 
 	ret = sdio_get_card_info(sdio, handle, &type, &address);
