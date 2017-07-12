@@ -122,7 +122,7 @@ int decode_object(const unsigned char **datap, long *sizep,
 	return 0;
 }
 
-
+#ifdef USER
 int decode_printable_string(const unsigned char **datap, long *sizep,
 		char *buf, size_t buf_sz)
 {
@@ -156,7 +156,7 @@ int decode_printable_string(const unsigned char **datap, long *sizep,
 	*sizep = *sizep - (*datap - orig);
 	return 0;
 }
-
+#endif
 
 /* Consume a sequence type in the ASN.1 message and all items within, discarding
  * the data.
