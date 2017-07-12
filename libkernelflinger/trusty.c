@@ -367,7 +367,7 @@ cleanup:
         return ret;
 }
 
-static EFI_STATUS load_tos_image(OUT VOID **bootimage)
+EFI_STATUS load_tos_image(OUT VOID **bootimage)
 {
         CHAR16 target[BOOT_TARGET_SIZE];
         EFI_STATUS ret;

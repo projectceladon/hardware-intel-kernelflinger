@@ -45,6 +45,7 @@
  * or loaded TOS image was missing or corrupt
  * EFI_SECURITY_VIOLATION - Validation failed against certificate
  */
+EFI_STATUS load_tos_image(OUT VOID **bootimage);
 EFI_STATUS start_trusty(struct rot_data_t *rot_data);
 
 #endif /* _TRUSTY_H_ */
