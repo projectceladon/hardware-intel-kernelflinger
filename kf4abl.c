@@ -52,11 +52,12 @@
 #include "libavb/uefi_avb_ops.h"
 #endif
 #include "security.h"
-
 #include <libtipc.h>
+#ifdef USE_TRUSTY
+#include "trusty.h"
 
-#define MAX_CMD_BUF 0x1000
-static CHAR8 cmd_buf[MAX_CMD_BUF];
+#define TRUSTY_PARA_STRING          "trusty.param_addr="
+#define LENGTH_TRUSTY_PARA_STRING   18
 
 typedef struct {
 	/* version of the struct. 0x0001 for this version */
@@ -68,8 +69,10 @@ typedef struct {
 	/* seed value retrieved from CSE */
 	uint8_t 			seed[32];
 	struct rot_data_t 	RotData;
-}__attribute__((packed)) trusty_boot_params_t;
+} __attribute__((packed)) trusty_boot_params_t;
 
+static trusty_boot_params_t *p_trusty_boot_params;
+#endif
 typedef union {
 	uint32_t raw;
 	struct {
@@ -81,11 +84,10 @@ typedef union {
 	};
 } os_version_t;
 
-static trusty_boot_params_t *p_trusty_boot_params = NULL;
+#define MAX_CMD_BUF 0x1000
+static CHAR8 cmd_buf[MAX_CMD_BUF];
 struct rot_data_t g_rot_data = {0};
-
 #endif
-
 struct abl_boot_info {
 	UINT32 magic;
 	UINT32 bootimage_len;
@@ -257,8 +259,6 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	UINTN cmd_len = 0;
 	CHAR8 arg8[256] = "";
 	UINTN arglen;
-	CHAR8 *trusty_str = (CHAR8 *)"trusty.param_addr=";
-	UINTN trusty_str_len;
 	CHAR8 *secureboot_str = (CHAR8 *)"ABL.secureboot=";
 	UINTN secureboot_str_len;
 
@@ -275,7 +275,6 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		return FASTBOOT;
 
 	cmd_buf[0] = 0;
-	trusty_str_len = strlen((CHAR8 *)trusty_str);
 	secureboot_str_len = strlen((CHAR8 *)secureboot_str);
 
 	/*Parse boot target*/
@@ -295,20 +294,24 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		if (cmd_len + arglen + 1 < max_cmd_size) {
 			if (cmd_buf[0] != 0) {
 				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)" ", 1);
-				cmd_len ++;
+				cmd_len++;
 			}
 
+#ifdef USE_TRUSTY
 			//Parse "trusty.param_addr=xxxxx"
-			if ((arglen > trusty_str_len) && (!strncmp(arg8, (CHAR8 *)trusty_str, trusty_str_len))) {
+			if ((arglen > LENGTH_TRUSTY_PARA_STRING) &&
+			    (!strncmp(arg8, (CHAR8 *)TRUSTY_PARA_STRING, LENGTH_TRUSTY_PARA_STRING))) {
 				UINT32 num;
-				CHAR8 *nptr = (CHAR8 *)(arg8 + trusty_str_len);
+				CHAR8 *nptr = (CHAR8 *)(arg8 + LENGTH_TRUSTY_PARA_STRING);
 				num = strtoul((char *)nptr, 0, 16);
 				debug(L"Parsed trusty param addr is 0x%x", num);
 				p_trusty_boot_params = (trusty_boot_params_t *)num;
-			} else if ((arglen > secureboot_str_len) && (!strncmp(arg8, (CHAR8 *)secureboot_str, secureboot_str_len))) {
+			} else
+#endif
+			if ((arglen > secureboot_str_len) && (!strncmp(arg8, (CHAR8 *)secureboot_str, secureboot_str_len))) {
 				UINT8 val;
 				CHAR8 *nptr = (CHAR8 *)(arg8 + secureboot_str_len);
-                                val = (UINT8)strtoul((char *)nptr, 0, 10);
+				val = (UINT8)strtoul((char *)nptr, 0, 10);
 				ret = set_abl_secure_boot(val);
 				if (EFI_ERROR(ret))
 					efi_perror(ret, L"Failed to set secure boot");
@@ -469,7 +472,7 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 						boot_target, boot_state, NULL,
 						slot_data, (const CHAR8 *)abl_cmd_line);
 #else
-        ret = android_image_start_buffer_abl(bootimage,
+	ret = android_image_start_buffer_abl(bootimage,
 						boot_target, boot_state, NULL,
 						verifier_cert, (const CHAR8 *)abl_cmd_line);
 #endif
@@ -483,6 +486,7 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 	return ret;
 }
 
+#ifdef USE_TRUSTY
 static EFI_STATUS init_trusty_rot_params(trusty_boot_params_t *param, UINT8 boot_state, VOID *image)
 {
 	EFI_STATUS ret;
@@ -516,17 +520,18 @@ static EFI_STATUS init_trusty_rot_params(trusty_boot_params_t *param, UINT8 boot
 }
 
 #define TRUSTY_VMCALL_SMC 0x74727500
-static EFI_STATUS launch_trusty_os(trusty_boot_params_t *param)
+static EFI_STATUS launch_trusty_os(trusty_boot_params_t *param, UINTN load_base, UINTN load_size)
 {
 	if (!param)
 		return EFI_INVALID_PARAMETER;
 
 	asm volatile(
 		"vmcall; \n"
-		: : "a"(TRUSTY_VMCALL_SMC), "D"((uint32_t)&param->RotData));
+		: : "a"(TRUSTY_VMCALL_SMC), "D"((uint32_t)&param->RotData), "S"(load_base), "d"(load_size));
 
 	return EFI_SUCCESS;
 }
+#endif
 
 #ifndef USE_AVB
 /* Validate an image.
@@ -596,22 +601,88 @@ static UINT8 validate_bootimage(
 #endif
 
 #ifdef USE_AVB
+static EFI_STATUS get_avb_result(
+		IN AvbSlotVerifyData *slot_data,
+		IN bool allow_verification_error,
+		IN AvbSlotVerifyResult verify_result,
+		OUT UINT8 *boot_state)
+{
+	AvbPartitionData *boot;
+	const struct boot_img_hdr *header;
+
+	if (!slot_data || !boot_state)
+		return EFI_INVALID_PARAMETER;
+
+	if (slot_data->num_loaded_partitions != 1) {
+		avb_error("No avb partition.\n");
+		return EFI_LOAD_ERROR;
+	}
+
+	boot = &slot_data->loaded_partitions[0];
+	header = (const struct boot_img_hdr *)boot->data;
+	/* Check boot image header magic field. */
+	if (avb_memcmp(BOOT_MAGIC, header->magic, BOOT_MAGIC_SIZE)) {
+		avb_error("Wrong image header magic.\n");
+		return EFI_NOT_FOUND;
+	}
+	avb_debug("Image read success\n");
+
+	switch (verify_result) {
+	case AVB_SLOT_VERIFY_RESULT_OK:
+		if (allow_verification_error) {
+			*boot_state = BOOT_STATE_ORANGE;
+		} else {
+			*boot_state = BOOT_STATE_GREEN;
+		}
+		break;
+
+	case AVB_SLOT_VERIFY_RESULT_ERROR_VERIFICATION:
+	case AVB_SLOT_VERIFY_RESULT_ERROR_ROLLBACK_INDEX:
+	case AVB_SLOT_VERIFY_RESULT_ERROR_PUBLIC_KEY_REJECTED:
+		if (allow_verification_error) {
+		/* Do nothing since we allow this. */
+			avb_debugv("Allow avb verified with result ",
+			avb_slot_verify_result_to_string(verify_result),
+			" because |allow_verification_error| is true.\n",
+			NULL);
+			*boot_state = BOOT_STATE_ORANGE;
+		} else {
+			*boot_state = BOOT_STATE_RED;
+		}
+		break;
+	default:
+		if (allow_verification_error) {
+			*boot_state = BOOT_STATE_ORANGE;
+		} else {
+			*boot_state = BOOT_STATE_RED;
+		}
+		break;
+	}
+
+	return EFI_SUCCESS;
+}
+
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
 	AvbOps *ops;
 	const char *slot_suffix = "";
 	AvbPartitionData *boot;
-	AvbSlotVerifyData *slot_data;
+	AvbSlotVerifyData *slot_data = NULL;
 	AvbSlotVerifyResult verify_result;
 	const char *requested_partitions[] = {"boot", NULL};
 	EFI_STATUS ret;
 	VOID *bootimage = NULL;
-        const struct boot_img_hdr *header;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	bool allow_verification_error = FALSE;
-
+	const struct boot_img_hdr *header;
+#ifdef USE_TRUSTY
+	AvbSlotVerifyData *slot_data_tos = NULL;
+	UINT8 tos_state = BOOT_STATE_GREEN;
 	const uint8_t *vbmeta_pub_key;
 	uint32_t vbmeta_pub_key_len;
+	UINTN load_base;
+	AvbPartitionData *tos;
+#endif
 
 	debug(L"Loading boot image");
 	if (boot_target == RECOVERY) {
@@ -624,8 +695,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			avb_fatal("Error determining whether device is unlocked.\n");
 			return EFI_ABORTED;
 		}
-	}
-	else {
+	} else {
 		return EFI_OUT_OF_RESOURCES;
 	}
 
@@ -637,85 +707,64 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 #endif
 
-        verify_result = avb_slot_verify(ops,
-                                      requested_partitions,
-                                      slot_suffix,
-                                      allow_verification_error,
-                                      &slot_data);
+	verify_result = avb_slot_verify(ops,
+					requested_partitions,
+					slot_suffix,
+					allow_verification_error,
+					&slot_data);
 
-	if (slot_data->num_loaded_partitions != 1) {
-		avb_error("No boot partition.\n");
-		ret = EFI_LOAD_ERROR;
-		return ret;
+	ret = get_avb_result(slot_data,
+			    allow_verification_error,
+			    verify_result,
+			    &boot_state);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get avb result for boot");
+		goto fail;
 	}
 
 	boot = &slot_data->loaded_partitions[0];
-
-	header = (const struct boot_img_hdr *)boot->data;
 	bootimage = boot->data;
-	/* Check boot image header magic field. */
-	if (avb_memcmp(BOOT_MAGIC, header->magic, BOOT_MAGIC_SIZE)) {
-		avb_error("Wrong boot image header magic.\n");
-		ret = EFI_NOT_FOUND;
-		return ret;
-	}
-	avb_debug("boot image read success\n");
-	avb_debugv("slot",
-		slot_suffix,
-		" which verified "
-		"with result ",
-		avb_slot_verify_result_to_string(verify_result),
-		" .\n",
-		NULL);
-	switch (verify_result) {
-	case AVB_SLOT_VERIFY_RESULT_OK:
-		if (allow_verification_error) {
-			boot_state = BOOT_STATE_ORANGE;
-		}
-		else {
-			boot_state = BOOT_STATE_GREEN;
-		}
-		break;
 
-	case AVB_SLOT_VERIFY_RESULT_ERROR_VERIFICATION:
-	case AVB_SLOT_VERIFY_RESULT_ERROR_ROLLBACK_INDEX:
-	case AVB_SLOT_VERIFY_RESULT_ERROR_PUBLIC_KEY_REJECTED:
-		if (allow_verification_error) {
-		/* Do nothing since we allow this. */
-			avb_debugv("Allowing slot ",
-			slot_suffix,
-			" which verified "
-			"with result ",
-			avb_slot_verify_result_to_string(verify_result),
-			" because |allow_verification_error| is true.\n",
-			NULL);
-			boot_state = BOOT_STATE_ORANGE;
-		}
-		else {
-			boot_state = BOOT_STATE_RED;
-		}
-		break;
-	default:
-		if (allow_verification_error) {
-			boot_state = BOOT_STATE_ORANGE;
-		}
-		else {
-			boot_state = BOOT_STATE_RED;
-		}
-		break;
-	}
-
+#ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {
+		requested_partitions[0] = "tos";
+		verify_result = avb_slot_verify(ops,
+					requested_partitions,
+					slot_suffix,
+					allow_verification_error,
+					&slot_data_tos);
+
+		ret = get_avb_result(slot_data_tos,
+				    false,
+				    verify_result,
+				    &tos_state);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to get avb result for tos");
+			goto fail;
+		} else if (tos_state != BOOT_STATE_GREEN) {
+			ret = EFI_ABORTED;
+			goto fail;
+		}
+
 		ret = init_trusty_rot_params(p_trusty_boot_params, boot_state, bootimage);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to init trusty rot params");
-			return ret;
+			goto fail;
 		}
 
-		ret = launch_trusty_os(p_trusty_boot_params);
+		tos = &slot_data_tos->loaded_partitions[0];
+		header = (const struct boot_img_hdr *)tos->data;
+		load_base = (UINTN)(tos->data + header->page_size);
+
+		ret = launch_trusty_os(p_trusty_boot_params, load_base, (UINTN)header->kernel_size);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to launch trusty os");
-			return ret;
+			goto fail;
+		}
+
+		if (slot_data_tos) {
+			avb_slot_verify_data_free(slot_data_tos);
+			slot_data_tos = NULL;
 		}
 
 		ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
@@ -724,25 +773,35 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 				&vbmeta_pub_key_len);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to get the vbmeta_pub_key");
-			return ret;
+			goto fail;
 		}
 
 		ret = get_rot_data(bootimage, boot_state, vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to init trusty rot params");
-			return ret;
+			goto fail;
 		}
 
 		trusty_ipc_init();
 		trusty_ipc_shutdown();
 	}
+#endif
 
 	ret = start_boot_image(bootimage, boot_state, boot_target, slot_data, abl_cmd_line);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to start boot image");
-		return ret;
+		goto fail;
 	}
-        return EFI_SUCCESS;
+
+fail:
+#ifdef USE_TRUSTY
+	if (slot_data_tos) {
+		avb_slot_verify_data_free(slot_data_tos);
+		slot_data_tos = NULL;
+	}
+#endif
+
+	return ret;
 }
 #endif
 
@@ -755,6 +814,11 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	BOOLEAN oneshot = FALSE;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	X509 *verifier_cert = NULL;
+#ifdef USE_TRUSTY
+	VOID *tosimage = NULL;
+	UINTN load_base;
+	struct boot_img_hdr *hdr;
+#endif
 
 	debug(L"Loading boot image");
 	ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
@@ -764,14 +828,29 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		return ret;
 	}
 	boot_state = validate_bootimage(boot_target, bootimage, &verifier_cert);
+#ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {
+		ret = load_tos_image(&tosimage);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to load trusty image");
+			return ret;
+		}
+
+		hdr = get_bootimage_header(tosimage);
+		if (!hdr)
+			return EFI_INVALID_PARAMETER;
+
+		load_base = (UINTN)((UINT8 *)tosimage + hdr->page_size);
+
 		ret = init_trusty_rot_params(p_trusty_boot_params, boot_state, bootimage);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to init trusty rot params");
 			return ret;
 		}
 
-		ret = launch_trusty_os(p_trusty_boot_params);
+		ret = launch_trusty_os(p_trusty_boot_params, load_base, (UINTN)hdr->kernel_size);
+		if (tosimage)
+			FreePool(tosimage);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to launch trusty os");
 			return ret;
@@ -780,6 +859,7 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		trusty_ipc_init();
 		trusty_ipc_shutdown();
 	}
+#endif
 
 	ret = start_boot_image(bootimage, boot_state, boot_target, verifier_cert, abl_cmd_line);
 	if (EFI_ERROR(ret)) {
