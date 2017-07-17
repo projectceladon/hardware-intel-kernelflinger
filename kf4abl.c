@@ -750,10 +750,11 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 #endif
 
 	debug(L"Loading boot image");
+#ifndef USE_SLOT
 	if (boot_target == RECOVERY) {
 		requested_partitions[0] = "recovery";
 	}
-
+#endif
 	ops = avb_init();
 	if (ops) {
 		if (ops->read_is_device_unlocked(ops, &allow_verification_error) != AVB_IO_RESULT_OK) {
