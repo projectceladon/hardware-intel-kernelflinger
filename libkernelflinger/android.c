@@ -1684,8 +1684,9 @@ static EFI_STATUS setup_command_line_abl(
         }
 
 #ifdef USE_SLOT
-        avb_prepend_command_line_rootfs(&cmdline16);
-
+        if (boot_target != RECOVERY) {
+                avb_prepend_command_line_rootfs(&cmdline16);
+        }
         /* Append serial number from DMI */
         serialno = get_serial_number();
         if (serialno) {
@@ -1763,13 +1764,10 @@ static EFI_STATUS setup_command_line_abl(
                 goto out;
 #endif
 
-        if (boot_target != RECOVERY && slot_get_active()) {
-                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
+        ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
                                            slot_get_active());
-                if (EFI_ERROR(ret))
-                        goto out;
-        }
-
+        if (EFI_ERROR(ret))
+                goto out;
 
 #endif
         cmdlen = StrLen(cmdline16);
