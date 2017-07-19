@@ -76,6 +76,10 @@ ifeq ($(BOARD_SLOT_AB_ENABLE),true)
     KERNELFLINGER_CFLAGS += -DUSE_SLOT
 endif
 
+ifeq ($(KERNELFLINGER_USE_RPMB),true)
+    KERNELFLINGER_CFLAGS += -DRPMB_STORAGE
+endif
+
 KERNELFLINGER_STATIC_LIBRARIES := \
 	libuefi_ssl_static \
 	libuefi_crypto_static \
@@ -286,6 +290,8 @@ LOCAL_GENERATED_SOURCES += $(ABL_AVB_PK_OBJ)
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,avb)
 endif
+LOCAL_C_INCLUDES := \
+	$(addprefix $(LOCAL_PATH)/,libkernelflinger)
 include $(BUILD_ABL_EXECUTABLE)
 
 include $(CLEAR_VARS)
@@ -333,5 +339,7 @@ LOCAL_GENERATED_SOURCES += $(ABL_AVB_PK_OBJ)
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,avb)
 endif
+LOCAL_C_INCLUDES := \
+	$(addprefix $(LOCAL_PATH)/,libkernelflinger)
 include $(BUILD_ABL_EXECUTABLE)
 

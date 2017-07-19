@@ -53,6 +53,9 @@
 #endif
 #include "security.h"
 #include <libtipc.h>
+#ifdef RPMB_STORAGE
+#include "rpmb_storage.h"
+#endif
 #ifdef USE_TRUSTY
 #include "trusty.h"
 
@@ -850,6 +853,11 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 #endif
 
+#ifndef USE_SLOT
+	if (boot_state == BOOT_STATE_GREEN) {
+		avb_update_stored_rollback_indexes_for_slot(ops, slot_data);
+	}
+#endif
 	ret = start_boot_image(bootimage, boot_state, boot_target, slot_data, abl_cmd_line);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to start boot image");
@@ -950,6 +958,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	BOOLEAN oneshot = FALSE;
 	CHAR16 *target_path = NULL;
 	EFI_STATUS ret;
+#ifdef RPMB_STORAGE
+	UINT8 key[RPMB_KEY_SIZE +1] = "12345ABCDEF1234512345ABCDEF12345";
+#endif
 
 	set_boottime_stamp(0);
 	InitializeLib(image, sys_table);
@@ -965,6 +976,20 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		return ret;
 	}
 
+#ifdef RPMB_STORAGE
+	rpmb_storage_init(is_abl_secure_boot_enabled());
+	if (!is_rpmb_programed()) {
+		debug(L"rpmb not programmed");
+		ret = program_rpmb_key(key);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"rpmb key program failed");
+			return ret;
+		}
+	} else {
+		debug(L"rpmb already programmed");
+		set_rpmb_key(key);
+	}
+#endif
 #ifdef __FORCE_FASTBOOT
 	target = FASTBOOT;
 #endif

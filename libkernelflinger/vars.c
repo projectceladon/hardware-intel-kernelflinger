@@ -40,6 +40,9 @@
 #include "smbios.h"
 #include "version.h"
 #include "life_cycle.h"
+#ifdef RPMB_STORAGE
+#include "rpmb_storage.h"
+#endif
 
 #define OFF_MODE_CHARGE		L"off-mode-charge"
 #define OEM_LOCK		L"OEMLock"
@@ -254,10 +257,20 @@ enum device_state get_current_state()
 	EFI_STATUS ret;
 	UINT32 flags;
 	BOOLEAN enduser;
+#ifdef RPMB_STORAGE
+	UINT8 val;
+#endif
 
 	if (current_state == UNKNOWN_STATE) {
-		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK,
+#ifdef RPMB_STORAGE
+	ret = read_rpmb_device_state(&val);
+	stored_state = &val;
+	dsize = 1;
+	flags = EFI_VARIABLE_NON_VOLATILE;
+#else
+	ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK,
 				       &dsize, (void **)&stored_state, &flags);
+#endif
 		if (ret == EFI_NOT_FOUND) {
 			set_provisioning_mode(FALSE);
 
@@ -310,6 +323,7 @@ exit:
 EFI_STATUS set_current_state(enum device_state state)
 {
 	UINT8 stored_state;
+	EFI_STATUS ret;
 
 	switch (state) {
 	case LOCKED:
@@ -322,9 +336,13 @@ EFI_STATUS set_current_state(enum device_state state)
 		return EFI_INVALID_PARAMETER;
 	}
 
-	EFI_STATUS ret = set_efi_variable(&fastboot_guid, OEM_LOCK,
+#ifdef RPMB_STORAGE
+	ret = write_rpmb_device_state(stored_state);
+#else
+	ret = set_efi_variable(&fastboot_guid, OEM_LOCK,
 					  sizeof(stored_state), &stored_state,
 					  TRUE, FALSE);
+#endif
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to set %s variable", OEM_LOCK);
 		return ret;

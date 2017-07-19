@@ -29,12 +29,34 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef _AVB_INIT_H_
-#define _AVB_INIT_H_
-#include "libavb/libavb.h"
-#include "libavb/uefi_avb_ops.h"
+#ifndef _RPMB_STORAGE_H_
+#define _RPMB_STORAGE_H_
 
-AvbOps *avb_init(void);
+#define RPMB_KEY_SIZE    32
 
-bool avb_update_stored_rollback_indexes_for_slot(AvbOps* ops, AvbSlotVerifyData* slot_data);
+typedef struct rpmb_storage {
+	BOOLEAN (*is_rpmb_programed)(void);
+	EFI_STATUS (*program_rpmb_key)(UINT8 *key);
+
+	EFI_STATUS (*write_rpmb_device_state)(UINT8 state);
+	EFI_STATUS (*read_rpmb_device_state)(UINT8 *state);
+
+	EFI_STATUS (*write_rpmb_rollback_index)(size_t index, UINT64 in_rollback_index);
+	EFI_STATUS (*read_rpmb_rollback_index)(size_t index, UINT64 *out_rollback_index);
+} rpmb_storage_t;
+
+void rpmb_storage_init(BOOLEAN real);
+
+void clear_rpmb_key(void);
+void set_rpmb_key(UINT8 *key);
+EFI_STATUS derive_rpmb_key(UINT8 *out_key);
+
+BOOLEAN is_rpmb_programed(void);
+EFI_STATUS program_rpmb_key(UINT8 *key);
+
+EFI_STATUS write_rpmb_device_state(UINT8 state);
+EFI_STATUS read_rpmb_device_state(UINT8 *state);
+
+EFI_STATUS write_rpmb_rollback_index(size_t index, UINT64 in_rollback_index);
+EFI_STATUS read_rpmb_rollback_index(size_t index, UINT64 *out_rollback_index);
 #endif
