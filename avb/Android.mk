@@ -50,6 +50,9 @@ LOCAL_MODULE_HOST_OS := linux
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)
 #LOCAL_CLANG := true
 LOCAL_CFLAGS := $(avb_common_cflags) -DAVB_ENABLE_DEBUG -DAVB_COMPILATION
+ifeq ($(KERNELFLINGER_USE_RPMB),true)
+LOCAL_CFLAGS += -DRPMB_STORAGE
+endif
 LOCAL_LDFLAGS := $(avb_common_ldflags)
 LOCAL_STATIC_LIBRARIES := \
 	$(KERNELFLINGER_STATIC_LIBRARIES) \
@@ -77,5 +80,9 @@ LOCAL_SRC_FILES := \
     libavb/avb_util.c \
     libavb/avb_vbmeta_image.c \
     libavb_ab/avb_ab_flow.c
+
+LOCAL_C_INCLUDES := \
+	$(addprefix $(LOCAL_PATH)/,../libkernelflinger)
+
 include $(BUILD_EFI_STATIC_LIBRARY)
 

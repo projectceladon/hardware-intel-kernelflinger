@@ -154,6 +154,10 @@ else
     LOCAL_SRC_FILES += $(TARGET_BOOT_SIGNER)_sig.c
 endif
 
+ifeq ($(KERNELFLINGER_USE_RPMB),true)
+    LOCAL_SRC_FILES += rpmb_storage.c
+endif
+
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(LOCAL_PATH)/../avb \
 		$(res_intermediates)

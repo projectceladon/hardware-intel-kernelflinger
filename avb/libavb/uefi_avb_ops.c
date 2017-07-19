@@ -30,6 +30,9 @@
 #include "gpt.h"
 #include "lib.h"
 #include "log.h"
+#ifdef RPMB_STORAGE
+#include "rpmb_storage.h"
+#endif
 
 extern char _binary_avb_pk_start;
 extern char _binary_avb_pk_end;
@@ -197,10 +200,20 @@ static AvbIOResult validate_vbmeta_public_key(
 static AvbIOResult read_rollback_index(AvbOps* ops,
                                        size_t rollback_index_slot,
                                        uint64_t* out_rollback_index) {
-  /* For now we always return 0 as the stored rollback index. */
-  avb_debug("TODO: implement read_rollback_index().\n");
+#ifdef RPMB_STORAGE
+  EFI_STATUS ret;
+#endif
+
   if (out_rollback_index != NULL) {
+#ifdef RPMB_STORAGE
+    ret = read_rpmb_rollback_index(rollback_index_slot, out_rollback_index);
+    if (EFI_ERROR(ret)) {
+      efi_perror(ret, L"Couldn't read rollback index");
+      return AVB_IO_RESULT_ERROR_IO;
+    }
+#else
     *out_rollback_index = 0;
+#endif
   }
   return AVB_IO_RESULT_OK;
 }
@@ -208,8 +221,17 @@ static AvbIOResult read_rollback_index(AvbOps* ops,
 static AvbIOResult write_rollback_index(AvbOps* ops,
                                         size_t rollback_index_slot,
                                         uint64_t rollback_index) {
-  /* For now this is a no-op. */
-  avb_debug("TODO: implement write_rollback_index().\n");
+#ifdef RPMB_STORAGE
+  EFI_STATUS ret;
+
+  if (rollback_index != 0) {
+    ret = write_rpmb_rollback_index(rollback_index_slot, rollback_index);
+    if (EFI_ERROR(ret)) {
+      efi_perror(ret, L"Couldn't write rollback index");
+      return AVB_IO_RESULT_ERROR_IO;
+    }
+  }
+#endif
   return AVB_IO_RESULT_OK;
 }
 
