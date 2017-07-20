@@ -367,6 +367,7 @@ struct fec_header {
 	/* [...] */
 };
 
+#ifndef USE_AVB
 /* adapted from build_verity_tree.cpp */
 static UINT64 verity_tree_blocks(UINT64 data_size, INT32 level)
 {
@@ -397,6 +398,7 @@ static UINT64 verity_tree_size(UINT64 data_size)
 	debug(L"verity tree size %lld", tree_size);
 	return tree_size;
 }
+#endif
 
 static UINT64 part_size(struct gpt_partition_interface *gparti)
 {
@@ -458,6 +460,7 @@ free:
 	return ret;
 }
 
+#ifndef USE_AVB
 static EFI_STATUS get_bootimage_len(struct gpt_partition_interface *gparti,
 				    UINT64 *len)
 {
@@ -517,6 +520,7 @@ out:
 	FreePool(footer);
 	return ret;
 }
+#endif
 
 static const unsigned char IAS_IMAGE_MAGIC[4] = "ipk.";
 static const unsigned char MULTIBOOT_MAGIC[4] = "\x02\xb0\xad\x1b";
@@ -580,7 +584,7 @@ static EFI_STATUS get_iasimage_len(struct gpt_partition_interface *gparti,
 		}
 	}
 
-	*len = ALIGN((hdr.data_len + IAS_HEADER_SIZE + IAS_CRC_SIZE), IAS_ALIGN);
+	*len = ALIGN((hdr.data_off + hdr.data_len + IAS_CRC_SIZE), IAS_ALIGN);
 	*len += IAS_RSA_SIGNATURE_SIZE + IAS_RSA_PUBLIC_KEY_SIZE + iasoffset;
 	if (*len > part_len) {
 		error(L"Ias-multiboot image is bigger than the partition");
@@ -629,9 +633,13 @@ EFI_STATUS get_boot_image_hash(const CHAR16 *label)
 		return ret;
 	}
 
+#ifdef USE_AVB
+	len = part_size(&gparti);
+#else
 	ret = get_bootimage_len(&gparti, &len);
 	if (EFI_ERROR(ret))
 		return ret;
+#endif
 
 	ret = hash_partition(&gparti, len, hash);
 	if (EFI_ERROR(ret))
@@ -693,6 +701,7 @@ static EFI_STATUS get_squashfs_len(struct gpt_partition_interface *gparti, UINT6
  * <data_blocks> <hole> <verity_tree> <verity_metdata> <fec_data> <fec_hdr>
  */
 
+#ifndef USE_AVB
 static EFI_STATUS check_verity_header(struct gpt_partition_interface *gparti, UINT64 *fs_len)
 {
 	EFI_STATUS ret;
@@ -742,6 +751,7 @@ static EFI_STATUS check_fec_header(struct gpt_partition_interface *gparti, UINT6
 	*fs_len = part_size(gparti);
 	return EFI_SUCCESS;
 }
+#endif
 
 EFI_STATUS get_fs_hash(const CHAR16 *label)
 {
@@ -778,6 +788,10 @@ EFI_STATUS get_fs_hash(const CHAR16 *label)
 		return ret;
 	}
 
+#ifdef USE_AVB
+	if (strcmp((CHAR8*)SUPPORTED_FS[i].name, (CHAR8*)"Ias"))
+		fs_len = part_size(&gparti);
+#else
 	ret = check_verity_header(&gparti, &fs_len);
 	if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND)
 		return ret;
@@ -788,6 +802,7 @@ EFI_STATUS get_fs_hash(const CHAR16 *label)
 			debug(L"No verity or FEC found, hashing the filesystem only");
 	}
 
+#endif
 	debug(L"filesystem size %lld", fs_len);
 
 	ret = hash_partition(&gparti, fs_len, hash);
