@@ -1246,6 +1246,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         /* EFI binaries are validated by the BIOS */
         if (boot_target == ESP_EFI_BINARY) {
                 debug(L"entering EFI binary");
+                if (!target_path)
+                        return EFI_INVALID_PARAMETER;
                 ret = enter_efi_binary(target_path, oneshot);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"EFI Application exited abnormally");
