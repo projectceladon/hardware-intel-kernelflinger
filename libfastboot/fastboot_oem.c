@@ -261,7 +261,7 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 	EFI_STATUS ret;
 
 	if (argc != 2) {
-		fastboot_fail("Supported storage: ufs, emmc");
+		fastboot_fail("Supported storage: ufs, emmc, nvme");
 		return;
 	}
 
@@ -271,6 +271,10 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 	}
 	if (!strcmp(argv[1], (CHAR8*)"ufs")) {
 		type = STORAGE_UFS;
+		goto set;
+	}
+	if (!strcmp(argv[1], (CHAR8*)"nvme")) {
+		type = STORAGE_NVME;
 		goto set;
 	}
 	fastboot_fail("Unsupported storage");
