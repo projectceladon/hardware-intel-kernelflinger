@@ -76,5 +76,13 @@ EFI_STATUS emmc_rpmb_get_response(EFI_SD_HOST_IO_PROTOCOL *sdio,
 		rpmb_data_frame *data_frame, UINT8 count);
 EFI_STATUS get_emmc_partition_num(EFI_SD_HOST_IO_PROTOCOL *sdio,
 		UINT8 *current_part);
+EFI_STATUS emmc_simulate_get_counter(UINT32 *write_counter, const void *key,
+		RPMB_RESPONSE_RESULT *result);
+EFI_STATUS emmc_simulate_program_rpmb_key(const void *key,
+		RPMB_RESPONSE_RESULT *result);
+EFI_STATUS emmc_simulate_read_rpmb_data(UINT32 offset, void *buffer,
+		UINT32 size);
+EFI_STATUS emmc_simulate_write_rpmb_data(UINT32 offset, void *buffer,
+		UINT32 size);
 
 #endif	/* _RPMB_H_ */

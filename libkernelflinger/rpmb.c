@@ -40,6 +40,7 @@
 #include "sdio.h"
 #include "storage.h"
 #include "rpmb.h"
+#include "gpt.h"
 
 #define TIMEOUT_DATA			3000
 #define TIMEOUT_COMMAND			1000
@@ -65,6 +66,11 @@
 #define RPMB_REQUEST_AUTH_WRITE		0x0003
 #define RPMB_REQUEST_AUTH_READ		0x0004
 #define RPMB_REQUEST_STATUS		0x0005
+
+#define MAGIC_KEY_OFFSET		0
+#define MAGIC_KEY_DATA			"key_sim"
+#define MAGIC_KEY_SIZE			7
+#define WRITE_COUNTER_SIZE 		4
 
 #define EXT_CSD_PART_CONF		179
 #define MMC_SWITCH_MODE_WRITE_BYTE	3
@@ -681,6 +687,145 @@ out:
 	if (EFI_ERROR(ret_switch_partition)) {
 		efi_perror(ret, L"Failed to switch emmc current partition");
 		ret = ret_switch_partition;
+	}
+
+	return ret;
+}
+
+static EFI_STATUS emmc_simulate_read_write_teedata_partition(
+		BOOLEAN bread, UINT32 offset, UINT32 len, void *data)
+{
+	UINT64 partlen;
+	UINT64 partoffset;
+	struct gpt_partition_interface gparti;
+	EFI_STATUS ret;
+
+	if (!data)
+		return EFI_INVALID_PARAMETER;
+
+	ret = gpt_get_partition_by_label(L"teedata", &gparti, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		error(L"teedata partition not found");
+		return ret;
+	}
+
+	partlen = (gparti.part.ending_lba + 1 - gparti.part.starting_lba) * gparti.bio->Media->BlockSize;
+	partoffset = gparti.part.starting_lba * gparti.bio->Media->BlockSize;
+
+	if (len + offset > partlen) {
+		debug(L"attempt to read/write outside of partition %s, (len %lld offset %lld partition len %lld)", gparti.part.name, len, offset, partlen);
+		return EFI_END_OF_MEDIA;
+	}
+	if (bread) {
+		ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio, gparti.bio->Media->MediaId, partoffset + offset, len, data);
+		if (EFI_ERROR(ret))
+			efi_perror(ret, L"read partition %s failed", gparti.part.name);
+	} else {
+		ret = uefi_call_wrapper(gparti.dio->WriteDisk, 5, gparti.dio, gparti.bio->Media->MediaId, partoffset + offset, len, data);
+		if (EFI_ERROR(ret))
+			efi_perror(ret, L"write partition %s failed", gparti.part.name);
+	}
+
+	return ret;
+}
+
+EFI_STATUS emmc_simulate_get_counter(UINT32 *write_counter, const void *key,
+		RPMB_RESPONSE_RESULT *result)
+{
+	EFI_STATUS ret;
+	unsigned char data[MAGIC_KEY_SIZE + RPMB_KEY_SIZE + WRITE_COUNTER_SIZE];
+	unsigned char counter_data[WRITE_COUNTER_SIZE];
+
+	ret = emmc_simulate_read_write_teedata_partition(TRUE, MAGIC_KEY_OFFSET,
+			MAGIC_KEY_SIZE + RPMB_KEY_SIZE + WRITE_COUNTER_SIZE, data);
+	if (EFI_ERROR(ret)) {
+		error(L"read data from emulation rpmb parition failed");
+		return ret;
+	}
+
+	if (memcmp(data, MAGIC_KEY_DATA, MAGIC_KEY_SIZE)) {
+		*result = RPMB_RES_NO_AUTH_KEY_PROGRAM;
+		return EFI_ABORTED;
+	} else if (memcmp(&data[MAGIC_KEY_SIZE], key, RPMB_KEY_SIZE)) {
+		*result = RPMB_RES_AUTH_FAILURE;
+		return EFI_ABORTED;
+	} else {
+		memcpy(counter_data, &data[MAGIC_KEY_SIZE + RPMB_KEY_SIZE], WRITE_COUNTER_SIZE);
+		*write_counter = ((UINT32)counter_data[0]) << 24;
+		*write_counter |= ((UINT32)counter_data[1]) << 16;
+		*write_counter |= ((UINT32)counter_data[2]) << 8;
+		*write_counter |= ((UINT32)counter_data[3]);
+	}
+
+	return ret;
+}
+
+EFI_STATUS emmc_simulate_program_rpmb_key(const void *key, RPMB_RESPONSE_RESULT *result)
+{
+	EFI_STATUS ret;
+	unsigned char data[MAGIC_KEY_SIZE + RPMB_KEY_SIZE + WRITE_COUNTER_SIZE];
+	unsigned char magic[MAGIC_KEY_SIZE];
+
+	if (!key || !result)
+		return EFI_INVALID_PARAMETER;
+
+	ret = emmc_simulate_read_write_teedata_partition(TRUE, MAGIC_KEY_OFFSET,
+			MAGIC_KEY_SIZE, magic);
+	if (EFI_ERROR(ret)) {
+		error(L"read key from emulation rpmb parition failed");
+		return ret;
+	}
+
+	memset(data, 0, sizeof(data));
+	if (memcmp(magic, MAGIC_KEY_DATA, MAGIC_KEY_SIZE)) {
+		debug(L"rpmb key not provisioned");
+		memcpy(data, MAGIC_KEY_DATA, MAGIC_KEY_SIZE);
+		memcpy(&data[MAGIC_KEY_SIZE], key, RPMB_KEY_SIZE);
+
+		ret = emmc_simulate_read_write_teedata_partition(FALSE, MAGIC_KEY_OFFSET,
+				MAGIC_KEY_SIZE + RPMB_KEY_SIZE + WRITE_COUNTER_SIZE, data);
+		if (EFI_ERROR(ret)) {
+			error(L"write key magic, key and counter to emulation rpmb parition failed");
+			return ret;
+		}
+	} else {
+		debug(L"rpmb key already provisioned");
+		*result = RPMB_RES_GENERAL_FAILURE;
+		return EFI_ABORTED;
+	}
+
+	return ret;
+}
+
+EFI_STATUS emmc_simulate_read_rpmb_data(UINT32 offset, void *buffer,
+		UINT32 size)
+{
+	EFI_STATUS ret;
+
+	if (!buffer)
+		return EFI_INVALID_PARAMETER;
+
+	ret = emmc_simulate_read_write_teedata_partition(TRUE, offset,
+			size, buffer);
+	if (EFI_ERROR(ret)) {
+		error(L"read data from emulation parition failed");
+	}
+
+	return ret;
+}
+
+EFI_STATUS emmc_simulate_write_rpmb_data(UINT32 offset, void *buffer,
+		UINT32 size)
+{
+	EFI_STATUS ret;
+
+	if (!buffer)
+		return EFI_INVALID_PARAMETER;
+
+	ret = emmc_simulate_read_write_teedata_partition(FALSE, offset,
+			size, buffer);
+	if (EFI_ERROR(ret)) {
+		error(L"write data to emulation parition failed");
 	}
 
 	return ret;
