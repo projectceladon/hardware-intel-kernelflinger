@@ -143,6 +143,62 @@ static EFI_STATUS enter_crashmode(enum boot_target *target)
 	return ret;
 }
 #endif
+static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
+{
+	EFI_STATUS ret;
+	struct bootloader_message bcb;
+	CHAR16 *target = NULL;
+	enum boot_target t;
+	CHAR8 *bcb_cmd;
+	BOOLEAN dirty;
+
+	*oneshot = FALSE;
+	*target_path = NULL;
+
+	ret = read_bcb(MISC_LABEL, &bcb);
+	if (EFI_ERROR(ret)) {
+		error(L"Unable to read BCB");
+		t = NORMAL_BOOT;
+		goto out;
+	}
+
+	dirty = bcb.status[0] != '\0';
+	/* We own the status field; clear it in case there is any stale data */
+	bcb.status[0] = '\0';
+	bcb_cmd = (CHAR8 *)bcb.command;
+	if (!strncmpa(bcb_cmd, (CHAR8 *)"boot-", 5)) {
+		target = stra_to_str(bcb_cmd + 5);
+		debug(L"BCB boot target: '%s'", target);
+	} else if (!strncmpa(bcb_cmd, (CHAR8 *)"bootonce-", 9)) {
+		target = stra_to_str(bcb_cmd + 9);
+		bcb_cmd[0] = '\0';
+		dirty = TRUE;
+		debug(L"BCB oneshot boot target: '%s'", target);
+		*oneshot = TRUE;
+	}
+
+	if (dirty) {
+		ret = write_bcb(MISC_LABEL, &bcb);
+		if (EFI_ERROR(ret))
+			error(L"Unable to update BCB contents!");
+	}
+
+	if (!target) {
+		t = NORMAL_BOOT;
+		goto out;
+	}
+
+	t = name_to_boot_target(target);
+	if (t != UNKNOWN_TARGET)
+		goto out;
+
+	error(L"Unknown boot target in BCB: '%s'", target);
+	t = NORMAL_BOOT;
+
+out:
+	FreePool(target);
+	return t;
+}
 
 #ifdef __SUPPORT_ABL_BOOT
 static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
@@ -882,7 +938,9 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
-	enum boot_target target;
+	enum boot_target target, bcb_target;
+	BOOLEAN oneshot = FALSE;
+	CHAR16 *target_path = NULL;
 	EFI_STATUS ret;
 
 	set_boottime_stamp(0);
@@ -902,6 +960,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #ifdef __FORCE_FASTBOOT
 	target = FASTBOOT;
 #endif
+
+	debug(L"ABL: Before Check BCB target is %d", target);
+	bcb_target = check_bcb(&target_path, &oneshot);
+	if (bcb_target != NORMAL_BOOT)
+		target = bcb_target;
+	debug(L"ABL: After Check BCB target is %d", target);
+
 	debug(L"target=%d", target);
 	for (;;) {
 		switch (target) {
