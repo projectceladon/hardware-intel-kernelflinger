@@ -41,6 +41,7 @@ enum storage_type {
 	STORAGE_UFS,
 	STORAGE_SDCARD,
 	STORAGE_SATA,
+	STORAGE_NVME,
 	STORAGE_ALL,
 };
 

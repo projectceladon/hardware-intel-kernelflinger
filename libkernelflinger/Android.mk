@@ -102,7 +102,8 @@ LOCAL_SRC_FILES := \
 	ioc_can.c \
 	qsort.c \
 	rpmb.c \
-	timer.c
+	timer.c \
+	nvme.c
 
 ifeq ($(BOARD_AVB_ENABLE),true)
 ifeq ($(BOARD_SLOT_AB_ENABLE),true)
