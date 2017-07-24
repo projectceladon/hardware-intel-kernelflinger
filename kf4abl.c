@@ -58,6 +58,7 @@
 
 #define TRUSTY_PARA_STRING          "trusty.param_addr="
 #define LENGTH_TRUSTY_PARA_STRING   18
+#define TRUSTY_SEED_LEN             32
 
 typedef struct {
 	/* version of the struct. 0x0001 for this version */
@@ -67,9 +68,22 @@ typedef struct {
 	/* assumed to be 16MB */
 	uint32_t 			TrustyMemSize;
 	/* seed value retrieved from CSE */
-	uint8_t 			seed[32];
+	uint8_t 			seed[TRUSTY_SEED_LEN];
 	struct rot_data_t 	RotData;
 } __attribute__((packed)) trusty_boot_params_t;
+
+typedef struct trusty_startup_params {
+	/* Size of this structure */
+	uint64_t size_of_this_struct;
+	/* Load time base address of trusty */
+	uint32_t load_base;
+	/* Load time size of trusty */
+	uint32_t load_size;
+	/* Seed */
+	uint8_t seed[TRUSTY_SEED_LEN];
+	/* Rot */
+	struct rot_data_t RotData;
+} trusty_startup_params_t;
 
 static trusty_boot_params_t *p_trusty_boot_params;
 #endif
@@ -487,47 +501,30 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 }
 
 #ifdef USE_TRUSTY
-static EFI_STATUS init_trusty_rot_params(trusty_boot_params_t *param, UINT8 boot_state, VOID *image)
+static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UINTN base, UINTN sz, UINT8 * seed)
 {
-	EFI_STATUS ret;
-	struct rot_data_t rot;
-
-	ret = get_rot_data(image, boot_state, NULL, 0, &rot);
-
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get rot data");
-		return ret;
-	}
-
-	if (!param)
+	if (!param || !seed)
 		return EFI_INVALID_PARAMETER;
 
-	param->RotData.version = rot.version;
-	param->RotData.deviceLocked = rot.deviceLocked;
-	param->RotData.verifiedBootState = rot.verifiedBootState;
-	param->RotData.osVersion = rot.osVersion;
-	param->RotData.patchMonthYear = rot.patchMonthYear;
-	//key_size is initialized in ABL for now
-	//key_hash256 is initialized in ABL for now
+	memset(param, 0, sizeof(trusty_startup_params_t));
+	param->size_of_this_struct = sizeof(trusty_startup_params_t);
+	param->load_base = base;
+	param->load_size = sz;
+	memcpy(param->seed, seed, TRUSTY_SEED_LEN);
+	memset(seed, 0, TRUSTY_SEED_LEN);
 
-	debug(L"RotData.version = %d", param->RotData.version);
-	debug(L"RotData.deviceLocked = %d", param->RotData.deviceLocked);
-	debug(L"RotData.verifiedBootState = %d", param->RotData.verifiedBootState);
-	debug(L"RotData.osVersion = %d", param->RotData.osVersion);
-	debug(L"RotData.patchMonthYear = %d", param->RotData.patchMonthYear);
-	debug(L"RotData.keySize = %d", param->RotData.keySize);
 	return EFI_SUCCESS;
 }
 
 #define TRUSTY_VMCALL_SMC 0x74727500
-static EFI_STATUS launch_trusty_os(trusty_boot_params_t *param, UINTN load_base, UINTN load_size)
+static EFI_STATUS launch_trusty_os(trusty_startup_params_t *param)
 {
 	if (!param)
 		return EFI_INVALID_PARAMETER;
 
 	asm volatile(
 		"vmcall; \n"
-		: : "a"(TRUSTY_VMCALL_SMC), "D"((uint32_t)&param->RotData), "S"(load_base), "d"(load_size));
+		: : "a"(TRUSTY_VMCALL_SMC), "D"((uint32_t)param));
 
 	return EFI_SUCCESS;
 }
@@ -682,6 +679,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	uint32_t vbmeta_pub_key_len;
 	UINTN load_base;
 	AvbPartitionData *tos;
+	trusty_startup_params_t trusty_startup_params;
 #endif
 
 	debug(L"Loading boot image");
@@ -746,17 +744,18 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			goto fail;
 		}
 
-		ret = init_trusty_rot_params(p_trusty_boot_params, boot_state, bootimage);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to init trusty rot params");
-			goto fail;
-		}
 
 		tos = &slot_data_tos->loaded_partitions[0];
 		header = (const struct boot_img_hdr *)tos->data;
 		load_base = (UINTN)(tos->data + header->page_size);
+		ret = init_trusty_startup_params(&trusty_startup_params, load_base,
+				header->kernel_size, p_trusty_boot_params->seed);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to init trusty startup params");
+			goto fail;
+		}
 
-		ret = launch_trusty_os(p_trusty_boot_params, load_base, (UINTN)header->kernel_size);
+		ret = launch_trusty_os(&trusty_startup_params);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to launch trusty os");
 			goto fail;
@@ -799,6 +798,7 @@ fail:
 		avb_slot_verify_data_free(slot_data_tos);
 		slot_data_tos = NULL;
 	}
+	memset(trusty_startup_params.seed, 0, TRUSTY_SEED_LEN);
 #endif
 
 	return ret;
@@ -818,6 +818,7 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	VOID *tosimage = NULL;
 	UINTN load_base;
 	struct boot_img_hdr *hdr;
+	trusty_startup_params_t trusty_startup_params;
 #endif
 
 	debug(L"Loading boot image");
@@ -842,13 +843,20 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 
 		load_base = (UINTN)((UINT8 *)tosimage + hdr->page_size);
 
-		ret = init_trusty_rot_params(p_trusty_boot_params, boot_state, bootimage);
+		ret = init_trusty_startup_params(&trusty_startup_params, load_base,
+				hdr->kernel_size, p_trusty_boot_params->seed);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to init trusty startup params");
+			goto fail;
+		}
+
+		ret = get_rot_data(bootimage, boot_state, verifier_cert, &trusty_startup_params.RotData);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to init trusty rot params");
 			return ret;
 		}
 
-		ret = launch_trusty_os(p_trusty_boot_params, load_base, (UINTN)hdr->kernel_size);
+		ret = launch_trusty_os(&trusty_startup_params);
 		if (tosimage)
 			FreePool(tosimage);
 		if (EFI_ERROR(ret)) {

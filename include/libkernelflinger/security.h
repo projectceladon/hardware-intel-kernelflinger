@@ -129,9 +129,14 @@ struct rot_data_t{
 } ;
 
 /* Initialize the struct rot_data for startup_information */
+#ifdef USE_AVB
 EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state,
                         IN const UINT8 *pub_key,
                         IN UINTN pub_key_len,
                         OUT struct rot_data_t *rot_data);
 
+#else
+EFI_STATUS get_rot_data(IN VOID *bootimage, IN UINT8 boot_state, IN X509 *verifier_cert,
+                        OUT struct rot_data_t *rot_data);
+#endif
 #endif

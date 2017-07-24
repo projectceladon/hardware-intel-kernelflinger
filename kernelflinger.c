@@ -844,7 +844,11 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 #endif
                 }
                 debug(L"loading trusty");
+#ifdef USE_AVB
                 ret = get_rot_data(bootimage, boot_state, NULL, 0, &rot_data);
+#else
+                ret = get_rot_data(bootimage, boot_state, verifier_cert, &rot_data);
+#endif
                 if (EFI_ERROR(ret)){
                         efi_perror(ret, L"Unable to get the rot_data for trusty");
                         die();

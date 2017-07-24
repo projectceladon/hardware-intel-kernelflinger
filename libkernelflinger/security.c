@@ -840,10 +840,15 @@ out:
 }
 
 /* Initialize the struct rot_data for startup_information */
+#ifdef USE_AVB
 EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state,
                         IN const UINT8 *pub_key,
                         IN UINTN pub_key_len,
                         OUT struct rot_data_t *rot_data)
+#else
+EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state, IN X509 *verifier_cert,
+                        OUT struct rot_data_t *rot_data)
+#endif
 {
         EFI_STATUS ret = EFI_SUCCESS;
         enum device_state state;
@@ -876,8 +881,13 @@ EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state,
         rot_data->patchMonthYear = ((temp_version.split.year + 2000) << 4) + temp_version.split.month;
         rot_data->keySize = SHA256_DIGEST_LENGTH;
 
+#ifdef USE_AVB
         if (pub_key) {
                 ret = raw_pub_key_sha256(pub_key, pub_key_len, &temp_hash);
+#else
+        if (verifier_cert) {
+                ret = pub_key_sha256(verifier_cert, &temp_hash);
+#endif
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"Failed to compute key hash");
                         return ret;
