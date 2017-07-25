@@ -57,6 +57,10 @@
 #endif
 #include "oemvars.h"
 #include "slot.h"
+#ifdef RPMB_STORAGE
+#include "rpmb.h"
+#include "rpmb_storage.h"
+#endif
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const CHAR16 __attribute__((used)) magic[] = L"### kernelflinger ###";
@@ -1148,6 +1152,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         X509 *verifier_cert = NULL;
         CHAR16 *name = NULL;
         EFI_RESET_TYPE resetType;
+#ifdef RPMB_STORAGE
+        UINT8 rpmb_key[RPMB_KEY_SIZE + 1] = "12345ABCDEF1234512345ABCDEF12345";
+#endif
 
         /* gnu-efi initialization */
         InitializeLib(image, sys_table);
@@ -1186,11 +1193,31 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                                 NULL);
         }
 
+#ifdef RPMB_STORAGE
+        // Init the rpmb
+        emmc_rpmb_init(g_disk_device);
+        rpmb_storage_init(false);  // Set to use simulate RPMB now. Please does not chenge to true in Joule.
+#endif
+
         ret = slot_init();
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Slot management initialization failed");
                 return ret;
         }
+
+#ifdef RPMB_STORAGE
+        if (!is_rpmb_programed()) {
+                debug(L"rpmb not programmed");
+                // Please do NOT program RPMB key in Joule platform, otherwise the board can't boot.
+                ret = program_rpmb_key(rpmb_key);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"rpmb key program failed");
+                        return ret;
+                }
+        } else
+                debug(L"rpmb already programmed");
+#endif  // RPMB_STORAGE
+
 
         /* No UX prompts before this point, do not want to interfere
          * with magic key detection */

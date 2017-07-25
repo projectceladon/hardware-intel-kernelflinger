@@ -54,6 +54,7 @@
 #include "security.h"
 #include <libtipc.h>
 #ifdef RPMB_STORAGE
+#include "rpmb.h"
 #include "rpmb_storage.h"
 #endif
 #ifdef USE_TRUSTY
@@ -935,6 +936,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
 
 #ifdef RPMB_STORAGE
+	emmc_rpmb_init(NULL);
 	rpmb_storage_init(is_abl_secure_boot_enabled());
 #endif
 
