@@ -127,7 +127,7 @@ static BOOLEAN is_rpmb_programed_real(void)
 	UINT32 write_counter;
 	RPMB_RESPONSE_RESULT rpmb_result;
 
-	ret = emmc_get_counter(&write_counter, (const void *)rpmb_key, &rpmb_result);
+	ret = emmc_get_counter(NULL, &write_counter, (const void *)rpmb_key, &rpmb_result);
 	debug(L"get_counter ret=%d, wc=%d", ret, write_counter);
 	if (EFI_ERROR(ret) && (rpmb_result == RPMB_RES_NO_AUTH_KEY_PROGRAM)) {
 		debug(L"rpmb key is not programmed");
@@ -142,7 +142,7 @@ static EFI_STATUS program_rpmb_key_real(UINT8 *key)
 	RPMB_RESPONSE_RESULT rpmb_result;
 
 	memcpy(rpmb_key, key, RPMB_KEY_SIZE);
-	ret = emmc_program_key((const void *)key, &rpmb_result);
+	ret = emmc_program_key(NULL, (const void *)key, &rpmb_result);
 
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to program rpmb key");
@@ -156,7 +156,7 @@ static EFI_STATUS write_rpmb_device_state_real(UINT8 state)
 	EFI_STATUS ret;
 	RPMB_RESPONSE_RESULT rpmb_result;
 
-	ret = emmc_read_rpmb_data(RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = emmc_read_rpmb_data(NULL, RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read device state");
 		return ret;
@@ -164,7 +164,7 @@ static EFI_STATUS write_rpmb_device_state_real(UINT8 state)
 
 	rpmb_buffer[0] = DEVICE_STATE_MAGIC;
 	rpmb_buffer[1] = state;
-	ret = emmc_write_rpmb_data(RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = emmc_write_rpmb_data(NULL, RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to write device state");
@@ -178,7 +178,7 @@ static EFI_STATUS read_rpmb_device_state_real(UINT8 *state)
 	EFI_STATUS ret;
 	RPMB_RESPONSE_RESULT rpmb_result;
 
-	ret = emmc_read_rpmb_data(RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = emmc_read_rpmb_data(NULL, RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read device state");
@@ -203,7 +203,7 @@ static EFI_STATUS write_rpmb_rollback_index_real(size_t index, UINT64 in_rollbac
         blk_addr += index / RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK;
         blk_offset = (index % RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK) * sizeof(UINT64);
 
-	ret = emmc_read_rpmb_data(1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = emmc_read_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read rollback index");
@@ -215,7 +215,7 @@ static EFI_STATUS write_rpmb_rollback_index_real(size_t index, UINT64 in_rollbac
 	}
 
         memcpy(rpmb_buffer + blk_offset, &in_rollback_index, sizeof(UINT64));
-	ret = emmc_write_rpmb_data(1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = emmc_write_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to write rollback index");
@@ -233,7 +233,7 @@ static EFI_STATUS read_rpmb_rollback_index_real(size_t index, UINT64 *out_rollba
 
         blk_addr += index / RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK;
         blk_offset = (index % RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK) * sizeof(UINT64);
-	ret = emmc_read_rpmb_data(1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = emmc_read_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read rollback index");

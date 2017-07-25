@@ -84,6 +84,10 @@ ifeq ($(KERNELFLINGER_USE_RPMB),true)
     KERNELFLINGER_CFLAGS += -DRPMB_STORAGE
 endif
 
+ifeq ($(BOARD_SD_PASS_THRU_ENABLE),true)
+    KERNELFLINGER_CFLAGS += -DUSE_SD_PASS_THRU
+endif
+
 KERNELFLINGER_STATIC_LIBRARIES := \
 	libuefi_ssl_static \
 	libuefi_crypto_static \
@@ -228,7 +232,6 @@ endif
 include $(BUILD_EFI_EXECUTABLE)  # For kernelflinger-$(TARGET_BUILD_VARIANT)
 
 
-
 include $(CLEAR_VARS)
 LOCAL_MODULE := installer-$(TARGET_BUILD_VARIANT)
 LOCAL_STATIC_LIBRARIES := \
@@ -281,7 +284,6 @@ LOCAL_STATIC_LIBRARIES += libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
 endif  # BOARD_AVB_ENABLE
 
 include $(BUILD_EFI_EXECUTABLE) # For installer-$(TARGET_BUILD_VARIANT)
-
 
 
 ifeq ($(KERNELFLINGER_SUPPORT_ABL_BOOT),true)
