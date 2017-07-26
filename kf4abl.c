@@ -738,8 +738,8 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	VOID *bootimage = NULL;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	bool allow_verification_error = FALSE;
-	const struct boot_img_hdr *header;
 #ifdef USE_TRUSTY
+	const struct boot_img_hdr *header;
 	AvbSlotVerifyData *slot_data_tos = NULL;
 	UINT8 tos_state = BOOT_STATE_GREEN;
 	const uint8_t *vbmeta_pub_key;
