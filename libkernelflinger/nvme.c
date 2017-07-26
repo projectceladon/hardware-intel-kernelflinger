@@ -214,9 +214,17 @@ static EFI_STATUS nvme_erase_blocks(
 			num = end - blk;
 
 		ret = nvme_erase_blocks_impl(NvmePassthru, NamespaceId, blk, num);
-		if (EFI_ERROR(ret))
+		if (EFI_ERROR(ret)) {
+			/*  Workround:
+			 *  if NVME driver do not support NVME_CMD_WRITE_ZEROS, erase large partition will take a long time
+			 *  return EFI_SUCCESS and skip erasing large partition
+			 */
+			if (end - start > 0x04000000) {
+				error(L"Warning: skip erasing 0x%X blocks this time !!!", end - start + 1);
+				return EFI_SUCCESS;
+			}
 			return EFI_UNSUPPORTED;
-
+		}
 		blk += num;
 	}
 
