@@ -65,16 +65,17 @@
 #define OS_SECURE_BOOT_VAR      L"OsSecureBoot"
 
 /* operating system version and security patch level; for
-     * version "A.B.C" and patch level "Y-M-D":
-     * ver = A << 14 | B << 7 | C         (7 bits for each of A, B, C)
-     * lvl = ((Y - 2000) & 127) << 4 | M  (7 bits for Y, 4 bits for M)
-     * os_version = ver << 11 | lvl */
+     * version "A.B.C" and patch level "Y-M":
+     * os_version = (A * 100 + B) * 100 + C   (7 bits for each of A, B, C)
+     * lvl = (year + 2000) * 100 + month      (7 bits for Y, 4 bits for M) */
 union android_version {
     UINT32 value;
     struct {
-        UINT32 version:21;
-        UINT32 year:7;
         UINT32 month:4;
+        UINT32 year:7;
+        UINT32 version_C:7;
+        UINT32 version_B:7;
+        UINT32 version_A:7;
      } __attribute__((packed)) split;
 };
 
@@ -877,8 +878,8 @@ EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state, IN X509 *verif
         }
         rot_data->verifiedBootState = boot_state;
         temp_version.value = boot_image_header->os_version;
-        rot_data->osVersion = temp_version.split.version;
-        rot_data->patchMonthYear = ((temp_version.split.year + 2000) << 4) + temp_version.split.month;
+        rot_data->osVersion = (temp_version.split.version_A * 100 + temp_version.split.version_B) * 100 + temp_version.split.version_C;
+        rot_data->patchMonthYear = (temp_version.split.year + 2000) * 100 + temp_version.split.month;
         rot_data->keySize = SHA256_DIGEST_LENGTH;
 
 #ifdef USE_AVB
