@@ -30,6 +30,7 @@
 #include <trusty/keymaster.h>
 
 #define LOCAL_LOG 0
+#define TRUSTY_QL_TIPC_MAX_BUFFER_LEN (68*1024)
 
 typedef unsigned long uintptr_t;
 typedef uintptr_t vaddr_t;
@@ -63,7 +64,7 @@ int trusty_ipc_init(void)
 
     /* create Trusty IPC device */
     trusty_info("Initializing Trusty IPC device\n");
-    rc = trusty_ipc_dev_create(&_ipc_dev, &_tdev, PAGE_SIZE);
+    rc = trusty_ipc_dev_create(&_ipc_dev, &_tdev, TRUSTY_QL_TIPC_MAX_BUFFER_LEN);
     if (rc != 0) {
         trusty_error("Initializing Trusty IPC device failed (%d)\n", rc);
         return rc;
