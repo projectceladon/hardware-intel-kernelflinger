@@ -479,6 +479,7 @@ EFI_STATUS slot_set_verity_corrupted(BOOLEAN corrupted)
 
 EFI_STATUS slot_reset(void)
 {
+	EFI_STATUS ret;
 	UINTN nb_slot;
 
 	cur_suffix = NULL;
@@ -489,7 +490,13 @@ EFI_STATUS slot_reset(void)
 		 * partition with slots. Disable slot management. */
 		is_used = FALSE;
 		memset(&boot_ctrl, 0, sizeof(boot_ctrl));
-		return write_boot_ctrl();
+		ret = write_boot_ctrl();
+		/* If the SLOT_STORAGE_PART does not exist anymore
+		   there is no need to clear the slot A/B data from
+		   that partition. */
+		if (ret == EFI_NOT_FOUND)
+			return EFI_SUCCESS;
+		return ret;
 	}
 
 	if (nb_slot > MAX_NB_SLOT) {
