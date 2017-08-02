@@ -34,6 +34,7 @@
 #include <lib.h>
 #include "storage.h"
 #include "pci.h"
+#include "protocol/EraseBlock.h"
 
 static struct storage *cur_storage;
 static PCI_DEVICE_PATH boot_device = { .Function = -1, .Device = -1 };
@@ -159,6 +160,40 @@ static BOOLEAN valid_storage(void)
 	return boot_device.Header.Type && cur_storage;
 }
 
+static EFI_STATUS media_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
+{
+	EFI_DEVICE_PATH *dev_path;
+	EFI_GUID guid = EFI_ERASE_BLOCK_PROTOCOL_GUID;
+	EFI_ERASE_BLOCK_PROTOCOL *erase_blockp;
+	UINTN size;
+	EFI_STATUS ret;
+	EFI_HANDLE storage_handle = NULL;
+
+	dev_path = DevicePathFromHandle(handle);
+	if (!dev_path) {
+		error(L"Failed to get device path");
+		return EFI_DEVICE_ERROR;
+        }
+
+	ret = uefi_call_wrapper(BS->LocateDevicePath, 3,
+                                &guid, &dev_path, &storage_handle);
+	if (EFI_ERROR(ret))
+		return EFI_UNSUPPORTED;
+
+	ret = uefi_call_wrapper(BS->HandleProtocol, 3,
+                                storage_handle, &guid, (void **)&erase_blockp);
+	if (EFI_ERROR(ret))
+		return EFI_UNSUPPORTED;
+
+	size = (end - start + 1) * bio->Media->BlockSize;
+	ret = uefi_call_wrapper(erase_blockp->EraseBlocks, 5, erase_blockp, bio->Media->MediaId,
+                                start, NULL, size);
+	if (EFI_ERROR(ret))
+		error(L"EFI_ERASE_BLOCK_PROTOCOL failed to erase block");
+
+	return ret;
+}
+
 EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
 {
 	if (!valid_storage())
@@ -171,10 +206,18 @@ EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_uni
 
 EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
 {
+	EFI_STATUS ret;
+
 	if (!valid_storage())
 		return EFI_UNSUPPORTED;
 
-	debug(L"Erase lba %ld -> %ld", start, end);
+	/* check if underlying BIOS supports ERASE_BLOCK_PROTOCOL
+	   If so use ERASE_BLOCK_PROTOCOL to erase blocks*/
+	ret = media_erase_blocks(handle, bio, start, end);
+	if (ret == EFI_SUCCESS || ret != EFI_UNSUPPORTED)
+		return ret;
+
+	debug(L"ERASE_BLOCK_PROTOCOL not supported");
 	return cur_storage->erase_blocks(handle, bio, start, end);
 }
 
