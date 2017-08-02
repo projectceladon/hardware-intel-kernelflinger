@@ -445,7 +445,9 @@ EFI_STATUS slot_set_verity_corrupted(BOOLEAN corrupted)
 EFI_STATUS slot_reset(void)
 {
 	UINTN nb_slot;
-
+	struct gpt_partition_interface gparti;
+	EFI_STATUS ret;
+	CHAR8 *magic;
 	cur_suffix = NULL;
 
 	nb_slot = get_part_nb_slot(BOOT_LABEL);
@@ -461,6 +463,50 @@ EFI_STATUS slot_reset(void)
 	if (nb_slot > MAX_NB_SLOT) {
 		error(L"Current partition scheme has unexpected number of slots");
 		return EFI_UNSUPPORTED;
+	}
+
+	ret = gpt_get_partition_by_label(MISC_LABEL, &gparti, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		error(L"Failed to lookup for MISC partition");
+		is_used = FALSE;
+		return EFI_SUCCESS;
+	}
+
+	if (ops == NULL) {
+		ops = uefi_avb_ops_new();
+		if (ops == NULL)
+			error(L"Error allocating AvbOps when slot_reset.");
+	}
+
+	ab_ops.ops = ops;
+	ab_ops.read_ab_metadata = avb_ab_data_read;
+	ab_ops.write_ab_metadata = avb_ab_data_write;
+	cur_suffix = NULL;
+	avb_ab_data_init(&boot_ctrl);
+
+	ret = read_boot_ctrl();
+	if (EFI_ERROR(ret)) {
+		if (ret == EFI_NOT_FOUND)
+			return EFI_SUCCESS;
+		efi_perror(ret, L"Failed to read A/B metadata");
+		return ret;
+	}
+
+	if (!boot_ctrl.magic) {
+		debug(L"No A/B metadata");
+		return EFI_SUCCESS;
+	}
+
+	debug(L"Avb magic 0x%x, 0x%x, 0x%x, 0x%x", boot_ctrl.magic[0], boot_ctrl.magic[1], boot_ctrl.magic[2], boot_ctrl.magic[3]);
+
+	magic = (CHAR8 *)AVB_AB_MAGIC;
+	if ((boot_ctrl.magic[0] == magic[0]) && \
+		(boot_ctrl.magic[1] == magic[1]) && \
+		(boot_ctrl.magic[2] == magic[2]) && \
+		(boot_ctrl.magic[3] == magic[3])) {
+		debug(L"Avb magic is right");
+	} else {
+		error(L"A/B metadata is corrupted");
 	}
 
 	memset(&boot_ctrl, 0, sizeof(boot_ctrl));
