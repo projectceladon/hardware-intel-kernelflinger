@@ -165,9 +165,10 @@ static EFI_STATUS media_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_L
 	EFI_DEVICE_PATH *dev_path;
 	EFI_GUID guid = EFI_ERASE_BLOCK_PROTOCOL_GUID;
 	EFI_ERASE_BLOCK_PROTOCOL *erase_blockp;
-	UINTN size;
+	UINTN size, erase_granularity;
 	EFI_STATUS ret;
 	EFI_HANDLE storage_handle = NULL;
+	EFI_LBA left;
 
 	dev_path = DevicePathFromHandle(handle);
 	if (!dev_path) {
@@ -184,6 +185,38 @@ static EFI_STATUS media_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_L
                                 storage_handle, &guid, (void **)&erase_blockp);
 	if (EFI_ERROR(ret))
 		return EFI_UNSUPPORTED;
+
+	erase_granularity = erase_blockp->EraseLengthGranularity;
+
+	/* check if space to be erased is lesser than group size
+	   in such a case we cannot afford a group erase*/
+	if ((end - start + 1) < erase_granularity) {
+		ret = fill_zero(bio, start, end);
+		if (EFI_ERROR(ret))
+			error(L"Failed to fill with zeros");
+
+		return ret;
+	}
+
+	left = start % erase_granularity;
+	if (left) {
+		ret = fill_zero(bio, start, start + erase_granularity - left - 1);
+		if (EFI_ERROR(ret)) {
+			error(L"Failed to fill with zeros");
+			return ret;
+		}
+		start += erase_granularity - left;
+	}
+
+	left = (end + 1) % erase_granularity;
+	if (left) {
+		ret = fill_zero(bio, end + 1 - left, end);
+		if (EFI_ERROR(ret)) {
+			error(L"Failed to fill with zeros");
+			return ret;
+		}
+		end -= left;
+	}
 
 	size = (end - start + 1) * bio->Media->BlockSize;
 	ret = uefi_call_wrapper(erase_blockp->EraseBlocks, 5, erase_blockp, bio->Media->MediaId,
