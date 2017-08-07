@@ -919,13 +919,13 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 				hdr->kernel_size, p_trusty_boot_params->seed);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to init trusty startup params");
-			goto fail;
+			goto exit;
 		}
 
 		ret = get_rot_data(bootimage, boot_state, verifier_cert, &trusty_startup_params.RotData);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to init trusty rot params");
-			return ret;
+			goto exit;
 		}
 
 		ret = launch_trusty_os(&trusty_startup_params);
@@ -933,7 +933,7 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			FreePool(tosimage);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to launch trusty os");
-			return ret;
+			goto exit;
 		}
 
 		trusty_ipc_init();
@@ -944,10 +944,15 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	ret = start_boot_image(bootimage, boot_state, boot_target, verifier_cert, abl_cmd_line);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to start boot image");
-		return ret;
+		goto exit;
 	}
 
-	return EFI_INVALID_PARAMETER;
+	ret = EFI_INVALID_PARAMETER;
+exit:
+#ifdef USE_TRUSTY
+	memset(trusty_startup_params.seed, 0, TRUSTY_SEED_LEN);
+#endif
+	return ret;
 }
 #endif
 #endif	// __SUPPORT_ABL_BOOT
