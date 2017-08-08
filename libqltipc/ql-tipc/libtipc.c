@@ -24,6 +24,7 @@
 
 #include <trusty/avb.h>
 #include <trusty/rpmb.h>
+#include <trusty/rpmb_sim.h>
 #include <trusty/trusty_dev.h>
 #include <trusty/trusty_ipc.h>
 #include <trusty/util.h>
@@ -31,9 +32,6 @@
 
 #define LOCAL_LOG 0
 #define TRUSTY_QL_TIPC_MAX_BUFFER_LEN (68*1024)
-
-typedef unsigned long uintptr_t;
-typedef uintptr_t vaddr_t;
 
 static struct trusty_ipc_dev *_ipc_dev;
 static struct trusty_dev _tdev; /* There should only be one trusty device */
@@ -55,6 +53,7 @@ void trusty_ipc_shutdown(void)
 int trusty_ipc_init(void)
 {
     int rc;
+
     /* init Trusty device */
     trusty_info("Initializing Trusty device\n");
     rc = trusty_dev_init(&_tdev, NULL);
@@ -65,14 +64,20 @@ int trusty_ipc_init(void)
 
     /* create Trusty IPC device */
     trusty_info("Initializing Trusty IPC device\n");
-    rc = trusty_ipc_dev_create(&_ipc_dev, &_tdev, TRUSTY_QL_TIPC_MAX_BUFFER_LEN);
+    rc = trusty_ipc_dev_create(&_ipc_dev, &_tdev,
+                               TRUSTY_QL_TIPC_MAX_BUFFER_LEN);
     if (rc != 0) {
         trusty_error("Initializing Trusty IPC device failed (%d)\n", rc);
         return rc;
     }
 
     /* get storage rpmb */
-    rpmb_ctx = rpmb_storage_get_ctx();
+    if (is_use_sim_rpmb()) {
+        trusty_info("Simulation RPMB is in use.\n");
+    } else {
+        trusty_info("Physical RPMB is in use.\n");
+        rpmb_ctx = rpmb_storage_get_ctx();
+    }
 
     /* start secure storage proxy service */
     trusty_info("Initializing RPMB storage proxy service\n");

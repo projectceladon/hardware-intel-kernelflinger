@@ -23,6 +23,7 @@
  */
 
 #include <trusty/rpmb.h>
+#include <trusty/rpmb_sim.h>
 #include <trusty/trusty_ipc.h>
 #include <trusty/util.h>
 #include <interface/storage/storage.h>
@@ -159,10 +160,18 @@ static int proxy_handle_rpmb(struct trusty_ipc_chan *chan,
     }
 
     /* execute rpmb command */
-    rc = rpmb_storage_send(proxy_rpmb,
-                           rel_write_data, req->reliable_write_size,
-                           write_data, req->write_size,
-                           read_buf, req->read_size);
+    if (is_use_sim_rpmb()) {
+        rc = rpmb_sim_operations(rel_write_data, req->reliable_write_size,
+                                 write_data, req->write_size,
+                                 read_buf, req->read_size);
+    }
+    else {
+        rc = rpmb_storage_send(proxy_rpmb,
+                               rel_write_data, req->reliable_write_size,
+                               write_data, req->write_size,
+                               read_buf, req->read_size);
+    }
+
     if (rc) {
         trusty_error("%s: rpmb_storage_send failed: %d\n", __func__, rc);
         msg->result = STORAGE_ERR_GENERIC;
