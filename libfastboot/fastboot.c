@@ -389,6 +389,7 @@ static EFI_STATUS publish_slots(void)
 	};
 	EFI_STATUS ret;
 	char var[MAX_VARIABLE_LENGTH];
+	char count[MAX_VARIABLE_LENGTH];
 	int len;
 	UINTN i, j, nb_slots;
 	char **suffixes;
@@ -397,6 +398,11 @@ static EFI_STATUS publish_slots(void)
 	nb_slots = slot_get_suffixes(&suffixes);
 	if (!nb_slots)
 		return EFI_SUCCESS;
+
+	efi_snprintf((CHAR8 *)count, sizeof(count), (CHAR8 *)"%d", nb_slots);
+	ret = fastboot_publish("slot-count", count);
+	if (EFI_ERROR(ret))
+		return ret;
 
 	ret = fastboot_publish_dynamic("current-slot", slot_get_active);
 	if (EFI_ERROR(ret))

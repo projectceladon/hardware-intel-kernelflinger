@@ -359,6 +359,12 @@ EFI_STATUS slot_set_active(const char *suffix)
 	slot_metadata_t *slot;
 	AvbSlotVerifyData *data;
 	const char *requested_partitions[] = {"boot", NULL};
+	const char *suffix_translate[] = {"_a", "_b"};
+
+	if(*suffix == 'a')
+		suffix = suffix_translate[0];
+	else if (*suffix == 'b')
+		suffix = suffix_translate[1];
 
 	slot = get_slot(suffix);
 	if (!slot)
