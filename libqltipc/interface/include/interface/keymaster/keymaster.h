@@ -52,9 +52,10 @@ enum keymaster_command {
 	KM_GET_SUPPORTED_EXPORT_FORMATS = (14 << KEYMASTER_REQ_SHIFT),
 	KM_GET_KEY_CHARACTERISTICS      = (15 << KEYMASTER_REQ_SHIFT),
 
-    KM_SET_BOOT_PARAMS               = (0x1000 << KEYMASTER_REQ_SHIFT),
-    KM_SET_ATTESTATION_KEY           = (0x2000 << KEYMASTER_REQ_SHIFT),
-    KM_APPEND_ATTESTATION_CERT_CHAIN = (0x3000 << KEYMASTER_REQ_SHIFT),
+	KM_SET_BOOT_PARAMS               = (0x1000 << KEYMASTER_REQ_SHIFT),
+	KM_SET_ATTESTATION_KEY           = (0x2000 << KEYMASTER_REQ_SHIFT),
+	KM_APPEND_ATTESTATION_CERT_CHAIN = (0x3000 << KEYMASTER_REQ_SHIFT),
+	KM_PROVISION_KEYBOX              = (0x8000 << KEYMASTER_REQ_SHIFT),
 };
 
 typedef enum {
@@ -238,6 +239,18 @@ struct km_append_attestation_cert_chain_req {
     uint32_t algorithm;
     uint32_t cert_size;
     uint8_t cert[0];
+} TRUSTY_ATTR_PACKED;
+
+/**
+ * km_provision_keybox_req - request format for
+ * KM_PROVISION_KEYBOX
+ *
+ * @keybox_size: size of |keybox|
+ * @keybox: the dump data of the keybox xml file
+ */
+struct km_provision_keybox_req {
+    uint32_t keybox_size;
+    uint8_t keybox[0];
 } TRUSTY_ATTR_PACKED;
 
 #endif /* TRUSTY_INTERFACE_KEYMASTER_H_ */

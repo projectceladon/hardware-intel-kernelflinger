@@ -27,6 +27,7 @@
 #include <trusty/trusty_ipc.h>
 #include <trusty/util.h>
 #include "security.h"
+#include <libqltipc/libtipc.h>
 
 #define LOCAL_LOG 0
 #define UNUSED(x) (void)(x)
@@ -188,15 +189,35 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
     }
 
     /* sent the ROT information to trusty */
-    trusty_set_boot_params(g_rot_data.osVersion,
+    rc = trusty_set_boot_params(g_rot_data.osVersion,
                 g_rot_data.patchMonthYear,
                 g_rot_data.verifiedBootState,
                 g_rot_data.deviceLocked,
                 g_rot_data.keyHash256,
                 g_rot_data.keySize);
 
-    /* TODO: (KM2.0 features)set the attestation_key and append the attest cert */
-    //trusty_set_attestation_key(NULL, 0,KM_ALGORITHM_RSA);
+    if (rc != KM_ERROR_OK && rc != KM_ERROR_ROOT_OF_TRUST_ALREADY_SET) {
+        trusty_error("set boot_params has failed( %d )\n", rc);
+        return TRUSTY_ERR_GENERIC;
+    }
+
+    /* keybox not privisioned yet, then provision it */
+    if (!is_keybox_provisioned()) {
+        /* set the attestation_key and append the attest cert:
+        * if the input is NULL, it means  it will retrieve the keybox from trusty side
+        * and parsed by tinyxml2 then save the prikey and certs into the securestorage.
+        * otherwise the inputs will be real keybox buffer which get in the bootloader(fastboot). */
+        rc = trusty_provision_keybox(NULL, 0);
+        if (rc != KM_ERROR_OK) {
+            trusty_error("provision keybox has failed( %d )\n", rc);
+            return TRUSTY_ERR_GENERIC;
+        }
+
+        rc = set_keybox_provision_magic_data();
+        if (rc != KM_ERROR_OK) {
+            return TRUSTY_ERR_GENERIC;
+        }
+    }
 
     return TRUSTY_ERR_NONE;
 }
@@ -254,4 +275,15 @@ int trusty_append_attestation_cert_chain(uint8_t *cert, uint32_t cert_size,
 
     return km_do_tipc(KM_APPEND_ATTESTATION_CERT_CHAIN, &req, sizeof(req), cert,
                       cert_size, true);
+}
+
+int trusty_provision_keybox(uint8_t *keybox, uint32_t keybox_size)
+{
+    struct km_provision_keybox_req req = {
+        .keybox_size = keybox_size
+    };
+    trusty_debug("keybox_size: %d\n", keybox_size);
+
+    return km_do_tipc(KM_PROVISION_KEYBOX, &req, sizeof(req), keybox,
+                      keybox_size, true);
 }
