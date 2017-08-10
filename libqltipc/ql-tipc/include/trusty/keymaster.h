@@ -79,5 +79,14 @@ int trusty_set_attestation_key(uint8_t *key,  uint32_t key_size,
 int trusty_append_attestation_cert_chain(uint8_t *cert,  uint32_t cert_size,
                                          keymaster_algorithm_t algorithm);
 
+/*
+ * Provision the keybox to secure storage.
+ * Returns one of trusty_err.
+ *
+ * @keybox: buffer of the dump data from keybox xml file
+ * @keybox_size: size of keybox in bytes
+ */
+int trusty_provision_keybox(uint8_t *keybox, uint32_t keybox_size);
+
 #endif /* TRUSTY_KEYMASTER_H_ */
 

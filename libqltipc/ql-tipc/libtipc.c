@@ -54,7 +54,7 @@ void trusty_ipc_shutdown(void)
 #define KEYBOX_PROVISION_MAGIC_DATA  (0xe62f30d4)
 #define KEYBOX_PROVISION_ADDR 1
 
-int rpmb_read_keybox_magic_data(uint32_t *data)
+static int rpmb_read_keybox_magic_data(uint32_t *data)
 {
     int rc = 0;
 
@@ -67,7 +67,7 @@ int rpmb_read_keybox_magic_data(uint32_t *data)
     return 0;
 }
 
-int rpmb_write_keybox_magic_data(uint32_t data)
+static int rpmb_write_keybox_magic_data(uint32_t data)
 {
     int rc = 0;
 
@@ -146,22 +146,22 @@ int trusty_ipc_init(void)
            return rc;
        }
     }
-/*
+
+    /*
     trusty_info("Initializing Trusty AVB client\n");
     rc = avb_tipc_init(_ipc_dev);
     if (rc != 0) {
         trusty_error("Initlializing Trusty AVB client failed (%d)\n", rc);
         return rc;
     }
-*/
+    */
+
     trusty_info("Initializing Trusty Keymaster client\n");
     rc = km_tipc_init(_ipc_dev);
     if (rc != 0) {
         trusty_error("Initlializing Trusty Keymaster client failed (%d)\n", rc);
         return rc;
     }
-
-    set_keybox_provision_magic_data();
 
     return TRUSTY_ERR_NONE;
 }
