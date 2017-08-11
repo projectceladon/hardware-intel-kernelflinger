@@ -47,15 +47,14 @@ static AvbIOResult read_from_partition(AvbOps* ops,
                                        size_t* out_num_read) {
   EFI_STATUS efi_ret;
   struct gpt_partition_interface gpart;
-  uint64_t partition_size;
-  UEFIAvbOpsData* data = (UEFIAvbOpsData*)ops->user_data;
+  int64_t partition_size;
   const CHAR16 *label;
 
   avb_assert(partition_name != NULL);
   avb_assert(buf != NULL);
   avb_assert(out_num_read != NULL);
 
-  label = stra_to_str(partition_name);
+  label = stra_to_str((const CHAR8 *)partition_name);
 
   if (!label) {
     error(L"out of memory");
@@ -115,12 +114,11 @@ static AvbIOResult write_to_partition(AvbOps* ops,
   struct gpt_partition_interface gpart;
   uint64_t partition_size;
   const CHAR16 * label;
-  UEFIAvbOpsData* data = (UEFIAvbOpsData*)ops->user_data;
 
   avb_assert(partition_name != NULL);
   avb_assert(buf != NULL);
 
-  label = stra_to_str(partition_name);
+  label = stra_to_str((const CHAR8 *)partition_name);
   if (!label) {
     error(L"out of memory");
     return AVB_IO_RESULT_ERROR_OOM;
@@ -137,7 +135,7 @@ static AvbIOResult write_to_partition(AvbOps* ops,
       gpart.bio->Media->BlockSize;
 
   if (offset_from_partition < 0) {
-    if ((-offset_from_partition) > partition_size) {
+    if ((-offset_from_partition) > (int)partition_size) {
       avb_error("Offset outside range.\n");
       return AVB_IO_RESULT_ERROR_RANGE_OUTSIDE_PARTITION;
     }
@@ -160,7 +158,7 @@ static AvbIOResult write_to_partition(AvbOps* ops,
       (gpart.part.starting_lba * gpart.bio->Media->BlockSize) +
           offset_from_partition,
       num_bytes,
-      buf);
+      (void *)buf);
 
   if (EFI_ERROR(efi_ret)) {
     avb_error("Could not write to Disk.\n");
@@ -188,7 +186,7 @@ static AvbIOResult validate_vbmeta_public_key(
     return AVB_IO_RESULT_ERROR_IO;
   }
 
-  if ((public_key_length <= avb_pk_size) && !memcmp(avb_pk, public_key_data, public_key_length))
+  if ((public_key_length <= (size_t)avb_pk_size) && !memcmp(avb_pk, public_key_data, public_key_length))
   {
     if (out_key_is_trusted != NULL) {
       *out_key_is_trusted = true;
@@ -253,7 +251,6 @@ static AvbIOResult get_unique_guid_for_partition(AvbOps* ops,
                                                  size_t guid_buf_size) {
   EFI_STATUS efi_ret;
   struct gpt_partition_interface gpart;
-  UEFIAvbOpsData* data = (UEFIAvbOpsData*)ops->user_data;
   uint8_t * unique_guid;
   const CHAR16 * label;
 
@@ -262,7 +259,7 @@ static AvbIOResult get_unique_guid_for_partition(AvbOps* ops,
   avb_assert(partition != NULL);
   avb_assert(guid_buf != NULL);
 
-  label = stra_to_str(partition);
+  label = stra_to_str((const CHAR8 *)partition);
   if (!label) {
     error(L"out of memory");
     return AVB_IO_RESULT_ERROR_OOM;
