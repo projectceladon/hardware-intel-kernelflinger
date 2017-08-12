@@ -975,13 +975,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #else
 	target = check_command_line(image);
 #endif
-
-	ret = slot_init();
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Slot management initialization failed");
-		return ret;
-	}
-
 #ifdef RPMB_STORAGE
 	rpmb_storage_init(is_abl_secure_boot_enabled());
 	if (!is_rpmb_programed()) {
@@ -996,6 +989,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		set_rpmb_key(key);
 	}
 #endif
+	ret = slot_init();
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Slot management initialization failed");
+		return ret;
+	}
+
 #ifdef __FORCE_FASTBOOT
 	target = FASTBOOT;
 #endif
