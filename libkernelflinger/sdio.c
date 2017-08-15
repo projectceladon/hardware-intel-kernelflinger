@@ -81,7 +81,7 @@ EFI_STATUS sdio_get_card_info(EFI_SD_HOST_IO_PROTOCOL *sdio,
 
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &guid, (void **)&info);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Unable to locate card info protocol");
+//		efi_perror(ret, L"Unable to locate card info protocol");
 		return ret;
 	}
 
