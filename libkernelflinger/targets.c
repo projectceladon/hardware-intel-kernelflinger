@@ -43,7 +43,6 @@ static struct target {
         { RECOVERY,       L"recovery",   L"Recovery OS" },
         { FASTBOOT,       L"bootloader", L"Fastboot mode" },
         { FASTBOOT,       L"fastboot",   L"Fastboot mode" },
-        { CHARGER,        L"charging",   L"Charger mode" },
         { DNX,            L"dnx",        L"Download and Execute mode" },
 #ifdef CRASHMODE_USE_ADB
         { CRASHMODE,      L"crashmode",  L"Crashmode" },
@@ -51,11 +50,14 @@ static struct target {
         { CRASHMODE,      NULL,          L"Crashmode" },
 #endif
         /* Internal only */
+#ifndef __SUPPORT_ABL_BOOT
+        { CHARGER,        L"charging",   L"Charger mode" },
         { ESP_BOOTIMAGE,  NULL,          L"ESP bootimage" },
         { ESP_EFI_BINARY, NULL,          L"ESP efi binary" },
         { MEMORY,         NULL,          L"RAM bootimage" },
         { POWER_OFF,      NULL,          L"Power Off" },
-        { EXIT_SHELL,     NULL,          L"Exit to shell" }
+        { EXIT_SHELL,     NULL,          L"Exit to shell" },
+#endif
 };
 
 static struct target *find_entry(enum boot_target bt)
@@ -99,10 +101,12 @@ EFI_STATUS reboot_to_target(enum boot_target bt, EFI_RESET_TYPE type)
 {
         const CHAR16 *name;
 
+#ifndef __SUPPORT_ABL_BOOT
         if (bt == POWER_OFF) {
                 halt_system();
                 return EFI_DEVICE_ERROR;
         }
+#endif
 
         name = boot_target_name(bt);
         if (!name)
