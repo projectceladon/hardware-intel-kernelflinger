@@ -45,7 +45,6 @@
 #include "android.h"
 #include "slot.h"
 #include "timer.h"
-#ifdef __SUPPORT_ABL_BOOT
 #ifdef USE_AVB
 #include "avb_init.h"
 #include "libavb/libavb.h"
@@ -59,8 +58,8 @@
 #ifdef USE_TRUSTY
 #include "trusty.h"
 
-#define TRUSTY_PARA_STRING          "trusty.param_addr="
-#define LENGTH_TRUSTY_PARA_STRING   18
+#define TRUSTY_PARAM_STRING          "trusty.param_addr="
+#define LENGTH_TRUSTY_PARAM_STRING   18
 #define TRUSTY_SEED_LEN             32
 
 typedef struct {
@@ -104,17 +103,6 @@ typedef union {
 #define MAX_CMD_BUF 0x1000
 static CHAR8 cmd_buf[MAX_CMD_BUF];
 struct rot_data_t g_rot_data = {0};
-#endif
-struct abl_boot_info {
-	UINT32 magic;
-	UINT32 bootimage_len;
-	UINT32 bootimage_crc;
-	UINT32 bootimage_pos;
-	UINT32 reserved1;
-	UINT32 reserved2;
-	UINT32 reserved3;
-	UINT32 reserved4;
-};
 
 #ifdef CRASHMODE_USE_ADB
 static EFI_STATUS enter_crashmode(enum boot_target *target)
@@ -205,7 +193,6 @@ out:
 }
 #endif
 
-#ifdef __SUPPORT_ABL_BOOT
 static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 {
 	EFI_STATUS ret;
@@ -233,50 +220,6 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 
 	return EFI_SUCCESS;
 }
-#else
-static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
-{
-	EFI_STATUS ret;
-
-	if (bootimage) {
-		/* 'fastboot boot' case, only allowed on unlocked devices.*/
-		if (device_is_unlocked()) {
-			struct bootloader_message bcb;
-			struct abl_boot_info *p;
-			UINT32 crc;
-
-			ret = uefi_call_wrapper(BS->CalculateCrc32, 3, bootimage, imagesize, &crc);
-
-			if (EFI_ERROR(ret)) {
-				efi_perror(ret, L"CalculateCrc32 failed");
-				return ret;
-			}
-
-			memset(&bcb, 0, sizeof(struct bootloader_message));
-
-			p = (struct abl_boot_info *)bcb.abl;
-			p->magic = 0xABCDABCD;
-			p->bootimage_len = imagesize;
-			p->bootimage_crc = crc;
-			p->bootimage_pos = (UINT32)bootimage;
-
-			ret = write_bcb(MISC_LABEL, &bcb);
-			if (EFI_ERROR(ret)) {
-				efi_perror(ret, L"Unable to update BCB contents!");
-				return ret;
-			}
-
-			ret = reboot_to_target(NORMAL_BOOT, EfiResetWarm);
-			if (EFI_ERROR(ret)) {
-				efi_perror(ret, L"Warm reset failed!");
-				return ret;
-			}
-		}
-	}
-
-	return EFI_SUCCESS;
-}
-#endif
 
 static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 {
@@ -323,7 +266,24 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 	return ret;
 }
 
-#ifdef __SUPPORT_ABL_BOOT
+/*
+ *  Boot mode field definitions.
+ */
+static union bootMode
+{
+	UINT16 _bits;
+	struct {
+		UINT16 target           : 5; /* [4:0] */
+		UINT16 do_mrc_training  : 1; /* [5] */
+		UINT16 do_save_mrc_data : 1; /* [6] */
+		UINT16 do_flash_update  : 1; /* [7] */
+		UINT16 silent           : 1; /* [8] */
+		UINT16 _reserved        : 1; /* [9] */
+		UINT16 action           : 2; /* [11:10] 0:boot,1:CLI,2:halt,3:reset */
+		UINT16 dipsw            : 4; /* [15:12] */
+	};
+} bootMode;
+
 static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UINTN max_cmd_size)
 {
 	EFI_STATUS ret;
@@ -336,6 +296,11 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	UINTN arglen;
 	CHAR8 *secureboot_str = (CHAR8 *)"ABL.secureboot=";
 	UINTN secureboot_str_len;
+	CHAR8 *bootmode_info_str = (CHAR8 *)"ABL.boot=";
+	UINTN bootmode_info_str_len;
+	CHAR8 *boot_target_str = (CHAR8 *)"ABL.boot_target=";
+	UINTN boot_target_str_len;
+	CHAR8 *nptr = NULL;
 
 	ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
 				&LoadedImageProtocol, (VOID **)&limg,
@@ -351,17 +316,12 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 
 	cmd_buf[0] = 0;
 	secureboot_str_len = strlen((CHAR8 *)secureboot_str);
+	bootmode_info_str_len = strlen((CHAR8 *)bootmode_info_str);
+	boot_target_str_len = strlen((CHAR8 *)boot_target_str);
 
 	/*Parse boot target*/
 	for (i = 0; i < argc; i++) {
 		debug(L" abl cmd %02d: %s", i, argv[i]);
-		if (!StrCmp(argv[i], L"ABL.boot_target=CRASHMODE"))
-			target = CRASHMODE;
-		else if (!StrCmp(argv[i], L"ABL.boot_target=NORMAL_BOOT"))
-			target = NORMAL_BOOT;
-		else if (!StrCmp(argv[i], L"ABL.boot_target=RECOVERY"))
-			target = RECOVERY;
-
 		arglen = StrLen(argv[i]);
 		if (arglen > (int)sizeof(arg8) - 2)
 			arglen = sizeof(arg8) - 2;
@@ -372,20 +332,41 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				cmd_len++;
 			}
 
+			/* Parse "ABL.boot_target=xxxx" */
+			if ((arglen > bootmode_info_str_len) &&
+				!strncmp(arg8, boot_target_str, boot_target_str_len)) {
+				nptr = (CHAR8 *)(arg8 + boot_target_str_len);
+				/* Only handle CRASHMODE case, other mode should be decided by "ABL.boot". */
+				if (!strcmp(nptr, (CHAR8 *)"CRASHMODE")) {
+					target = CRASHMODE;
+					break;
+				}
+			} else
+			/* Parse "ABL.boot=xx" */
+			if ((arglen > bootmode_info_str_len) &&
+				(!strncmp(arg8, bootmode_info_str, bootmode_info_str_len))) {
+				nptr = (CHAR8 *)(arg8 + bootmode_info_str_len);
+				bootMode._bits = (UINT16)strtoul((char *)nptr, 0, 16);
+				target = bootMode.target;
+				/* Continue pass "ABL.boot" to kernel command line. */
+				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
+				cmd_len += arglen;
+			} else
 #ifdef USE_TRUSTY
-			//Parse "trusty.param_addr=xxxxx"
-			if ((arglen > LENGTH_TRUSTY_PARA_STRING) &&
-			    (!strncmp(arg8, (CHAR8 *)TRUSTY_PARA_STRING, LENGTH_TRUSTY_PARA_STRING))) {
+			/* Parse "trusty.param_addr=xxxxx" */
+			if ((arglen > LENGTH_TRUSTY_PARAM_STRING) &&
+			    (!strncmp(arg8, (CHAR8 *)TRUSTY_PARAM_STRING, LENGTH_TRUSTY_PARAM_STRING))) {
 				UINT32 num;
-				CHAR8 *nptr = (CHAR8 *)(arg8 + LENGTH_TRUSTY_PARA_STRING);
+				nptr = (CHAR8 *)(arg8 + LENGTH_TRUSTY_PARAM_STRING);
 				num = strtoul((char *)nptr, 0, 16);
 				debug(L"Parsed trusty param addr is 0x%x", num);
 				p_trusty_boot_params = (trusty_boot_params_t *)num;
 			} else
 #endif
+			/* Parse "ABL.secureboot=x" */
 			if ((arglen > secureboot_str_len) && (!strncmp(arg8, (CHAR8 *)secureboot_str, secureboot_str_len))) {
 				UINT8 val;
-				CHAR8 *nptr = (CHAR8 *)(arg8 + secureboot_str_len);
+				nptr = (CHAR8 *)(arg8 + secureboot_str_len);
 				val = (UINT8)strtoul((char *)nptr, 0, 10);
 				ret = set_abl_secure_boot(val);
 				if (EFI_ERROR(ret))
@@ -401,38 +382,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	FreePool(argv);
 	return target;
 }
-#else
-static enum boot_target check_command_line(EFI_HANDLE image)
-{
-	EFI_STATUS ret;
-	enum boot_target target = FASTBOOT;
-	static EFI_LOADED_IMAGE *limg;
-	UINTN argc, i;
-	CHAR16 **argv;
 
-	ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
-			&LoadedImageProtocol, (VOID **)&limg,
-			image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
-
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to open LoadedImageProtocol");
-		return FASTBOOT;
-	}
-
-	ret = get_argv(limg, &argc, &argv);
-	if (EFI_ERROR(ret))
-		return FASTBOOT;
-
-	for (i = 0; i < argc; i++)
-		if (!StrCmp(argv[i], L"-c"))
-			target = CRASHMODE;
-
-	FreePool(argv);
-	return target;
-}
-#endif
-
-#ifdef __SUPPORT_ABL_BOOT
 #ifndef USE_AVB
 /* Load a boot image into RAM.
  *
@@ -460,7 +410,6 @@ static EFI_STATUS load_boot_image(
 
 	switch (boot_target) {
 	case NORMAL_BOOT:
-	case CHARGER:
 		ret = EFI_NOT_FOUND;
 		if (use_slot() && !slot_get_active())
 			break;
@@ -634,23 +583,15 @@ static UINT8 validate_bootimage(
 
 	switch (boot_target) {
 	case NORMAL_BOOT:
-	case MEMORY:
 		expected = L"/boot";
 		/* in case of multistage ota */
 		expected2 = L"/recovery";
-		break;
-	case CHARGER:
-		expected = L"/boot";
 		break;
 	case RECOVERY:
 		if (recovery_in_boot_partition())
 			expected = L"/boot";
 		else
 			expected = L"/recovery";
-		break;
-	case ESP_BOOTIMAGE:
-		/* "live" bootable image */
-		expected = L"/boot";
 		break;
 	default:
 		expected = NULL;
@@ -957,7 +898,6 @@ exit:
 	return ret;
 }
 #endif
-#endif	// __SUPPORT_ABL_BOOT
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
@@ -975,11 +915,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 	set_boottime_stamp(0);
 	InitializeLib(image, sys_table);
-#ifdef __SUPPORT_ABL_BOOT
 	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
-#else
-	target = check_command_line(image);
-#endif
 
 #ifdef RPMB_STORAGE
 	rpmb_storage_init(is_abl_secure_boot_enabled());
@@ -1021,7 +957,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	debug(L"target=%d", target);
 	for (;;) {
 		switch (target) {
-#ifdef __SUPPORT_ABL_BOOT
 		case NORMAL_BOOT:
 		case RECOVERY:
 #ifdef USE_AVB
@@ -1032,7 +967,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 			if (EFI_ERROR(ret))
 				target = FASTBOOT;
 			break;
-#endif
 		case UNKNOWN_TARGET:
 #ifndef CRASHMODE_USE_ADB
 		case CRASHMODE:

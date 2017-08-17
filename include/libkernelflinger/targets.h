@@ -37,23 +37,41 @@
 #include <efi.h>
 #include <efilib.h>
 
+#ifdef __SUPPORT_ABL_BOOT
 enum boot_target {
-        UNKNOWN_TARGET = -1,
-        NORMAL_BOOT,
-        RECOVERY,
-        FASTBOOT,
-        ESP_BOOTIMAGE,
-        ESP_EFI_BINARY,
-        MEMORY,
-        CHARGER,
-        POWER_OFF,
-        EXIT_SHELL,
-        DNX,
-        CRASHMODE
+	UNKNOWN_TARGET = -1,
+	NORMAL_BOOT,
+	FASTBOOT,
+	ELK,
+	RECOVERY,
+	CRASHMODE,
+	DNX,
 };
 
 #define is_bootimg_target(target) \
-        (target == NORMAL_BOOT || target == CHARGER || target == RECOVERY)
+	(target == NORMAL_BOOT || target == RECOVERY)
+
+#else
+enum boot_target {
+	UNKNOWN_TARGET = -1,
+	NORMAL_BOOT,
+	RECOVERY,
+	FASTBOOT,
+	ESP_BOOTIMAGE,
+	ESP_EFI_BINARY,
+	MEMORY,
+	CHARGER,
+	POWER_OFF,
+	EXIT_SHELL,
+	DNX,
+	CRASHMODE
+};
+
+#define is_bootimg_target(target) \
+	(target == NORMAL_BOOT || target == CHARGER || target == RECOVERY)
+
+#endif
+
 
 const CHAR16 *boot_target_name(enum boot_target bt);
 const CHAR16 *boot_target_description(enum boot_target bt);
