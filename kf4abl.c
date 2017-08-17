@@ -146,6 +146,7 @@ static EFI_STATUS enter_crashmode(enum boot_target *target)
 	return ret;
 }
 #endif
+#ifndef __FORCE_FASTBOOT
 static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
 {
 	EFI_STATUS ret;
@@ -202,6 +203,7 @@ out:
 	FreePool(target);
 	return t;
 }
+#endif
 
 #ifdef __SUPPORT_ABL_BOOT
 static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
@@ -960,12 +962,16 @@ exit:
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
-	enum boot_target target, bcb_target;
-	BOOLEAN oneshot = FALSE;
-	CHAR16 *target_path = NULL;
+	enum boot_target target;
 	EFI_STATUS ret;
 #ifdef RPMB_STORAGE
 	UINT8 key[RPMB_KEY_SIZE +1] = "12345ABCDEF1234512345ABCDEF12345";
+#endif
+
+#ifndef __FORCE_FASTBOOT
+	BOOLEAN oneshot = FALSE;
+	CHAR16 *target_path = NULL;
+	enum boot_target bcb_target;
 #endif
 
 	set_boottime_stamp(0);
@@ -999,11 +1005,14 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	target = FASTBOOT;
 #endif
 
-	debug(L"ABL: Before Check BCB target is %d", target);
+#ifndef __FORCE_FASTBOOT
+	debug(L"Before Check BCB target is %d", target);
 	bcb_target = check_bcb(&target_path, &oneshot);
+	debug(L"BCB target is %d", bcb_target);
 	if (bcb_target != NORMAL_BOOT)
 		target = bcb_target;
-	debug(L"ABL: After Check BCB target is %d", target);
+	debug(L"After Check BCB target is %d", target);
+#endif
 
 	debug(L"target=%d", target);
 	for (;;) {
