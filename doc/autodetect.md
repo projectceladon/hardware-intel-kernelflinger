@@ -36,4 +36,5 @@ which the key is the string: `<brand>/<product>/<device>`.
 
 Blobstore current support the following data type: device tree blob,
 OEMVARS (Cf. [Fastboot](./fastboot.md)) and Kernel command line
-parameters.  Kernelflinger is using the OEMVARS type only.
+parameters.  Kernelflinger does not make use of the device tree blob
+type.
