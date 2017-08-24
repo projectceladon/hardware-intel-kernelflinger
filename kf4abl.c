@@ -1014,7 +1014,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	debug(L"Before Check BCB target is %d", target);
 	bcb_target = check_bcb(&target_path, &oneshot);
 	debug(L"BCB target is %d", bcb_target);
-	if (bcb_target != NORMAL_BOOT)
+	if (bcb_target == RECOVERY)
 		target = bcb_target;
 	debug(L"After Check BCB target is %d", target);
 #endif
