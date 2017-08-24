@@ -72,8 +72,7 @@ static int decode_auth_attributes(const unsigned char **datap, long *sizep,
 
 	if (consume_sequence(datap, &seq_size) < 0)
 		return -1;
-
-#ifdef USER
+#ifndef BUILD_ANDROID_THINGS
 	if (decode_printable_string(datap, &seq_size, aa->target,
 				    sizeof(aa->target)))
 		return -1;

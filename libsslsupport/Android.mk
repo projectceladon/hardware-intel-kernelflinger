@@ -1,5 +1,7 @@
 LOCAL_PATH := $(call my-dir)
 
+KERNELFLINGER_SSLSUPPORT_PATH := $(LOCAL_PATH)
+
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := wrapper.c
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)
@@ -122,7 +124,7 @@ ifneq (,$(filter boringssl, $(KERNELFLINGER_SSL_LIBRARY)))
 include $(LOCAL_PATH)/sources.mk
 LOCAL_SRC_FILES := $(crypto_sources) $(linux_$(LOCAL_ARCH)_sources)
 ifeq ($(FIRST_BUILD_ID),O)
-LOCAL_CFLAGS += -I$(LOCAL_PATH)/../../hardware/intel/kernelflinger/libsslsupport/borningssl
+LOCAL_CFLAGS += -I$(KERNELFLINGER_SSLSUPPORT_PATH)/borningssl
 endif
 endif
 LOCAL_MODULE_TAGS := optional

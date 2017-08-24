@@ -98,6 +98,8 @@ SHARED_STATIC_LIBRARIES := \
 	libkernelflinger-$(TARGET_BUILD_VARIANT)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE := kernelflinger-$(TARGET_BUILD_VARIANT)
+
 
 # if dm-verity is disabled for eng purpose skip the oem-cert
 ifeq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY), true)
@@ -129,16 +131,57 @@ $(OEMCERT_OBJ): $(PADDED_VERITY_CERT)
                        --rename-section .data=.oemkeys $@ $@
 
 LOCAL_GENERATED_SOURCES := $(OEMCERT_OBJ)
-else
+else # PRODUCT_SUPPORTS_VERITY
 ifneq (,$(filter user userdebug, $(TARGET_BUILD_VARIANT)))
 
+ifeq ($(BOARD_AVB_ENABLE),false)
 fail_no_oem_cert:
 	$(error Trying to build kernelflinger-$(TARGET_BUILD_VARIANT)\
 without oem-cert, this is allowed only for eng builds)
 
 LOCAL_GENERATED_SOURCES := fail_no_oem_cert
+endif # BOARD_AVB_ENABLE
 endif
 endif # PRODUCT_SUPPORTS_VERITY
+
+ifeq ($(BOARD_AVB_ENABLE),true)
+kf_intermediates := $(call intermediates-dir-for,EFI,kernelflingeravb)
+
+AVB_PK := $(kf_intermediates)/avb_pk.bin
+PADDED_AVB_PK := $(kf_intermediates)/avb_pk.padded.bin
+AVB_PK_OBJ := $(kf_intermediates)/avb_pk.o
+ifndef BOARD_AVB_KEY_PATH
+BOOTLOADER_AVB_KEY_PATH := external/avb/test/data/testkey_rsa4096.pem
+else
+BOOTLOADER_AVB_KEY_PATH := $(BOARD_AVB_KEY_PATH)
+endif
+
+$(AVB_PK): $(BOOTLOADER_AVB_KEY_PATH) avbtool
+	avbtool extract_public_key --key $< --output $@
+
+$(PADDED_AVB_PK): $(AVB_PK)
+	$(call pad-binary, 4096)
+
+ifeq ($(TARGET_UEFI_ARCH),x86_64)
+    ELF_OUTPUT := elf64-x86-64
+else
+    ELF_OUTPUT := elf32-i386
+endif
+
+avb_sym_binary := $(shell echo _binary_$(PADDED_AVB_PK) | sed "s/[\/\.-]/_/g")
+$(AVB_PK_OBJ): $(PADDED_AVB_PK)
+	mkdir -p $(@D) && \
+	$(EFI_OBJCOPY) --input binary --output $(ELF_OUTPUT) --binary-architecture i386 $< $@ && \
+	$(EFI_OBJCOPY) --redefine-sym $(avb_sym_binary)_start=_binary_avb_pk_start \
+                       --redefine-sym $(avb_sym_binary)_end=_binary_avb_pk_end \
+                       --redefine-sym $(avb_sym_binary)_size=_binary_avb_pk_size \
+                       --rename-section .data=.oemkeys $@ $@
+
+LOCAL_GENERATED_SOURCES += $(AVB_PK_OBJ)
+LOCAL_C_INCLUDES := \
+	$(addprefix $(LOCAL_PATH)/,avb)
+endif  # BOARD_AVB_ENABLE
+
 
 LOCAL_SRC_FILES := \
 	kernelflinger.c
@@ -147,7 +190,7 @@ ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
 	ux.c
 endif
 
-LOCAL_STATIC_LIBRARIES += \
+LOCAL_STATIC_LIBRARIES := \
 	libfastboot-$(TARGET_BUILD_VARIANT) \
 	libefiusb-$(TARGET_BUILD_VARIANT) \
 	libefitcp-$(TARGET_BUILD_VARIANT) \
@@ -160,15 +203,27 @@ ifneq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_SRC_FILES += unittest.c
 endif
 
-LOCAL_MODULE := kernelflinger-$(TARGET_BUILD_VARIANT)
 LOCAL_CFLAGS := $(SHARED_CFLAGS)
+
 ifeq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY), true)
 LOCAL_OBJCOPY_FLAGS := -j .oemkeys
 endif
+
+ifeq ($(BOARD_AVB_ENABLE), true)
+LOCAL_OBJCOPY_FLAGS := -j .oemkeys
+endif
+
 LOCAL_STATIC_LIBRARIES += $(SHARED_STATIC_LIBRARIES)
 LOCAL_MODULE_STEM := kernelflinger
 
-include $(BUILD_EFI_EXECUTABLE)
+ifeq ($(BOARD_AVB_ENABLE),true)
+LOCAL_SRC_FILES += avb_init.c
+LOCAL_STATIC_LIBRARIES += libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
+endif
+
+include $(BUILD_EFI_EXECUTABLE)  # For kernelflinger-$(TARGET_BUILD_VARIANT)
+
+
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := installer-$(TARGET_BUILD_VARIANT)
@@ -181,16 +236,58 @@ LOCAL_SRC_FILES := installer.c
 LOCAL_MODULE_STEM := installer
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,libfastboot)
-include $(BUILD_EFI_EXECUTABLE)
+
+ifeq ($(BOARD_AVB_ENABLE),true)
+kfins_intermediates := $(call intermediates-dir-for,EFI,kernelflingerins)
+
+KFINS_AVB_PK := $(kfins_intermediates)/avb_pk.bin
+KFINS_PADDED_AVB_PK := $(kfins_intermediates)/avb_pk.padded.bin
+KFINS_AVB_PK_OBJ := $(kfins_intermediates)/avb_pk.o
+ifndef BOARD_AVB_KEY_PATH
+BOOTLOADER_AVB_KEY_PATH := external/avb/test/data/testkey_rsa4096.pem
+else
+BOOTLOADER_AVB_KEY_PATH := $(BOARD_AVB_KEY_PATH)
+endif
+
+$(KFINS_AVB_PK): $(BOOTLOADER_AVB_KEY_PATH) avbtool
+	avbtool extract_public_key --key $< --output $@
+
+$(KFINS_PADDED_AVB_PK): $(KFINS_AVB_PK)
+	$(call pad-binary, 4096)
+
+ifeq ($(TARGET_UEFI_ARCH),x86_64)
+    ELF_OUTPUT := elf64-x86-64
+else
+    ELF_OUTPUT := elf32-i386
+endif
+
+kfins_avb_sym_binary := $(shell echo _binary_$(KFINS_PADDED_AVB_PK) | sed "s/[\/\.-]/_/g")
+$(KFINS_AVB_PK_OBJ): $(KFINS_PADDED_AVB_PK)
+	mkdir -p $(@D) && \
+	$(EFI_OBJCOPY) --input binary --output $(ELF_OUTPUT) --binary-architecture i386 $< $@ && \
+	$(EFI_OBJCOPY) --redefine-sym $(kfins_avb_sym_binary)_start=_binary_avb_pk_start \
+                       --redefine-sym $(kfins_avb_sym_binary)_end=_binary_avb_pk_end \
+                       --redefine-sym $(kfins_avb_sym_binary)_size=_binary_avb_pk_size \
+                       --rename-section .data=.oemkeys $@ $@
+
+LOCAL_GENERATED_SOURCES += $(KFINS_AVB_PK_OBJ)
+LOCAL_SRC_FILES += avb_init.c
+LOCAL_C_INCLUDES += $(addprefix $(LOCAL_PATH)/,avb)
+LOCAL_STATIC_LIBRARIES += libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
+endif  # BOARD_AVB_ENABLE
+
+include $(BUILD_EFI_EXECUTABLE) # For installer-$(TARGET_BUILD_VARIANT)
+
+
+
+ifeq ($(KERNELFLINGER_SUPPORT_ABL_BOOT),true)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := kf4abl-$(TARGET_BUILD_VARIANT)
 LOCAL_MODULE_STEM := kf4abl
 LOCAL_CFLAGS := $(SHARED_CFLAGS)
 
-ifeq ($(KERNELFLINGER_SUPPORT_ABL_BOOT),true)
-    LOCAL_CFLAGS += -D__SUPPORT_ABL_BOOT
-endif
+LOCAL_CFLAGS += -D__SUPPORT_ABL_BOOT
 
 ifeq ($(KERNELFLINGER_DISABLE_DEBUG_PRINT),true)
     LOCAL_CFLAGS += -D__DISABLE_DEBUG_PRINT
@@ -216,11 +313,6 @@ ifneq ($(TARGET_BUILD_VARIANT),user)
 endif
 LOCAL_SRC_FILES := \
 	kf4abl.c
-
-ifeq ($(BOARD_AVB_ENABLE),true)
-LOCAL_SRC_FILES += \
-	avb_init.c
-endif
 
 ifeq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY),true)
 keys4abl_intermediates := $(call intermediates-dir-for,ABL,keys)
@@ -251,7 +343,7 @@ $(ABL_OEMCERT_OBJ): $(ABL_PADDED_VERITY_CERT)
                        --rename-section .data=.oemkeys $@ $@
 
 LOCAL_GENERATED_SOURCES := $(ABL_OEMCERT_OBJ)
-endif
+endif #.PRODUCT_SUPPORTS_VERITY == true
 
 ifeq ($(BOARD_AVB_ENABLE),true)
 keys4abl_intermediates := $(call intermediates-dir-for,ABL,keys4abl)
@@ -289,6 +381,9 @@ $(ABL_AVB_PK_OBJ): $(ABL_PADDED_AVB_PK)
 LOCAL_GENERATED_SOURCES += $(ABL_AVB_PK_OBJ)
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,avb)
+
+LOCAL_SRC_FILES += avb_init.c
+
 endif
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,libkernelflinger)
@@ -299,10 +394,7 @@ LOCAL_MODULE := fb4abl-$(TARGET_BUILD_VARIANT)
 LOCAL_MODULE_STEM := fb4abl
 LOCAL_CFLAGS := $(SHARED_CFLAGS)
 
-ifeq ($(KERNELFLINGER_SUPPORT_ABL_BOOT),true)
-    LOCAL_CFLAGS += -D__SUPPORT_ABL_BOOT
-endif
-
+LOCAL_CFLAGS += -D__SUPPORT_ABL_BOOT
 LOCAL_CFLAGS += -D__FORCE_FASTBOOT
 
 LOCAL_STATIC_LIBRARIES += \
@@ -343,3 +435,4 @@ LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,libkernelflinger)
 include $(BUILD_ABL_EXECUTABLE)
 
+endif  #KERNELFLINGER_SUPPORT_ABL_BOOT
