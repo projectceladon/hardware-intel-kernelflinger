@@ -1628,6 +1628,7 @@ void cmdline_add_item (CHAR8 *cmd_buf, UINTN max_cmd_size, const CHAR8 *item, co
 #ifdef USE_AVB
 #ifdef USE_SLOT
 #define AVB_ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init "
+#define DISABLE_AVB_ROOTFS_PREFIX L" root="
 static EFI_STATUS avb_prepend_command_line_rootfs(CHAR16 **cmdline16)
 {
         EFI_STATUS ret;
@@ -1664,6 +1665,7 @@ static EFI_STATUS setup_command_line_abl(
         char   *serialno = NULL;
         CHAR16 *serialport = NULL;
         CHAR16 *bootreason = NULL;
+        EFI_GUID system_uuid;
 #endif
 #endif
         UINTN abl_cmd_len = 0;
@@ -1770,6 +1772,25 @@ static EFI_STATUS setup_command_line_abl(
                 goto out;
 
 #endif
+
+#ifdef USE_AVB
+#ifdef USE_SLOT
+        if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root="))) {
+                ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
+                                                        &system_uuid, LOGICAL_UNIT_USER);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
+                        goto out;
+                }
+
+                ret = prepend_command_line(&cmdline16, DISABLE_AVB_ROOTFS_PREFIX "PARTUUID=%g",
+                                           &system_uuid);
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+#endif
+#endif
+
         cmdlen = StrLen(cmdline16);
 #ifdef USE_AVB
         avb_cmd_len = strlen((const CHAR8 *)slot_data->cmdline);
