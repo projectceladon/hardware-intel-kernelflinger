@@ -838,8 +838,8 @@ static void cmd_set_active(INTN argc, CHAR8 **argv)
 	if (EFI_ERROR(ret))
 		fastboot_fail("Failed to set %a slot as active: %r",
 			      argv[1], ret);
-
-	fastboot_okay("");
+	else
+		fastboot_okay("");
 }
 
 static struct fastboot_cmd *get_cmd(cmdlist_t list, const char *name)
