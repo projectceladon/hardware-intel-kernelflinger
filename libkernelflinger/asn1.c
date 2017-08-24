@@ -122,7 +122,10 @@ int decode_object(const unsigned char **datap, long *sizep,
 	return 0;
 }
 
-#ifdef USER
+#ifndef BUILD_ANDROID_THINGS
+// TODO: M_d2i_ASN1_PRINTABLESTRING() is not exist in the borningssl used by Android Things,
+// also not exist in the newest borningssl.
+// Need to rewrite the function with newest borningssl.
 int decode_printable_string(const unsigned char **datap, long *sizep,
 		char *buf, size_t buf_sz)
 {

@@ -25,7 +25,7 @@ int decode_octet_string(const unsigned char **datap, long *sizep,
 
 int decode_object(const unsigned char **datap, long *sizep,
 		int *nid);
-#ifdef USER
+#ifndef BUILD_ANDROID_THINGS
 int decode_printable_string(const unsigned char **datap, long *sizep,
 		char *buf, size_t buf_sz);
 #endif
