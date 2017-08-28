@@ -53,12 +53,7 @@
 #include "libavb/libavb.h"
 #include "libavb/uefi_avb_ops.h"
 
-#define BOOT_A_LABEL		L"boot_a"
-#define BOOT_B_LABEL		L"boot_b"
-#define SYSTEM_A_LABEL		L"system_a"
-#define SYSTEM_B_LABEL		L"system_b"
-#define VENDOR_A_LABEL		L"vendor_a"
-#define VENDOR_B_LABEL		L"vendor_b"
+#define VBMETA_LABEL		L"vbmeta"
 #endif
 #define OFF_MODE_CHARGE		"off-mode-charge"
 #define CRASH_EVENT_MENU	"crash-event-menu"
@@ -202,12 +197,7 @@ static struct oem_hash {
 	EFI_STATUS (*hash)(const CHAR16 *name);
 	BOOLEAN fail_if_missing;
 } OEM_HASH[] = {
-#ifdef USE_SLOT
-	{ BOOT_A_LABEL,		get_boot_image_hash,	TRUE },
-	{ BOOT_B_LABEL,		get_boot_image_hash,	TRUE },
-#else
 	{ BOOT_LABEL,		get_boot_image_hash,	TRUE },
-#endif
 	{ RECOVERY_LABEL,	get_boot_image_hash,	FALSE },
 #ifdef USE_TRUSTY
 #ifdef USE_MULTIBOOT
@@ -217,15 +207,10 @@ static struct oem_hash {
 #endif
 	{ BOOTLOADER_LABEL,	get_bootloader_hash,	FALSE },
 #ifdef USE_SLOT
-	{ SYSTEM_A_LABEL,		get_fs_hash,		TRUE },
-	{ SYSTEM_B_LABEL,		get_fs_hash,		TRUE },
-	{ VENDOR_A_LABEL,		get_fs_hash,		FALSE },
-	{ VENDOR_B_LABEL,		get_fs_hash,		FALSE }
-
-#else
+	{ VBMETA_LABEL,		get_boot_image_hash,	FALSE },
+#endif
 	{ SYSTEM_LABEL,		get_fs_hash,		TRUE },
 	{ VENDOR_LABEL,		get_fs_hash,		FALSE }
-#endif
 };
 
 static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)
