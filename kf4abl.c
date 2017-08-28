@@ -856,11 +856,10 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 #endif
 
-#ifndef USE_SLOT
 	if (boot_state == BOOT_STATE_GREEN) {
 		avb_update_stored_rollback_indexes_for_slot(ops, slot_data);
 	}
-#endif
+
 	ret = start_boot_image(bootimage, boot_state, boot_target, slot_data, abl_cmd_line);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to start boot image");
