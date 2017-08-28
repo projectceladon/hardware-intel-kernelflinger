@@ -89,7 +89,7 @@ static const CHAR16 *label_with_suffix(const CHAR16 *label, const char *suffix)
 	return res_label;
 }
 
-static UINTN get_part_nb_slot(const CHAR16 *label)
+UINTN get_part_nb_slot(const CHAR16 *label)
 {
 	EFI_STATUS ret;
 	UINTN i;
@@ -293,12 +293,21 @@ BOOLEAN use_slot(void)
 const CHAR16 *slot_label(const CHAR16 *base)
 {
 	const CHAR16 *label;
+	UINTN nb_slot;
 
 	if (!use_slot())
 		return base;
 
 	if (!base || !cur_suffix)
 		return NULL;
+
+	nb_slot = get_part_nb_slot(base);
+	if (!nb_slot) {
+		/*
+		 * Current partition scheme does not have slots.
+		 */
+		return base;
+	}
 
 	label = label_with_suffix(base, cur_suffix);
 
