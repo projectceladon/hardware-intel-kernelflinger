@@ -211,7 +211,7 @@ EFI_STATUS get_emmc_partition_num(EFI_SD_HOST_IO_PROTOCOL *sdio,
 	if (!sdio || !current_part)
 		return EFI_INVALID_PARAMETER;
 
-	ret = alloc_aligned(&rawbuffer, (void **)&ext_csd, sizeof(*ext_csd), 8);
+	ret = alloc_aligned(&rawbuffer, (void **)&ext_csd, sizeof(*ext_csd), sdio->HostCapability.BoundarySize);
 	if (EFI_ERROR(ret))
 		return ret;
 
