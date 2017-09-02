@@ -60,6 +60,12 @@ LOCAL_STATIC_LIBRARIES := \
 	libefitcp-$(TARGET_BUILD_VARIANT) \
 	libtransport-$(TARGET_BUILD_VARIANT) \
 	libkernelflinger-$(TARGET_BUILD_VARIANT)
+
+ifeq ($(KERNELFLINGER_USE_IPP_SHA256),true)
+    LOCAL_CFLAGS += -DUSE_IPP_SHA256
+    LOCAL_CFLAGS += -msse4 -msha
+endif
+
 LOCAL_SRC_FILES := \
     libavb/avb_chain_partition_descriptor.c \
     libavb/avb_crc32.c \
@@ -71,7 +77,6 @@ LOCAL_SRC_FILES := \
     libavb/avb_kernel_cmdline_descriptor.c \
     libavb/avb_property_descriptor.c \
     libavb/avb_rsa.c \
-    libavb/avb_sha256.c \
     libavb/avb_sha512.c \
     libavb/avb_slot_verify.c \
     libavb/uefi_avb_sysdeps.c \
@@ -80,6 +85,14 @@ LOCAL_SRC_FILES := \
     libavb/avb_util.c \
     libavb/avb_vbmeta_image.c \
     libavb_ab/avb_ab_flow.c
+
+ifeq ($(KERNELFLINGER_USE_IPP_SHA256),true)
+LOCAL_SRC_FILES += \
+    libavb/avb_sha256_ipps.c
+else
+LOCAL_SRC_FILES += \
+    libavb/avb_sha256.c
+endif
 
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,../libkernelflinger)
