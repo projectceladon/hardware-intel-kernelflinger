@@ -37,6 +37,11 @@
 #define TIMESTAMP_MAX 3
 unsigned bt_stamp[TIMESTAMP_MAX];
 
+enum TM_POINT {
+	TM_EFI_MAIN = 0,
+	TM_JMP_KERNEL = TIMESTAMP_MAX - 1
+};
+
 unsigned boottime_in_msec(void);
 void set_boottime_stamp(int num);
 void format_stages_boottime(CHAR16 *time_str);
