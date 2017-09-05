@@ -314,6 +314,25 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	if (EFI_ERROR(ret))
 		return FASTBOOT;
 
+#ifdef KERNELFLINGER_BUILD_FOR_SLIMBOOT
+	if(argc <= 0)
+	{
+		CHAR8 *def_cmdline = (CHAR8 *)"androidboot.serialno=0123456789ABCDEFGHIJ" \
+				" g_ffs.iSerialNumber=0123456789ABCDEFGHIJ" \
+				" androidboot.diskbus=1A.0" \
+				" androidboot.bootreason=not_applicable" \
+				" pci=nocrs" \
+				" nowatchdog" \
+				" androidboot.bootloader=slimboot_android_payload-07_03-userdebug" \
+				" gpt";
+
+		strcpy(cmd_buf, def_cmdline);
+
+		log(L"KERNELFLINGER_BUILD_FOR_SLIMBOOT: argc == %d, default parameters added !\n", argc);
+		return NORMAL_BOOT;
+	}
+#endif
+
 	cmd_buf[0] = 0;
 	secureboot_str_len = strlen((CHAR8 *)secureboot_str);
 	bootmode_info_str_len = strlen((CHAR8 *)bootmode_info_str);
