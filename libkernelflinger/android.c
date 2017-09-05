@@ -1838,7 +1838,7 @@ static EFI_STATUS setup_command_line_abl(
         cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.verifiedbootstate", boot_str8);
 
         /* append stages boottime */
-        set_boottime_stamp(1);
+        set_boottime_stamp(TM_JMP_KERNEL);
         format_stages_boottime(time_str16);
         str_to_stra(boot_str8, time_str16, StrLen(time_str16) + 1);
         cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.boottime", boot_str8);

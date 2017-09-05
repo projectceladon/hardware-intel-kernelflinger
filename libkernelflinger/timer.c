@@ -109,27 +109,30 @@ void set_boottime_stamp(int num)
 
 void format_stages_boottime(CHAR16 *time_str)
 {
-	CHAR16 *bt_prop;
 	CHAR8 time_str8[64] = "";
-	CHAR16 *str;
+	CHAR16 *str = NULL;
 
 	if (!time_str)
 		return;
 
-	bt_prop = time_str;
-	StrCat(bt_prop, BOOT_SATGE_FIRMWARE);
-	StrCat(bt_prop, L":");
-	itoa(bt_stamp[0], time_str8, 10);
+	StrCat(time_str, BOOT_SATGE_FIRMWARE);
+	StrCat(time_str, L":");
+	itoa(bt_stamp[TM_EFI_MAIN], time_str8, 10);
 	str = stra_to_str(time_str8);
-	if (!str)
+	if (str == NULL)
 		return;
-	StrCat(bt_prop, str);
-	StrCat(bt_prop, L",");
 
-	StrCat(bt_prop, BOOT_SATGE_OSLOADER);
-	StrCat(bt_prop, L":");
-	itoa(bt_stamp[1] - bt_stamp[0], time_str8, 10);
-	StrCat(bt_prop, str);
+	StrCat(time_str, str);
+	FreePool(str);
+	StrCat(time_str, L",");
 
-	StrCpy(time_str, bt_prop);
+	StrCat(time_str, BOOT_SATGE_OSLOADER);
+	StrCat(time_str, L":");
+	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_EFI_MAIN], time_str8, 10);
+	str = stra_to_str(time_str8);
+	if (str == NULL)
+		return;
+
+	StrCat(time_str, str);
+	FreePool(str);
 }

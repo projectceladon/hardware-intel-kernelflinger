@@ -913,7 +913,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	enum boot_target bcb_target;
 #endif
 
-	set_boottime_stamp(0);
+	set_boottime_stamp(TM_EFI_MAIN);
 	InitializeLib(image, sys_table);
 	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
 
