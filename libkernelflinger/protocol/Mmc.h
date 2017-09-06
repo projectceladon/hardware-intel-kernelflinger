@@ -340,7 +340,17 @@ typedef struct {
 #define  Dis_STATE               8
 #define  Btst_STATE              9
 
-
+#ifndef MSG_EMMC_DP
+/**
+ * EMMC Device Path SubType.
+ * UEFI 2.0 specification version 2.7 § 10.3.5.28.
+ */
+#define MSG_EMMC_DP 29
+typedef struct _EMMC_DEVICE_PATH {
+    EFI_DEVICE_PATH Header;
+    UINT8 SlotNum;
+} EMMC_DEVICE_PATH;
+#endif
 
 #pragma pack()
 #endif
