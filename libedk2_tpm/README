@@ -1,0 +1,8 @@
+EDK2 Functionality
+
+We use the edk2 library for creating and managing the TPM
+entities in kernelflinger. The necessary TPM functions are
+ported to kernelflinger/edk2. The Tcg2 protocol headers are
+ported to edk2/include.
+
+Github link : https://github.com/tianocore/edk2
