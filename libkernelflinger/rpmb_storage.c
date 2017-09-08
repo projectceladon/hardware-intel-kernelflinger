@@ -42,6 +42,7 @@
 #include "storage.h"
 #include "rpmb.h"
 #include "rpmb_storage.h"
+#include "security.h"
 
 #define RPMB_DEVICE_STATE_BLOCK_COUNT            1
 #define RPMB_DEVICE_STATE_BLOCK_ADDR             2
@@ -50,6 +51,7 @@
 #define RPMB_ROLLBACK_INDEX_BLOCK_TOTAL_COUNT    8
 #define RPMB_ROLLBACK_INDEX_BLOCK_ADDR           3
 #define DEVICE_STATE_MAGIC 0xDC
+#define RPMB_ALL_BLOCK_TOTAL_COUNT        10
 
 static rpmb_storage_t rpmb_ops;
 static UINT8 rpmb_key[RPMB_KEY_SIZE + 1] = "12345ABCDEF1234512345ABCDEF12345";
@@ -90,6 +92,35 @@ void set_rpmb_key(UINT8 *key)
 {
 	memcpy(rpmb_key, key, RPMB_KEY_SIZE);
 }
+
+#ifndef USER
+EFI_STATUS erase_rpmb_all_blocks(void)
+{
+	EFI_STATUS ret;
+	RPMB_RESPONSE_RESULT rpmb_result;
+	BOOLEAN sbflags;
+
+#ifndef __SUPPORT_ABL_BOOT
+	sbflags = is_efi_secure_boot_enabled();
+#else
+	sbflags = is_abl_secure_boot_enabled();
+#endif
+
+	if (sbflags) {
+		ret = emmc_write_rpmb_data(NULL, RPMB_ALL_BLOCK_TOTAL_COUNT, 0, rpmb_buffer, rpmb_key, &rpmb_result);
+		debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to erase whole rpmb partition");
+			return ret;
+		}
+	} else {
+		error(L"Not support erase physical RPMB on non-fused board.");
+		return EFI_UNSUPPORTED;
+	}
+
+	return EFI_SUCCESS;
+}
+#endif
 
 BOOLEAN is_rpmb_programed(void)
 {
