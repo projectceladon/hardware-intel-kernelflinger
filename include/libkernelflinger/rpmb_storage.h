@@ -49,6 +49,7 @@ void rpmb_storage_init(BOOLEAN real);
 
 void clear_rpmb_key(void);
 void set_rpmb_key(UINT8 *key);
+EFI_STATUS erase_rpmb_all_blocks(void);
 EFI_STATUS derive_rpmb_key(UINT8 *out_key);
 
 BOOLEAN is_rpmb_programed(void);
