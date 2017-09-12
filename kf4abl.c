@@ -351,13 +351,15 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			}
 
 			/* Parse "ABL.boot_target=xxxx" */
-			if ((arglen > bootmode_info_str_len) &&
+			if ((arglen > boot_target_str_len) &&
 				!strncmp(arg8, boot_target_str, boot_target_str_len)) {
 				nptr = (CHAR8 *)(arg8 + boot_target_str_len);
 				/* Only handle CRASHMODE case, other mode should be decided by "ABL.boot". */
 				if (!strcmp(nptr, (CHAR8 *)"CRASHMODE")) {
 					target = CRASHMODE;
 					break;
+				} else {
+					continue;
 				}
 			} else
 			/* Parse "ABL.boot=xx" */
@@ -366,9 +368,6 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				nptr = (CHAR8 *)(arg8 + bootmode_info_str_len);
 				bootMode._bits = (UINT16)strtoul((char *)nptr, 0, 16);
 				target = bootMode.target;
-				/* Continue pass "ABL.boot" to kernel command line. */
-				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
-				cmd_len += arglen;
 			} else
 #ifdef USE_TRUSTY
 			/* Parse "trusty.param_addr=xxxxx" */
@@ -379,6 +378,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				num = strtoul((char *)nptr, 0, 16);
 				debug(L"Parsed trusty param addr is 0x%x", num);
 				p_trusty_boot_params = (trusty_boot_params_t *)num;
+				continue;
 			} else
 #endif
 			/* Parse "ABL.secureboot=x" */
@@ -389,10 +389,10 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				ret = set_abl_secure_boot(val);
 				if (EFI_ERROR(ret))
 					efi_perror(ret, L"Failed to set secure boot");
-			} else {
-				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
-				cmd_len += arglen;
 			}
+
+			strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
+			cmd_len += arglen;
 		}
 	}
 
