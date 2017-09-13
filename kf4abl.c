@@ -626,67 +626,6 @@ static UINT8 validate_bootimage(
 #endif
 
 #ifdef USE_AVB
-static EFI_STATUS get_avb_result(
-		IN AvbSlotVerifyData *slot_data,
-		IN bool allow_verification_error,
-		IN AvbSlotVerifyResult verify_result,
-		OUT UINT8 *boot_state)
-{
-	AvbPartitionData *boot;
-	const struct boot_img_hdr *header;
-
-	if (!slot_data || !boot_state)
-		return EFI_INVALID_PARAMETER;
-
-	if (slot_data->num_loaded_partitions != 1) {
-		avb_error("No avb partition.\n");
-		return EFI_LOAD_ERROR;
-	}
-
-	boot = &slot_data->loaded_partitions[0];
-	header = (const struct boot_img_hdr *)boot->data;
-	/* Check boot image header magic field. */
-	if (avb_memcmp(BOOT_MAGIC, header->magic, BOOT_MAGIC_SIZE)) {
-		avb_error("Wrong image header magic.\n");
-		return EFI_NOT_FOUND;
-	}
-	avb_debug("Image read success\n");
-
-	switch (verify_result) {
-	case AVB_SLOT_VERIFY_RESULT_OK:
-		if (allow_verification_error) {
-			*boot_state = BOOT_STATE_ORANGE;
-		} else {
-			*boot_state = BOOT_STATE_GREEN;
-		}
-		break;
-
-	case AVB_SLOT_VERIFY_RESULT_ERROR_VERIFICATION:
-	case AVB_SLOT_VERIFY_RESULT_ERROR_ROLLBACK_INDEX:
-	case AVB_SLOT_VERIFY_RESULT_ERROR_PUBLIC_KEY_REJECTED:
-		if (allow_verification_error) {
-		/* Do nothing since we allow this. */
-			avb_debugv("Allow avb verified with result ",
-			avb_slot_verify_result_to_string(verify_result),
-			" because |allow_verification_error| is true.\n",
-			NULL);
-			*boot_state = BOOT_STATE_ORANGE;
-		} else {
-			*boot_state = BOOT_STATE_RED;
-		}
-		break;
-	default:
-		if (allow_verification_error) {
-			*boot_state = BOOT_STATE_ORANGE;
-		} else {
-			*boot_state = BOOT_STATE_RED;
-		}
-		break;
-	}
-
-	return EFI_SUCCESS;
-}
-
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
 	AvbOps *ops;

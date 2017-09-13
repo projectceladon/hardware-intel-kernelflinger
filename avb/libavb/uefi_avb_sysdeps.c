@@ -49,20 +49,11 @@ void* avb_memset(void* dest, const int c, size_t n) {
 }
 
 void avb_print(const char* message) {
-  size_t utf8_num_bytes = avb_strlen(message) + 1;
-  size_t max_ucs2_bytes = utf8_num_bytes * 2;
-  uint16_t* message_ucs2 = (uint16_t*)avb_calloc(max_ucs2_bytes);
-  if (message_ucs2 == NULL) {
-    return;
+  CHAR16* p = stra_to_str(message);
+  if (p != NULL) {
+    log(L"%s", p);
+    FreePool(p);
   }
-  if (uefi_avb_utf8_to_ucs2((const uint8_t*)message,
-                            utf8_num_bytes,
-                            message_ucs2,
-                            max_ucs2_bytes,
-                            NULL)) {
-    Print(message_ucs2);
-  }
-  avb_free(message_ucs2);
 }
 
 void avb_printv(const char* message, ...) {

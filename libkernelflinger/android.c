@@ -52,6 +52,9 @@
 #include "slot.h"
 #include "pae.h"
 #include "timer.h"
+#ifdef USE_AVB
+#include "avb_init.h"
+#endif
 
 #define OS_INITIATED L"os_initiated"
 
@@ -901,8 +904,8 @@ static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_c
                 return ret;
         }
 
-        if (!verity_cert) {
-#ifdef USERDEBUG
+        if (!verity_cert) {  // if defined (USE_AVB), the verity_cert should == NULL
+#if defined(USERDEBUG) && !defined(USE_AVB)
                 error(L"Cannot boot without a verity certificate");
                 return EFI_INVALID_PARAMETER;
 #else
@@ -1379,6 +1382,127 @@ out_free:
         return ret;
 }
 
+#ifdef USE_AVB
+EFI_STATUS get_avb_result(
+                IN AvbSlotVerifyData *slot_data,
+                IN bool allow_verification_error,
+                IN AvbSlotVerifyResult verify_result,
+                IN OUT UINT8 *boot_state)
+{
+        AvbPartitionData *boot;
+        const struct boot_img_hdr *header;
+
+        if (!slot_data || !boot_state)
+                return EFI_INVALID_PARAMETER;
+
+        if (slot_data->num_loaded_partitions != 1) {
+                avb_error("No avb partition.\n");
+                return EFI_LOAD_ERROR;
+        }
+
+        boot = &slot_data->loaded_partitions[0];
+        header = (const struct boot_img_hdr *)boot->data;
+        /* Check boot image header magic field. */
+        if (avb_memcmp(BOOT_MAGIC, header->magic, BOOT_MAGIC_SIZE)) {
+                avb_error("Wrong image header magic.\n");
+                return EFI_NOT_FOUND;
+        }
+        avb_debug("Image read success\n");
+
+        switch (verify_result) {
+        case AVB_SLOT_VERIFY_RESULT_OK:
+                if (allow_verification_error && *boot_state < BOOT_STATE_ORANGE)
+                        *boot_state = BOOT_STATE_ORANGE;
+                break;
+
+        case AVB_SLOT_VERIFY_RESULT_ERROR_VERIFICATION:
+        case AVB_SLOT_VERIFY_RESULT_ERROR_ROLLBACK_INDEX:
+        case AVB_SLOT_VERIFY_RESULT_ERROR_PUBLIC_KEY_REJECTED:
+                if (allow_verification_error && *boot_state <= BOOT_STATE_ORANGE) {
+                /* Do nothing since we allow this. */
+                        avb_debugv("Allow avb verified with result ",
+                        avb_slot_verify_result_to_string(verify_result),
+                        " because |allow_verification_error| is true.\n",
+                        NULL);
+                        *boot_state = BOOT_STATE_ORANGE;
+                } else
+                        *boot_state = BOOT_STATE_RED;
+                break;
+        default:
+                if (allow_verification_error && *boot_state <= BOOT_STATE_ORANGE)
+                        *boot_state = BOOT_STATE_ORANGE;
+                else
+                        *boot_state = BOOT_STATE_RED;
+                break;
+        }
+
+        return EFI_SUCCESS;
+}
+
+
+EFI_STATUS android_image_load_partition_avb(
+                IN const char *label,
+                OUT VOID **bootimage_p,
+                IN OUT UINT8* boot_state)
+{
+        EFI_STATUS ret = EFI_SUCCESS;
+        AvbOps *ops;
+        const char *slot_suffix = "";
+        AvbPartitionData *boot;
+        AvbSlotVerifyData *slot_data;
+        AvbSlotVerifyResult verify_result = 0;
+        AvbSlotVerifyFlags flags;
+        const char *requested_partitions[] = {label, NULL};
+        VOID *bootimage = NULL;
+        bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
+        *bootimage_p = NULL;
+
+        ops = avb_init();
+        if (! ops) {
+                ret = EFI_OUT_OF_RESOURCES;
+                goto fail;
+        }
+
+#ifdef USE_SLOT
+        slot_suffix = slot_get_active();
+        if (!slot_suffix) {
+                error(L"suffix is null");
+                slot_suffix = "";
+        }
+#endif
+
+        flags = AVB_SLOT_VERIFY_FLAGS_NONE;
+        if (allow_verification_error)
+                flags |= AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR;
+
+        verify_result = avb_slot_verify(ops,
+                        requested_partitions,
+                        slot_suffix,
+                        flags,
+                        AVB_HASHTREE_ERROR_MODE_RESTART,
+                        &slot_data);
+
+        debug(L"avb_slot_verify ret %d\n", verify_result);
+
+        ret = get_avb_result(slot_data,
+                        allow_verification_error,
+                        verify_result,
+                        boot_state);
+
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to get avb result for boot");
+                goto fail;
+        }
+
+        boot = &slot_data->loaded_partitions[0];
+        bootimage = boot->data;
+        *bootimage_p = bootimage;
+        return ret;
+fail:
+        *boot_state = BOOT_STATE_RED;
+        return ret;
+}
+#endif // USE_AVB
 
 EFI_STATUS android_image_start_buffer(
                 IN EFI_HANDLE parent_image,
