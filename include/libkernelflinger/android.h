@@ -278,6 +278,18 @@ EFI_STATUS android_image_load_file(
                 IN CHAR16 *loader,
                 IN BOOLEAN delete,
                 OUT VOID **bootimage_p);
+#ifdef USE_AVB
+EFI_STATUS android_image_load_partition_avb(
+                IN const char *label,
+                OUT VOID **bootimage_p,
+                UINT8* boot_state);
+
+EFI_STATUS get_avb_result(
+                IN AvbSlotVerifyData *slot_data,
+                IN bool allow_verification_error,
+                IN AvbSlotVerifyResult verify_result,
+                IN OUT UINT8 *boot_state);
+#endif
 
 EFI_STATUS read_bcb(
                 IN const CHAR16 *label,

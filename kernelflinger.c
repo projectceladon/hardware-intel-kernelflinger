@@ -595,6 +595,79 @@ out:
         return ret;
 }
 
+#ifdef USE_AVB
+/* Use AVB load and verify a boot image into RAM.
+ *
+ * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
+ *                and ESP_BOOTIMAGE (for 'fastboot boot')
+ * target_path  - Path to load boot image from for ESP_BOOTIMAGE case, ignored
+ *                otherwise.
+ * bootimage    - Returned allocated pointer value for the loaded boot image.
+ * oneshot      - For ESP_BOOTIMAGE case, flag indicating that the image should
+ *                be deleted.
+ * boot_state   - The boot state, maybe changed according the load and verify result.
+ *
+ * Return values:
+ * EFI_INVALID_PARAMETER - Unsupported boot target type, key is not well-formed,
+ *                         or loaded boot image was missing or corrupt
+ * EFI_ACCESS_DENIED     - Validation failed against OEM or embedded certificate,
+ *                         boot image still usable
+ */
+static EFI_STATUS avb_load_verify_boot_image(
+                IN enum boot_target boot_target,
+                IN CHAR16 *target_path,
+                OUT VOID **bootimage,
+                IN BOOLEAN oneshot,
+                UINT8* boot_state)
+{
+        EFI_STATUS ret;
+
+        switch (boot_target) {
+        case NORMAL_BOOT:
+        case CHARGER:
+                ret = EFI_NOT_FOUND;
+                if (use_slot() && !slot_get_active())
+                        break;
+                do {
+                        ret = android_image_load_partition_avb("boot", bootimage, boot_state);
+                        if (EFI_ERROR(ret)) {
+                                efi_perror(ret, L"Failed to load boot image from boot partition");
+                                if (use_slot())
+                                        slot_boot_failed(boot_target);
+                        }
+                } while (EFI_ERROR(ret) && slot_get_active());
+                break;
+        case RECOVERY:
+                if (recovery_in_boot_partition()) {
+                        ret = avb_load_verify_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot, boot_state);
+                        break;
+                }
+#if !defined(USE_AVB) || !defined(USE_SLOT)
+                if (use_slot() && !slot_recovery_tries_remaining()) {
+                        ret = EFI_NOT_FOUND;
+                        break;
+                }
+#endif
+                ret = android_image_load_partition_avb("recovery", bootimage, boot_state);
+                break;
+        case ESP_BOOTIMAGE:
+                /* "fastboot boot" case */
+                ret = android_image_load_file(g_disk_device, target_path, oneshot,
+                        bootimage);
+                break;
+        default:
+                *bootimage = NULL;
+                return EFI_INVALID_PARAMETER;
+        }
+
+        if (!EFI_ERROR(ret))
+                debug(L"boot image loaded");
+
+        return ret;
+}
+
+#else  // USE_AVB == false
+
 /* Validate an image.
  *
  * Parameters:
@@ -729,7 +802,7 @@ static EFI_STATUS load_boot_image(
 
         return ret;
 }
-
+#endif
 
 /* Chainload another EFI application on the ESP with the specified path,
  * optionally deleting the file before entering */
@@ -1148,7 +1221,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         BOOLEAN lock_prompted = FALSE;
         enum boot_target boot_target = NORMAL_BOOT;
         UINT8 boot_state = BOOT_STATE_GREEN;
+#ifndef USE_AVB
         UINT8 *hash = NULL;
+#endif
         X509 *verifier_cert = NULL;
         CHAR16 *name = NULL;
         EFI_RESET_TYPE resetType;
@@ -1310,6 +1385,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 boot_error(DEVICE_UNLOCKED_CODE, boot_state, NULL, 0);
 
         debug(L"Loading boot image");
+
+#ifdef USE_AVB
+        ret = avb_load_verify_boot_image(boot_target, target_path, &bootimage, oneshot, &boot_state);
+#else
         ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
         FreePool(target_path);
         if (EFI_ERROR(ret)) {
@@ -1328,6 +1407,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, hash,
                            SHA256_DIGEST_LENGTH);
         }
+#endif
 
         if (boot_state == BOOT_STATE_RED) {
                 if (boot_target == RECOVERY)

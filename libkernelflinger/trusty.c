@@ -165,6 +165,7 @@ static EFI_STATUS get_address_size_trusty(OUT UINT64 *trusty_mem_base, OUT UINT3
         return EFI_SUCCESS;
 }
 
+#ifndef USE_AVB
 /* Open the tos partition and load the tos image into memory
  * Parameters:
  * label    - Label for the partition in the GPT
@@ -225,7 +226,7 @@ static EFI_STATUS tos_image_load_partition(IN const CHAR16 *label, OUT VOID **im
         *image = bootimg;
         return EFI_SUCCESS;
 }
-
+#endif // USE_AVB
 /*
  * 1. Boot loader gets the tos image header address from kernel slot in
  *    android boot image (aosp_header + page_size)
@@ -367,6 +368,31 @@ cleanup:
         return ret;
 }
 
+#ifdef USE_AVB
+EFI_STATUS load_tos_image(OUT VOID **bootimage)
+{
+        EFI_STATUS ret;
+        UINT8 verify_state = BOOT_STATE_GREEN;
+
+        ret = android_image_load_partition_avb("tos", bootimage, &verify_state);  // Do not try to switch slot if failed
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"TOS image loading failed");
+                return ret;
+        }
+
+        if (verify_state != BOOT_STATE_GREEN) {
+#ifndef USERDEBUG
+                error(L"Invalid TOS image. Boot anyway on ENG build");
+                ret = EFI_SUCCESS;
+#else
+                error(L"TOS image doesn't verify");
+                ret = EFI_SECURITY_VIOLATION;
+#endif
+        }
+
+        return ret;
+}
+#else // USE_AVB == false
 EFI_STATUS load_tos_image(OUT VOID **bootimage)
 {
         CHAR16 target[BOOT_TARGET_SIZE];
@@ -405,6 +431,7 @@ cleanup_tos:
                 FreePool(*bootimage);
         return ret;
 }
+#endif // USE_AVB
 
 EFI_STATUS start_trusty(IN struct rot_data_t *rot_data)
 {

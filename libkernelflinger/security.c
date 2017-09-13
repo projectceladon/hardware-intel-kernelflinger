@@ -841,15 +841,14 @@ out:
 }
 
 /* Initialize the struct rot_data for startup_information */
-#ifdef USE_AVB
 EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state,
+#ifdef USE_AVB
                         IN const UINT8 *pub_key,
                         IN UINTN pub_key_len,
-                        OUT struct rot_data_t *rot_data)
 #else
-EFI_STATUS get_rot_data(IN VOID * bootimage, IN UINT8 boot_state, IN X509 *verifier_cert,
-                        OUT struct rot_data_t *rot_data)
+                        IN X509 *verifier_cert,
 #endif
+                        OUT struct rot_data_t *rot_data)
 {
         EFI_STATUS ret = EFI_SUCCESS;
         enum device_state state;

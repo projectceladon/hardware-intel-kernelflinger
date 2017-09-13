@@ -163,6 +163,7 @@ ifeq ($(KERNELFLINGER_USE_RPMB),true)
 endif
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
+		$(LOCAL_PATH)/../ \
 		$(LOCAL_PATH)/../avb \
 		$(res_intermediates)
 
