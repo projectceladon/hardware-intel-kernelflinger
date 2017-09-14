@@ -1796,6 +1796,8 @@ static EFI_STATUS setup_command_line_abl(
 
         cmdlen = StrLen(cmdline16);
 #ifdef USE_AVB
+        if (!slot_data->cmdline)
+                goto out;
         avb_cmd_len = strlen((const CHAR8 *)slot_data->cmdline);
         /* +256: for extra cmd line */
         cmdsize = cmdlen + avb_cmd_len + abl_cmd_len + 256;

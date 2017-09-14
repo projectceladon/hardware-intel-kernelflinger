@@ -352,6 +352,8 @@ const char *slot_get_active(void)
 		return cur_suffix;
 	}
 	avb_ab_flow(&ab_ops, requested_partitions, TRUE, &data);
+	if (!data)
+		return NULL;
 
 	if (data->ab_suffix) {
 		cur_suffix = suffixes[SUFFIX_INDEX(data->ab_suffix)];
@@ -388,6 +390,8 @@ EFI_STATUS slot_set_active(const char *suffix)
 	avb_ab_mark_slot_active(&ab_ops, SUFFIX_INDEX(suffix));
 	avb_ab_mark_slot_successful(&ab_ops, SUFFIX_INDEX(suffix));
 	avb_ab_flow(&ab_ops, requested_partitions, TRUE, &data);
+	if (!data)
+		return EFI_SUCCESS;
 
 	if (data->ab_suffix)
 		cur_suffix = suffixes[SUFFIX_INDEX(data->ab_suffix)];
