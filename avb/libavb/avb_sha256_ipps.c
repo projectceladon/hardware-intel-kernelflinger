@@ -42,7 +42,7 @@
     *((str) + 0) = (uint8_t)((x) >> 24); \
   }
 
-static void sha256_update(uint32_t *digest, uint8_t *data, uint32_t num_blks)
+static void sha256_update(uint32_t *digest, const uint8_t *data, uint32_t num_blks)
 {
 	__m128i state0, state1;
 	__m128i msg;
@@ -272,12 +272,12 @@ void avb_sha256_init(AvbSHA256Ctx* ctx)
 
 void avb_sha256_update(AvbSHA256Ctx* ctx, const uint8_t* buf, uint32_t size)
 {
-	int i;
-	int num;
-	int blocks;
+	uint32_t i;
+	uint32_t num;
+	uint32_t blocks;
 	uint32_t *digest = ctx->h;
 	uint8_t *data = (uint8_t *)ctx->block;
-	int kn = ctx->len % SHA256_BLOCK_SIZE;
+	uint32_t kn = ctx->len % SHA256_BLOCK_SIZE;
 
 	ctx->len += size;
 	if (size + kn < SHA256_BLOCK_SIZE) {
@@ -308,14 +308,14 @@ void avb_sha256_update(AvbSHA256Ctx* ctx, const uint8_t* buf, uint32_t size)
 
 uint8_t* avb_sha256_final(AvbSHA256Ctx* ctx)
 {
-	int i;
-	int len;
+	uint32_t i;
+	uint32_t len;
 	uint8_t buffer[SHA256_BLOCK_SIZE * 2];
 	uint8_t *p8bits;
 	uint8_t *data = (uint8_t *)ctx->block;
 	uint32_t *digest = ctx->h;
 	uint64_t u64bits = (uint64_t)ctx->len * 8;
-	int kn = ctx->len % SHA256_BLOCK_SIZE;
+	uint32_t kn = ctx->len % SHA256_BLOCK_SIZE;
 
 	len = kn < (int)(SHA256_BLOCK_SIZE-8) ? SHA256_BLOCK_SIZE : SHA256_BLOCK_SIZE * 2;
 
