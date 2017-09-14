@@ -53,11 +53,9 @@ include $(LOCAL_PATH)/android-config.mk
 # Replace cflags with static-specific cflags so we dont build in libdl deps
 LOCAL_CFLAGS_32 := $(openssl_cflags_static_32)
 LOCAL_CFLAGS_64 := $(openssl_cflags_static_64)
-LOCAL_CFLAGS += -D__ANDROID_API__=9
 endif
 ifneq (,$(filter boringssl, $(KERNELFLINGER_SSL_LIBRARY)))
 include $(LOCAL_PATH)/crypto-sources.mk
-LOCAL_CFLAGS += -D__ANDROID_API__=24
 endif
 LOCAL_SRC_FILES := $(LOCAL_SRC_FILES_$(LOCAL_ARCH))
 LOCAL_CFLAGS += $(LOCAL_CFLAGS_$(LOCAL_ARCH)) $(LOCAL_CFLAGS_$(LOCAL_2ND_ARCH)) $(openssl_cflags_static_$(LOCAL_2ND_ARCH))
@@ -68,6 +66,7 @@ LOCAL_CFLAGS_64 :=
 LOCAL_CFLAGS_x86 :=
 LOCAL_CFLAGS_x86_64 :=
 
+LOCAL_CFLAGS += -D__ANDROID_API__=21
 LOCAL_CFLAGS += -Ibionic/libc/include
 LOCAL_CFLAGS += -Ibionic/libc/kernel/uapi
 LOCAL_CFLAGS += -Ibionic/libc/kernel/uapi/asm-x86
@@ -100,14 +99,12 @@ LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/android-config.mk $(LOCAL_PATH)/S
 include $(LOCAL_PATH)/Ssl-config-target.mk
 include $(LOCAL_PATH)/android-config.mk
 LOCAL_SRC_FILES := $(LOCAL_SRC_FILES_$(LOCAL_ARCH))
-LOCAL_CFLAGS += -D__ANDROID_API__=9
 endif
 ifneq (,$(filter boringssl, $(KERNELFLINGER_SSL_LIBRARY)))
 include $(LOCAL_PATH)/sources.mk
 LOCAL_SRC_FILES := $(crypto_sources) $(linux_$(LOCAL_ARCH)_sources)
 ifeq ($(FIRST_BUILD_ID),O)
 LOCAL_CFLAGS += -I$(KERNELFLINGER_SSLSUPPORT_PATH)/borningssl
-LOCAL_CFLAGS += -D__ANDROID_API__=24
 endif
 endif
 LOCAL_MODULE_TAGS := optional
@@ -124,6 +121,7 @@ LOCAL_CFLAGS_x86_64 :=
 LOCAL_CFLAGS += -std=c99
 LOCAL_CFLAGS += -I$(LOCAL_PATH)/include
 LOCAL_CFLAGS += -DOPENSSL_NO_THREADS
+LOCAL_CFLAGS += -D__ANDROID_API__=21
 LOCAL_CFLAGS += -Ibionic/libc/include
 LOCAL_CFLAGS += -Ibionic/libc/kernel/uapi
 LOCAL_CFLAGS += -Ibionic/libc/kernel/uapi/asm-x86
