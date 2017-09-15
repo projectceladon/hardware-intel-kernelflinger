@@ -85,13 +85,13 @@ static int avb_do_tipc(uint32_t cmd, void *req, uint32_t req_size, void *resp,
     struct avb_message msg = { .cmd = cmd };
 
     if (!initialized && cmd != AVB_GET_VERSION) {
-        trusty_error("%s: AVB TIPC client not initialized\n", __func__);
+        trusty_error("%a: AVB TIPC client not initialized\n", __func__);
         return TRUSTY_ERR_GENERIC;
     }
 
     rc = avb_send_request(&msg, req, req_size);
     if (rc < 0) {
-        trusty_error("%s: failed (%d) to send AVB request\n", __func__, rc);
+        trusty_error("%a: failed (%d) to send AVB request\n", __func__, rc);
         return rc;
     }
 
@@ -99,7 +99,7 @@ static int avb_do_tipc(uint32_t cmd, void *req, uint32_t req_size, void *resp,
         /* handle any incoming RPMB requests */
         rc = rpmb_storage_proxy_poll();
         if (rc < 0) {
-            trusty_error("%s: failed (%d) to get RPMB requests\n", __func__,
+            trusty_error("%a: failed (%d) to get RPMB requests\n", __func__,
                          rc);
             return rc;
         }
@@ -108,7 +108,7 @@ static int avb_do_tipc(uint32_t cmd, void *req, uint32_t req_size, void *resp,
     uint32_t resp_size = resp_size_p ? *resp_size_p : 0;
     rc = avb_read_response(&msg, cmd, resp, resp_size);
     if (rc < 0) {
-        trusty_error("%s: failed (%d) to read AVB response\n", __func__, rc);
+        trusty_error("%a: failed (%d) to read AVB response\n", __func__, rc);
         return rc;
     }
     /* change response size to actual response size */
@@ -116,7 +116,7 @@ static int avb_do_tipc(uint32_t cmd, void *req, uint32_t req_size, void *resp,
         *resp_size_p = rc;
     }
     if (msg.result != AVB_ERROR_NONE) {
-        trusty_error("%s: AVB service returned error (%d)\n", __func__,
+        trusty_error("%a: AVB service returned error (%d)\n", __func__,
                      msg.result);
         return TRUSTY_ERR_GENERIC;
     }
@@ -150,7 +150,7 @@ int avb_tipc_init(struct trusty_ipc_dev *dev)
     /* connect to AVB service and wait for connect to complete */
     rc = trusty_ipc_connect(&avb_chan, AVB_PORT, true);
     if (rc < 0) {
-        trusty_error("failed (%d) to connect to '%s'\n", rc, AVB_PORT);
+        trusty_error("failed (%d) to connect to '%a'\n", rc, AVB_PORT);
         return rc;
     }
 

@@ -64,16 +64,16 @@ void trusty_abort(void)
     __builtin_unreachable();
 }
 
-void trusty_printv(const char *message, ...)
+void trusty_printf(const char *format, ...)
 {
     va_list ap;
-    CHAR16 *message16;
-    message16 = stra_to_str((CHAR8 *)message);
+    CHAR16 *format16;
+    format16 = stra_to_str((CHAR8 *)format);
 
-    va_start(ap, message);
-    vlog(message16, ap);
+    va_start(ap, format);
+    vlog(format16, ap);
     va_end(ap);
-    FreePool(message16);
+    FreePool(format16);
 }
 
 void *trusty_memcpy(void *dest, void *src, size_t n)
@@ -116,7 +116,7 @@ void *trusty_membuf_alloc(struct ns_mem_page_info *page_info, size_t size)
     ret = alloc_aligned(&pa, &aligned_pa, size, 4096);
 
     if (EFI_ERROR(ret)) {
-        trusty_printv("alloc_aligned failed\n");
+        trusty_printf("alloc_aligned failed\n");
     }
 
     if (!aligned_pa)

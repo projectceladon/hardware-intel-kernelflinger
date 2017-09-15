@@ -63,13 +63,13 @@ static int proxy_read_request(struct trusty_ipc_chan *chan,
     rc = trusty_ipc_recv(chan, req_iovs, 2, false);
     if (rc < 0) {
         /* recv message failed */
-        trusty_error("%s: failed (%d) to recv request\n", __func__, rc);
+        trusty_error("%a: failed (%d) to recv request\n", __func__, rc);
         return rc;
     }
 
     if ((size_t)rc < sizeof(*msg)) {
         /* malformed message */
-        trusty_error("%s: malformed request (%zu)\n", __func__, (size_t)rc);
+        trusty_error("%a: malformed request (%zu)\n", __func__, (size_t)rc);
         return TRUSTY_ERR_GENERIC;
     }
 
@@ -123,7 +123,7 @@ static int proxy_handle_rpmb(struct trusty_ipc_chan *chan,
     exp_len = sizeof(*req) + req->reliable_write_size + req->write_size;
     if (req_len != exp_len) {
         trusty_error(
-            "%s: malformed rpmb request: invalid length (%zu != %zu)\n",
+            "%a: malformed rpmb request: invalid length (%zu != %zu)\n",
             __func__, req_len, exp_len);
         msg->result = STORAGE_ERR_NOT_VALID;
         goto err_response;
@@ -131,7 +131,7 @@ static int proxy_handle_rpmb(struct trusty_ipc_chan *chan,
 
     if (req->reliable_write_size) {
         if ((req->reliable_write_size % MMC_BLOCK_SIZE) != 0) {
-            trusty_error("%s: invalid reliable write size %u\n", __func__,
+            trusty_error("%a: invalid reliable write size %u\n", __func__,
                          req->reliable_write_size);
             msg->result = STORAGE_ERR_NOT_VALID;
             goto err_response;
@@ -141,7 +141,7 @@ static int proxy_handle_rpmb(struct trusty_ipc_chan *chan,
 
     if (req->write_size) {
         if ((req->write_size % MMC_BLOCK_SIZE) != 0) {
-            trusty_error("%: invalid write size %u\n", __func__,
+            trusty_error("%a: invalid write size %u\n", __func__,
                          req->write_size);
             msg->result = STORAGE_ERR_NOT_VALID;
             goto err_response;
@@ -152,7 +152,7 @@ static int proxy_handle_rpmb(struct trusty_ipc_chan *chan,
     if (req->read_size) {
         if (req->read_size % MMC_BLOCK_SIZE != 0 ||
             req->read_size > sizeof(read_buf)) {
-            trusty_error("%s: invalid read size %u\n", __func__,
+            trusty_error("%a: invalid read size %u\n", __func__,
                          req->read_size);
             msg->result = STORAGE_ERR_NOT_VALID;
             goto err_response;
@@ -173,7 +173,7 @@ static int proxy_handle_rpmb(struct trusty_ipc_chan *chan,
     }
 
     if (rc) {
-        trusty_error("%s: rpmb_storage_send failed: %d\n", __func__, rc);
+        trusty_error("%a: rpmb_storage_send failed: %d\n", __func__, rc);
         msg->result = STORAGE_ERR_GENERIC;
         goto err_response;
     }
@@ -244,7 +244,7 @@ static int proxy_on_disconnect(struct trusty_ipc_chan *chan)
 {
     trusty_assert(chan);
 
-    trusty_debug("%s: closed by peer\n", __func__);
+    trusty_debug("%a: closed by peer\n", __func__);
     chan->handle = INVALID_IPC_HANDLE;
     return TRUSTY_EVENT_HANDLED;
 }
@@ -263,7 +263,7 @@ static int proxy_on_message(struct trusty_ipc_chan *chan)
     /* read request */
     rc = proxy_read_request(chan, &req_msg, req_buf, sizeof(req_buf));
     if (rc < 0) {
-        trusty_error("%s: failed (%d) to read request\n", __func__, rc);
+        trusty_error("%a: failed (%d) to read request\n", __func__, rc);
         trusty_ipc_close(chan);
         return rc;
     }
@@ -271,7 +271,7 @@ static int proxy_on_message(struct trusty_ipc_chan *chan)
     /* handle it and send reply */
     rc = proxy_handle_req(chan, &req_msg, req_buf, rc);
     if (rc < 0) {
-        trusty_error("%s: failed (%d) to handle request\n", __func__, rc);
+        trusty_error("%a: failed (%d) to handle request\n", __func__, rc);
         trusty_ipc_close(chan);
         return rc;
     }
@@ -303,7 +303,7 @@ int rpmb_storage_proxy_init(struct trusty_ipc_dev *dev, void *rpmb_dev)
     /* connect to proxy service and wait for connect to complete */
     rc = trusty_ipc_connect(&proxy_chan, STORAGE_DISK_PROXY_PORT, true);
     if (rc < 0) {
-        trusty_error("%s: failed (%d) to connect to '%s'\n", __func__, rc,
+        trusty_error("%a: failed (%d) to connect to '%s'\n", __func__, rc,
                      STORAGE_DISK_PROXY_PORT);
         return rc;
     }
@@ -329,7 +329,7 @@ int rpmb_storage_proxy_poll(void)
         /* Check for RPMB events */
         rc = trusty_ipc_poll_for_event(&proxy_chan);
         if (rc < 0) {
-            trusty_error("%s: failed (%d) to get rpmb event\n", __func__, rc);
+            trusty_error("%a: failed (%d) to get rpmb event\n", __func__, rc);
             return rc;
         }
     }

@@ -88,7 +88,7 @@ static int km_do_tipc(uint32_t cmd, void *req, uint32_t req_len,
 
     rc = km_send_request(&msg, req, req_len, data, data_len);
     if (rc < 0) {
-        trusty_error("%s: failed (%d) to send km request\n", __func__, rc);
+        trusty_error("%a: failed (%d) to send km request\n", __func__, rc);
         return rc;
     }
 
@@ -96,7 +96,7 @@ static int km_do_tipc(uint32_t cmd, void *req, uint32_t req_len,
         /* handle any incoming RPMB requests */
         rc = rpmb_storage_proxy_poll();
         if (rc < 0) {
-            trusty_error("%s: failed (%d) to get RPMB requests\n", __func__,
+            trusty_error("%a: failed (%d) to get RPMB requests\n", __func__,
                          rc);
             return rc;
         }
@@ -104,7 +104,7 @@ static int km_do_tipc(uint32_t cmd, void *req, uint32_t req_len,
 
     rc = km_read_response(&msg, cmd, &resp, sizeof(resp));
     if (rc < 0) {
-        trusty_error("%s: failed (%d) to read km response\n", __func__, rc);
+        trusty_error("%a: failed (%d) to read km response\n", __func__, rc);
         return rc;
     }
 
@@ -150,7 +150,7 @@ static int km_get_version(int32_t *version)
 
     rc = km_read_response(&msg, KM_GET_VERSION, &resp, sizeof(resp));
     if (rc < 0) {
-        trusty_error("%s: failed (%d) to read km response\n", __func__, rc);
+        trusty_error("%a: failed (%d) to read km response\n", __func__, rc);
         return rc;
     }
 
@@ -171,7 +171,7 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
     /* connect to km service and wait for connect to complete */
     rc = trusty_ipc_connect(&km_chan, KEYMASTER_PORT, true);
     if (rc < 0) {
-        trusty_error("failed (%d) to connect to '%s'\n", rc, KEYMASTER_PORT);
+        trusty_error("failed (%d) to connect to '%a'\n", rc, KEYMASTER_PORT);
         return rc;
     }
 
