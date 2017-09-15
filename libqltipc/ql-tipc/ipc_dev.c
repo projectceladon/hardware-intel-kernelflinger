@@ -143,14 +143,14 @@ static int check_response(struct trusty_ipc_dev *dev,
     UNUSED(*dev);
     if (hdr->opcode != (cmd | QL_TIPC_DEV_RESP)) {
         /* malformed response */
-        trusty_error("%s: malformed response cmd: 0x%x\n",
+        trusty_error("%a: malformed response cmd: 0x%x\n",
                      __func__, hdr->opcode);
         return TRUSTY_ERR_SECOS_ERR;
     }
 
     if (hdr->status) {
         /* secure OS responded with error: TODO need error code */
-        trusty_error("%s: cmd 0x%x: status = %d\n",
+        trusty_error("%a: cmd 0x%x: status = %d\n",
                      __func__, hdr->opcode, hdr->status);
         return TRUSTY_ERR_SECOS_ERR;
     }
@@ -167,12 +167,12 @@ int trusty_ipc_dev_create(struct trusty_ipc_dev **idev,
 
     trusty_assert(idev);
 
-    trusty_debug("%s: Create new Trusty IPC device (%zu)\n", __func__, buf_size);
+    trusty_debug("%a: Create new Trusty IPC device (%zu)\n", __func__, buf_size);
 
     /* allocate device context */
     dev = trusty_calloc(1, sizeof(*dev));
     if (!dev) {
-        trusty_error("%s: failed to allocate Trusty IPC device\n", __func__);
+        trusty_error("%a: failed to allocate Trusty IPC device\n", __func__);
         return TRUSTY_ERR_NO_MEMORY;
     }
     dev->tdev = tdev;
@@ -181,7 +181,7 @@ int trusty_ipc_dev_create(struct trusty_ipc_dev **idev,
     dev->buf_size = buf_size;
     dev->buf_vaddr = trusty_membuf_alloc(&dev->buf_ns, buf_size);
     if (!dev->buf_vaddr) {
-        trusty_error("%s: failed to allocate shared memory\n", __func__);
+        trusty_error("%a: failed to allocate shared memory\n", __func__);
         rc = TRUSTY_ERR_NO_MEMORY;
         goto err_alloc_membuf;
     }
@@ -189,13 +189,13 @@ int trusty_ipc_dev_create(struct trusty_ipc_dev **idev,
     /* call secure OS to register shared buffer */
     rc = trusty_dev_init_ipc(dev->tdev, &dev->buf_ns, dev->buf_size);
     if (rc != 0) {
-        trusty_error("%s: failed (%d) to create Trusty IPC device\n",
+        trusty_error("%a: failed (%d) to create Trusty IPC device\n",
                      __func__, rc);
         rc = TRUSTY_ERR_SECOS_ERR;
         goto err_create_sec_dev;
     }
 
-    trusty_debug("%s: new Trusty IPC device (%p)\n", __func__, dev);
+    trusty_debug("%a: new Trusty IPC device (%p)\n", __func__, dev);
 
     *idev = dev;
     return TRUSTY_ERR_NONE;
@@ -212,13 +212,13 @@ void trusty_ipc_dev_shutdown(struct trusty_ipc_dev *dev)
     int rc;
     trusty_assert(dev);
 
-    trusty_debug("%s: shutting down Trusty IPC device (%p)\n", __func__, dev);
+    trusty_debug("%a: shutting down Trusty IPC device (%p)\n", __func__, dev);
 
     /* shutdown Trusty IPC device */
     rc = trusty_dev_shutdown_ipc(dev->tdev, &dev->buf_ns, dev->buf_size);
     trusty_assert(!rc);
     if (rc != 0) {
-        trusty_error("%s: failed (%d) to shutdown Trusty IPC device\n",
+        trusty_error("%a: failed (%d) to shutdown Trusty IPC device\n",
                      __func__, rc);
     }
     trusty_membuf_free(dev->buf_vaddr);
@@ -236,13 +236,13 @@ int trusty_ipc_dev_connect(struct trusty_ipc_dev *dev, const char *port,
     trusty_assert(dev);
     trusty_assert(port);
 
-    trusty_debug("%s: connecting to '%s'\n", __func__, port);
+    trusty_debug("%a: connecting to '%s'\n", __func__, port);
 
     /* check port name length */
     port_len = strlen((CHAR8 *)port) + 1;
     if (port_len > (dev->buf_size - sizeof(*cmd) + sizeof(*req))) {
         /* it would not fit into buffer */
-        trusty_error("%s: port name is too long (%zu)\n", __func__, port_len);
+        trusty_error("%a: port name is too long (%zu)\n", __func__, port_len);
         return TRUSTY_ERR_INVALID_ARGS;
     }
 
@@ -263,13 +263,13 @@ int trusty_ipc_dev_connect(struct trusty_ipc_dev *dev, const char *port,
                              &dev->buf_ns, sizeof(*cmd) + cmd->payload_len);
     if (rc) {
         /* secure OS returned an error */
-        trusty_error("%s: secure OS returned (%d)\n", __func__, rc);
+        trusty_error("%a: secure OS returned (%d)\n", __func__, rc);
         return TRUSTY_ERR_SECOS_ERR;
     }
 
     rc = check_response(dev, cmd, QL_TIPC_DEV_CONNECT);
     if (rc) {
-        trusty_error("%s: connect cmd failed (%d)\n", __func__, rc);
+        trusty_error("%a: connect cmd failed (%d)\n", __func__, rc);
         return rc;
     }
 
@@ -284,7 +284,7 @@ int trusty_ipc_dev_close(struct trusty_ipc_dev *dev, handle_t handle)
 
     trusty_assert(dev);
 
-    trusty_debug("%s: chan %d: closing\n", __func__, handle);
+    trusty_debug("%a: chan %d: closing\n", __func__, handle);
 
     /* prepare command */
     cmd = dev->buf_vaddr;
@@ -297,17 +297,17 @@ int trusty_ipc_dev_close(struct trusty_ipc_dev *dev, handle_t handle)
     rc = trusty_dev_exec_ipc(dev->tdev,
                              &dev->buf_ns, sizeof(*cmd) + cmd->payload_len);
     if (rc) {
-        trusty_error("%s: secure OS returned (%d)\n", __func__, rc);
+        trusty_error("%a: secure OS returned (%d)\n", __func__, rc);
         return TRUSTY_ERR_SECOS_ERR;
     }
 
     rc = check_response(dev, cmd, QL_TIPC_DEV_DISCONNECT);
     if (rc) {
-        trusty_error("%s: disconnect cmd failed (%d)\n", __func__, rc);
+        trusty_error("%a: disconnect cmd failed (%d)\n", __func__, rc);
         return rc;
     }
 
-    trusty_debug("%s: chan %d: closed\n", __func__, handle);
+    trusty_debug("%a: chan %d: closed\n", __func__, handle);
 
     return TRUSTY_ERR_NONE;
 }
@@ -335,18 +335,18 @@ int trusty_ipc_dev_get_event(struct trusty_ipc_dev *dev, handle_t chan,
     rc = trusty_dev_exec_ipc(dev->tdev,
                              &dev->buf_ns, sizeof(*cmd) + cmd->payload_len);
     if (rc) {
-        trusty_error("%s: secure OS returned (%d)\n", __func__, rc);
+        trusty_error("%a: secure OS returned (%d)\n", __func__, rc);
         return TRUSTY_ERR_SECOS_ERR;
     }
 
     rc = check_response(dev, cmd, QL_TIPC_DEV_GET_EVENT);
     if (rc) {
-        trusty_error("%s: get event cmd failed (%d)\n", __func__, rc);
+        trusty_error("%a: get event cmd failed (%d)\n", __func__, rc);
         return rc;
     }
 
     if ((size_t)cmd->payload_len < sizeof(*event)) {
-        trusty_error("%s: invalid response length (%zd)\n",
+        trusty_error("%a: invalid response length (%zd)\n",
                      __func__, (size_t)cmd->payload_len);
         return TRUSTY_ERR_SECOS_ERR;
     }
@@ -368,7 +368,7 @@ int trusty_ipc_dev_send(struct trusty_ipc_dev *dev, handle_t chan,
     msg_size = iovec_size(iovs, iovs_cnt);
     if (msg_size > dev->buf_size - sizeof(*cmd)) {
         /* msg is too big to fit provided buffer */
-        trusty_error("%s: chan %d: msg is too long (%zu)\n", __func__,
+        trusty_error("%a: chan %d: msg is too long (%zu)\n", __func__,
                      chan, msg_size);
         return TRUSTY_ERR_MSG_TOO_BIG;
     }
@@ -389,13 +389,13 @@ int trusty_ipc_dev_send(struct trusty_ipc_dev *dev, handle_t chan,
     rc = trusty_dev_exec_ipc(dev->tdev,
                              &dev->buf_ns, sizeof(*cmd) + cmd->payload_len);
     if (rc < 0) {
-        trusty_error("%s: secure OS returned (%d)\n", __func__, rc);
+        trusty_error("%a: secure OS returned (%d)\n", __func__, rc);
         return TRUSTY_ERR_SECOS_ERR;
     }
 
     rc = check_response(dev, cmd, QL_TIPC_DEV_SEND);
     if (rc) {
-        trusty_error("%s: send msg failed (%d)\n", __func__, rc);
+        trusty_error("%a: send msg failed (%d)\n", __func__, rc);
     }
 
     return rc;
@@ -422,13 +422,13 @@ int trusty_ipc_dev_recv(struct trusty_ipc_dev *dev, handle_t chan,
     rc = trusty_dev_exec_ipc(dev->tdev,
                              &dev->buf_ns, sizeof(*cmd) + cmd->payload_len);
     if (rc < 0) {
-        trusty_error("%s: secure OS returned (%d)\n", __func__, rc);
+        trusty_error("%a: secure OS returned (%d)\n", __func__, rc);
         return TRUSTY_ERR_SECOS_ERR;
     }
 
     rc = check_response(dev, cmd, QL_TIPC_DEV_RECV);
     if (rc) {
-        trusty_error("%s: recv cmd failed (%d)\n", __func__, rc);
+        trusty_error("%a: recv cmd failed (%d)\n", __func__, rc);
         return rc;
     }
 
@@ -437,7 +437,7 @@ int trusty_ipc_dev_recv(struct trusty_ipc_dev *dev, handle_t chan,
                           (const void *)cmd->payload, cmd->payload_len);
     if (copied != (size_t)cmd->payload_len) {
         /* msg is too big to fit provided buffer */
-        trusty_error("%s: chan %d: buffer too small (%zu vs. %zu)\n",
+        trusty_error("%a: chan %d: buffer too small (%zu vs. %zu)\n",
                      __func__, chan, copied, (size_t)cmd->payload_len);
         return TRUSTY_ERR_MSG_TOO_BIG;
     }

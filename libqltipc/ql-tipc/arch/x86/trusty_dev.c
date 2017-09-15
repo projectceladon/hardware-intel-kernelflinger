@@ -78,7 +78,7 @@ static unsigned long trusty_std_call_inner(struct trusty_dev *dev,
 
     UNUSED(dev);
 
-    trusty_debug("%s(0x%lx 0x%lx 0x%lx 0x%lx)\n", __func__, smcnr, a0, a1, a2);
+    trusty_debug("%a(0x%lx 0x%lx 0x%lx 0x%lx)\n", __func__, smcnr, a0, a1, a2);
 
     while (true) {
         ret = smc(smcnr, a0, a1, a2);
@@ -87,7 +87,7 @@ static unsigned long trusty_std_call_inner(struct trusty_dev *dev,
         if ((int)ret != SM_ERR_BUSY || !retry)
             break;
 
-        trusty_debug("%s(0x%lx 0x%lx 0x%lx 0x%lx) returned busy, retry\n",
+        trusty_debug("%a(0x%lx 0x%lx 0x%lx 0x%lx) returned busy, retry\n",
                      __func__, smcnr, a0, a1, a2);
 
         retry--;
@@ -131,12 +131,12 @@ static int32_t trusty_std_call32(struct trusty_dev *dev, uint32_t smcnr,
         trusty_lock(dev);
     }
 
-    trusty_debug("%s(0x%x 0x%x 0x%x 0x%x) started\n", __func__,
+    trusty_debug("%a(0x%x 0x%x 0x%x 0x%x) started\n", __func__,
                  smcnr, a0, a1, a2);
 
     ret = trusty_std_call_helper(dev, smcnr, a0, a1, a2);
     while (ret == SM_ERR_INTERRUPTED || ret == SM_ERR_CPU_IDLE) {
-        trusty_debug("%s(0x%x 0x%x 0x%x 0x%x) interrupted\n", __func__,
+        trusty_debug("%a(0x%x 0x%x 0x%x 0x%x) interrupted\n", __func__,
                      smcnr, a0, a1, a2);
         if (ret == SM_ERR_CPU_IDLE) {
             trusty_idle(dev);
@@ -144,7 +144,7 @@ static int32_t trusty_std_call32(struct trusty_dev *dev, uint32_t smcnr,
         ret = trusty_std_call_helper(dev, SMC_SC_RESTART_LAST, 0, 0, 0);
     }
 
-    trusty_debug("%s(0x%x 0x%x 0x%x 0x%x) returned 0x%x\n",
+    trusty_debug("%a(0x%x 0x%x 0x%x 0x%x) returned 0x%x\n",
                  __func__, smcnr, a0, a1, a2, ret);
 
     if (smcnr != SMC_SC_NOP) {

@@ -21,6 +21,7 @@ LOCAL_SRC_FILES := \
 	arch/x86/trusty_mem.c \
 	storage_ops_osloader.c \
 	sysdeps_osloader.c \
+	util.c \
 	keymaster.c \
 	rpmb_sim.c \
 
