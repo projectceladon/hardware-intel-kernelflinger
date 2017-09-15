@@ -830,7 +830,8 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			goto exit;
 		}
 
-		ret = get_rot_data(bootimage, boot_state, verifier_cert, &trusty_startup_params.RotData);
+		/*  keymaster interface always use the g_rot_data as its input param */
+		ret = get_rot_data(bootimage, boot_state, verifier_cert, &g_rot_data);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to init trusty rot params");
 			goto exit;
