@@ -35,26 +35,11 @@ void *rpmb_storage_get_ctx(void)
 {
     EFI_STATUS ret;
     EFI_SD_HOST_IO_PROTOCOL *sdio;
-    uint8_t currentPart;
 
     ret = get_emmc_sdio(&sdio);
     if (EFI_ERROR(ret)) {
         trusty_error("Failed to get emmc sdio.\n");
         return NULL;
-    }
-
-    ret = get_emmc_partition_num(sdio, &currentPart);
-    if (EFI_ERROR(ret)) {
-        trusty_error("Failed to get emmc current part number.\n");
-        return NULL;
-    }
-
-    if (currentPart != RPMB_PARTITION) {
-        ret = emmc_partition_switch(sdio, RPMB_PARTITION);
-        if (EFI_ERROR(ret)) {
-            trusty_error("Failed to switch RPMB parition.\n");
-            return NULL;
-        }
     }
 
     return (void *)sdio;
@@ -94,11 +79,26 @@ int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
     uint8_t rpmb_rel_write_data[rel_write_size];
     uint8_t rpmb_write_data[write_size];
     uint8_t rpmb_read_data[read_size];
-    int ret;
+    uint8_t original_part;
+    int ret = TRUSTY_ERR_NONE;
 
     if (rpmb_dev == NULL) {
         trusty_error("rpmb_dev is NULL.\n");
          return TRUSTY_ERR_INVALID_ARGS;
+    }
+
+    ret = get_emmc_partition_num((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev, &original_part);
+    if (EFI_ERROR(ret)) {
+        trusty_error("Failed to get emmc current part number.\n");
+        return ret;
+    }
+
+    if (original_part != RPMB_PARTITION) {
+        ret = emmc_partition_switch((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev, RPMB_PARTITION);
+        if (EFI_ERROR(ret)) {
+            trusty_error("Failed to switch RPMB parition.\n");
+            return ret;
+        }
     }
 
     if (rel_write_size) {
@@ -106,7 +106,8 @@ int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
             trusty_error(
                 "rel_write_size is not a multiple of MMC_BLOCK_SIZE: %d\n",
                  rel_write_size);
-            return TRUSTY_ERR_INVALID_ARGS;
+            ret = TRUSTY_ERR_INVALID_ARGS;
+            goto end;
         }
         memcpy(rpmb_rel_write_data, rel_write_data, rel_write_size);
         ret = mmc_rpmb_request((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev,
@@ -114,7 +115,7 @@ int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
                                 rel_write_size / MMC_BLOCK_SIZE, true);
         if (ret) {
             trusty_error("failed to execute rpmb reliable write\n");
-            return ret;
+            goto end;
         }
     }
 
@@ -122,7 +123,8 @@ int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
         if (write_size % MMC_BLOCK_SIZE) {
             trusty_error("write_size is not a multiple of MMC_BLOCK_SIZE: %d\n",
                          write_size);
-            return TRUSTY_ERR_INVALID_ARGS;
+            ret = TRUSTY_ERR_INVALID_ARGS;
+            goto end;
         }
         memcpy(rpmb_write_data, write_data, write_size);
         ret = mmc_rpmb_request((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev,
@@ -130,7 +132,7 @@ int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
                                 write_size / MMC_BLOCK_SIZE, false);
         if (ret) {
             trusty_error("failed to execute rpmb write\n");
-            return ret;
+            goto end;
         }
     }
 
@@ -138,7 +140,8 @@ int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
         if (read_size % MMC_BLOCK_SIZE) {
             trusty_error("read_size is not a multiple of MMC_BLOCK_SIZE: %d\n",
                          read_size);
-            return TRUSTY_ERR_INVALID_ARGS;
+            ret = TRUSTY_ERR_INVALID_ARGS;
+            goto end;
         }
         ret = mmc_rpmb_response((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev,
                                 (rpmb_data_frame *)rpmb_read_data,
@@ -147,9 +150,18 @@ int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
 
         if (ret < 0) {
             trusty_error("failed to execute rpmb read\n");
-            return ret;
+            goto end;
         }
     }
 
-    return TRUSTY_ERR_NONE;
+end:
+    /*back to original part*/
+    if (original_part != RPMB_PARTITION) {
+        if (emmc_partition_switch((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev, original_part) != EFI_SUCCESS) {
+            trusty_error("Failed to switch RPMB parition.\n");
+            return TRUSTY_ERR_GENERIC;
+        }
+    }
+
+    return ret;
 }
