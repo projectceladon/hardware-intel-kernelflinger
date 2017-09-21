@@ -1666,7 +1666,7 @@ static EFI_STATUS setup_command_line_abl(
         CHAR8 *cmdline;
         UINTN cmdsize;
         UINTN cmdlen;
-        EFI_STATUS ret;
+        EFI_STATUS ret = EFI_SUCCESS;
         struct boot_params *buf;
         struct boot_img_hdr *aosp_header;
 #ifdef USE_AVB
