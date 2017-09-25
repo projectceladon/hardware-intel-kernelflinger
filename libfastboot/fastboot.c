@@ -383,6 +383,18 @@ static EFI_STATUS publish_part(CHAR16 *part_name, UINT64 size, EFI_GUID *guid)
 	return ret;
 }
 
+const char* fastboot_slot_get_active()
+{
+	const char* p = slot_get_active();
+	if (p == NULL) {
+		return p;
+	}
+	if (p[0] == '_') {
+		return p + 1;
+	}
+	return p;
+}
+
 static EFI_STATUS publish_slots(void)
 {
 	struct descriptor {
@@ -410,14 +422,14 @@ static EFI_STATUS publish_slots(void)
 	if (EFI_ERROR(ret))
 		return ret;
 
-	ret = fastboot_publish_dynamic("current-slot", slot_get_active);
+	ret = fastboot_publish_dynamic("current-slot", fastboot_slot_get_active);
 	if (EFI_ERROR(ret))
 		return ret;
 
 	for (i = 0, j = 0; i < nb_slots; i++) {
 		len = efi_snprintf((CHAR8 *)var + j, sizeof(var) - j,
 				   i == 0 ? (CHAR8 *)"%a" : (CHAR8 *)",%a",
-				   suffixes[i]);
+				   (suffixes[i][0] == '_') ? suffixes[i] + 1 : suffixes[i]);
 		if (len < 0 || len >= (int)(sizeof(var) - j))
 			return EFI_INVALID_PARAMETER;
 		j += len;
@@ -432,7 +444,7 @@ static EFI_STATUS publish_slots(void)
 			desc = &descriptors[j];
 
 			len = efi_snprintf((CHAR8 *)var, sizeof(var), (CHAR8 *)"%a:%a",
-					   desc->name, suffixes[i]);
+					   desc->name, (suffixes[i][0] == '_') ? suffixes[i] + 1 : suffixes[i]);
 			if (len < 0 || len >= (int)sizeof(var))
 				return EFI_INVALID_PARAMETER;
 
