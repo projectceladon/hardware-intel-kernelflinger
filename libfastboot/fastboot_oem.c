@@ -574,7 +574,28 @@ static void cmd_fuse_vbmeta_key_hash(INTN argc, __attribute__((__unused__)) CHAR
 
 	ret = tpm2_fuse_vbmeta_key_hash(dl->data, dl->size);
 	if (EFI_ERROR(ret)) {
-		fastboot_fail("Tee keyhash fuse failed, %r", ret);
+		fastboot_fail("Tee verify hash fuse failed, %r", ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
+
+static void cmd_fuse_bootloader_policy(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	struct download_buffer *dl;
+
+	if (argc != 1) {
+		fastboot_fail("Invalid parameters");
+		return;
+	}
+
+	dl = fastboot_download_buffer();
+
+	ret = tpm2_fuse_bootloader_policy(dl->data, dl->size);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Setting Bootloader policy failed, %r", ret);
 		return;
 	}
 
@@ -620,7 +641,8 @@ static struct fastboot_cmd COMMANDS_FUSE[] = {
 #ifdef BUILD_ANDROID_THINGS
 	{ "at-perm-attr",		LOCKED,		cmd_fuse_atperm },
 #endif
-	{ "vbmeta-key-hash",		UNLOCKED,	cmd_fuse_vbmeta_key_hash }
+	{ "vbmeta-key-hash",		UNLOCKED,	cmd_fuse_vbmeta_key_hash },
+	{ "bootloader-policy",		UNLOCKED,	cmd_fuse_bootloader_policy }
 };
 #endif
 
