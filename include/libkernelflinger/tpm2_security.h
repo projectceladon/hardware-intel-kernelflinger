@@ -43,4 +43,6 @@ EFI_STATUS tpm2_fuse_perm_attr(void *data, uint32_t size);
 
 EFI_STATUS tpm2_fuse_vbmeta_key_hash(void *data, uint32_t size);
 
+EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size);
+
 #endif /* _TPM2_SECURITY_H_ */

@@ -40,6 +40,7 @@
 #define NV_INDEX_AT_PERM_ATTR		0x01500046
 #define NV_INDEX_TRUSTYOS_SEED		0x01500047
 #define NV_INDEX_VBMETA_KEY_HASH	0x01500048
+#define NV_INDEX_FB_BL_POLICY		0x01500049
 
 EFI_STATUS tpm2_create_nvindex(TPMI_RH_NV_INDEX nv_index,
 			       TPMA_NV attributes,
@@ -208,5 +209,35 @@ EFI_STATUS tpm2_fuse_vbmeta_key_hash(void *data, uint32_t size)
 		return ret;
 
 	debug(L"VBMETA Key Hash created successfully");
+	return ret;
+}
+
+EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size)
+{
+	EFI_STATUS ret;
+	TPMA_NV attributes = {0};
+	TPMI_RH_NV_AUTH auth_handle = TPM_RH_PLATFORM;
+	TPMS_AUTH_COMMAND session_data = {0};
+	UINT64 set_bits = 0;
+
+	if (size != sizeof(set_bits)) {
+		error(L"bootloader policy size is not 8 bytes");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	session_data.sessionHandle = TPM_RS_PW;
+	set_attributes(&attributes, FALSE, FALSE);
+	attributes.TPMA_NV_BITS = 1;
+
+	ret = tpm2_create_nvindex(NV_INDEX_FB_BL_POLICY, attributes, sizeof(set_bits));
+	if (EFI_ERROR(ret) && (ret != EFI_ALREADY_STARTED))
+		return ret;
+
+	memcpy(&set_bits, data, size);
+	ret = Tpm2NvSetBits(auth_handle, NV_INDEX_FB_BL_POLICY, &session_data, set_bits);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	debug(L"Bootloader policy created successfully");
 	return ret;
 }
