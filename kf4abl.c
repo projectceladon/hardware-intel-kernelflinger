@@ -34,6 +34,7 @@
 #include <efiapi.h>
 #include <lib.h>
 #include <fastboot.h>
+#include <vars.h>
 #ifdef CRASHMODE_USE_ADB
 #include <adb.h>
 #endif
@@ -317,16 +318,13 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 #ifdef KERNELFLINGER_BUILD_FOR_SLIMBOOT
 	if(argc <= 0)
 	{
-		CHAR8 *def_cmdline = (CHAR8 *)"androidboot.serialno=0123456789ABCDEFGHIJ" \
-				" g_ffs.iSerialNumber=0123456789ABCDEFGHIJ" \
-				" androidboot.diskbus=1A.0" \
+		efi_snprintf(cmd_buf, max_cmd_size + 1,
+				(CHAR8 *)"androidboot.serialno=%a" \
 				" androidboot.bootreason=not_applicable" \
 				" pci=nocrs" \
 				" nowatchdog" \
 				" androidboot.bootloader=slimboot_android_payload-07_03-userdebug" \
-				" gpt";
-
-		strcpy(cmd_buf, def_cmdline);
+				" gpt", get_serial_number());
 
 		log(L"KERNELFLINGER_BUILD_FOR_SLIMBOOT: argc == %d, default parameters added !\n", argc);
 		return NORMAL_BOOT;
