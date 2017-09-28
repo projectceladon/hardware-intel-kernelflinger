@@ -33,6 +33,10 @@
 #ifndef _BOOTLOADER_H_
 #define _BOOTLOADER_H_
 
+#ifdef USE_SLOT
+EFI_STATUS flash_bootloader(VOID *data, UINTN size, CHAR16 *label);
+#else
 EFI_STATUS flash_bootloader(VOID *data, UINTN size);
+#endif
 
 #endif	/* _BOOTLOADER_H_ */
