@@ -447,9 +447,11 @@ static struct label_exception {
 	{ L"oemvars", flash_oemvars },
 	{ L"kernel", flash_kernel },
 	{ L"ramdisk", flash_ramdisk },
-	{ BOOTLOADER_LABEL, flash_bootloader },
 #if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 	{ L"ioc", flash_ioc },
+#endif
+#ifndef USE_SLOT
+	{ BOOTLOADER_LABEL, flash_bootloader },
 #endif
 #ifdef BOOTLOADER_POLICY
 	{ CONVERT_TO_WIDE(ACTION_AUTHORIZATION), authenticated_action }
@@ -466,6 +468,13 @@ EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
 	if (!StrnCmp(esp, label, StrLen(esp)))
 		return flash_into_esp(data, size, &label[ARRAY_SIZE(esp) - 1]);
 #endif
+
+#ifdef USE_SLOT
+	if (!StrCmp(BOOTLOADER_LABEL, label) || !StrCmp(BOOTLOADER_LABEL_A, label) \
+		|| !StrCmp(BOOTLOADER_LABEL_B, label) )
+		return flash_bootloader(data, size, label);
+#endif
+
 	/* special cases */
 	for (i = 0; i < ARRAY_SIZE(LABEL_EXCEPTIONS); i++)
 		if (!StrCmp(LABEL_EXCEPTIONS[i].name, label))

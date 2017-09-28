@@ -38,6 +38,9 @@
 #include <gpt.h>
 #include "protocol.h"
 #include "uefi_utils.h"
+#ifdef USE_SLOT
+#include "slot.h"
+#endif
 
 /* GUID for ESP partition on gmin */
 const EFI_GUID esp_ptn_guid = { 0x2568845d, 0x2332, 0x4675,
@@ -50,8 +53,13 @@ EFI_STATUS get_esp_fs(EFI_FILE_IO_INTERFACE **esp_fs)
 	EFI_HANDLE esp_handle = NULL;
 	EFI_FILE_IO_INTERFACE *esp;
 
+#ifdef USE_SLOT
+	ret = gpt_get_partition_handle(slot_label(BOOTLOADER_LABEL), LOGICAL_UNIT_USER,
+				       &esp_handle);
+#else
 	ret = gpt_get_partition_handle(BOOTLOADER_LABEL, LOGICAL_UNIT_USER,
 				       &esp_handle);
+#endif
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get ESP partition");
 		return ret;
