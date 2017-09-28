@@ -1671,16 +1671,15 @@ static EFI_STATUS setup_command_line_abl(
         struct boot_img_hdr *aosp_header;
 #ifdef USE_AVB
         UINTN avb_cmd_len = 0;
-#ifdef USE_SLOT
+#endif
         char   *serialno = NULL;
         CHAR16 *serialport = NULL;
         CHAR16 *bootreason = NULL;
+#ifdef USE_SLOT
         EFI_GUID system_uuid;
 #endif
-#endif
         UINTN abl_cmd_len = 0;
-        CHAR16 *boot_str16;
-        CHAR8 boot_str8[64] = "";
+        CHAR8 time_str8[64] = "";
         CHAR16 time_str16[32] = L"";
 
         if (abl_cmd_line != NULL)
@@ -1694,11 +1693,11 @@ static EFI_STATUS setup_command_line_abl(
                 ret = EFI_OUT_OF_RESOURCES;
                 goto out;
         }
-
 #ifdef USE_SLOT
         if (boot_target != RECOVERY) {
                 avb_prepend_command_line_rootfs(&cmdline16);
         }
+#endif
         /* Append serial number from DMI */
         serialno = get_serial_number();
         if (serialno) {
@@ -1768,16 +1767,13 @@ static EFI_STATUS setup_command_line_abl(
         if (EFI_ERROR(ret))
                 goto out;
 #endif
-
+#ifdef USE_AVB
+#ifdef USE_SLOT
         ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
                                            slot_get_active());
         if (EFI_ERROR(ret))
                 goto out;
 
-#endif
-
-#ifdef USE_AVB
-#ifdef USE_SLOT
         if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root="))) {
                 ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
                                                         &system_uuid, LOGICAL_UNIT_USER);
@@ -1834,16 +1830,11 @@ static EFI_STATUS setup_command_line_abl(
                 memcpy(cmdline + cmdlen + 1, abl_cmd_line, abl_cmd_len + 1);
         }
 
-        /* append verified boot state */
-        boot_str16 = boot_state_to_string(boot_state);
-        str_to_stra(boot_str8, boot_str16, StrLen(boot_str16) + 1);
-        cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.verifiedbootstate", boot_str8);
-
         /* append stages boottime */
         set_boottime_stamp(TM_JMP_KERNEL);
         format_stages_boottime(time_str16);
-        str_to_stra(boot_str8, time_str16, StrLen(time_str16) + 1);
-        cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.boottime", boot_str8);
+        str_to_stra(time_str8, time_str16, StrLen(time_str16) + 1);
+        cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.boottime", time_str8);
 
         buf->hdr.cmd_line_ptr = (UINT32)(UINTN)cmdline;
         ret = EFI_SUCCESS;
