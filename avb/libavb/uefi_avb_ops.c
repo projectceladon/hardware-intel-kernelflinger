@@ -168,6 +168,39 @@ static AvbIOResult write_to_partition(AvbOps* ops,
   return AVB_IO_RESULT_OK;
 }
 
+static AvbIOResult get_size_of_partition(AvbOps* ops,
+                                         const char* partition_name,
+                                         uint64_t* out_size) {
+  EFI_STATUS efi_ret;
+  struct gpt_partition_interface gpart;
+  uint64_t partition_size;
+  const CHAR16 * label;
+  UEFIAvbOpsData* data = (UEFIAvbOpsData*)ops->user_data;
+
+  avb_assert(partition_name != NULL);
+
+  label = stra_to_str(partition_name);
+  if (!label) {
+    error(L"out of memory");
+    return AVB_IO_RESULT_ERROR_OOM;
+  }
+
+  efi_ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
+  if (EFI_ERROR(efi_ret)) {
+    error(L"Partition %s not found", label);
+    return AVB_IO_RESULT_ERROR_NO_SUCH_PARTITION;
+  }
+
+  partition_size =
+      (gpart.part.ending_lba - gpart.part.starting_lba + 1) *
+      gpart.bio->Media->BlockSize;
+
+  if (out_size != NULL) {
+    *out_size = partition_size;
+  }
+
+  return AVB_IO_RESULT_OK;
+}
 
 static AvbIOResult validate_vbmeta_public_key(
     AvbOps* ops,
@@ -324,6 +357,7 @@ AvbOps* uefi_avb_ops_new(void) {
   data->disk_io  = gparti.dio;
   data->ops.read_from_partition = read_from_partition;
   data->ops.write_to_partition = write_to_partition;
+  data->ops.get_size_of_partition = get_size_of_partition;
   data->ops.validate_vbmeta_public_key = validate_vbmeta_public_key;
   data->ops.read_rollback_index = read_rollback_index;
   data->ops.write_rollback_index = write_rollback_index;
