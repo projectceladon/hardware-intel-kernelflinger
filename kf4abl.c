@@ -699,6 +699,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	VOID *bootimage = NULL;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	bool allow_verification_error = FALSE;
+	AvbSlotVerifyFlags flags;
 #ifdef USE_TRUSTY
 	const struct boot_img_hdr *header;
 	AvbSlotVerifyData *slot_data_tos = NULL;
@@ -734,10 +735,15 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 #endif
 
+	flags = AVB_SLOT_VERIFY_FLAGS_NONE;
+	if (allow_verification_error) {
+		flags |= AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR;
+	}
 	verify_result = avb_slot_verify(ops,
 					requested_partitions,
 					slot_suffix,
-					allow_verification_error,
+					flags,
+					AVB_HASHTREE_ERROR_MODE_RESTART,
 					&slot_data);
 
 	ret = get_avb_result(slot_data,
@@ -758,7 +764,8 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		verify_result = avb_slot_verify(ops,
 					requested_partitions,
 					slot_suffix,
-					allow_verification_error,
+					flags,
+					AVB_HASHTREE_ERROR_MODE_RESTART,
 					&slot_data_tos);
 
 		ret = get_avb_result(slot_data_tos,
