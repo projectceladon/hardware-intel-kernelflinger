@@ -1179,7 +1179,6 @@ EFI_STATUS emmc_read_rpmb_data_sdio(void *rpmb_dev, UINT16 blk_count, UINT16 blk
 	if (!buffer || !result || !sdio)
 		return EFI_INVALID_PARAMETER;
 
-
 	ret = emmc_get_current_part_switch_part_sdio(sdio, &current_part, RPMB_PARTITION);
 	if (EFI_ERROR(ret))
 		return ret;
@@ -1591,6 +1590,7 @@ EFI_STATUS emmc_rpmb_init(EFI_HANDLE disk_handle)
 
 	if ((*emmc_rpmb_ops_sdio.get_emmc)((void **)(&rpmb_dev), disk_handle) == EFI_SUCCESS) {
 		debug(L"init emmc rpmb sdio success");
+		def_rpmb_dev_sdio = (EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev;
 		return EFI_SUCCESS;
 	}
 	error(L"init emmc rpmb using sdio failed");
