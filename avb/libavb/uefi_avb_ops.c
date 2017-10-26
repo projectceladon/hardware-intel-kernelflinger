@@ -175,11 +175,10 @@ static AvbIOResult get_size_of_partition(AvbOps* ops,
   struct gpt_partition_interface gpart;
   uint64_t partition_size;
   const CHAR16 * label;
-  UEFIAvbOpsData* data = (UEFIAvbOpsData*)ops->user_data;
 
   avb_assert(partition_name != NULL);
 
-  label = stra_to_str(partition_name);
+  label = stra_to_str((const CHAR8 *)partition_name);
   if (!label) {
     error(L"out of memory");
     return AVB_IO_RESULT_ERROR_OOM;
