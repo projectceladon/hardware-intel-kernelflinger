@@ -79,6 +79,7 @@ union android_version {
      } __attribute__((packed)) split;
 };
 
+#ifndef USE_AVB
 static VOID pr_error_openssl(void)
 {
 	unsigned long code;
@@ -90,6 +91,7 @@ static VOID pr_error_openssl(void)
 		 * codes using 'openssl errstr' in a shell */
 		debug(L"openssl error code %08X", code);
 }
+#endif
 
 
 static EVP_PKEY *get_rsa_pubkey(X509 *cert)
@@ -106,6 +108,7 @@ static EVP_PKEY *get_rsa_pubkey(X509 *cert)
 }
 
 
+#ifndef USE_AVB
 static X509 *der_to_x509(CONST UINT8 *der, UINTN size)
 {
         BIO *bio;
@@ -305,6 +308,7 @@ static EFI_STATUS add_digest(X509_ALGOR *algo)
 
         return ret != 0 ? EFI_SUCCESS : EFI_UNSUPPORTED;
 }
+#endif
 
 
 static EFI_STATUS pub_key_hash(X509 *cert, UINT8 **hash_p,
@@ -399,6 +403,7 @@ EFI_STATUS raw_pub_key_sha256(IN const UINT8 *pub_key,
         return EFI_SUCCESS;
 }
 
+#ifndef USE_AVB
 UINT8 verify_android_boot_image(IN VOID *bootimage, IN VOID *der_cert,
                                 IN UINTN cert_size, OUT CHAR16 *target,
                                 OUT X509 **verifier_cert)
@@ -490,6 +495,7 @@ out:
 
         return verify_state;
 }
+#endif
 
 /* UEFI specification 2.4. Section 3.3
    The platform firmware is operating in secure boot mode if the value

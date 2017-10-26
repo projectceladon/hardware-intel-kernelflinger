@@ -80,7 +80,6 @@ LOCAL_SRC_FILES := \
 	lib.c \
 	options.c \
 	security.c \
-	signature.c \
 	vars.c \
 	log.c \
 	em.c \
@@ -104,6 +103,10 @@ LOCAL_SRC_FILES := \
 	rpmb.c \
 	timer.c \
 	nvme.c
+ifneq ($(BOARD_AVB_ENABLE),true)
+	LOCAL_SRC_FILES += \
+	signature.c
+endif
 
 ifeq ($(BOARD_GPIO_ENABLE),true)
     LOCAL_SRC_FILES += gpio.c
@@ -151,9 +154,11 @@ ifneq ($(TARGET_UEFI_ARCH),x86_64)
 endif
 
 ifeq ($(TARGET_BOOT_SIGNER),)
+ifneq ($(BOARD_AVB_ENABLE), true)
     LOCAL_SRC_FILES += \
 	aosp_sig.c \
 	asn1.c
+endif
 else
     LOCAL_SRC_FILES += $(TARGET_BOOT_SIGNER)_sig.c
 endif
