@@ -122,7 +122,6 @@ int decode_object(const unsigned char **datap, long *sizep,
 	return 0;
 }
 
-#ifndef BUILD_ANDROID_THINGS
 // TODO: M_d2i_ASN1_PRINTABLESTRING() is not exist in the borningssl used by Android Things,
 // also not exist in the newest borningssl.
 // Need to rewrite the function with newest borningssl.
@@ -159,7 +158,6 @@ int decode_printable_string(const unsigned char **datap, long *sizep,
 	*sizep = *sizep - (*datap - orig);
 	return 0;
 }
-#endif
 
 /* Consume a sequence type in the ASN.1 message and all items within, discarding
  * the data.
