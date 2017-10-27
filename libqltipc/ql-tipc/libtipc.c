@@ -29,6 +29,7 @@
 #include <trusty/trusty_ipc.h>
 #include <trusty/util.h>
 #include <trusty/keymaster.h>
+#include "../include/libkernelflinger/rpmb_storage.h"
 
 #define LOCAL_LOG 0
 #define TRUSTY_QL_TIPC_MAX_BUFFER_LEN (68*1024)
@@ -50,9 +51,65 @@ void trusty_ipc_shutdown(void)
     (void)trusty_dev_shutdown(&_tdev);
 }
 
+#define KEYBOX_PROVISION_MAGIC_DATA  (0xe62f30d4)
+#define KEYBOX_PROVISION_ADDR 1
+
+int rpmb_read_keybox_magic_data(uint32_t *data)
+{
+    int rc = 0;
+
+    rc = read_rpmb_keybox_magic(KEYBOX_PROVISION_ADDR,  data);
+    if (EFI_ERROR(rc)) {
+        trusty_error("[KeyBox] Failed to read keybox magic data from rpmb.\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int rpmb_write_keybox_magic_data(uint32_t data)
+{
+    int rc = 0;
+
+    rc = write_rpmb_keybox_magic(KEYBOX_PROVISION_ADDR, &data);
+    if (EFI_ERROR(rc)) {
+        trusty_error("[KeyBox] Failed to write keybox magic data from rpmb.\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int is_keybox_provisioned(void)
+{
+    uint32_t data = 0;
+    int rc = 0;
+
+    rc = rpmb_read_keybox_magic_data(&data);
+    if (rc != 0) {
+        trusty_error("Reading keybox provision magic data failed.\n");
+    }
+
+    return (data == KEYBOX_PROVISION_MAGIC_DATA);
+}
+
+int set_keybox_provision_magic_data(void)
+{
+    uint32_t data = KEYBOX_PROVISION_MAGIC_DATA;
+    int rc = 0;
+
+    rc = rpmb_write_keybox_magic_data(data);
+    if (rc != 0) {
+        trusty_error("Writing keybox provision magic data failed (%d)\n", rc);
+        return rc;
+    }
+
+    return 0;
+}
+
 int trusty_ipc_init(void)
 {
-    int rc;
+    int rc = 0;
 
     /* init Trusty device */
     trusty_info("Initializing Trusty device\n");
@@ -71,36 +128,40 @@ int trusty_ipc_init(void)
         return rc;
     }
 
-    /* get storage rpmb */
-    if (is_use_sim_rpmb()) {
-        trusty_info("Simulation RPMB is in use.\n");
-    } else {
-        trusty_info("Physical RPMB is in use.\n");
-        rpmb_ctx = rpmb_storage_get_ctx();
-    }
+    if (!is_keybox_provisioned()) {
+       /* get storage rpmb */
+       if (is_use_sim_rpmb()) {
+          trusty_info("Simulation RPMB is in use.\n");
+       } else {
+          trusty_info("Physical RPMB is in use.\n");
+          rpmb_ctx = rpmb_storage_get_ctx();
+       }
 
-    /* start secure storage proxy service */
-    trusty_info("Initializing RPMB storage proxy service\n");
-    rc = rpmb_storage_proxy_init(_ipc_dev, rpmb_ctx);
-    if (rc != 0) {
-        trusty_error("Initlializing RPMB storage proxy service failed (%d)\n",
+       /* start secure storage proxy service */
+       trusty_info("Initializing RPMB storage proxy service\n");
+       rc = rpmb_storage_proxy_init(_ipc_dev, rpmb_ctx);
+       if (rc != 0) {
+           trusty_error("Initlializing RPMB storage proxy service failed (%d)\n",
                      rc);
-        return rc;
+           return rc;
+       }
     }
-
+/*
     trusty_info("Initializing Trusty AVB client\n");
     rc = avb_tipc_init(_ipc_dev);
     if (rc != 0) {
         trusty_error("Initlializing Trusty AVB client failed (%d)\n", rc);
         return rc;
     }
-
+*/
     trusty_info("Initializing Trusty Keymaster client\n");
     rc = km_tipc_init(_ipc_dev);
     if (rc != 0) {
         trusty_error("Initlializing Trusty Keymaster client failed (%d)\n", rc);
         return rc;
     }
+
+    set_keybox_provision_magic_data();
 
     return TRUSTY_ERR_NONE;
 }
