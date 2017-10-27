@@ -152,6 +152,16 @@ EFI_STATUS read_rpmb_rollback_index(size_t index, UINT64 *out_rollback_index)
 	return rpmb_ops.read_rpmb_rollback_index(index, out_rollback_index);
 }
 
+EFI_STATUS write_rpmb_keybox_magic(UINT16 offset, void *buffer)
+{
+	return rpmb_ops.write_rpmb_keybox_magic(offset, buffer);
+}
+
+EFI_STATUS read_rpmb_keybox_magic(UINT16 offset, void *buffer)
+{
+	return rpmb_ops.read_rpmb_keybox_magic(offset, buffer);
+}
+
 static BOOLEAN is_rpmb_programed_real(void)
 {
 	EFI_STATUS ret;
@@ -273,6 +283,50 @@ static EFI_STATUS read_rpmb_rollback_index_real(size_t index, UINT64 *out_rollba
         memcpy(out_rollback_index, rpmb_buffer + blk_offset, sizeof(UINT64));
 	debug(L"rollback index=%16x", *out_rollback_index);
 	return EFI_SUCCESS;
+}
+
+static EFI_STATUS write_rpmb_keybox_magic_real(UINT16 offset, void *buffer)
+{
+        EFI_STATUS ret;
+        RPMB_RESPONSE_RESULT rpmb_result;
+
+        ret = emmc_read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
+        debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
+        if (EFI_ERROR(ret)) {
+               efi_perror(ret, L"Failed to read keybox magic data");
+               return ret;
+        }
+
+        if (!memcmp(buffer, rpmb_buffer, sizeof(UINT64))) {
+               return EFI_SUCCESS;
+        }
+
+        memcpy(rpmb_buffer, buffer, sizeof(UINT64));
+        ret = emmc_write_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
+        debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
+        if (EFI_ERROR(ret)) {
+               efi_perror(ret, L"Failed to write keybox magic data");
+               return ret;
+        }
+
+        return EFI_SUCCESS;
+}
+
+static EFI_STATUS read_rpmb_keybox_magic_real(UINT16 offset, void *buffer)
+{
+        EFI_STATUS ret;
+        RPMB_RESPONSE_RESULT rpmb_result;
+
+        ret = emmc_read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
+        debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
+        if (EFI_ERROR(ret)) {
+               efi_perror(ret, L"Failed to read keybox magic data");
+               return ret;
+        }
+
+        memcpy(buffer, rpmb_buffer, sizeof(UINT64));
+
+        return EFI_SUCCESS;
 }
 
 static BOOLEAN is_rpmb_programed_simulate(void)
@@ -408,6 +462,63 @@ static EFI_STATUS read_rpmb_rollback_index_simulate(size_t index, UINT64 *out_ro
 	return EFI_SUCCESS;
 }
 
+static EFI_STATUS write_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
+{
+        EFI_STATUS ret;
+        UINT32 byte_offset;
+
+        byte_offset = offset * RPMB_BLOCK_SIZE;
+        ret = emmc_simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+        debug(L"ret=%d", ret);
+        if (EFI_ERROR(ret)) {
+               efi_perror(ret, L"Failed to read keybox magic data");
+               return ret;
+        }
+
+        /*gpt not updated, force success*/
+        if (ret == EFI_NOT_FOUND) {
+                return EFI_SUCCESS;
+        }
+
+        if (!memcmp(buffer, rpmb_buffer, sizeof(UINT64))) {
+                return EFI_SUCCESS;
+        }
+
+        memcpy(rpmb_buffer, buffer, sizeof(UINT64));
+        ret = emmc_simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+        debug(L"ret=%d", ret);
+        if (EFI_ERROR(ret)) {
+               efi_perror(ret, L"Failed to write keybox magic data");
+               return ret;
+        }
+        return EFI_SUCCESS;
+
+}
+
+static EFI_STATUS read_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
+{
+        EFI_STATUS ret;
+        UINT32 byte_offset;
+
+        byte_offset = offset * RPMB_BLOCK_SIZE;
+        ret = emmc_simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+        debug(L"ret=%d", ret);
+        /*gpt not updated, force success*/
+        if (ret == EFI_NOT_FOUND) {
+                memset(buffer, 0, sizeof(UINT64));
+                return EFI_SUCCESS;
+        }
+
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to read keybox magic data");
+                return ret;
+        }
+
+        memcpy(buffer, rpmb_buffer, sizeof(UINT64));
+
+        return EFI_SUCCESS;
+}
+
 void rpmb_storage_init(BOOLEAN real)
 {
 	if (real) {
@@ -417,6 +528,8 @@ void rpmb_storage_init(BOOLEAN real)
 		rpmb_ops.read_rpmb_device_state = read_rpmb_device_state_real;
 		rpmb_ops.write_rpmb_rollback_index = write_rpmb_rollback_index_real;
 		rpmb_ops.read_rpmb_rollback_index = read_rpmb_rollback_index_real;
+		rpmb_ops.write_rpmb_keybox_magic = write_rpmb_keybox_magic_real;
+		rpmb_ops.read_rpmb_keybox_magic = read_rpmb_keybox_magic_real;
 	} else {
 		rpmb_ops.is_rpmb_programed = is_rpmb_programed_simulate;
 		rpmb_ops.program_rpmb_key = program_rpmb_key_simulate;
@@ -424,5 +537,7 @@ void rpmb_storage_init(BOOLEAN real)
 		rpmb_ops.read_rpmb_device_state = read_rpmb_device_state_simulate;
 		rpmb_ops.write_rpmb_rollback_index = write_rpmb_rollback_index_simulate;
 		rpmb_ops.read_rpmb_rollback_index = read_rpmb_rollback_index_simulate;
+		rpmb_ops.write_rpmb_keybox_magic = write_rpmb_keybox_magic_simulate;
+		rpmb_ops.read_rpmb_keybox_magic = read_rpmb_keybox_magic_simulate;
 	}
 }

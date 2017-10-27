@@ -43,6 +43,9 @@ typedef struct rpmb_storage {
 
 	EFI_STATUS (*write_rpmb_rollback_index)(size_t index, UINT64 in_rollback_index);
 	EFI_STATUS (*read_rpmb_rollback_index)(size_t index, UINT64 *out_rollback_index);
+
+	EFI_STATUS (*write_rpmb_keybox_magic)(UINT16 offset, void *buffer);
+	EFI_STATUS (*read_rpmb_keybox_magic)(UINT16 offset, void *buffer);
 } rpmb_storage_t;
 
 void rpmb_storage_init(BOOLEAN real);
@@ -60,4 +63,7 @@ EFI_STATUS read_rpmb_device_state(UINT8 *state);
 
 EFI_STATUS write_rpmb_rollback_index(size_t index, UINT64 in_rollback_index);
 EFI_STATUS read_rpmb_rollback_index(size_t index, UINT64 *out_rollback_index);
+
+EFI_STATUS write_rpmb_keybox_magic(UINT16 offset, void *buffer);
+EFI_STATUS read_rpmb_keybox_magic(UINT16 offset, void *buffer);
 #endif
