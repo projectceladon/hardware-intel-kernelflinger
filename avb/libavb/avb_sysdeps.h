@@ -94,6 +94,18 @@ void avb_printv(const char* message, ...) AVB_ATTR_SENTINEL;
 /* Aborts the program or reboots the device. */
 void avb_abort(void) AVB_ATTR_NO_RETURN;
 
+#ifdef USE_UI
+/* Prints out a message in UI. The string passed must be a NUL-terminated
+ * UTF-8 string.
+ */
+void avb_print_ui(const char* message);
+
+/* Prints out a vector of strings in UI. Each argument must point to a
+ * NUL-terminated UTF-8 string and NULL should be the last argument.
+ */
+void avb_printv_ui(const char* message, ...) AVB_ATTR_SENTINEL;
+#endif
+
 /* Allocates |size| bytes. Returns NULL if no memory is available,
  * otherwise a pointer to the allocated memory.
  *
