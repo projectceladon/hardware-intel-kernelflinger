@@ -80,6 +80,27 @@ void avb_abort(void) {
   }
 }
 
+#ifdef USE_UI
+void avb_print_ui(const char* message) {
+  CHAR16* p = stra_to_str(message);
+  if (p != NULL) {
+    ui_error(p);
+    FreePool(p);
+  }
+}
+
+void avb_printv_ui(const char* message, ...) {
+  va_list ap;
+
+  va_start(ap, message);
+  do {
+    avb_print_ui(message);
+    message = va_arg(ap, const char*);
+  } while (message != NULL);
+  va_end(ap);
+}
+#endif
+
 void* avb_malloc_(size_t size) {
   EFI_STATUS err;
   void* x;

@@ -65,6 +65,9 @@ ifeq ($(KERNELFLINGER_USE_IPP_SHA256),true)
     LOCAL_CFLAGS += -DUSE_IPP_SHA256
     LOCAL_CFLAGS += -msse4 -msha
 endif
+ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
+    LOCAL_CFLAGS += -DUSE_UI
+endif
 
 LOCAL_SRC_FILES := \
     libavb/avb_chain_partition_descriptor.c \
