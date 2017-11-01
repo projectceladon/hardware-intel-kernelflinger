@@ -184,6 +184,39 @@ static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
 	fastboot_reboot(bt, L"Rebooting to requested target ...");
 }
 
+#ifdef __SUPPORT_ABL_BOOT
+#define IFWI_CAPSULE_UPDATE			L"IfwiCapsuleUpdate"
+static void cmd_oem_fw_update(INTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	CHAR8 *capsule_buf;
+	INTN capsule_buf_len;
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameter");
+		return;
+	}
+
+	capsule_buf = argv[1];
+	capsule_buf_len = strlen(capsule_buf);
+
+	if (capsule_buf[1] < '0' || capsule_buf[1] > '9' || capsule_buf[2] != ':'
+		|| capsule_buf_len > 33) {
+		fastboot_fail("Illegal capsule buffer");
+		return;
+	}
+
+	ret = set_efi_variable(&loader_guid, IFWI_CAPSULE_UPDATE, capsule_buf_len + 1,
+						   capsule_buf, TRUE, TRUE);
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Unable to set %s", IFWI_CAPSULE_UPDATE);
+		return;
+	}
+
+	fastboot_okay("");
+}
+#endif
+
 static void cmd_oem_garbage_disk(__attribute__((__unused__)) INTN argc,
 				 __attribute__((__unused__)) CHAR8 **argv)
 {
@@ -492,6 +525,9 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "setvar",			UNLOCKED,	cmd_oem_setvar  },
 	{ "garbage-disk",		UNLOCKED,	cmd_oem_garbage_disk  },
 	{ "reboot",			LOCKED,		cmd_oem_reboot  },
+#ifdef __SUPPORT_ABL_BOOT
+	{ "fw-update",			UNLOCKED,	cmd_oem_fw_update  },
+#endif
 #ifndef USER
 	{ "set-storage",		LOCKED,		cmd_oem_set_storage  },
 	{ "reprovision",		LOCKED,		cmd_oem_reprovision  },
