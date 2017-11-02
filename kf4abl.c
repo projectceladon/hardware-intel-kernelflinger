@@ -715,7 +715,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to get avb result for tos");
 			goto fail;
-		} else if (tos_state != BOOT_STATE_GREEN) {
+		} else if ((tos_state != BOOT_STATE_GREEN) && is_abl_secure_boot_enabled()) {
 			ret = EFI_ABORTED;
 			goto fail;
 		}
