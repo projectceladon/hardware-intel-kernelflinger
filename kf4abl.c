@@ -327,6 +327,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				" androidboot.bootloader=slimboot_android_payload-07_03-userdebug" \
 				" gpt", get_serial_number());
 
+		set_abl_secure_boot(0);
 		log(L"KERNELFLINGER_BUILD_FOR_SLIMBOOT: argc == %d, default parameters added !\n", argc);
 		return NORMAL_BOOT;
 	}
