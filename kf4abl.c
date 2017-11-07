@@ -61,8 +61,17 @@
 #include "trusty.h"
 
 #define TRUSTY_PARAM_STRING          "trusty.param_addr="
+#define BOOTLOADER_SEED_MAX_ENTRIES  4
+#define MMC_PROD_NAME_WITH_PSN_LEN   15
 #define LENGTH_TRUSTY_PARAM_STRING   18
-#define TRUSTY_SEED_LEN             32
+#define TRUSTY_SEED_LEN              32
+
+/* structure of seed info */
+typedef struct _seed_info {
+	uint8_t svn;
+	uint8_t padding[3];
+	uint8_t seed[TRUSTY_SEED_LEN];
+}__attribute__((packed)) seed_info_t;
 
 typedef struct {
 	/* version of the struct. 0x0001 for this version */
@@ -72,7 +81,8 @@ typedef struct {
 	/* assumed to be 16MB */
 	uint32_t 			TrustyMemSize;
 	/* seed value retrieved from CSE */
-	uint8_t 			seed[TRUSTY_SEED_LEN];
+	uint32_t			num_seeds;
+	seed_info_t 		seed_list[BOOTLOADER_SEED_MAX_ENTRIES];
 	struct rot_data_t 	RotData;
 } __attribute__((packed)) trusty_boot_params_t;
 
@@ -84,10 +94,14 @@ typedef struct trusty_startup_params {
 	/* Load time size of trusty */
 	uint32_t load_size;
 	/* Seed */
-	uint8_t seed[TRUSTY_SEED_LEN];
+	uint32_t num_seeds;
+	seed_info_t seed_list[BOOTLOADER_SEED_MAX_ENTRIES];
 	/* Rot */
 	struct rot_data_t RotData;
-} trusty_startup_params_t;
+	/* Concatenation of mmc product name with a string representation of PSN */
+	char serial[MMC_PROD_NAME_WITH_PSN_LEN];
+}__attribute__((packed)) trusty_startup_params_t;
+
 
 static trusty_boot_params_t *p_trusty_boot_params;
 #endif
@@ -538,17 +552,26 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 }
 
 #ifdef USE_TRUSTY
-static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UINTN base, UINTN sz, UINT8 * seed)
+static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UINTN base, UINTN sz, uint32_t num, seed_info_t *seed_list)
 {
-	if (!param || !seed)
+	char *serialno;
+
+	if (!param || !seed_list || num > BOOTLOADER_SEED_MAX_ENTRIES || num == 0)
 		return EFI_INVALID_PARAMETER;
 
 	memset(param, 0, sizeof(trusty_startup_params_t));
 	param->size_of_this_struct = sizeof(trusty_startup_params_t);
 	param->load_base = base;
 	param->load_size = sz;
-	memcpy(param->seed, seed, TRUSTY_SEED_LEN);
-	memset(seed, 0, TRUSTY_SEED_LEN);
+	param->num_seeds = num;
+	serialno = get_serial_number();
+	if (!serialno)
+		return EFI_NOT_FOUND;
+
+	memcpy(param->serial, serialno, MMC_PROD_NAME_WITH_PSN_LEN);
+	memcpy(param->seed_list, seed_list, sizeof(param->seed_list));
+
+	memset(seed_list, 0, sizeof(param->seed_list));
 
 	return EFI_SUCCESS;
 }
@@ -725,7 +748,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		header = (const struct boot_img_hdr *)tos->data;
 		load_base = (UINTN)(tos->data + header->page_size);
 		ret = init_trusty_startup_params(&trusty_startup_params, load_base,
-				header->kernel_size, p_trusty_boot_params->seed);
+				header->kernel_size, p_trusty_boot_params->num_seeds, p_trusty_boot_params->seed_list);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to init trusty startup params");
 			goto fail;
@@ -778,7 +801,7 @@ fail:
 		avb_slot_verify_data_free(slot_data_tos);
 		slot_data_tos = NULL;
 	}
-	memset(trusty_startup_params.seed, 0, TRUSTY_SEED_LEN);
+	memset(trusty_startup_params.seed_list, 0, sizeof(trusty_startup_params.seed_list));
 #endif
 
 	return ret;
@@ -824,7 +847,7 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		load_base = (UINTN)((UINT8 *)tosimage + hdr->page_size);
 
 		ret = init_trusty_startup_params(&trusty_startup_params, load_base,
-				hdr->kernel_size, p_trusty_boot_params->seed);
+				hdr->kernel_size, p_trusty_boot_params->num_seeds, p_trusty_boot_params->seed_list);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to init trusty startup params");
 			goto exit;
@@ -859,7 +882,7 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	ret = EFI_INVALID_PARAMETER;
 exit:
 #ifdef USE_TRUSTY
-	memset(trusty_startup_params.seed, 0, TRUSTY_SEED_LEN);
+	memset(trusty_startup_params.seed_list, 0, sizeof(trusty_startup_params.seed_list));
 #endif
 	return ret;
 }
