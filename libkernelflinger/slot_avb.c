@@ -389,7 +389,6 @@ EFI_STATUS slot_set_active(const char *suffix)
 	 */
 
 	avb_ab_mark_slot_active(&ab_ops, SUFFIX_INDEX(suffix));
-	avb_ab_mark_slot_successful(&ab_ops, SUFFIX_INDEX(suffix));
 	avb_ab_flow(&ab_ops, requested_partitions, AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR,\
 			AVB_HASHTREE_ERROR_MODE_RESTART, &data);
 	if (!data)
