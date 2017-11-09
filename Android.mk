@@ -202,7 +202,8 @@ LOCAL_STATIC_LIBRARIES := \
 	libfastboot-$(TARGET_BUILD_VARIANT) \
 	libefiusb-$(TARGET_BUILD_VARIANT) \
 	libefitcp-$(TARGET_BUILD_VARIANT) \
-	libtransport-$(TARGET_BUILD_VARIANT)
+	libtransport-$(TARGET_BUILD_VARIANT) \
+	libheci-$(TARGET_BUILD_VARIANT)
 ifneq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_STATIC_LIBRARIES += libadb-$(TARGET_BUILD_VARIANT)
 endif
@@ -304,6 +305,7 @@ LOCAL_STATIC_LIBRARIES += \
 	libefiusb-$(TARGET_BUILD_VARIANT) \
 	libefitcp-$(TARGET_BUILD_VARIANT) \
 	libtransport-$(TARGET_BUILD_VARIANT) \
+	libheci-$(TARGET_BUILD_VARIANT) \
 	$(SHARED_STATIC_LIBRARIES) \
 	libpayload \
 	libefiwrapper-$(TARGET_BUILD_VARIANT) \
@@ -408,6 +410,7 @@ LOCAL_STATIC_LIBRARIES += \
 	libefiusb-$(TARGET_BUILD_VARIANT) \
 	libefitcp-$(TARGET_BUILD_VARIANT) \
 	libtransport-$(TARGET_BUILD_VARIANT) \
+	libheci-$(TARGET_BUILD_VARIANT) \
 	$(SHARED_STATIC_LIBRARIES) \
 	libpayload \
 	libefiwrapper-$(TARGET_BUILD_VARIANT) \

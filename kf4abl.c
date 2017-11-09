@@ -60,6 +60,8 @@
 #ifdef USE_TRUSTY
 #include "trusty.h"
 
+#include <hecisupport.h>
+
 #define TRUSTY_PARAM_STRING          "trusty.param_addr="
 #define BOOTLOADER_SEED_MAX_ENTRIES  4
 #define MMC_PROD_NAME_WITH_PSN_LEN   15
@@ -782,6 +784,13 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 
 		trusty_ipc_init();
 		trusty_ipc_shutdown();
+
+		// Send EOP heci messages
+		ret = heci_end_of_post();
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to send EOP message to CSE FW, halt");
+			goto fail;
+		}
 	}
 #endif
 
@@ -870,6 +879,13 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 
 		trusty_ipc_init();
 		trusty_ipc_shutdown();
+
+		// Send EOP heci messages
+		ret = heci_end_of_post();
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to send EOP message to CSE FW, halt");
+			goto exit;
+		}
 	}
 #endif
 
