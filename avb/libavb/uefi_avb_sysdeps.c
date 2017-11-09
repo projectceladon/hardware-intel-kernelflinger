@@ -29,6 +29,8 @@
 #include <libavb/libavb.h>
 
 #include "uefi_avb_util.h"
+#include "lib.h"
+#include "log.h"
 
 int avb_memcmp(const void* src1, const void* src2, size_t n) {
   return (int)CompareMem((VOID*)src1, (VOID*)src2, (UINTN)n);
@@ -49,7 +51,9 @@ void* avb_memset(void* dest, const int c, size_t n) {
 }
 
 void avb_print(const char* message) {
-  CHAR16* p = stra_to_str(message);
+  CHAR16* p = NULL;
+
+  p = stra_to_str((const CHAR8 *)message);
   if (p != NULL) {
     log(L"%s", p);
     FreePool(p);
