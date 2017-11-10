@@ -318,6 +318,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	UINTN bootmode_info_str_len;
 	CHAR8 *boot_target_str = (CHAR8 *)"ABL.boot_target=";
 	UINTN boot_target_str_len;
+	CHAR16 *boot_reset_str = (CHAR16 *)L"ABL.reset=";
+	UINTN boot_reset_str_len;
 	CHAR8 *nptr = NULL;
 
 	ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
@@ -353,11 +355,17 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	secureboot_str_len = strlen((CHAR8 *)secureboot_str);
 	bootmode_info_str_len = strlen((CHAR8 *)bootmode_info_str);
 	boot_target_str_len = strlen((CHAR8 *)boot_target_str);
+	boot_reset_str_len = StrLen((CHAR16 *)boot_reset_str);
 
 	/*Parse boot target*/
 	for (i = 0; i < argc; i++) {
 		debug(L" abl cmd %02d: %s", i, argv[i]);
 		arglen = StrLen(argv[i]);
+
+		/* Parse "ABL.reset=xxx" */
+		if(StrnCmp(argv[i], boot_reset_str, boot_reset_str_len) == 0)
+			set_reboot_reason(argv[i] + boot_reset_str_len);
+
 		if (arglen > (int)sizeof(arg8) - 2)
 			arglen = sizeof(arg8) - 2;
 		str_to_stra((CHAR8 *)arg8, argv[i], arglen + 1);
