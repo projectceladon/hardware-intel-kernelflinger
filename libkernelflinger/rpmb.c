@@ -681,6 +681,7 @@ EFI_STATUS emmc_get_counter_passthru(void *rpmb_dev, UINT32 *write_counter, cons
 
 	if (key && (rpmb_check_mac(key, &counter_frame, 1) == 0)) {
 		debug(L"rpmb_check_mac failed");
+		*result = RPMB_RES_AUTH_FAILURE;
 		ret = EFI_ABORTED;
 		goto out;
 	}
@@ -1268,6 +1269,7 @@ EFI_STATUS emmc_get_counter_sdio(void *rpmb_dev, UINT32 *write_counter, const vo
 
 	if (key && (rpmb_check_mac(key, &counter_frame, 1) == 0)) {
 		debug(L"rpmb_check_mac failed");
+		*result = RPMB_RES_AUTH_FAILURE;
 		ret = EFI_ABORTED;
 		goto out;
 	}
