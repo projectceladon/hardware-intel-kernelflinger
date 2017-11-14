@@ -55,6 +55,9 @@
 #ifdef USE_AVB
 #include "avb_init.h"
 #endif
+#ifdef RPMB_STORAGE
+#include "rpmb_storage.h"
+#endif
 
 #define OS_INITIATED L"os_initiated"
 
@@ -2002,6 +2005,10 @@ static inline EFI_STATUS handover_jump_abl(struct boot_params *boot_params,
              efi_perror(ret, L"Failed to setup memory map");
              return ret;
         }
+
+#ifdef RPMB_STORAGE
+        clear_rpmb_key();
+#endif
 
         log(L"jmp 0x%X (setup @0x%x)\n", (UINTN)kernel_start, (UINTN)boot_params);
         __asm__ __volatile__ ("cli;  jmp *%0"

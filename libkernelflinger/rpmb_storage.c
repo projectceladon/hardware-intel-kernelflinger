@@ -54,9 +54,16 @@
 #define RPMB_ALL_BLOCK_TOTAL_COUNT        10
 
 static rpmb_storage_t rpmb_ops;
-static UINT8 rpmb_key[RPMB_KEY_SIZE + 1] = "12345ABCDEF1234512345ABCDEF12345";
+static UINT8 rpmb_key[RPMB_KEY_SIZE] = { 0 };
 static UINT8 rpmb_buffer[RPMB_BLOCK_SIZE];
-
+/*
+ * 0~6 is magic
+ * 7~38 is rpmb key
+ * 39~41 is write counter
+ */
+#define TEEDATA_KEY_MAGIC               "key_sim"
+#define TEEDATA_KEY_MAGIC_ADDR          0
+#define TEEDATA_KEY_MAGIC_LENGTH        7
 
 EFI_STATUS derive_rpmb_key(UINT8 * out_key)
 {
@@ -91,6 +98,24 @@ void clear_rpmb_key(void)
 void set_rpmb_key(UINT8 *key)
 {
 	memcpy(rpmb_key, key, RPMB_KEY_SIZE);
+}
+
+EFI_STATUS clear_teedata_flag(void)
+{
+	EFI_STATUS ret;
+ 	uint8_t magic[TEEDATA_KEY_MAGIC_LENGTH] = {0};
+
+	debug(L"enter clear teedata flag.");
+
+	ret = emmc_simulate_write_rpmb_data(TEEDATA_KEY_MAGIC_ADDR, magic, TEEDATA_KEY_MAGIC_LENGTH);
+	if (EFI_ERROR(ret)) {
+		debug(L"clear teedata_flag failed for magic.");
+		return ret;
+	}
+
+	debug(L"end clear teedata flag , success");
+
+	return EFI_SUCCESS;
 }
 
 #ifndef USER
@@ -130,6 +155,11 @@ BOOLEAN is_rpmb_programed(void)
 EFI_STATUS program_rpmb_key(UINT8 *key)
 {
 	return rpmb_ops.program_rpmb_key(key);
+}
+
+EFI_STATUS rpmb_read_counter(const void *key, RPMB_RESPONSE_RESULT *result)
+{
+	return rpmb_ops.rpmb_read_counter(key, result);
 }
 
 EFI_STATUS write_rpmb_device_state(UINT8 state)
@@ -190,6 +220,20 @@ static EFI_STATUS program_rpmb_key_real(UINT8 *key)
 		return ret;
 	}
 	return EFI_SUCCESS;
+}
+
+static EFI_STATUS rpmb_read_counter_real(const void *key, RPMB_RESPONSE_RESULT *result)
+{
+	EFI_STATUS ret;
+	UINT32 write_counter;
+
+	ret = emmc_get_counter(NULL, &write_counter, key, result);
+	if(EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read counter for physical rpmb");
+		return ret;
+	}
+	return EFI_SUCCESS;
+
 }
 
 static EFI_STATUS write_rpmb_device_state_real(UINT8 state)
@@ -354,6 +398,19 @@ static EFI_STATUS program_rpmb_key_simulate(UINT8 *key)
 
 	if (EFI_ERROR(efi_ret)) {
 		efi_perror(efi_ret, L"Failed to program rpmb key");
+		return efi_ret;
+	}
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS rpmb_read_counter_simulate(const void *key, RPMB_RESPONSE_RESULT *result)
+{
+	EFI_STATUS efi_ret;
+	UINT32 write_counter;
+
+	efi_ret = emmc_simulate_get_counter(&write_counter, key, result);
+	if(EFI_ERROR(efi_ret)) {
+		efi_perror(efi_ret, L"Failed to read counter for simulate");
 		return efi_ret;
 	}
 	return EFI_SUCCESS;
@@ -524,6 +581,7 @@ void rpmb_storage_init(BOOLEAN real)
 	if (real) {
 		rpmb_ops.is_rpmb_programed = is_rpmb_programed_real;
 		rpmb_ops.program_rpmb_key = program_rpmb_key_real;
+		rpmb_ops.rpmb_read_counter = rpmb_read_counter_real;
 		rpmb_ops.write_rpmb_device_state = write_rpmb_device_state_real;
 		rpmb_ops.read_rpmb_device_state = read_rpmb_device_state_real;
 		rpmb_ops.write_rpmb_rollback_index = write_rpmb_rollback_index_real;
@@ -533,6 +591,7 @@ void rpmb_storage_init(BOOLEAN real)
 	} else {
 		rpmb_ops.is_rpmb_programed = is_rpmb_programed_simulate;
 		rpmb_ops.program_rpmb_key = program_rpmb_key_simulate;
+		rpmb_ops.rpmb_read_counter = rpmb_read_counter_simulate;
 		rpmb_ops.write_rpmb_device_state = write_rpmb_device_state_simulate;
 		rpmb_ops.read_rpmb_device_state = read_rpmb_device_state_simulate;
 		rpmb_ops.write_rpmb_rollback_index = write_rpmb_rollback_index_simulate;

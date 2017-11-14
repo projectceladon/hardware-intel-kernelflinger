@@ -78,6 +78,7 @@ BOOLEAN is_efi_secure_boot_enabled(VOID);
 
 #ifdef __SUPPORT_ABL_BOOT
 BOOLEAN is_abl_secure_boot_enabled(VOID);
+BOOLEAN is_eom_and_secureboot_enabled(VOID);
 EFI_STATUS set_abl_secure_boot(UINT8 secure);
 #endif
 EFI_STATUS set_os_secure_boot(BOOLEAN secure);

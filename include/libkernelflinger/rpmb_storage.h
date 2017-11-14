@@ -32,11 +32,14 @@
 #ifndef _RPMB_STORAGE_H_
 #define _RPMB_STORAGE_H_
 
+#include "rpmb.h"
+
 #define RPMB_KEY_SIZE    32
 
 typedef struct rpmb_storage {
 	BOOLEAN (*is_rpmb_programed)(void);
 	EFI_STATUS (*program_rpmb_key)(UINT8 *key);
+	EFI_STATUS (*rpmb_read_counter)(const void *key, RPMB_RESPONSE_RESULT *result);
 
 	EFI_STATUS (*write_rpmb_device_state)(UINT8 state);
 	EFI_STATUS (*read_rpmb_device_state)(UINT8 *state);
@@ -52,8 +55,10 @@ void rpmb_storage_init(BOOLEAN real);
 
 void clear_rpmb_key(void);
 void set_rpmb_key(UINT8 *key);
+EFI_STATUS clear_teedata_flag(void);
 EFI_STATUS erase_rpmb_all_blocks(void);
 EFI_STATUS derive_rpmb_key(UINT8 *out_key);
+EFI_STATUS rpmb_read_counter(const void *key, RPMB_RESPONSE_RESULT *result);
 
 BOOLEAN is_rpmb_programed(void);
 EFI_STATUS program_rpmb_key(UINT8 *key);

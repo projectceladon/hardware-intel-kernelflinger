@@ -61,6 +61,7 @@
 #include "trusty.h"
 
 #include <hecisupport.h>
+#include <openssl/hkdf.h>
 
 #define TRUSTY_PARAM_STRING          "trusty.param_addr="
 #define BOOTLOADER_SEED_MAX_ENTRIES  4
@@ -104,8 +105,8 @@ typedef struct trusty_startup_params {
 	char serial[MMC_PROD_NAME_WITH_PSN_LEN];
 }__attribute__((packed)) trusty_startup_params_t;
 
-
 static trusty_boot_params_t *p_trusty_boot_params;
+static UINT8 out_key[BOOTLOADER_SEED_MAX_ENTRIES][RPMB_KEY_SIZE] = {{0}, {0}, {0}, {0}};
 #endif
 typedef union {
 	uint32_t raw;
@@ -651,6 +652,69 @@ static UINT8 validate_bootimage(
 }
 #endif
 
+#ifdef USE_TRUSTY
+/* HWCRYPTO Server App UUID */
+const EFI_GUID  crypo_uuid = { 0x23fe5938, 0xccd5, 0x4a78,
+	{ 0x8b, 0xaf, 0x0f, 0x3d, 0x05, 0xff, 0xc2, 0xdf } };
+
+static EFI_STATUS derive_rpmb_key_with_index(UINT8 index, VOID *kbuf)
+{
+	EFI_STATUS ret;
+	UINT8 rpmb_key[RPMB_KEY_SIZE] = {0};
+	UINT8 serial[MMC_PROD_NAME_WITH_PSN_LEN] = {0};
+	char *serialno;
+
+	serialno = get_serial_number();
+
+	if (!serialno)
+		return EFI_NOT_FOUND;
+
+	/* Clear Byte 2 and 0 for CID[6] PRV and CID[0] CRC for eMMC Field Firmware Updates
+	 * serial[0] = cid[0];	-- CRC
+	 * serial[2] = cid[6];	-- PRV
+	 */
+	memcpy(serial, serialno, sizeof(serial));
+	serial[0] ^= serial[0];
+	serial[2] ^= serial[2];
+
+	if (index < p_trusty_boot_params->num_seeds) {
+		if (!HKDF(rpmb_key, sizeof(rpmb_key), EVP_sha256(),
+			  (const uint8_t *)p_trusty_boot_params->seed_list[index].seed, RPMB_KEY_SIZE,
+			  (const uint8_t *)&crypo_uuid, sizeof(EFI_GUID),
+			  (const uint8_t *)serial, sizeof(serial))) {
+			error(L"HDKF failed \n");
+			ret = EFI_INVALID_PARAMETER;
+			goto out;
+		}
+
+		memcpy(kbuf, rpmb_key, RPMB_KEY_SIZE);
+	}
+
+	ret = EFI_SUCCESS;
+
+out:
+	memset(rpmb_key, 0, sizeof(rpmb_key));
+	return ret;
+}
+
+static EFI_STATUS get_rpmb_derived_key(VOID *kbuf, size_t kbuf_len)
+{
+	UINT32 i;
+
+	if (kbuf_len < p_trusty_boot_params->num_seeds * RPMB_KEY_SIZE)
+		return EFI_INVALID_PARAMETER;
+
+	for (i = 0; i < p_trusty_boot_params->num_seeds; i++) {
+		if (EFI_SUCCESS != derive_rpmb_key_with_index(i, kbuf + i * RPMB_KEY_SIZE)) {
+			memset(kbuf + i * RPMB_KEY_SIZE, 0, RPMB_KEY_SIZE);
+			return EFI_INVALID_PARAMETER;
+		}
+	}
+
+	return EFI_SUCCESS;
+}
+#endif
+
 #ifdef USE_AVB
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
@@ -909,7 +973,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	enum boot_target target;
 	EFI_STATUS ret;
 #ifdef RPMB_STORAGE
-	UINT8 key[RPMB_KEY_SIZE +1] = "12345ABCDEF1234512345ABCDEF12345";
+	UINT8 key[RPMB_KEY_SIZE] = {0};
+#ifdef USE_TRUSTY
+	UINT16 i;
+	RPMB_RESPONSE_RESULT result;
+#endif
 #endif
 
 #ifndef __FORCE_FASTBOOT
@@ -924,7 +992,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 #ifdef RPMB_STORAGE
 	emmc_rpmb_init(NULL);
-	rpmb_storage_init(is_abl_secure_boot_enabled());
+	rpmb_storage_init(is_eom_and_secureboot_enabled());
 #endif
 
 	ret = slot_init();
@@ -934,6 +1002,47 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	}
 
 #ifdef RPMB_STORAGE
+#ifdef USE_TRUSTY
+	if (is_eom_and_secureboot_enabled()) {
+		ret = clear_teedata_flag();
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Clear teedata flag failed");
+			return ret;
+		}
+	}
+
+	ret = get_rpmb_derived_key(out_key, sizeof(out_key));
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Get RPMB derived key failed");
+		return ret;
+	}
+
+	for (i = 0; i < p_trusty_boot_params->num_seeds; i++) {
+		memcpy(key, out_key[i], RPMB_KEY_SIZE);
+		ret = rpmb_read_counter(key, &result);
+		if (ret == EFI_SUCCESS)
+			break;
+
+		if (result == RPMB_RES_NO_AUTH_KEY_PROGRAM) {
+			efi_perror(ret, L"key is not programmed, use the first seed to derive keys.");
+			break;
+		}
+
+		if (result != RPMB_RES_AUTH_FAILURE) {
+			efi_perror(ret, L"rpmb_read_counter unexpected error: %d.", result);
+			goto err_get_rpmb_key;
+		}
+	}
+
+	if (i >= BOOTLOADER_SEED_MAX_ENTRIES) {
+		error(L"All keys are not match!");
+		goto err_get_rpmb_key;
+	}
+
+	if (i != 0)
+		error(L"seed changed to %d ", i);
+#endif
+
 	if (!is_rpmb_programed()) {
 		debug(L"rpmb not programmed");
 		ret = program_rpmb_key(key);
@@ -945,6 +1054,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		debug(L"rpmb already programmed");
 		set_rpmb_key(key);
 	}
+
+#ifdef USE_TRUSTY
+err_get_rpmb_key:
+	memset(out_key, 0, sizeof(out_key));
+	memset(key, 0, sizeof(key));
+#endif
 #endif
 
 #ifdef __FORCE_FASTBOOT

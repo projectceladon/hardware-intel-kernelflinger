@@ -46,6 +46,7 @@
 #include "signature.h"
 #include "lib.h"
 #include "vars.h"
+#include "life_cycle.h"
 
 #define SETUP_MODE_VAR	        L"SetupMode"
 #define SECURE_BOOT_VAR         L"SecureBoot"
@@ -543,6 +544,23 @@ BOOLEAN is_abl_secure_boot_enabled(VOID)
         debug(L"Getting abl secure boot to value[%d], size[%d]", value, cursize);
 
         return value == 1;
+}
+
+BOOLEAN is_eom_and_secureboot_enabled(VOID)
+{
+        BOOLEAN sbflags;
+        EFI_STATUS ret;
+        BOOLEAN enduser;
+
+        ret = life_cycle_is_enduser(&enduser);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to get eom var");
+                return FALSE;
+        }
+
+        sbflags = is_abl_secure_boot_enabled();
+
+        return sbflags && enduser;
 }
 
 EFI_STATUS set_abl_secure_boot(UINT8 secure)
