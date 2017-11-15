@@ -504,8 +504,12 @@ static const char *get_battery_voltage_var()
 	UINTN voltage;
 
 	ret = get_battery_voltage(&voltage);
-	if (EFI_ERROR(ret))
-		return NULL;
+	if (EFI_ERROR(ret)) {
+		if (ret == EFI_UNSUPPORTED)
+			voltage = 0;
+		else
+			return NULL;
+	}
 
 	len = efi_snprintf((CHAR8 *)battery_voltage, sizeof(battery_voltage),
 			   (CHAR8 *)"%dmV", voltage);
@@ -515,6 +519,21 @@ static const char *get_battery_voltage_var()
 	}
 
 	return battery_voltage;
+}
+
+static const char *get_battery_soc_ok_var()
+{
+	EFI_STATUS ret;
+	static char *battery_soc_ok;
+	UINTN voltage;
+
+	ret = get_battery_voltage(&voltage);
+	if (EFI_ERROR(ret))
+		battery_soc_ok = "no";
+	else
+		battery_soc_ok = "yes";
+
+	return battery_soc_ok;
 }
 
 static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char *fmt, va_list ap)
@@ -1180,6 +1199,10 @@ static EFI_STATUS fastboot_init()
 		goto error;
 
 	ret = fastboot_publish_dynamic("battery-voltage", get_battery_voltage_var);
+	if (EFI_ERROR(ret))
+		goto error;
+
+	ret = fastboot_publish_dynamic("battery-soc-ok", get_battery_soc_ok_var);
 	if (EFI_ERROR(ret))
 		goto error;
 
