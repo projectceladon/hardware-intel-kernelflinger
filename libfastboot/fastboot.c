@@ -1180,11 +1180,9 @@ static EFI_STATUS fastboot_init()
 	data = NULL;
 #endif
 
-#ifdef HAL_AUTODETECT
 	ret = fastboot_publish("variant", info_variant());
 	if (EFI_ERROR(ret))
 		goto error;
-#endif
 
 	ret = fastboot_publish("hw-revision", info_hw_revision());
 	if (EFI_ERROR(ret))
