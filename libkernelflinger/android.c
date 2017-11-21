@@ -1044,7 +1044,7 @@ static EFI_STATUS setup_command_line(
                 goto out;
 #endif
 
-        if (boot_target != RECOVERY && slot_get_active()) {
+        if (slot_get_active()) {
                 ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
                                            slot_get_active());
                 if (EFI_ERROR(ret))
