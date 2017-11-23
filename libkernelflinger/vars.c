@@ -856,17 +856,6 @@ CHAR16 *get_reboot_reason()
 	return reboot_reason;
 }
 
-EFI_STATUS set_reboot_reason(CHAR16 *reboot_reason)
-{
-	EFI_STATUS ret;
-
-	if (reboot_reason[0] == 0)
-		return EFI_INVALID_PARAMETER;
-
-	ret = set_efi_variable_str(&loader_guid, REBOOT_REASON, FALSE, FALSE, reboot_reason);
-	return ret;
-}
-
 BOOLEAN is_reboot_reason(CHAR16 *reason)
 {
 	CHAR16 *rr = get_reboot_reason();
