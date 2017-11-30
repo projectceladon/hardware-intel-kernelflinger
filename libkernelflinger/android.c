@@ -1835,7 +1835,7 @@ static EFI_STATUS setup_command_line_abl(
                         goto out;
         }
 
-        bootreason = get_boot_reason();
+        bootreason = get_reboot_reason();
         if (!bootreason) {
                 ret = EFI_OUT_OF_RESOURCES;
                 goto out;

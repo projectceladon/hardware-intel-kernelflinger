@@ -143,6 +143,7 @@ CHAR16 *boot_state_to_string(UINT8 boot_state);
 EFI_STATUS reprovision_state_vars(VOID);
 EFI_STATUS erase_efivars(VOID);
 #endif
+EFI_STATUS set_reboot_reason(CHAR16 *reboot_reason);
 CHAR16 *get_reboot_reason();
 BOOLEAN is_reboot_reason(CHAR16 *reason);
 VOID del_reboot_reason();
