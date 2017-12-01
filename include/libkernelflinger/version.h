@@ -44,7 +44,7 @@
 #define BUILD_VARIANT           "-eng"
 #endif
 
-#define KERNELFLINGER_VERSION_8	"kernelflinger-05.06" BUILD_VARIANT
+#define KERNELFLINGER_VERSION_8	"kernelflinger-05.07" BUILD_VARIANT
 #define KERNELFLINGER_VERSION   WIDE_STR(KERNELFLINGER_VERSION_8)
 
 #endif
