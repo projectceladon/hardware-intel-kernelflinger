@@ -52,7 +52,7 @@
 #include "info.h"
 #include "authenticated_action.h"
 #include "fastboot_transport.h"
-#ifdef IOC_USE_SLCAN
+#if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 #include "ioc_can.h"
 #endif
 
@@ -60,7 +60,7 @@
 #define CODE_LENGTH 4
 #define INFO_PAYLOAD (MAGIC_LENGTH - CODE_LENGTH)
 #define MAX_VARIABLE_LENGTH 64
-#ifdef IOC_USE_SLCAN
+#if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 #define TIMEOUT 5
 #endif
 
@@ -1267,7 +1267,7 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 			  enum boot_target *target)
 {
 	EFI_STATUS ret;
-#ifdef IOC_USE_SLCAN
+#if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 	EFI_TIME now;
 	UINT64 expiration_time = 0;
 	UINT64 current_time;
@@ -1307,7 +1307,7 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 		if (*target != UNKNOWN_TARGET)
 			break;
 #endif
-#ifdef IOC_USE_SLCAN
+#if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 		ret = uefi_call_wrapper(RT->GetTime, 2, &now, NULL);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to get the current time");

@@ -49,8 +49,9 @@
 #include "vars.h"
 #include "bootloader.h"
 #include "authenticated_action.h"
+#if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 #include "ioc_uart_protocol.h"
-
+#endif
 static struct gpt_partition_interface gparti;
 static UINT64 cur_offset;
 
@@ -241,6 +242,7 @@ static EFI_STATUS flash_ifwi(VOID *data, UINTN size)
 	return flash_into_esp(data, size, L"ifwi.bin");
 }
 
+#if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 static EFI_STATUS flash_ioc(VOID *data, UINTN size)
 {
 	EFI_STATUS ret;
@@ -263,6 +265,7 @@ static EFI_STATUS flash_ioc(VOID *data, UINTN size)
 
 	return EFI_SUCCESS;
 }
+#endif
 
 static EFI_STATUS flash_new_bootimage(VOID *kernel, UINTN kernel_size,
 				      VOID *ramdisk, UINTN ramdisk_size)
@@ -445,7 +448,9 @@ static struct label_exception {
 	{ L"kernel", flash_kernel },
 	{ L"ramdisk", flash_ramdisk },
 	{ BOOTLOADER_LABEL, flash_bootloader },
+#if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 	{ L"ioc", flash_ioc },
+#endif
 #ifdef BOOTLOADER_POLICY
 	{ CONVERT_TO_WIDE(ACTION_AUTHORIZATION), authenticated_action }
 #endif
