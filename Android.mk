@@ -15,6 +15,10 @@ endif
 
 ifeq ($(IOC_USE_SLCAN),true)
     KERNELFLINGER_CFLAGS += -DIOC_USE_SLCAN
+else
+ifeq ($(IOC_USE_CBC),true)
+    KERNELFLINGER_CFLAGS += -DIOC_USE_CBC
+endif
 endif
 
 ifeq ($(TARGET_BUILD_VARIANT),user)

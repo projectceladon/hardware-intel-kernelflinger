@@ -98,11 +98,14 @@ LOCAL_SRC_FILES := \
 	text_parser.c \
 	watchdog.c \
 	life_cycle.c \
-	ioc_can.c \
 	qsort.c \
 	rpmb.c \
 	timer.c \
 	nvme.c
+ifeq ($(or $(IOC_USE_SLCAN),$(IOC_USE_CBC)),true)
+        LOCAL_SRC_FILES += ioc_can.c
+endif
+
 ifneq ($(BOARD_AVB_ENABLE),true)
 	LOCAL_SRC_FILES += \
 	signature.c
