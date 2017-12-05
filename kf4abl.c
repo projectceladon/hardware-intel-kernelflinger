@@ -715,6 +715,79 @@ static EFI_STATUS get_rpmb_derived_key(VOID *kbuf, size_t kbuf_len)
 }
 #endif
 
+#ifdef RPMB_STORAGE
+EFI_STATUS  osloader_rpmb_key_init(VOID)
+{
+	EFI_STATUS ret;
+	UINT8 key[RPMB_KEY_SIZE] = {0};
+	ret = EFI_SUCCESS;
+
+#ifdef USE_TRUSTY
+	UINT16 i;
+	RPMB_RESPONSE_RESULT result;
+
+	if (is_eom_and_secureboot_enabled()) {
+		ret = clear_teedata_flag();
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Clear teedata flag failed");
+			return ret;
+		}
+	}
+
+	ret = get_rpmb_derived_key(out_key, sizeof(out_key));
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Get RPMB derived key failed");
+		return ret;
+	}
+
+	for (i = 0; i < p_trusty_boot_params->num_seeds; i++) {
+		memcpy(key, out_key[i], RPMB_KEY_SIZE);
+		ret = rpmb_read_counter(key, &result);
+		if (ret == EFI_SUCCESS)
+			break;
+
+		if (result == RPMB_RES_NO_AUTH_KEY_PROGRAM) {
+			efi_perror(ret, L"key is not programmed, use the first seed to derive keys.");
+			break;
+		}
+
+		if (result != RPMB_RES_AUTH_FAILURE) {
+			efi_perror(ret, L"rpmb_read_counter unexpected error: %d.", result);
+			goto err_get_rpmb_key;
+		}
+	}
+
+	if (i >= BOOTLOADER_SEED_MAX_ENTRIES) {
+		error(L"All keys are not match!");
+		goto err_get_rpmb_key;
+	}
+
+	if (i != 0)
+		error(L"seed changed to %d ", i);
+#endif
+
+	if (!is_rpmb_programed()) {
+		debug(L"rpmb not programmed");
+		ret = program_rpmb_key(key);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"rpmb key program failed");
+			return ret;
+		}
+	} else {
+		debug(L"rpmb already programmed");
+		set_rpmb_key(key);
+	}
+
+#ifdef USE_TRUSTY
+err_get_rpmb_key:
+	memset(out_key, 0, sizeof(out_key));
+	memset(key, 0, sizeof(key));
+#endif
+
+	return ret;
+}
+#endif
+
 #ifdef USE_AVB
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
@@ -972,13 +1045,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
 	enum boot_target target;
 	EFI_STATUS ret;
-#ifdef RPMB_STORAGE
-	UINT8 key[RPMB_KEY_SIZE] = {0};
-#ifdef USE_TRUSTY
-	UINT16 i;
-	RPMB_RESPONSE_RESULT result;
-#endif
-#endif
 
 #ifndef __FORCE_FASTBOOT
 	BOOLEAN oneshot = FALSE;
@@ -1001,67 +1067,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		return ret;
 	}
 
-#ifdef RPMB_STORAGE
-#ifdef USE_TRUSTY
-	if (is_eom_and_secureboot_enabled()) {
-		ret = clear_teedata_flag();
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Clear teedata flag failed");
-			return ret;
-		}
-	}
-
-	ret = get_rpmb_derived_key(out_key, sizeof(out_key));
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Get RPMB derived key failed");
-		return ret;
-	}
-
-	for (i = 0; i < p_trusty_boot_params->num_seeds; i++) {
-		memcpy(key, out_key[i], RPMB_KEY_SIZE);
-		ret = rpmb_read_counter(key, &result);
-		if (ret == EFI_SUCCESS)
-			break;
-
-		if (result == RPMB_RES_NO_AUTH_KEY_PROGRAM) {
-			efi_perror(ret, L"key is not programmed, use the first seed to derive keys.");
-			break;
-		}
-
-		if (result != RPMB_RES_AUTH_FAILURE) {
-			efi_perror(ret, L"rpmb_read_counter unexpected error: %d.", result);
-			goto err_get_rpmb_key;
-		}
-	}
-
-	if (i >= BOOTLOADER_SEED_MAX_ENTRIES) {
-		error(L"All keys are not match!");
-		goto err_get_rpmb_key;
-	}
-
-	if (i != 0)
-		error(L"seed changed to %d ", i);
-#endif
-
-	if (!is_rpmb_programed()) {
-		debug(L"rpmb not programmed");
-		ret = program_rpmb_key(key);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"rpmb key program failed");
-			return ret;
-		}
-	} else {
-		debug(L"rpmb already programmed");
-		set_rpmb_key(key);
-	}
-
-#ifdef USE_TRUSTY
-err_get_rpmb_key:
-	memset(out_key, 0, sizeof(out_key));
-	memset(key, 0, sizeof(key));
-#endif
-#endif
-
 #ifdef __FORCE_FASTBOOT
 	target = FASTBOOT;
 #endif
@@ -1076,6 +1081,15 @@ err_get_rpmb_key:
 #endif
 
 	debug(L"target=%d", target);
+
+#ifdef RPMB_STORAGE
+	if (target != CRASHMODE) {
+		ret = osloader_rpmb_key_init();
+		if (EFI_ERROR(ret))
+			error(L"rpmb key init failure for osloader");
+	}
+#endif
+
 	for (;;) {
 		switch (target) {
 		case NORMAL_BOOT:
