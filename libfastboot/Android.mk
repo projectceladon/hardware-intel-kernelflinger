@@ -16,6 +16,13 @@ SHARED_STATIC_LIBRARIES := \
 	libefitcp-$(TARGET_BUILD_VARIANT) \
 	libtransport-$(TARGET_BUILD_VARIANT) \
 	libkernelflinger-$(TARGET_BUILD_VARIANT)
+
+ifeq ($(BOARD_AVB_ENABLE),true)
+SHARED_STATIC_LIBRARIES += \
+	libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
+endif
+
+
 SHARED_SRC_FILES := \
 	fastboot.c \
 	fastboot_oem.c \
