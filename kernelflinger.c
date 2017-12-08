@@ -1181,10 +1181,19 @@ static VOID boot_error(enum ux_error_code error_code, UINT8 boot_state,
 /* Flash the OEMVARS that include the bootloader policy.  */
 static void flash_bootloader_policy(void)
 {
-        UINT8 verify_state;
-        VOID *bootimage;
+        VOID *bootimage = NULL;
         EFI_STATUS ret;
 
+#ifdef USE_AVB
+        UINT8 boot_state = BOOT_STATE_GREEN;
+        debug(L"Loading bootloader policy using AVB");
+        ret = avb_load_verify_boot_image(NORMAL_BOOT, NULL, &bootimage, FALSE, &boot_state);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to load the boot image using AVB to get bootloader policy");
+                goto out;
+        }
+#else
+        UINT8 verify_state;
         debug(L"Loading bootloader policy");
         ret = load_boot_image(NORMAL_BOOT, NULL, &bootimage, FALSE);
         if (EFI_ERROR(ret)) {
@@ -1197,7 +1206,7 @@ static void flash_bootloader_policy(void)
                 efi_perror(ret, L"Failed to verify the boot image to get bootloader policy");
                 goto out;
         }
-
+#endif
         /* The bootloader policy EFI variables are using the
            FASTBOOT_GUID. */
         set_image_oemvars_nocheck(bootimage, &fastboot_guid);
@@ -1208,7 +1217,13 @@ static void flash_bootloader_policy(void)
         if (!blpolicy_is_flashed())
                 debug(L"Bootloader Policy EFI variables are not flashed");
 out:
-        FreePool(bootimage);
+        if (bootimage != NULL) {
+#ifdef USE_AVB
+            avb_slot_verify_data_free(bootimage);
+#else
+            FreePool(bootimage);
+#endif
+       }
 }
 #endif
 
