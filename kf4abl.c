@@ -321,6 +321,10 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	UINTN boot_target_str_len;
 	CHAR16 *boot_reset_str = (CHAR16 *)L"ABL.reset=";
 	UINTN boot_reset_str_len;
+	CHAR8 *bootversion_str = (CHAR8 *)"androidboot.bootloader=";
+	UINTN bootversion_str_len;
+	CHAR8 *serialno_str = (CHAR8 *)"androidboot.serialno=";
+	UINTN serialno_str_len;
 	CHAR8 *nptr = NULL;
 
 	ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
@@ -357,6 +361,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	bootmode_info_str_len = strlen((CHAR8 *)bootmode_info_str);
 	boot_target_str_len = strlen((CHAR8 *)boot_target_str);
 	boot_reset_str_len = StrLen((CHAR16 *)boot_reset_str);
+	bootversion_str_len = strlen((CHAR8 *)bootversion_str);
+	serialno_str_len = strlen((CHAR8 *)serialno_str);
 
 	/*Parse boot target*/
 	for (i = 0; i < argc; i++) {
@@ -415,6 +421,16 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				ret = set_abl_secure_boot(val);
 				if (EFI_ERROR(ret))
 					efi_perror(ret, L"Failed to set secure boot");
+			} else
+			/* Parse "android.bootloader=xxxxx" */
+			if((arglen > bootversion_str_len) &&
+			    (!strncmp(arg8, (CHAR8 *)bootversion_str, bootversion_str_len))) {
+				continue;
+			} else
+			/* Parse "android.serialno=xxxxx " */
+			if((arglen > serialno_str_len) &&
+			    (!strncmp(arg8, (CHAR8 *)serialno_str, serialno_str_len))) {
+				continue;
 			}
 
 			strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
