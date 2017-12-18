@@ -759,6 +759,12 @@ EFI_STATUS  osloader_rpmb_key_init(VOID)
 		}
 	}
 
+	if (p_trusty_boot_params->num_seeds > BOOTLOADER_SEED_MAX_ENTRIES ||
+		p_trusty_boot_params->num_seeds == 0) {
+		error(L"Invalid parameter for seed number!");
+		return EFI_INVALID_PARAMETER;
+	}
+
 	ret = get_rpmb_derived_key(out_key, sizeof(out_key));
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Get RPMB derived key failed");
@@ -782,7 +788,7 @@ EFI_STATUS  osloader_rpmb_key_init(VOID)
 		}
 	}
 
-	if (i >= BOOTLOADER_SEED_MAX_ENTRIES) {
+	if (i >= p_trusty_boot_params->num_seeds) {
 		error(L"All keys are not match!");
 		goto err_get_rpmb_key;
 	}
