@@ -26,6 +26,7 @@
 #include "targets.h"
 #ifdef USE_AVB
 #include "libavb/libavb.h"
+#include "libavb_ab/libavb_ab.h"
 #endif
 
 #define BOOT_MAGIC "ANDROID!"
@@ -288,6 +289,12 @@ EFI_STATUS get_avb_result(
                 IN AvbSlotVerifyData *slot_data,
                 IN bool allow_verification_error,
                 IN AvbSlotVerifyResult verify_result,
+                IN OUT UINT8 *boot_state);
+
+EFI_STATUS get_avb_flow_result(
+                IN AvbSlotVerifyData *slot_data,
+                IN bool allow_verification_error,
+                IN AvbABFlowResult flow_result,
                 IN OUT UINT8 *boot_state);
 #endif
 

@@ -111,4 +111,7 @@ EFI_STATUS slot_boot_failed(enum boot_target target);
  * mode. */
 UINT8 slot_recovery_tries_remaining();
 
+#ifdef USE_SLOT
+extern struct AvbABOps ab_ops;
+#endif
 #endif	/* _SLOT_H_ */

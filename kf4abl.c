@@ -50,6 +50,7 @@
 #include "avb_init.h"
 #include "libavb/libavb.h"
 #include "libavb/uefi_avb_ops.h"
+#include "libavb_ab/libavb_ab.h"
 #endif
 #include "security.h"
 #include <libtipc.h>
@@ -820,6 +821,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	AvbPartitionData *boot;
 	AvbSlotVerifyData *slot_data = NULL;
 	AvbSlotVerifyResult verify_result;
+	AvbABFlowResult flow_result;
 	const char *requested_partitions[] = {"boot", NULL};
 	EFI_STATUS ret;
 	VOID *bootimage = NULL;
@@ -853,32 +855,23 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		return EFI_OUT_OF_RESOURCES;
 	}
 
-#ifdef USE_SLOT
-	slot_suffix = slot_get_active();
-	if (!slot_suffix) {
-		error(L"suffix is null");
-		slot_suffix = "";
-	}
-#endif
-
 	flags = AVB_SLOT_VERIFY_FLAGS_NONE;
 	if (allow_verification_error) {
 		flags |= AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR;
 	}
-	verify_result = avb_slot_verify(ops,
-					requested_partitions,
-					slot_suffix,
-					flags,
-					AVB_HASHTREE_ERROR_MODE_RESTART,
-					&slot_data);
 
-	ret = get_avb_result(slot_data,
+	flow_result = avb_ab_flow(&ab_ops, requested_partitions, flags, AVB_HASHTREE_ERROR_MODE_RESTART, &slot_data);
+	ret = get_avb_flow_result(slot_data,
 			    allow_verification_error,
-			    verify_result,
+			    flow_result,
 			    &boot_state);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get avb result for boot");
+		efi_perror(ret, L"Failed to get avb flow result for boot");
 		goto fail;
+	}
+
+	if (slot_data->ab_suffix) {
+		slot_suffix = slot_data->ab_suffix;
 	}
 
 	boot = &slot_data->loaded_partitions[0];

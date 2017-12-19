@@ -1386,6 +1386,64 @@ out_free:
 }
 
 #ifdef USE_AVB
+EFI_STATUS get_avb_flow_result(
+                IN AvbSlotVerifyData *slot_data,
+                IN bool allow_verification_error,
+                IN AvbABFlowResult flow_result,
+                IN OUT UINT8 *boot_state)
+{
+        AvbPartitionData *boot;
+        const struct boot_img_hdr *header;
+
+        if (!slot_data || !boot_state)
+                return EFI_INVALID_PARAMETER;
+
+        if (slot_data->num_loaded_partitions != 1) {
+                avb_error("No avb partition.\n");
+                return EFI_LOAD_ERROR;
+        }
+
+        boot = &slot_data->loaded_partitions[0];
+        header = (const struct boot_img_hdr *)boot->data;
+        /* Check boot image header magic field. */
+        if (avb_memcmp(BOOT_MAGIC, header->magic, BOOT_MAGIC_SIZE)) {
+                avb_error("Wrong image header magic.\n");
+                return EFI_NOT_FOUND;
+        }
+        avb_debug("Image read success\n");
+
+        switch (flow_result) {
+        case AVB_AB_FLOW_RESULT_OK:
+                if (allow_verification_error && *boot_state < BOOT_STATE_ORANGE)
+                        *boot_state = BOOT_STATE_ORANGE;
+                break;
+
+        case AVB_AB_FLOW_RESULT_OK_WITH_VERIFICATION_ERROR:
+        case AVB_AB_FLOW_RESULT_ERROR_OOM:
+        case AVB_AB_FLOW_RESULT_ERROR_IO:
+        case AVB_AB_FLOW_RESULT_ERROR_NO_BOOTABLE_SLOTS:
+        case AVB_AB_FLOW_RESULT_ERROR_INVALID_ARGUMENT:
+                if (allow_verification_error && *boot_state <= BOOT_STATE_ORANGE) {
+                /* Do nothing since we allow this. */
+                        avb_debugv("Allow avb ab flow with result ",
+                        avb_ab_flow_result_to_string(flow_result),
+                        " because |allow_verification_error| is true.\n",
+                        NULL);
+                        *boot_state = BOOT_STATE_ORANGE;
+                } else
+                        *boot_state = BOOT_STATE_RED;
+                break;
+        default:
+                if (allow_verification_error && *boot_state <= BOOT_STATE_ORANGE)
+                        *boot_state = BOOT_STATE_ORANGE;
+                else
+                        *boot_state = BOOT_STATE_RED;
+                break;
+        }
+
+        return EFI_SUCCESS;
+}
+
 EFI_STATUS get_avb_result(
                 IN AvbSlotVerifyData *slot_data,
                 IN bool allow_verification_error,
@@ -1896,7 +1954,11 @@ static EFI_STATUS setup_command_line_abl(
 #endif
 #ifdef USE_AVB
 #ifdef USE_SLOT
-        ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
+        if (slot_data && slot_data->ab_suffix)
+                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
+                                           slot_data->ab_suffix);
+        else
+                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
                                            slot_get_active());
         if (EFI_ERROR(ret))
                 goto out;
