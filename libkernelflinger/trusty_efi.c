@@ -38,7 +38,7 @@
 #include "android.h"
 #include "options.h"
 #include "power.h"
-#include "trusty.h"
+#include "trusty_interface.h"
 #include "power.h"
 #include "targets.h"
 #include "gpt.h"
@@ -100,6 +100,7 @@ struct tos_image_header {
         UINT32 seed_msg_dst_offset;
 };
 
+static struct rot_data_t *rot_data;
 
 /* Get the TOS image header from the bootimage
  * Parameters:
@@ -165,68 +166,6 @@ static EFI_STATUS get_address_size_trusty(OUT UINT64 *trusty_mem_base, OUT UINT3
         return EFI_SUCCESS;
 }
 
-#ifndef USE_AVB
-/* Open the tos partition and load the tos image into memory
- * Parameters:
- * label    - Label for the partition in the GPT
- * image    - the image pointer after loading from the GPT
- * Return values:
- * EFI_SUCCESS           - image is loaded
- * EFI_ACCESS_DENIED     - Error in image loading
- * EFI_INVALID_PARAMETER - wrong image size
- * EFI_OUT_OF_RESOURCES  - Out of memory
- */
-static EFI_STATUS tos_image_load_partition(IN const CHAR16 *label, OUT VOID **image)
-{
-        UINT32 MediaId;
-        UINT32 img_size;
-        EFI_STATUS ret;
-        struct gpt_partition_interface gpart;
-        UINTN partition_start;
-        UINTN partition_size;
-        VOID *bootimg;
-        struct boot_img_hdr aosp_header;
-
-        ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Partition %s not found", label);
-                return ret;
-        }
-        MediaId = gpart.bio->Media->MediaId;
-        partition_start = gpart.part.starting_lba * gpart.bio->Media->BlockSize;
-        partition_size = (gpart.part.ending_lba + 1 - gpart.part.starting_lba) *
-                gpart.bio->Media->BlockSize;
-        debug(L"Reading TOS image header");
-        ret = uefi_call_wrapper(gpart.dio->ReadDisk, 5, gpart.dio, MediaId,
-                                partition_start,
-                                sizeof(aosp_header), &aosp_header);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"ReadDisk (aosp_header)");
-                return ret;
-        }
-        img_size = bootimage_size(&aosp_header) + BOOT_SIGNATURE_MAX_SIZE;
-        if (img_size > partition_size) {
-                error(L"TOS image is larger than partition size");
-                return EFI_INVALID_PARAMETER;
-        }
-        bootimg = AllocatePool(img_size);
-        if (!bootimg) {
-                error(L"Alloc memory for TOS image failed");
-                return EFI_OUT_OF_RESOURCES;
-        }
-
-        debug(L"Reading Tos image: %d bytes", img_size);
-        ret = uefi_call_wrapper(gpart.dio->ReadDisk, 5, gpart.dio, MediaId, partition_start,
-                                img_size, bootimg);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"ReadDisk Error for TOS image read");
-                FreePool(bootimg);
-                return ret;
-        }
-        *image = bootimg;
-        return EFI_SUCCESS;
-}
-#endif // USE_AVB
 /*
  * 1. Boot loader gets the tos image header address from kernel slot in
  *    android boot image (aosp_header + page_size)
@@ -368,81 +307,17 @@ cleanup:
         return ret;
 }
 
-#ifdef USE_AVB
-EFI_STATUS load_tos_image(OUT VOID **bootimage)
+EFI_STATUS set_trusty_param(IN VOID *param_data)
 {
-        EFI_STATUS ret;
-        UINT8 verify_state = BOOT_STATE_GREEN;
-        AvbSlotVerifyData *slot_data;
+        rot_data = (struct rot_data_t *)param_data;
 
-        ret = android_image_load_partition_avb("tos", bootimage, &verify_state, &slot_data);  // Do not try to switch slot if failed
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"TOS image loading failed");
-                return ret;
-        }
-
-        if (verify_state != BOOT_STATE_GREEN) {
-#ifndef USERDEBUG
-                error(L"Invalid TOS image. Boot anyway on ENG build");
-                ret = EFI_SUCCESS;
-#else
-                error(L"TOS image doesn't verify");
-                ret = EFI_SECURITY_VIOLATION;
-#endif
-        }
-
-        return ret;
+	return EFI_SUCCESS;
 }
-#else // USE_AVB == false
-EFI_STATUS load_tos_image(OUT VOID **bootimage)
+
+EFI_STATUS start_trusty(VOID *tosimage)
 {
-        CHAR16 target[BOOT_TARGET_SIZE];
-        EFI_STATUS ret;
-        UINT8 verify_state;
-
-        ret = tos_image_load_partition(TOS_LABEL, bootimage);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"TOS image loading failed");
-                return ret;
-        }
-
-        verify_state = verify_android_boot_image(*bootimage, oem_cert,
-                                                 oem_cert_size, target, NULL);
-        if (verify_state != BOOT_STATE_GREEN) {
-                error(L"TOS image doesn't verify");
-                ret = EFI_SECURITY_VIOLATION;
-                goto cleanup_tos;
-        }
-
-        if (StrCmp(L"/tos", target)) {
-                error(L"TOS image has unexpected target name");
-                ret = EFI_SECURITY_VIOLATION;
-                goto cleanup_tos;
-        }
-        return EFI_SUCCESS;
-
-cleanup_tos:
-#ifndef USERDEBUG
-        if(EFI_SECURITY_VIOLATION == ret) {
-                error(L"Invalid TOS image. Boot anyway on ENG build");
-                ret = EFI_SUCCESS;
-        }
-#endif
-        if (*bootimage)
-                FreePool(*bootimage);
-        return ret;
-}
-#endif // USE_AVB
-
-EFI_STATUS start_trusty(IN struct rot_data_t *rot_data)
-{
-        EFI_STATUS ret;
-        VOID *tosimage;
-
-        ret = load_tos_image(&tosimage);
-        if (EFI_ERROR(ret))
-                return ret;
+        if (!tosimage)
+                return EFI_INVALID_PARAMETER;
 
         return start_tos_image(tosimage, rot_data);
 }
-

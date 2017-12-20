@@ -55,65 +55,17 @@
 #endif
 #endif
 #include "security.h"
-
-#ifdef USE_TRUSTY
-#include <libtipc.h>
-#endif
-
+#include "security_interface.h"
 #ifdef RPMB_STORAGE
+#include <openssl/hkdf.h>
 #include "rpmb.h"
 #include "rpmb_storage.h"
 #endif
 #ifdef USE_TRUSTY
-#include "trusty.h"
-
-#include <hecisupport.h>
-#include <openssl/hkdf.h>
-
-
-#define BOOTLOADER_SEED_MAX_ENTRIES  4
-#define MMC_PROD_NAME_WITH_PSN_LEN   15
-#define TRUSTY_SEED_LEN              32
-
-/* structure of seed info */
-typedef struct _seed_info {
-	uint8_t svn;
-	uint8_t padding[3];
-	uint8_t seed[TRUSTY_SEED_LEN];
-}__attribute__((packed)) seed_info_t;
-
-typedef struct {
-	/* version of the struct. 0x0001 for this version */
-	uint16_t 			Version;
-	/* Trusty’s mem base address */
-	uint32_t 			TrustyMemBase;
-	/* assumed to be 16MB */
-	uint32_t 			TrustyMemSize;
-	/* seed value retrieved from CSE */
-	uint32_t			num_seeds;
-	seed_info_t 		seed_list[BOOTLOADER_SEED_MAX_ENTRIES];
-	struct rot_data_t 	RotData;
-} __attribute__((packed)) trusty_boot_params_t;
-
-typedef struct trusty_startup_params {
-	/* Size of this structure */
-	uint64_t size_of_this_struct;
-	/* Load time base address of trusty */
-	uint32_t load_base;
-	/* Load time size of trusty */
-	uint32_t load_size;
-	/* Seed */
-	uint32_t num_seeds;
-	seed_info_t seed_list[BOOTLOADER_SEED_MAX_ENTRIES];
-	/* Rot */
-	struct rot_data_t RotData;
-	/* Concatenation of mmc product name with a string representation of PSN */
-	char serial[MMC_PROD_NAME_WITH_PSN_LEN];
-}__attribute__((packed)) trusty_startup_params_t;
-
-static trusty_boot_params_t *p_trusty_boot_params;
-static UINT8 out_key[BOOTLOADER_SEED_MAX_ENTRIES][RPMB_KEY_SIZE] = {{0}, {0}, {0}, {0}};
+#include "trusty_interface.h"
+#include "trusty_common.h"
 #endif
+
 typedef union {
 	uint32_t raw;
 	struct {
@@ -319,6 +271,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	UINTN cmd_len = 0;
 	CHAR8 arg8[256] = "";
 	UINTN arglen;
+	UINTN num;
 
 	enum CmdType
 	{
@@ -328,7 +281,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		TRUSTY_PARAM,
 		SECUREBOOT,
 		BOOTVERSION,
-		SERIALNO
+		SERIALNO,
+		DEV_SEC_INFO
 	};
 
 	struct Cmdline
@@ -373,6 +327,11 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			(CHAR8 *)"androidboot.serialno=",
 			strlen((CHAR8 *)"androidboot.serialno="),
 			SERIALNO
+		},
+		{
+			(CHAR8 *)"dev_sec_info.param_addr=",
+			strlen((CHAR8 *)"dev_sec_info.param_addr="),
+			DEV_SEC_INFO
 		},
 	};
 
@@ -437,18 +396,22 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 					bootMode._bits = (UINT16)strtoul((char *)nptr, 0, 16);
 					target = bootMode.target;
 					break;
-
-				/* Parse "trusty.param_addr=xxxxx" */
-				case TRUSTY_PARAM: {
 #ifdef USE_TRUSTY
-					UINTN num;
+				/* Parse "trusty.param_addr=xxxxx" */
+				case TRUSTY_PARAM:
 					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
 					num = strtoul((char *)nptr, 0, 16);
 					debug(L"Parsed trusty param addr is 0x%x", num);
-					p_trusty_boot_params = (trusty_boot_params_t *)num;
-#endif
+					set_trusty_param((VOID *)num);
 					continue;
-				}
+#endif
+				/* Parse "dev_sec_info.param_addr=" */
+				case DEV_SEC_INFO:
+					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
+					num = strtoul((char *)nptr, 0, 16);
+					debug(L"Parsed device security information addr is 0x%x", num);
+					set_device_security_info((VOID *)num);
+					continue;
 
 				/* Parse "ABL.secureboot=x" */
 				case SECUREBOOT: {
@@ -467,6 +430,9 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 
 				/* Parse "android.serialno=xxxxx " */
 				case SERIALNO:
+					continue;
+
+				default:
 					continue;
 				}
 			}
@@ -616,45 +582,6 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 	return ret;
 }
 
-#ifdef USE_TRUSTY
-static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UINTN base, UINTN sz, uint32_t num, seed_info_t *seed_list)
-{
-	char *serialno;
-
-	if (!param || !seed_list || num > BOOTLOADER_SEED_MAX_ENTRIES || num == 0)
-		return EFI_INVALID_PARAMETER;
-
-	memset(param, 0, sizeof(trusty_startup_params_t));
-	param->size_of_this_struct = sizeof(trusty_startup_params_t);
-	param->load_base = base;
-	param->load_size = sz;
-	param->num_seeds = num;
-	serialno = get_serial_number();
-	if (!serialno)
-		return EFI_NOT_FOUND;
-
-	memcpy(param->serial, serialno, MMC_PROD_NAME_WITH_PSN_LEN);
-	memcpy(param->seed_list, seed_list, sizeof(param->seed_list));
-
-	memset(seed_list, 0, sizeof(param->seed_list));
-
-	return EFI_SUCCESS;
-}
-
-#define TRUSTY_VMCALL_SMC 0x74727500
-static EFI_STATUS launch_trusty_os(trusty_startup_params_t *param)
-{
-	if (!param)
-		return EFI_INVALID_PARAMETER;
-
-	asm volatile(
-		"vmcall; \n"
-		: : "a"(TRUSTY_VMCALL_SMC), "D"((UINTN)param));
-
-	return EFI_SUCCESS;
-}
-#endif
-
 #ifndef USE_AVB
 /* Validate an image.
  *
@@ -714,79 +641,15 @@ static UINT8 validate_bootimage(
 }
 #endif
 
-#ifdef USE_TRUSTY
-/* HWCRYPTO Server App UUID */
-const EFI_GUID  crypo_uuid = { 0x23fe5938, 0xccd5, 0x4a78,
-	{ 0x8b, 0xaf, 0x0f, 0x3d, 0x05, 0xff, 0xc2, 0xdf } };
-
-static EFI_STATUS derive_rpmb_key_with_index(UINT8 index, VOID *kbuf)
-{
-	EFI_STATUS ret;
-	UINT8 rpmb_key[RPMB_KEY_SIZE] = {0};
-	UINT8 serial[MMC_PROD_NAME_WITH_PSN_LEN] = {0};
-	char *serialno;
-
-	serialno = get_serial_number();
-
-	if (!serialno)
-		return EFI_NOT_FOUND;
-
-	/* Clear Byte 2 and 0 for CID[6] PRV and CID[0] CRC for eMMC Field Firmware Updates
-	 * serial[0] = cid[0];	-- CRC
-	 * serial[2] = cid[6];	-- PRV
-	 */
-	memcpy(serial, serialno, sizeof(serial));
-	serial[0] ^= serial[0];
-	serial[2] ^= serial[2];
-
-	if (index < p_trusty_boot_params->num_seeds) {
-		if (!HKDF(rpmb_key, sizeof(rpmb_key), EVP_sha256(),
-			  (const uint8_t *)p_trusty_boot_params->seed_list[index].seed, RPMB_KEY_SIZE,
-			  (const uint8_t *)&crypo_uuid, sizeof(EFI_GUID),
-			  (const uint8_t *)serial, sizeof(serial))) {
-			error(L"HDKF failed \n");
-			ret = EFI_INVALID_PARAMETER;
-			goto out;
-		}
-
-		memcpy(kbuf, rpmb_key, RPMB_KEY_SIZE);
-	}
-
-	ret = EFI_SUCCESS;
-
-out:
-	memset(rpmb_key, 0, sizeof(rpmb_key));
-	return ret;
-}
-
-static EFI_STATUS get_rpmb_derived_key(VOID *kbuf, size_t kbuf_len)
-{
-	UINT32 i;
-
-	if (kbuf_len < p_trusty_boot_params->num_seeds * RPMB_KEY_SIZE)
-		return EFI_INVALID_PARAMETER;
-
-	for (i = 0; i < p_trusty_boot_params->num_seeds; i++) {
-		if (EFI_SUCCESS != derive_rpmb_key_with_index(i, kbuf + i * RPMB_KEY_SIZE)) {
-			memset(kbuf + i * RPMB_KEY_SIZE, 0, RPMB_KEY_SIZE);
-			return EFI_INVALID_PARAMETER;
-		}
-	}
-
-	return EFI_SUCCESS;
-}
-#endif
-
 #ifdef RPMB_STORAGE
 EFI_STATUS  osloader_rpmb_key_init(VOID)
 {
-	EFI_STATUS ret;
 	UINT8 key[RPMB_KEY_SIZE] = {0};
-	ret = EFI_SUCCESS;
-
-#ifdef USE_TRUSTY
+	UINT8 *out_key;
+	UINT8 number_derived_key = 0;
 	UINT16 i;
 	RPMB_RESPONSE_RESULT result;
+	EFI_STATUS ret = EFI_SUCCESS;
 
 	if (is_eom_and_secureboot_enabled()) {
 		ret = clear_teedata_flag();
@@ -796,26 +659,20 @@ EFI_STATUS  osloader_rpmb_key_init(VOID)
 		}
 	}
 
-	if (p_trusty_boot_params->num_seeds > BOOTLOADER_SEED_MAX_ENTRIES ||
-		p_trusty_boot_params->num_seeds == 0) {
-		error(L"Invalid parameter for seed number!");
-		return EFI_INVALID_PARAMETER;
-	}
-
-	ret = get_rpmb_derived_key(out_key, sizeof(out_key));
+	ret = get_rpmb_derived_key(&out_key, &number_derived_key);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Get RPMB derived key failed");
+		efi_perror(ret, L"get_rpmb_derived_key failed");
 		return ret;
 	}
 
-	for (i = 0; i < p_trusty_boot_params->num_seeds; i++) {
-		memcpy(key, out_key[i], RPMB_KEY_SIZE);
+	for (i = 0; i < number_derived_key; i++) {
+		memcpy(key, out_key + i * RPMB_KEY_SIZE, RPMB_KEY_SIZE);
 		ret = rpmb_read_counter(key, &result);
 		if (ret == EFI_SUCCESS)
 			break;
 
 		if (result == RPMB_RES_NO_AUTH_KEY_PROGRAM) {
-			efi_perror(ret, L"key is not programmed, use the first seed to derive keys.");
+			efi_perror(ret, L"key is not programmed, use the first derived key.");
 			break;
 		}
 
@@ -825,14 +682,13 @@ EFI_STATUS  osloader_rpmb_key_init(VOID)
 		}
 	}
 
-	if (i >= p_trusty_boot_params->num_seeds) {
+	if (i >= number_derived_key) {
 		error(L"All keys are not match!");
 		goto err_get_rpmb_key;
 	}
 
 	if (i != 0)
-		error(L"seed changed to %d ", i);
-#endif
+		error(L"seed/key changed to %d ", i);
 
 	if (!is_rpmb_programed()) {
 		debug(L"rpmb not programmed");
@@ -846,11 +702,8 @@ EFI_STATUS  osloader_rpmb_key_init(VOID)
 		set_rpmb_key(key);
 	}
 
-#ifdef USE_TRUSTY
 err_get_rpmb_key:
-	memset(out_key, 0, sizeof(out_key));
 	memset(key, 0, sizeof(key));
-#endif
 
 	return ret;
 }
@@ -874,18 +727,8 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
-#ifdef USE_TRUSTY
-	AvbSlotVerifyResult trusty_verify_result;
-	const char *trusty_slot_suffix = "";
-	const struct boot_img_hdr *header;
-	AvbSlotVerifyData *slot_data_tos = NULL;
-	UINT8 tos_state = BOOT_STATE_GREEN;
 	const uint8_t *vbmeta_pub_key;
-	UINTN vbmeta_pub_key_len;
-	UINTN load_base;
-	AvbPartitionData *tos;
-	trusty_startup_params_t trusty_startup_params;
-#endif
+	uint32_t vbmeta_pub_key_len;
 
 	debug(L"Loading boot image");
 #ifndef USE_SLOT
@@ -936,85 +779,39 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 #endif
 
-#ifdef USE_TRUSTY
-	if (slot_data->ab_suffix) {
-		trusty_slot_suffix = slot_data->ab_suffix;
-	}
-#endif
-
 	boot = &slot_data->loaded_partitions[0];
 	bootimage = boot->data;
 	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
+	ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
+			slot_data->vbmeta_images[0].vbmeta_size,
+			&vbmeta_pub_key,
+			&vbmeta_pub_key_len);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get the vbmeta_pub_key");
+		goto fail;
+	}
+
+	ret = get_rot_data(bootimage, boot_state, vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to init rot params");
+		goto fail;
+	}
 
 #ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {
-		requested_partitions[0] = "tos";
-		trusty_verify_result = avb_slot_verify(ops,
-					requested_partitions,
-					trusty_slot_suffix,
-					flags,
-					AVB_HASHTREE_ERROR_MODE_RESTART,
-					&slot_data_tos);
-
-		ret = get_avb_result(slot_data_tos,
-				    false,
-				    trusty_verify_result,
-				    &tos_state);
+		VOID *tosimage = NULL;
+		ret = load_tos_image(&tosimage);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to get avb result for tos");
-			goto fail;
-		} else if ((tos_state != BOOT_STATE_GREEN) && is_abl_secure_boot_enabled()) {
-			ret = EFI_ABORTED;
+			efi_perror(ret, L"Load tos image failed");
 			goto fail;
 		}
-
-		tos = &slot_data_tos->loaded_partitions[0];
-		header = (const struct boot_img_hdr *)tos->data;
-		load_base = (UINTN)(tos->data + header->page_size);
-		ret = init_trusty_startup_params(&trusty_startup_params, load_base,
-				header->kernel_size, p_trusty_boot_params->num_seeds, p_trusty_boot_params->seed_list);
+		ret = start_trusty(tosimage);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to init trusty startup params");
+			efi_perror(ret, L"Unable to start trusty: stop");
 			goto fail;
 		}
-
-		ret = launch_trusty_os(&trusty_startup_params);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to launch trusty os");
-			goto fail;
-		}
-
-		if (slot_data_tos) {
-			avb_slot_verify_data_free(slot_data_tos);
-			slot_data_tos = NULL;
-		}
-
-		ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
-				slot_data->vbmeta_images[0].vbmeta_size,
-				&vbmeta_pub_key,
-				&vbmeta_pub_key_len);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to get the vbmeta_pub_key");
-			goto fail;
-		}
-
-		ret = get_rot_data(bootimage, boot_state, vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to init trusty rot params");
-			goto fail;
-		}
-
-		trusty_ipc_init();
-		trusty_ipc_shutdown();
-
-		// Send EOP heci messages
-		ret = heci_end_of_post();
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to send EOP message to CSE FW, halt");
-			goto fail;
-		}
+		set_boottime_stamp(TM_VERIFY_TOS_DONE);
 	}
-	set_boottime_stamp(TM_VERIFY_TOS_DONE);
 #endif
 
 	if (boot_state == BOOT_STATE_GREEN) {
@@ -1028,14 +825,6 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 
 fail:
-#ifdef USE_TRUSTY
-	if (slot_data_tos) {
-		avb_slot_verify_data_free(slot_data_tos);
-		slot_data_tos = NULL;
-	}
-	memset(trusty_startup_params.seed_list, 0, sizeof(trusty_startup_params.seed_list));
-#endif
-
 	return ret;
 }
 #endif
@@ -1049,12 +838,6 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	BOOLEAN oneshot = FALSE;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	X509 *verifier_cert = NULL;
-#ifdef USE_TRUSTY
-	VOID *tosimage = NULL;
-	UINTN load_base;
-	struct boot_img_hdr *hdr;
-	trusty_startup_params_t trusty_startup_params;
-#endif
 
 	debug(L"Loading boot image");
 	ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
@@ -1064,49 +847,25 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		return ret;
 	}
 	boot_state = validate_bootimage(boot_target, bootimage, &verifier_cert);
+
+	/*  keymaster interface always use the g_rot_data as its input param */
+	ret = get_rot_data(bootimage, boot_state, verifier_cert, &g_rot_data);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to init rot params");
+		goto exit;
+	}
+
 #ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {
+		VOID *tosimage = NULL;
 		ret = load_tos_image(&tosimage);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to load trusty image");
-			return ret;
-		}
-
-		hdr = get_bootimage_header(tosimage);
-		if (!hdr)
-			return EFI_INVALID_PARAMETER;
-
-		load_base = (UINTN)((UINT8 *)tosimage + hdr->page_size);
-
-		ret = init_trusty_startup_params(&trusty_startup_params, load_base,
-				hdr->kernel_size, p_trusty_boot_params->num_seeds, p_trusty_boot_params->seed_list);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to init trusty startup params");
+			efi_perror(ret, L"Load tos image failed");
 			goto exit;
 		}
-
-		/*  keymaster interface always use the g_rot_data as its input param */
-		ret = get_rot_data(bootimage, boot_state, verifier_cert, &g_rot_data);
+		ret = start_trusty(tosimage);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to init trusty rot params");
-			goto exit;
-		}
-
-		ret = launch_trusty_os(&trusty_startup_params);
-		if (tosimage)
-			FreePool(tosimage);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to launch trusty os");
-			goto exit;
-		}
-
-		trusty_ipc_init();
-		trusty_ipc_shutdown();
-
-		// Send EOP heci messages
-		ret = heci_end_of_post();
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to send EOP message to CSE FW, halt");
+			efi_perror(ret, L"Unable to start trusty: stop");
 			goto exit;
 		}
 	}
@@ -1120,9 +879,6 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 
 	ret = EFI_INVALID_PARAMETER;
 exit:
-#ifdef USE_TRUSTY
-	memset(trusty_startup_params.seed_list, 0, sizeof(trusty_startup_params.seed_list));
-#endif
 	return ret;
 }
 #endif

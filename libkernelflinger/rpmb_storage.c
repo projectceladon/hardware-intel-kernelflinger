@@ -65,29 +65,89 @@ static UINT8 rpmb_buffer[RPMB_BLOCK_SIZE];
 #define TEEDATA_KEY_MAGIC_ADDR          0
 #define TEEDATA_KEY_MAGIC_LENGTH        7
 
-EFI_STATUS derive_rpmb_key(UINT8 * out_key)
-{
-	SHA256_CTX sha_ctx;
-	char * serialno;
-	EFI_STATUS ret;
-	UINT8 random[RPMB_KEY_SIZE] = {0};
+static UINT8 *derived_key;
+static UINT8 number_derived_key;
 
-	if (1 != SHA256_Init(&sha_ctx))
+EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	UINT8 i;
+
+	if ((num_key > RPMB_NUMBER_KEY ) || !kbuf || ((num_key * RPMB_KEY_SIZE) > kbuf_len))
 		return EFI_INVALID_PARAMETER;
-	serialno = get_serial_number();
-	ret = generate_random_numbers(random, RPMB_KEY_SIZE);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to generate random numbers");
+
+	if (derived_key)
+		FreePool(derived_key);
+
+	derived_key = AllocatePool(num_key * RPMB_KEY_SIZE);
+	if (!derived_key) {
+		ret = EFI_OUT_OF_RESOURCES;
+		efi_perror(ret, L"Allocate pool error");
 		return ret;
 	}
 
-	SHA256_Update(&sha_ctx, random, RPMB_KEY_SIZE);
-	SHA256_Update(&sha_ctx, serialno,
-                                strlen((const CHAR8 *)serialno));
-	SHA256_Final(out_key, &sha_ctx);
-	OPENSSL_cleanse(&sha_ctx, sizeof(sha_ctx));
+	for (i = 0; i < num_key; i++)
+		memcpy(derived_key + i * RPMB_KEY_SIZE, kbuf + i * RPMB_KEY_SIZE, RPMB_KEY_SIZE);
+	number_derived_key = num_key;
 
-	return EFI_SUCCESS;
+	return ret;
+}
+
+EFI_STATUS get_rpmb_derived_key(OUT UINT8 **d_key, OUT UINT8 *number_d_key)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+
+	if (!d_key || !number_d_key)
+		return EFI_INVALID_PARAMETER;
+
+	if (!derived_key)
+		return EFI_NOT_FOUND;
+
+	*number_d_key = number_derived_key;
+	*d_key = derived_key;
+
+	return ret;
+}
+
+EFI_STATUS derive_rpmb_key_with_seed(IN VOID *seed, OUT VOID *rpmb_key)
+{
+	EFI_STATUS ret;
+	UINT8 serial[MMC_PROD_NAME_WITH_PSN_LEN] = {0};
+	char *serialno;
+	/* HWCRYPTO Server App UUID */
+	const EFI_GUID  crypo_uuid = { 0x23fe5938, 0xccd5, 0x4a78,
+		{ 0x8b, 0xaf, 0x0f, 0x3d, 0x05, 0xff, 0xc2, 0xdf } };
+
+	if (!seed || !rpmb_key)
+		return EFI_INVALID_PARAMETER;
+
+	serialno = get_serial_number();
+
+	if (!serialno)
+		return EFI_NOT_FOUND;
+
+	/* Clear Byte 2 and 0 for CID[6] PRV and CID[0] CRC for eMMC Field Firmware Updates
+	 * serial[0] = cid[0];	-- CRC
+	 * serial[2] = cid[6];	-- PRV
+	 */
+	memcpy(serial, serialno, sizeof(serial));
+	serial[0] ^= serial[0];
+	serial[2] ^= serial[2];
+
+	if (!HKDF(rpmb_key, RPMB_KEY_SIZE, EVP_sha256(),
+		  (const uint8_t *)seed, RPMB_SEED_SIZE,
+		  (const uint8_t *)&crypo_uuid, sizeof(EFI_GUID),
+		  (const uint8_t *)serial, sizeof(serial))) {
+		error(L"HDKF failed \n");
+		memset(rpmb_key, 0, RPMB_KEY_SIZE);
+		ret = EFI_INVALID_PARAMETER;
+		goto out;
+	}
+
+	ret = EFI_SUCCESS;
+
+out:
+	return ret;
 }
 
 void clear_rpmb_key(void)
