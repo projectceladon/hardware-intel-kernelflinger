@@ -158,7 +158,26 @@ ifeq ($(HAL_AUTODETECT),true)
 endif
 
 ifeq ($(TARGET_USE_TRUSTY),true)
-    LOCAL_SRC_FILES += trusty.c
+    LOCAL_SRC_FILES += trusty_common.c
+ifeq ($(KERNELFLINGER_TRUSTY_PLATFORM),sbl)
+    LOCAL_SRC_FILES += trusty_sbl.c
+else
+ifeq ($(KERNELFLINGER_TRUSTY_PLATFORM),abl)
+    LOCAL_SRC_FILES += trusty_abl.c
+else
+    LOCAL_SRC_FILES += trusty_efi.c
+endif
+endif
+endif
+
+ifeq ($(KERNELFLINGER_SECURITY_PLATFORM),abl)
+    LOCAL_SRC_FILES += security_abl.c
+else
+ifeq ($(KERNELFLINGER_SECURITY_PLATFORM),sbl)
+    LOCAL_SRC_FILES += security_sbl.c
+else
+    LOCAL_SRC_FILES += security_efi.c
+endif
 endif
 
 ifneq ($(TARGET_UEFI_ARCH),x86_64)
@@ -189,5 +208,7 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb/libavb
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb/libavb_ab
 endif
-
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../include/libqltipc
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../include/libheci
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../include/libelfloader
 include $(BUILD_EFI_STATIC_LIBRARY)

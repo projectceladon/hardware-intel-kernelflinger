@@ -51,7 +51,6 @@
 #include "em.h"
 #include "storage.h"
 #include "version.h"
-#include "trusty.h"
 #ifdef HAL_AUTODETECT
 #include "blobstore.h"
 #endif
@@ -60,6 +59,10 @@
 #ifdef RPMB_STORAGE
 #include "rpmb.h"
 #include "rpmb_storage.h"
+#endif
+#ifdef USE_TRUSTY
+#include "trusty_interface.h"
+#include "trusty_common.h"
 #endif
 
 /* Ensure this is embedded in the EFI binary somewhere */
@@ -896,6 +899,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
         EFI_STATUS ret;
 #ifdef USE_TRUSTY
         struct rot_data_t rot_data;
+        VOID *tosimage = NULL;
 #endif
 #ifdef USER
         /* per bootloaderequirements.pdf */
@@ -938,7 +942,13 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                         efi_perror(ret, L"Unable to get the rot_data for trusty");
                         die();
                 }
-                ret = start_trusty(&rot_data);
+                set_trusty_param((VOID *)&rot_data);
+                ret = load_tos_image(&tosimage);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Load tos image failed");
+                        die();
+                }
+                ret = start_trusty(tosimage);
                 if (EFI_ERROR(ret)) {
 #ifndef BUILD_ANDROID_THINGS
                         efi_perror(ret, L"Unable to start trusty; stop.");

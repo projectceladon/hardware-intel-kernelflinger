@@ -35,6 +35,10 @@
 #include "rpmb.h"
 
 #define RPMB_KEY_SIZE    32
+#define RPMB_SEED_SIZE  32
+#define RPMB_NUMBER_KEY  10
+#define MMC_PROD_NAME_WITH_PSN_LEN   15
+#define RPMB_MAX_PARTITION_NUMBER 6
 
 typedef struct rpmb_storage {
 	BOOLEAN (*is_rpmb_programed)(void);
@@ -52,12 +56,13 @@ typedef struct rpmb_storage {
 } rpmb_storage_t;
 
 void rpmb_storage_init(BOOLEAN real);
-
+EFI_STATUS get_rpmb_derived_key(OUT UINT8 **d_key, OUT UINT8 *number_d_key);
+EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key);
+EFI_STATUS derive_rpmb_key_with_seed(IN VOID *seed, OUT VOID *rpmb_key);
 void clear_rpmb_key(void);
 void set_rpmb_key(UINT8 *key);
 EFI_STATUS clear_teedata_flag(void);
 EFI_STATUS erase_rpmb_all_blocks(void);
-EFI_STATUS derive_rpmb_key(UINT8 *out_key);
 EFI_STATUS rpmb_read_counter(const void *key, RPMB_RESPONSE_RESULT *result);
 
 BOOLEAN is_rpmb_programed(void);
@@ -67,7 +72,7 @@ EFI_STATUS write_rpmb_device_state(UINT8 state);
 EFI_STATUS read_rpmb_device_state(UINT8 *state);
 
 EFI_STATUS write_rpmb_rollback_index(size_t index, UINT64 in_rollback_index);
-EFI_STATUS read_rpmb_rollback_index(size_t index, UINT64 *out_rollback_index);
+EFI_STATUS read_rpmb_rollback_index(size_t index, UINT64* out_rollback_index);
 
 EFI_STATUS write_rpmb_keybox_magic(UINT16 offset, void *buffer);
 EFI_STATUS read_rpmb_keybox_magic(UINT16 offset, void *buffer);

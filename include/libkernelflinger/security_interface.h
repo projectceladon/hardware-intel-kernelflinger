@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,24 +28,11 @@
  *
  */
 
-#ifndef _TRUSTY_H_
-#define _TRUSTY_H_
+#ifndef _SECURITY_INTERFACE_H_
+#define _SECURITY_INTERFACE_H_
 
-#include "efi.h"
-#include "efilib.h"
-#include "vars.h"
-#include <openssl/evp.h>
+#include <efi.h>
 
-/* Load a TOS boot image into RAM, validate the image against the certificate,
- * find the TOS header and then start the TOS by calling into the entry
- * Parameters:
- * rot_data - Rot data
- * Return values:
- * EFI_INVALID_PARAMETER - Unsupported boot target type, invalid boot state,
- * or loaded TOS image was missing or corrupt
- * EFI_SECURITY_VIOLATION - Validation failed against certificate
- */
-EFI_STATUS load_tos_image(OUT VOID **bootimage);
-EFI_STATUS start_trusty(struct rot_data_t *rot_data);
+EFI_STATUS set_device_security_info(IN VOID *security_data);
 
-#endif /* _TRUSTY_H_ */
+#endif /* _SECURITY_INTERFACE_H_ */
