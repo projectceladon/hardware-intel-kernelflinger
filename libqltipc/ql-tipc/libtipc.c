@@ -128,15 +128,20 @@ int trusty_ipc_init(void)
         return rc;
     }
 
-    if (!is_keybox_provisioned()) {
-       /* get storage rpmb */
-       if (is_use_sim_rpmb()) {
-          trusty_info("Simulation RPMB is in use.\n");
-       } else {
-          trusty_info("Physical RPMB is in use.\n");
-          rpmb_ctx = rpmb_storage_get_ctx();
-       }
+    /* get storage rpmb */
+    if (is_use_sim_rpmb()) {
+        trusty_info("Simulation RPMB is in use.\n");
+    } else {
+        trusty_info("Physical RPMB is in use.\n");
+        rpmb_ctx = rpmb_storage_get_ctx();
+    }
 
+    /* start secure storage proxy service for initialization */
+    rc = rpmb_storage_proxy_init(_ipc_dev, rpmb_ctx);
+    trusty_info("1st Initlializing RPMB storage proxy service rc: (%d)\n", rc);
+
+
+    if (!is_keybox_provisioned()) {
        /* start secure storage proxy service */
        trusty_info("Initializing RPMB storage proxy service\n");
        rc = rpmb_storage_proxy_init(_ipc_dev, rpmb_ctx);
