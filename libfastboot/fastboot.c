@@ -1267,6 +1267,7 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 			  enum boot_target *target)
 {
 	EFI_STATUS ret;
+	BOOLEAN enable_transport = FALSE;
 #if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 	EFI_TIME now;
 	UINT64 expiration_time = 0;
@@ -1296,10 +1297,10 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 	ret = transport_start(fastboot_start_callback,
 			      fastboot_process_rx,
 			      fastboot_process_tx);
-	if (EFI_ERROR(ret)) {
+	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to initialize transport layer");
-		goto exit;
-	}
+	else
+		enable_transport = TRUE;
 
 	for (;;) {
 #ifdef USE_UI
@@ -1325,10 +1326,12 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 		 * - retro-compatibility with previous USB device mode
 		 *   protocol implementation;
 		 * - the installer needs to be scheduled; */
-		ret = transport_run();
-		if (EFI_ERROR(ret) && ret != EFI_TIMEOUT) {
-			efi_perror(ret, L"Error occurred during transport run");
-			goto exit;
+		if (enable_transport) {
+			ret = transport_run();
+			if (EFI_ERROR(ret) && ret != EFI_TIMEOUT) {
+				efi_perror(ret, L"Error occurred during transport run");
+				goto exit;
+			}
 		}
 
 		fastboot_run_command();
@@ -1337,9 +1340,11 @@ EFI_STATUS fastboot_start(void **bootimage, void **efiimage, UINTN *imagesize,
 			break;
 	}
 
-	ret = transport_stop();
-	if (EFI_ERROR(ret))
-		goto exit;
+	if (enable_transport) {
+		ret = transport_stop();
+		if (EFI_ERROR(ret))
+			goto exit;
+	}
 
 	if (fastboot_target != UNKNOWN_TARGET)
 		*target = fastboot_target;
