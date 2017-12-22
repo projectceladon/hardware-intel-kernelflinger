@@ -65,7 +65,7 @@ static USB_DEVICE_INTERFACE_OBJ gInterfaceObjs[INTERFACE_COUNT];
 static USB_DEVICE_ENDPOINT_OBJ	gEndpointObjs[ENDPOINT_COUNT];
 
 EFI_GUID gEfiUsbDeviceModeProtocolGuid = EFI_USB_DEVICE_MODE_PROTOCOL_GUID;
-static EFI_USB_DEVICE_MODE_PROTOCOL *usb_device;
+static EFI_USB_DEVICE_MODE_PROTOCOL *usb_device = NULL;
 
 /* String descriptor table indexes */
 typedef enum {
@@ -165,6 +165,9 @@ EFI_STATUS usb_write(void *buf, UINT32 size)
 	EFI_STATUS ret;
 	USB_DEVICE_IO_REQ ioReq;
 
+	if (usb_device == NULL)
+		return EFI_INVALID_PARAMETER;
+
 	ioReq.EndpointInfo.EndpointDesc = &config_descriptor.ep_in;
 	ioReq.EndpointInfo.EndpointCompDesc = NULL;
 	ioReq.IoInfo.Buffer = buf;
@@ -185,6 +188,9 @@ EFI_STATUS usb_read(void *buf, UINT32 size)
 
 	/* WA: usb device stack doesn't accept rx buffer not multiple of MaxPacketSize */
 	unsigned max_pkt_size = config_descriptor.ep_out.MaxPacketSize;
+
+	if (usb_device == NULL)
+		return EFI_INVALID_PARAMETER;
 
 	size = ALIGN(size, max_pkt_size);
 
@@ -399,6 +405,9 @@ EFI_STATUS usb_stop(void)
 {
 	EFI_STATUS ret;
 
+	if (usb_device == NULL)
+		return EFI_SUCCESS;
+
 	ret = uefi_call_wrapper(usb_device->Stop, 1, usb_device);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to Stop USB", ret);
@@ -424,5 +433,8 @@ EFI_STATUS usb_stop(void)
 
 EFI_STATUS usb_run(void)
 {
+	if (usb_device == NULL)
+		return EFI_INVALID_PARAMETER;
+
 	return uefi_call_wrapper(usb_device->Run, 2, usb_device, 1);
 }
