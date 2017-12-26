@@ -236,7 +236,7 @@ int trusty_ipc_dev_connect(struct trusty_ipc_dev *dev, const char *port,
     trusty_assert(dev);
     trusty_assert(port);
 
-    trusty_debug("%a: connecting to '%s'\n", __func__, port);
+    trusty_debug("%a: connecting to '%a'\n", __func__, port);
 
     /* check port name length */
     port_len = strlen((CHAR8 *)port) + 1;
