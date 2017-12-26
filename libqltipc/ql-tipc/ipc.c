@@ -293,7 +293,7 @@ int trusty_ipc_poll_for_event(struct trusty_ipc_chan *chan)
                 return rc;
             }
             if (rc > 0)
-                return rc;
+                return TRUSTY_ERR_CHANNEL_CLOSED;
         }
     }
 
