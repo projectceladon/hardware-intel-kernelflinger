@@ -823,10 +823,8 @@ err_get_rpmb_key:
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
 	AvbOps *ops;
-	const char *slot_suffix = "";
 	AvbPartitionData *boot;
 	AvbSlotVerifyData *slot_data = NULL;
-	AvbSlotVerifyResult verify_result;
 	AvbABFlowResult flow_result;
 	const char *requested_partitions[] = {"boot", NULL};
 	EFI_STATUS ret;
@@ -835,6 +833,8 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
 #ifdef USE_TRUSTY
+	AvbSlotVerifyResult trusty_verify_result;
+	const char *trusty_slot_suffix = "";
 	const struct boot_img_hdr *header;
 	AvbSlotVerifyData *slot_data_tos = NULL;
 	UINT8 tos_state = BOOT_STATE_GREEN;
@@ -876,9 +876,11 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		goto fail;
 	}
 
+#ifdef USE_TRUSTY
 	if (slot_data->ab_suffix) {
-		slot_suffix = slot_data->ab_suffix;
+		trusty_slot_suffix = slot_data->ab_suffix;
 	}
+#endif
 
 	boot = &slot_data->loaded_partitions[0];
 	bootimage = boot->data;
@@ -886,16 +888,16 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 #ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {
 		requested_partitions[0] = "tos";
-		verify_result = avb_slot_verify(ops,
+		trusty_verify_result = avb_slot_verify(ops,
 					requested_partitions,
-					slot_suffix,
+					trusty_slot_suffix,
 					flags,
 					AVB_HASHTREE_ERROR_MODE_RESTART,
 					&slot_data_tos);
 
 		ret = get_avb_result(slot_data_tos,
 				    false,
-				    verify_result,
+				    trusty_verify_result,
 				    &tos_state);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to get avb result for tos");
