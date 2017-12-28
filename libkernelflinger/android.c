@@ -894,6 +894,7 @@ static EFI_STATUS add_bootvars(VOID *bootimage, CHAR16 **cmdline16)
 
 #define ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init root="
 
+#ifndef USE_AVB
 static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_cert)
 {
         EFI_GUID system_uuid;
@@ -907,8 +908,8 @@ static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_c
                 return ret;
         }
 
-        if (!verity_cert) {  // if defined (USE_AVB), the verity_cert should == NULL
-#if defined(USERDEBUG) && !defined(USE_AVB)
+        if (!verity_cert) {
+#if defined(USERDEBUG)
                 error(L"Cannot boot without a verity certificate");
                 return EFI_INVALID_PARAMETER;
 #else
@@ -929,13 +930,42 @@ static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_c
 
         return ret;
 }
+#endif // USE_AVB
+
+#ifdef USE_AVB
+#define AVB_ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init"
+#define DISABLE_AVB_ROOTFS_PREFIX L" root="
+static EFI_STATUS avb_prepend_command_line_rootfs(
+                __attribute__((__unused__)) OUT CHAR16 **cmdline16,
+                IN enum boot_target boot_target)
+{
+        EFI_STATUS ret = EFI_SUCCESS;
+
+        if (boot_target == RECOVERY)
+                return ret;
+
+#ifdef USE_SLOT
+        ret = prepend_command_line(cmdline16, AVB_ROOTFS_PREFIX);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to add AVB rootfs prefix");
+                return ret;
+        }
+#endif
+        return ret;
+}
+#endif  // defined USE_AVB and USE_SLOT
 
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
                 IN EFI_GUID *swap_guid,
                 IN UINT8 boot_state,
-                IN X509 *verity_cert)
+#ifdef USE_AVB
+                IN AvbSlotVerifyData *slot_data
+#else
+                IN X509 *verity_cert
+#endif
+                )
 {
         CHAR16 *cmdline16 = NULL;
         char   *serialno = NULL;
@@ -945,9 +975,13 @@ static EFI_STATUS setup_command_line(
         EFI_PHYSICAL_ADDRESS cmdline_addr;
         CHAR8 *cmdline;
         UINTN cmdlen;
+        UINTN avb_cmdlen = 0;
         EFI_STATUS ret;
         struct boot_params *buf;
         struct boot_img_hdr *aosp_header;
+#ifdef USE_SLOT
+        EFI_GUID system_uuid;
+#endif
 
         aosp_header = (struct boot_img_hdr *)bootimage;
         buf = (struct boot_params *)(bootimage + aosp_header->page_size);
@@ -1051,6 +1085,7 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 
+#ifndef USE_AVB
 #ifndef __SUPPORT_ABL_BOOT
         if ((boot_target == NORMAL_BOOT || boot_target == CHARGER || boot_target == MEMORY) &&
 #else
@@ -1069,13 +1104,41 @@ static EFI_STATUS setup_command_line(
                                 goto out;
                 }
         }
+#else // defined USE_AVB
+        avb_prepend_command_line_rootfs(&cmdline16, boot_target);
+
+#ifdef AVB_CMDLINE
+        if (slot_data && slot_data->cmdline && boot_target != RECOVERY) {
+                avb_cmdlen = strlen((const CHAR8*)slot_data->cmdline);
+        }
+#endif // AVB_CMDLINE
+
+#ifdef USE_SLOT
+#ifdef AVB_CMDLINE
+        if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root=")))
+#endif // AVB_CMDLINE
+        {
+                ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
+                                                        &system_uuid, LOGICAL_UNIT_USER);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
+                        goto out;
+                }
+
+                ret = prepend_command_line(&cmdline16, DISABLE_AVB_ROOTFS_PREFIX "PARTUUID=%g",
+                                           &system_uuid);
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+#endif // USE_SLOT
+#endif // USE_AVB
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */
         cmdline_addr = 0xA0000;
         cmdlen = StrLen(cmdline16);
         ret = allocate_pages(AllocateMaxAddress, EfiLoaderData,
-                             EFI_SIZE_TO_PAGES(cmdlen + 1),
+                             EFI_SIZE_TO_PAGES(cmdlen + 1 + avb_cmdlen + 1),
                              &cmdline_addr);
         if (EFI_ERROR(ret))
                 goto out;
@@ -1084,9 +1147,18 @@ static EFI_STATUS setup_command_line(
         ret = str_to_stra(cmdline, cmdline16, cmdlen + 1);
         if (EFI_ERROR(ret)) {
                 error(L"Non-ascii characters in command line");
-                free_pages(cmdline_addr, EFI_SIZE_TO_PAGES(cmdlen + 1));
+                free_pages(cmdline_addr, EFI_SIZE_TO_PAGES(cmdlen + 1 + avb_cmdlen + 1));
                 goto out;
         }
+
+#ifdef USE_AVB
+        if (avb_cmdlen > 0) {
+                cmdline[cmdlen] = ' ';
+                memcpy(cmdline + cmdlen + 1, slot_data->cmdline, avb_cmdlen);
+                cmdlen += avb_cmdlen + 1;
+                cmdline[cmdlen] = 0;
+        }
+#endif
 
         buf->hdr.cmd_line_ptr = (UINT32)(UINTN)cmdline;
         ret = EFI_SUCCESS;
@@ -1504,13 +1576,13 @@ EFI_STATUS get_avb_result(
 EFI_STATUS android_image_load_partition_avb(
                 IN const char *label,
                 OUT VOID **bootimage_p,
-                IN OUT UINT8* boot_state)
+                IN OUT UINT8* boot_state,
+                AvbSlotVerifyData **slot_data)
 {
         EFI_STATUS ret = EFI_SUCCESS;
         AvbOps *ops;
         const char *slot_suffix = "";
         AvbPartitionData *boot;
-        AvbSlotVerifyData *slot_data;
         AvbSlotVerifyResult verify_result = 0;
         AvbSlotVerifyFlags flags;
         const char *requested_partitions[] = {label, NULL};
@@ -1541,11 +1613,11 @@ EFI_STATUS android_image_load_partition_avb(
                         slot_suffix,
                         flags,
                         AVB_HASHTREE_ERROR_MODE_RESTART,
-                        &slot_data);
+                        slot_data);
 
         debug(L"avb_slot_verify ret %d\n", verify_result);
 
-        ret = get_avb_result(slot_data,
+        ret = get_avb_result(*slot_data,
                         allow_verification_error,
                         verify_result,
                         boot_state);
@@ -1555,7 +1627,7 @@ EFI_STATUS android_image_load_partition_avb(
                 goto fail;
         }
 
-        boot = &slot_data->loaded_partitions[0];
+        boot = &(*slot_data)->loaded_partitions[0];
         bootimage = boot->data;
         *bootimage_p = bootimage;
         return ret;
@@ -1571,7 +1643,12 @@ EFI_STATUS android_image_start_buffer(
                 IN enum boot_target boot_target,
                 IN UINT8 boot_state,
                 IN EFI_GUID *swap_guid,
-                IN X509 *verity_cert)
+#ifdef USE_AVB
+                IN AvbSlotVerifyData *slot_data
+#else
+                IN X509 *verity_cert
+#endif
+                )
 {
         struct boot_img_hdr *aosp_header;
         struct boot_params *buf;
@@ -1612,7 +1689,12 @@ EFI_STATUS android_image_start_buffer(
 
         debug(L"Creating command line");
         ret = setup_command_line(bootimage, boot_target, swap_guid, boot_state,
-                                 verity_cert);
+#ifdef USE_AVB
+                                 slot_data
+#else
+                                 verity_cert
+#endif
+                                 );
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"setup_command_line");
                 return ret;
@@ -1821,17 +1903,6 @@ void cmdline_add_item (CHAR8 *cmd_buf, UINTN max_cmd_size, const CHAR8 *item, co
 }
 
 #ifdef USE_AVB
-#ifdef USE_SLOT
-#define AVB_ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init "
-#define DISABLE_AVB_ROOTFS_PREFIX L" root="
-static EFI_STATUS avb_prepend_command_line_rootfs(CHAR16 **cmdline16)
-{
-        EFI_STATUS ret;
-        ret = prepend_command_line(cmdline16, AVB_ROOTFS_PREFIX);
-        return ret;
-}
-#endif
-
 static EFI_STATUS setup_command_line_abl(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
@@ -1878,11 +1949,7 @@ static EFI_STATUS setup_command_line_abl(
                 ret = EFI_OUT_OF_RESOURCES;
                 goto out;
         }
-#ifdef USE_SLOT
-        if (boot_target != RECOVERY) {
-                avb_prepend_command_line_rootfs(&cmdline16);
-        }
-#endif
+
         /* Append serial number from DMI */
         serialno = get_serial_number();
         if (serialno) {
@@ -1953,6 +2020,7 @@ static EFI_STATUS setup_command_line_abl(
                 goto out;
 #endif
 #ifdef USE_AVB
+        avb_prepend_command_line_rootfs(&cmdline16, boot_target);
 #ifdef USE_SLOT
         if (!slot_data)
                 goto out;

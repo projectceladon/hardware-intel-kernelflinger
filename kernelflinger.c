@@ -618,7 +618,8 @@ static EFI_STATUS avb_load_verify_boot_image(
                 IN CHAR16 *target_path,
                 OUT VOID **bootimage,
                 IN BOOLEAN oneshot,
-                UINT8* boot_state)
+                UINT8* boot_state,
+                AvbSlotVerifyData **slot_data)
 {
         EFI_STATUS ret;
 
@@ -629,7 +630,7 @@ static EFI_STATUS avb_load_verify_boot_image(
                 if (use_slot() && !slot_get_active())
                         break;
                 do {
-                        ret = android_image_load_partition_avb("boot", bootimage, boot_state);
+                        ret = android_image_load_partition_avb("boot", bootimage, boot_state, slot_data);
                         if (EFI_ERROR(ret)) {
                                 efi_perror(ret, L"Failed to load boot image from boot partition");
                                 if (use_slot())
@@ -639,7 +640,7 @@ static EFI_STATUS avb_load_verify_boot_image(
                 break;
         case RECOVERY:
                 if (recovery_in_boot_partition()) {
-                        ret = avb_load_verify_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot, boot_state);
+                        ret = avb_load_verify_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot, boot_state, slot_data);
                         break;
                 }
 #if !defined(USE_AVB) || !defined(USE_SLOT)
@@ -648,7 +649,7 @@ static EFI_STATUS avb_load_verify_boot_image(
                         break;
                 }
 #endif
-                ret = android_image_load_partition_avb("recovery", bootimage, boot_state);
+                ret = android_image_load_partition_avb("recovery", bootimage, boot_state, slot_data);
                 break;
         case ESP_BOOTIMAGE:
                 /* "fastboot boot" case */
@@ -885,7 +886,12 @@ static EFI_STATUS set_image_oemvars(VOID *bootimage)
 
 static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                              enum boot_target boot_target,
-                             X509 *verifier_cert)
+#ifdef USE_AVB
+                             AvbSlotVerifyData *slot_data
+#else
+                             X509 *verifier_cert
+#endif
+                             )
 {
         EFI_STATUS ret;
 #ifdef USE_TRUSTY
@@ -956,7 +962,12 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                         boot_state_to_string(boot_state));
         ret = android_image_start_buffer(g_parent_image, bootimage,
                                          boot_target, boot_state, NULL,
-                                         verifier_cert);
+#ifdef USE_AVB
+                                         slot_data
+#else
+                                         verifier_cert
+#endif
+                                         );
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Couldn't load Boot image");
 
@@ -1186,8 +1197,9 @@ static void flash_bootloader_policy(void)
 
 #ifdef USE_AVB
         UINT8 boot_state = BOOT_STATE_GREEN;
+        AvbSlotVerifyData *slot_data;
         debug(L"Loading bootloader policy using AVB");
-        ret = avb_load_verify_boot_image(NORMAL_BOOT, NULL, &bootimage, FALSE, &boot_state);
+        ret = avb_load_verify_boot_image(NORMAL_BOOT, NULL, &bootimage, FALSE, &boot_state, &slot_data);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Failed to load the boot image using AVB to get bootloader policy");
                 goto out;
@@ -1238,8 +1250,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         UINT8 boot_state = BOOT_STATE_GREEN;
 #ifndef USE_AVB
         UINT8 *hash = NULL;
-#endif
         X509 *verifier_cert = NULL;
+#else
+        AvbSlotVerifyData *slot_data = NULL;
+#endif
         CHAR16 *name = NULL;
         EFI_RESET_TYPE resetType;
 #ifdef RPMB_STORAGE
@@ -1402,7 +1416,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         debug(L"Loading boot image");
 
 #ifdef USE_AVB
-        ret = avb_load_verify_boot_image(boot_target, target_path, &bootimage, oneshot, &boot_state);
+        ret = avb_load_verify_boot_image(boot_target, target_path, &bootimage, oneshot, &boot_state, &slot_data);
 #else
         ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
         FreePool(target_path);
@@ -1449,7 +1463,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 break;
         }
 
-        ret = load_image(bootimage, boot_state, boot_target, verifier_cert);
+        ret = load_image(bootimage, boot_state, boot_target,
+#ifdef USE_AVB
+                         slot_data
+#else
+                         verifier_cert
+#endif
+                         );
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Failed to start boot image");
 
