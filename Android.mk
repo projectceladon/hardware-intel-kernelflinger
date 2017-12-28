@@ -79,6 +79,9 @@ ifeq ($(BOARD_AVB_ENABLE),true)
     ifeq ($(TARGET_BUILD_VARIANT),userdebug)
           KERNELFLINGER_CFLAGS += -DAVB_ENABLE_DEBUG
     endif
+    ifeq ($(KERNELFLINGER_AVB_CMDLINE),true)
+          KERNELFLINGER_CFLAGS += -DAVB_CMDLINE
+    endif
 endif
 
 ifeq ($(BOARD_SLOT_AB_ENABLE),true)

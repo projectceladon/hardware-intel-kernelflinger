@@ -373,8 +373,9 @@ EFI_STATUS load_tos_image(OUT VOID **bootimage)
 {
         EFI_STATUS ret;
         UINT8 verify_state = BOOT_STATE_GREEN;
+        AvbSlotVerifyData *slot_data;
 
-        ret = android_image_load_partition_avb("tos", bootimage, &verify_state);  // Do not try to switch slot if failed
+        ret = android_image_load_partition_avb("tos", bootimage, &verify_state, &slot_data);  // Do not try to switch slot if failed
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"TOS image loading failed");
                 return ret;
