@@ -77,10 +77,12 @@ const char* trusty_basename(const char* str);
  */
 #define trusty_info(message, ...)             \
   do {                                        \
-    trusty_printf("%a: INFO "                 \
+    if (LOCAL_LOG) {                          \
+        trusty_printf("%a: INFO "             \
                   message,                    \
                   trusty_basename(__FILE__),  \
                   ##__VA_ARGS__);             \
+    }                                         \
   } while(0)
 
 /*
