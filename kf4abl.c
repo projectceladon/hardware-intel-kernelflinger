@@ -834,6 +834,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		requested_partitions[0] = "recovery";
 	}
 #endif
+	set_boottime_stamp(TM_AVB_START);
 	ops = avb_init();
 	if (ops) {
 		if (ops->read_is_device_unlocked(ops, &allow_verification_error) != AVB_IO_RESULT_OK) {
@@ -867,6 +868,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 
 	boot = &slot_data->loaded_partitions[0];
 	bootimage = boot->data;
+	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
 
 #ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {
@@ -889,7 +891,6 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			ret = EFI_ABORTED;
 			goto fail;
 		}
-
 
 		tos = &slot_data_tos->loaded_partitions[0];
 		header = (const struct boot_img_hdr *)tos->data;
@@ -937,6 +938,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			goto fail;
 		}
 	}
+	set_boottime_stamp(TM_VERIFY_TOS_DONE);
 #endif
 
 	if (boot_state == BOOT_STATE_GREEN) {
