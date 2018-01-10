@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2018, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,41 +30,59 @@
  * any external definitions in order to ease export of it.
  */
 
-#ifndef _STORAGE_H_
-#define _STORAGE_H_
+#include <lib.h>
+#include "storage.h"
 
-#include <efi.h>
-#include "gpt.h"
+#ifndef MSG_VIRTUAL_MEDIA_DP
+#define MSG_VIRTUAL_MEDIA_DP	0x20
+#endif
 
-enum storage_type {
-	STORAGE_EMMC,
-	STORAGE_UFS,
-	STORAGE_SDCARD,
-	STORAGE_SATA,
-	STORAGE_NVME,
-	STORAGE_VIRTUAL,
-	STORAGE_ALL,
+static EFI_DEVICE_PATH *get_virtual_media_device_path(EFI_DEVICE_PATH *p)
+{
+	for (; !IsDevicePathEndType(p); p = NextDevicePathNode(p))
+		if (DevicePathType(p) == MESSAGING_DEVICE_PATH
+		    && DevicePathSubType(p) == MSG_VIRTUAL_MEDIA_DP)
+			return p;
+	return NULL;
+}
+
+static EFI_STATUS virtual_media_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EFI_BLOCK_IO *bio,
+	__attribute__((unused))EFI_LBA start, __attribute__((unused))EFI_LBA end)
+{
+	EFI_STATUS ret;
+	EFI_DEVICE_PATH *dp = DevicePathFromHandle(handle);
+
+	if (!dp) {
+		error(L"Failed to get device path from handle");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	ret = EFI_UNSUPPORTED;
+	return ret;
+}
+
+static EFI_STATUS virtual_media_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit)
+{
+	p = get_virtual_media_device_path(p);
+	if (!p)
+		return EFI_NOT_FOUND;
+
+	if (log_unit != LOGICAL_UNIT_USER)
+		return EFI_NOT_FOUND;
+
+	return EFI_SUCCESS;
+
+}
+
+static BOOLEAN is_virtual_media(EFI_DEVICE_PATH *p)
+{
+	return get_virtual_media_device_path(p) != NULL;
+}
+
+struct storage STORAGE(STORAGE_VIRTUAL) = {
+	.erase_blocks = virtual_media_erase_blocks,
+	.check_logical_unit = virtual_media_check_logical_unit,
+	.probe = is_virtual_media,
+	.name = L"VIRTUAL_MEDIA"
 };
 
-/* It is faster to erase multiple block at once */
-#define N_BLOCK (4096)
-
-struct storage {
-	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
-	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-	BOOLEAN (*probe)(EFI_DEVICE_PATH *p);
-	const CHAR16 *name;
-};
-
-#define STORAGE(X) storage_##X
-
-EFI_STATUS identify_boot_device(enum storage_type type);
-PCI_DEVICE_PATH *get_boot_device(void);
-EFI_STATUS storage_set_boot_device(EFI_HANDLE device);
-EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
-EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
-EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
-		     VOID *pattern, UINTN pattern_blocks);
-EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
-
-#endif	/* _STORAGE_H_ */

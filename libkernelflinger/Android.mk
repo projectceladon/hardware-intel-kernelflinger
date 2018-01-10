@@ -101,7 +101,8 @@ LOCAL_SRC_FILES := \
 	qsort.c \
 	rpmb.c \
 	timer.c \
-	nvme.c
+	nvme.c \
+	virtual_media.c
 ifeq ($(or $(IOC_USE_SLCAN),$(IOC_USE_CBC)),true)
         LOCAL_SRC_FILES += ioc_can.c
 endif
