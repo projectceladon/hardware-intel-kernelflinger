@@ -36,11 +36,16 @@
 #include <lib.h>
 #include "timer.h"
 
-#define BOOT_SATGE_FIRMWARE L"LFW"
-#define BOOT_SATGE_OSLOADER L"LOS"
+#define BOOT_STAGE_FIRMWARE L"FWS"
+#define BOOT_STAGE_OSLOADER L"OLS"
+#define BOOT_STAGE_CHECK_BCB L"CBS"
+#define BOOT_STAGE_VERIFY_BOOT L"VBS"
+#define BOOT_STAGE_VERIFY_TRUSTY L"VTS"
+#define BOOT_STAGE_START_KERNEL L"SKS"
 
 //Array for recording boot time of every stage
-unsigned bt_stamp[TIMESTAMP_MAX];
+static unsigned bt_stamp[TM_POINT_LAST];
+
 
 typedef union
 {
@@ -101,7 +106,7 @@ unsigned boottime_in_msec(void)
 
 void set_boottime_stamp(int num)
 {
-	if ((num < 0) || (num >= TIMESTAMP_MAX))
+	if ((num < 0) || (num >= TM_POINT_LAST))
 		return;
 
 	bt_stamp[num] = boottime_in_msec();
@@ -109,13 +114,13 @@ void set_boottime_stamp(int num)
 
 void format_stages_boottime(CHAR16 *time_str)
 {
-	CHAR8 time_str8[64] = "";
+	CHAR8 time_str8[128] = "";
 	CHAR16 *str = NULL;
 
 	if (!time_str)
 		return;
 
-	StrCat(time_str, BOOT_SATGE_FIRMWARE);
+	StrCat(time_str, BOOT_STAGE_FIRMWARE);
 	StrCat(time_str, L":");
 	itoa(bt_stamp[TM_EFI_MAIN], time_str8, 10);
 	str = stra_to_str(time_str8);
@@ -125,10 +130,53 @@ void format_stages_boottime(CHAR16 *time_str)
 	StrCat(time_str, str);
 	FreePool(str);
 	StrCat(time_str, L",");
+#ifdef USE_AVB
+	StrCat(time_str, BOOT_STAGE_CHECK_BCB);
+	StrCat(time_str, L":");
+	itoa(bt_stamp[TM_AVB_START] - bt_stamp[TM_EFI_MAIN], time_str8, 10);
+	str = stra_to_str(time_str8);
+	if (str == NULL)
+		return;
 
-	StrCat(time_str, BOOT_SATGE_OSLOADER);
+	StrCat(time_str, str);
+	FreePool(str);
+	StrCat(time_str, L",");
+	StrCat(time_str, BOOT_STAGE_VERIFY_BOOT);
+	StrCat(time_str, L":");
+	itoa(bt_stamp[TM_VERIFY_BOOT_DONE] - bt_stamp[TM_AVB_START], time_str8, 10);
+	str = stra_to_str(time_str8);
+	if (str == NULL)
+		return;
+
+	StrCat(time_str, str);
+	FreePool(str);
+	StrCat(time_str, L",");
+#ifdef USE_TRUSTY
+	StrCat(time_str, BOOT_STAGE_VERIFY_TRUSTY);
+	StrCat(time_str, L":");
+	itoa(bt_stamp[TM_VERIFY_TOS_DONE] - bt_stamp[TM_VERIFY_BOOT_DONE], time_str8, 10);
+	str = stra_to_str(time_str8);
+	if (str == NULL)
+		return;
+
+	StrCat(time_str, str);
+	FreePool(str);
+	StrCat(time_str, L",");
+#endif
+	StrCat(time_str, BOOT_STAGE_START_KERNEL);
+	StrCat(time_str, L":");
+
+#ifdef USE_TRUSTY
+	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_VERIFY_TOS_DONE], time_str8, 10);
+#else
+	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_VERIFY_BOOT_DONE], time_str8, 10);
+#endif
+
+#else //#ifdef USE_AVB
+	StrCat(time_str, BOOT_STAGE_OSLOADER);
 	StrCat(time_str, L":");
 	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_EFI_MAIN], time_str8, 10);
+#endif
 	str = stra_to_str(time_str8);
 	if (str == NULL)
 		return;

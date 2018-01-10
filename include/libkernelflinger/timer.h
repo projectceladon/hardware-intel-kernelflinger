@@ -27,19 +27,20 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef _TIME_H_
-#define _TIME_H_
+#ifndef _TIMER_H_
+#define _TIMER_H_
 
 #include <efi.h>
 #include <efiapi.h>
 #include "lib.h"
 
-#define TIMESTAMP_MAX 3
-unsigned bt_stamp[TIMESTAMP_MAX];
-
 enum TM_POINT {
 	TM_EFI_MAIN = 0,
-	TM_JMP_KERNEL = TIMESTAMP_MAX - 1
+	TM_AVB_START,
+	TM_VERIFY_BOOT_DONE,
+	TM_VERIFY_TOS_DONE,
+	TM_JMP_KERNEL,
+	TM_POINT_LAST
 };
 
 unsigned boottime_in_msec(void);

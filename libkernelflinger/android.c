@@ -1864,8 +1864,8 @@ static EFI_STATUS setup_command_line_abl(
         EFI_GUID system_uuid;
 #endif
         UINTN abl_cmd_len = 0;
-        CHAR8 time_str8[64] = "";
-        CHAR16 time_str16[32] = L"";
+        CHAR8 time_str8[128] = "";
+        CHAR16 time_str16[64] = L"";
 
         if (abl_cmd_line != NULL)
                abl_cmd_len = strlen(abl_cmd_line);
