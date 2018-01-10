@@ -298,6 +298,10 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 		type = STORAGE_NVME;
 		goto set;
 	}
+	if (!strcmp(argv[1], (CHAR8*)"virtual_media")) {
+		type = STORAGE_VIRTUAL;
+		goto set;
+	}
 	fastboot_fail("Unsupported storage");
 	return;
 set:
