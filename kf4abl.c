@@ -64,10 +64,9 @@
 #include <hecisupport.h>
 #include <openssl/hkdf.h>
 
-#define TRUSTY_PARAM_STRING          "trusty.param_addr="
+
 #define BOOTLOADER_SEED_MAX_ENTRIES  4
 #define MMC_PROD_NAME_WITH_PSN_LEN   15
-#define LENGTH_TRUSTY_PARAM_STRING   18
 #define TRUSTY_SEED_LEN              32
 
 /* structure of seed info */
@@ -309,25 +308,69 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	EFI_STATUS ret;
 	enum boot_target target = FASTBOOT;
 	static EFI_LOADED_IMAGE *limg;
-	UINTN argc, i;
+	UINTN argc, i, j;
 	CHAR16 **argv;
 	UINTN cmd_len = 0;
 	CHAR8 arg8[256] = "";
 	UINTN arglen;
-	CHAR8 *secureboot_str = (CHAR8 *)"ABL.secureboot=";
-	UINTN secureboot_str_len;
-	CHAR8 *bootmode_info_str = (CHAR8 *)"ABL.boot=";
-	UINTN bootmode_info_str_len;
-	CHAR8 *boot_target_str = (CHAR8 *)"ABL.boot_target=";
-	UINTN boot_target_str_len;
-	CHAR16 *boot_reset_str = (CHAR16 *)L"ABL.reset=";
-	UINTN boot_reset_str_len;
-	CHAR8 *bootversion_str = (CHAR8 *)"androidboot.bootloader=";
-	UINTN bootversion_str_len;
-	CHAR8 *serialno_str = (CHAR8 *)"androidboot.serialno=";
-	UINTN serialno_str_len;
-	CHAR8 *nptr = NULL;
 
+	enum CmdType
+	{
+		RESET,
+		BOOT_TARGET,
+		BOOT,
+		TRUSTY_PARAM,
+		SECUREBOOT,
+		BOOTVERSION,
+		SERIALNO
+	};
+
+	struct Cmdline
+	{
+		CHAR8 *name;
+		UINTN length;
+		enum CmdType type;
+	};
+
+	struct Cmdline CmdlineArray[] = {
+		{
+			(CHAR8 *)"ABL.reset=",
+			strlen((CHAR8 *)"ABL.reset="),
+			RESET
+		},
+		{
+			(CHAR8 *)"ABL.boot_target=",
+			strlen((CHAR8 *)"ABL.boot_target="),
+			BOOT_TARGET
+		},
+		{
+			(CHAR8 *)"ABL.boot=",
+			strlen((CHAR8 *)"ABL.boot="),
+			BOOT
+		},
+		{
+			(CHAR8 *)"trusty.param_addr=",
+			strlen((CHAR8 *)"trusty.param_addr="),
+			TRUSTY_PARAM
+		},
+		{
+			(CHAR8 *)"ABL.secureboot=",
+			strlen((CHAR8 *)"ABL.secureboot="),
+			SECUREBOOT
+		},
+		{
+			(CHAR8 *)"androidboot.bootloader=",
+			strlen((CHAR8 *)"androidboot.bootloader="),
+			BOOTVERSION
+		},
+		{
+			(CHAR8 *)"androidboot.serialno=",
+			strlen((CHAR8 *)"androidboot.serialno="),
+			SERIALNO
+		},
+	};
+
+	CHAR8 *nptr = NULL;
 	ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
 				&LoadedImageProtocol, (VOID **)&limg,
 				image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
@@ -341,87 +384,92 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		return FASTBOOT;
 
 	cmd_buf[0] = 0;
-	secureboot_str_len = strlen((CHAR8 *)secureboot_str);
-	bootmode_info_str_len = strlen((CHAR8 *)bootmode_info_str);
-	boot_target_str_len = strlen((CHAR8 *)boot_target_str);
-	boot_reset_str_len = StrLen((CHAR16 *)boot_reset_str);
-	bootversion_str_len = strlen((CHAR8 *)bootversion_str);
-	serialno_str_len = strlen((CHAR8 *)serialno_str);
 
-	/*Parse boot target*/
 	for (i = 0; i < argc; i++) {
 		debug(L" abl cmd %02d: %s", i, argv[i]);
 		arglen = StrLen(argv[i]);
 
-		/* Parse "ABL.reset=xxx" */
-		if(StrnCmp(argv[i], boot_reset_str, boot_reset_str_len) == 0)
-			set_reboot_reason(argv[i] + boot_reset_str_len);
-
 		if (arglen > (int)sizeof(arg8) - 2)
 			arglen = sizeof(arg8) - 2;
-		str_to_stra((CHAR8 *)arg8, argv[i], arglen + 1);
+		debug(L" abl cmd %02d length: %d", i, arglen);
+
+		ret = str_to_stra((CHAR8 *)arg8, argv[i], arglen + 1);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Non-ascii characters in command line");
+			return FASTBOOT;
+		}
+
 		if (cmd_len + arglen + 1 < max_cmd_size) {
 			if (cmd_buf[0] != 0) {
 				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)" ", 1);
 				cmd_len++;
 			}
-
-			/* Parse "ABL.boot_target=xxxx" */
-			if ((arglen > boot_target_str_len) &&
-				!strncmp(arg8, boot_target_str, boot_target_str_len)) {
-				nptr = (CHAR8 *)(arg8 + boot_target_str_len);
-				/* Only handle CRASHMODE case, other mode should be decided by "ABL.boot". */
-				if (!strcmp(nptr, (CHAR8 *)"CRASHMODE")) {
-					target = CRASHMODE;
+			for (j = 0; j < sizeof(CmdlineArray)/sizeof(CmdlineArray[0]); j++) {
+				if((arglen > CmdlineArray[j].length) && !strncmp(arg8, CmdlineArray[j].name, CmdlineArray[j].length))
 					break;
-				} else {
+			}
+			if (j < sizeof(CmdlineArray)/sizeof(CmdlineArray[0])) {
+				switch(CmdlineArray[j].type) {
+				/* Parse "ABL.reset=xxx" */
+				case RESET:
+					set_reboot_reason(argv[i] + CmdlineArray[j].length);
+					continue;
+
+				/* Parse "ABL.boot_target=xxxx" */
+				case BOOT_TARGET:
+					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
+					/* Only handle CRASHMODE case, other mode should be decided by "ABL.boot". */
+					if (!strcmp(nptr, (CHAR8 *)"CRASHMODE")) {
+						target = CRASHMODE;
+						goto out;
+					}
+					continue;
+
+				/* Parse "ABL.boot=xx" */
+				case BOOT:
+					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
+					bootMode._bits = (UINT16)strtoul((char *)nptr, 0, 16);
+					target = bootMode.target;
+					break;
+
+				/* Parse "trusty.param_addr=xxxxx" */
+				case TRUSTY_PARAM: {
+#ifdef USE_TRUSTY
+					UINT32 num;
+					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
+					num = strtoul((char *)nptr, 0, 16);
+					debug(L"Parsed trusty param addr is 0x%x", num);
+					p_trusty_boot_params = (trusty_boot_params_t *)num;
+#endif
 					continue;
 				}
-			} else
-			/* Parse "ABL.boot=xx" */
-			if ((arglen > bootmode_info_str_len) &&
-				(!strncmp(arg8, bootmode_info_str, bootmode_info_str_len))) {
-				nptr = (CHAR8 *)(arg8 + bootmode_info_str_len);
-				bootMode._bits = (UINT16)strtoul((char *)nptr, 0, 16);
-				target = bootMode.target;
-			} else
-#ifdef USE_TRUSTY
-			/* Parse "trusty.param_addr=xxxxx" */
-			if ((arglen > LENGTH_TRUSTY_PARAM_STRING) &&
-			    (!strncmp(arg8, (CHAR8 *)TRUSTY_PARAM_STRING, LENGTH_TRUSTY_PARAM_STRING))) {
-				UINT32 num;
-				nptr = (CHAR8 *)(arg8 + LENGTH_TRUSTY_PARAM_STRING);
-				num = strtoul((char *)nptr, 0, 16);
-				debug(L"Parsed trusty param addr is 0x%x", num);
-				p_trusty_boot_params = (trusty_boot_params_t *)num;
-				continue;
-			} else
-#endif
-			/* Parse "ABL.secureboot=x" */
-			if ((arglen > secureboot_str_len) && (!strncmp(arg8, (CHAR8 *)secureboot_str, secureboot_str_len))) {
-				UINT8 val;
-				nptr = (CHAR8 *)(arg8 + secureboot_str_len);
-				val = (UINT8)strtoul((char *)nptr, 0, 10);
-				ret = set_abl_secure_boot(val);
-				if (EFI_ERROR(ret))
-					efi_perror(ret, L"Failed to set secure boot");
-			} else
-			/* Parse "android.bootloader=xxxxx" */
-			if((arglen > bootversion_str_len) &&
-			    (!strncmp(arg8, (CHAR8 *)bootversion_str, bootversion_str_len))) {
-				continue;
-			} else
-			/* Parse "android.serialno=xxxxx " */
-			if((arglen > serialno_str_len) &&
-			    (!strncmp(arg8, (CHAR8 *)serialno_str, serialno_str_len))) {
-				continue;
-			}
 
+				/* Parse "ABL.secureboot=x" */
+				case SECUREBOOT: {
+					UINT8 val;
+					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
+					val = (UINT8)strtoul((char *)nptr, 0, 10);
+					ret = set_abl_secure_boot(val);
+					if (EFI_ERROR(ret))
+						efi_perror(ret, L"Failed to set secure boot");
+					break;
+				}
+
+				/* Parse "android.bootloader=xxxxx" */
+				case BOOTVERSION:
+					continue;
+
+				/* Parse "android.serialno=xxxxx " */
+				case SERIALNO:
+					continue;
+				}
+			}
 			strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
 			cmd_len += arglen;
 		}
 	}
 
+out:
 	debug(L"boot target: %d", target);
 	FreePool(argv);
 	return target;
