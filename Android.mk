@@ -1,6 +1,11 @@
 KERNELFLINGER_LOCAL_PATH := $(call my-dir)
 KERNELFLINGER_CFLAGS := -Wall -Wextra -Werror -mrdrnd
 
+ifeq ($(TARGET_UEFI_ARCH),x86_64)
+    KERNELFLINGER_CFLAGS += -mpreferred-stack-boundary=5
+    KERNELFLINGER_CFLAGS += -D__STDC_VERSION__=199901L
+endif
+
 ifeq ($(TARGET_USE_TRUSTY),true)
     KERNELFLINGER_CFLAGS += -DUSE_TRUSTY
 endif
