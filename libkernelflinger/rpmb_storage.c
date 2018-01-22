@@ -103,11 +103,11 @@ void set_rpmb_key(UINT8 *key)
 EFI_STATUS clear_teedata_flag(void)
 {
 	EFI_STATUS ret;
- 	uint8_t magic[TEEDATA_KEY_MAGIC_LENGTH] = {0};
+	uint8_t data[ TEEDATA_KEY_MAGIC_LENGTH + RPMB_KEY_SIZE ] = {0};
 
 	debug(L"enter clear teedata flag.");
 
-	ret = emmc_simulate_write_rpmb_data(TEEDATA_KEY_MAGIC_ADDR, magic, TEEDATA_KEY_MAGIC_LENGTH);
+	ret = emmc_simulate_write_rpmb_data(TEEDATA_KEY_MAGIC_ADDR, data, TEEDATA_KEY_MAGIC_LENGTH + RPMB_KEY_SIZE);
 	if (EFI_ERROR(ret)) {
 		debug(L"clear teedata_flag failed for magic.");
 		return ret;
