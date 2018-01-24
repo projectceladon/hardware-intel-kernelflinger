@@ -196,7 +196,7 @@ struct km_get_version_resp {
 } TRUSTY_ATTR_PACKED;
 
 /**
- * km_set_boot_params_req - request format for KM_SET_BOOT_PARAMS.
+ * km_boot_params - request format for KM_SET_BOOT_PARAMS.
  *
  * @os_version: OS version from Android image header
  * @os_patchlevel: OS patch level from Android image header
@@ -205,52 +205,37 @@ struct km_get_version_resp {
  * @verified_boot_key_hash_size: size of verified_boot_key_hash
  * @verified_boot_key_hash: hash of key used to verify Android image
  */
-struct km_set_boot_params_req {
+struct km_boot_params {
     uint32_t os_version;
     uint32_t os_patchlevel;
     uint32_t device_locked;
     uint32_t verified_boot_state;
     uint32_t verified_boot_key_hash_size;
-    uint8_t verified_boot_key_hash[0];
+    uint8_t *verified_boot_key_hash;
 } TRUSTY_ATTR_PACKED;
 
 /**
- * km_set_attestation_key_req - request format for KM_SET_ATTESTION_KEY.
+ * km_attestation_data - request format for KM_SET_ATTESTION_KEY.
  *
  * @algorithm: specifies key type. one of KM_ALGORITHM_RSA or KM_ALGORITHM_EC.
  * @key_size: size of |key|
  * @key: start of key of type |algorithm|, of size |key_size|
  */
-struct km_set_attestation_key_req {
+struct km_attestation_data {
     uint32_t algorithm;
-    uint32_t key_size;
-    uint8_t key[0];
+    uint32_t data_size;
+    uint8_t *data;
 } TRUSTY_ATTR_PACKED;
 
 /**
- * km_append_attestation_cert_chain_req - request format for
- * KM_APPEND_ATTESTION_CERT_CHAIN.
- *
- * @algorithm: specifies key type. one of KM_ALGORITHM_RSA or KM_ALGORITHM_EC.
- * @key_size: size of |key|
- * @key: start of key of type |algorithm|, of size |key_size|
- */
-struct km_append_attestation_cert_chain_req {
-    uint32_t algorithm;
-    uint32_t cert_size;
-    uint8_t cert[0];
-} TRUSTY_ATTR_PACKED;
-
-/**
- * km_provision_keybox_req - request format for
+ * km_provision_data - request format for
  * KM_PROVISION_KEYBOX
  *
  * @keybox_size: size of |keybox|
  * @keybox: the dump data of the keybox xml file
  */
-struct km_provision_keybox_req {
-    uint32_t keybox_size;
-    uint8_t keybox[0];
+struct km_provision_data {
+    uint32_t data_size;
+    uint8_t *data;
 } TRUSTY_ATTR_PACKED;
-
 #endif /* TRUSTY_INTERFACE_KEYMASTER_H_ */
