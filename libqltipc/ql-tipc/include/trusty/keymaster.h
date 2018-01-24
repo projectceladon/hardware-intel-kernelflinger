@@ -55,7 +55,8 @@ void km_tipc_shutdown(struct trusty_ipc_dev *dev);
  */
 int trusty_set_boot_params(uint32_t os_version, uint32_t os_patchlevel,
                            keymaster_verified_boot_t verified_boot_state,
-                           bool device_locked, uint8_t *verified_boot_key_hash,
+                           bool device_locked,
+                           const uint8_t *verified_boot_key_hash,
                            uint32_t verified_boot_key_hash_size);
 
 /*
@@ -65,7 +66,7 @@ int trusty_set_boot_params(uint32_t os_version, uint32_t os_patchlevel,
  * @key_size: size of key in bytes
  * @algorithm: one of KM_ALGORITHM_RSA or KM_ALGORITHM_EC
  */
-int trusty_set_attestation_key(uint8_t *key,  uint32_t key_size,
+int trusty_set_attestation_key(const uint8_t *key, uint32_t key_size,
                                keymaster_algorithm_t algorithm);
 
 /*
@@ -76,7 +77,8 @@ int trusty_set_attestation_key(uint8_t *key,  uint32_t key_size,
  * @cert_size: size of certificate in bytes
  * @algorithm: one of KM_ALGORITHM_RSA or KM_ALGORITHM_EC
  */
-int trusty_append_attestation_cert_chain(uint8_t *cert,  uint32_t cert_size,
+int trusty_append_attestation_cert_chain(const uint8_t *cert,
+                                         uint32_t cert_size,
                                          keymaster_algorithm_t algorithm);
 
 /*

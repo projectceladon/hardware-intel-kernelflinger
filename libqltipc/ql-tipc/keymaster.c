@@ -23,6 +23,7 @@
  */
 
 #include <trusty/keymaster.h>
+#include <trusty/keymaster_serializable.h>
 #include <trusty/rpmb.h>
 #include <trusty/trusty_ipc.h>
 #include <trusty/util.h>
@@ -34,27 +35,18 @@
 
 static struct trusty_ipc_chan km_chan;
 static bool initialized;
-static int trusty_km_version = 1;
+static int trusty_km_version = 2;
 extern struct rot_data_t g_rot_data;
+
 static int km_send_request(struct keymaster_message *msg, void *req,
-                           size_t req_len, void *data, size_t data_len)
+                           size_t req_len)
 {
-    int num_iovecs = 1;
+    int num_iovecs = req ? 2 : 1;
 
-    /* If data is non-NULL, req must be non-NULL */
-    trusty_assert(!(!req && data));
-
-    struct trusty_ipc_iovec req_iovs[3] = {
+    struct trusty_ipc_iovec req_iovs[2] = {
         { .base = msg, .len = sizeof(*msg) },
         { .base = req, .len = req_len },
-        { .base = data, .len = data_len },
     };
-
-    if (req && data) {
-        num_iovecs = 3;
-    } else if (req) {
-        num_iovecs = 2;
-    }
 
     return trusty_ipc_send(&km_chan, req_iovs, num_iovecs, true);
 }
@@ -62,7 +54,7 @@ static int km_send_request(struct keymaster_message *msg, void *req,
 static int km_read_response(struct keymaster_message *msg, uint32_t cmd,
                             void *resp, size_t resp_len)
 {
-    int rc;
+    int rc = TRUSTY_ERR_GENERIC;
     struct trusty_ipc_iovec resp_iovs[2] = {
         { .base = msg, .len = sizeof(*msg) },
         { .base = resp, .len = resp_len },
@@ -81,15 +73,15 @@ static int km_read_response(struct keymaster_message *msg, uint32_t cmd,
 }
 
 static int km_do_tipc(uint32_t cmd, void *req, uint32_t req_len,
-                      void *data, uint32_t data_len, bool handle_rpmb)
+                      bool handle_rpmb)
 {
-    int rc;
+    int rc = TRUSTY_ERR_GENERIC;
     struct keymaster_message msg = { .cmd = cmd };
-    struct km_no_response resp = { .error = 0 };
+    struct km_no_response resp;
 
-    rc = km_send_request(&msg, req, req_len, data, data_len);
+    rc = km_send_request(&msg, req, req_len);
     if (rc < 0) {
-        trusty_error("%a: failed (%d) to send km request\n", __func__, rc);
+        trusty_error("%s: failed (%d) to send km request\n", __func__, rc);
         return rc;
     }
 
@@ -97,7 +89,7 @@ static int km_do_tipc(uint32_t cmd, void *req, uint32_t req_len,
         /* handle any incoming RPMB requests */
         rc = rpmb_storage_proxy_poll();
         if (rc < 0) {
-            trusty_error("%a: failed (%d) to get RPMB requests\n", __func__,
+            trusty_error("%s: failed (%d) to get RPMB requests\n", __func__,
                          rc);
             return rc;
         }
@@ -105,10 +97,9 @@ static int km_do_tipc(uint32_t cmd, void *req, uint32_t req_len,
 
     rc = km_read_response(&msg, cmd, &resp, sizeof(resp));
     if (rc < 0) {
-        trusty_error("%a: failed (%d) to read km response\n", __func__, rc);
+        trusty_error("%s: failed (%d) to read km response\n", __func__, rc);
         return rc;
     }
-
     return resp.error;
 }
 
@@ -139,11 +130,11 @@ static int32_t MessageVersion(uint8_t major_ver, uint8_t minor_ver,
 
 static int km_get_version(int32_t *version)
 {
-    int rc;
+    int rc = TRUSTY_ERR_GENERIC;
     struct keymaster_message msg = { .cmd = KM_GET_VERSION };
     struct km_get_version_resp resp;
 
-    rc = km_send_request(&msg, NULL, 0, NULL, 0);
+    rc = km_send_request(&msg, NULL, 0);
     if (rc < 0) {
         trusty_error("failed to send km version request", rc);
         return rc;
@@ -151,7 +142,7 @@ static int km_get_version(int32_t *version)
 
     rc = km_read_response(&msg, KM_GET_VERSION, &resp, sizeof(resp));
     if (rc < 0) {
-        trusty_error("%a: failed (%d) to read km response\n", __func__, rc);
+        trusty_error("%s: failed (%d) to read km response\n", __func__, rc);
         return rc;
     }
 
@@ -162,7 +153,7 @@ static int km_get_version(int32_t *version)
 
 int km_tipc_init(struct trusty_ipc_dev *dev)
 {
-    int rc;
+    int rc = TRUSTY_ERR_GENERIC;
 
     trusty_assert(dev);
 
@@ -172,7 +163,7 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
     /* connect to km service and wait for connect to complete */
     rc = trusty_ipc_connect(&km_chan, KEYMASTER_PORT, true);
     if (rc < 0) {
-        trusty_error("failed (%d) to connect to '%a'\n", rc, KEYMASTER_PORT);
+        trusty_error("failed (%d) to connect to '%s'\n", rc, KEYMASTER_PORT);
         return rc;
     }
 
@@ -239,55 +230,95 @@ void km_tipc_shutdown(struct trusty_ipc_dev *dev)
 
 int trusty_set_boot_params(uint32_t os_version, uint32_t os_patchlevel,
                            keymaster_verified_boot_t verified_boot_state,
-                           bool device_locked, uint8_t *verified_boot_key_hash,
+                           bool device_locked,
+                           const uint8_t *verified_boot_key_hash,
                            uint32_t verified_boot_key_hash_size)
 {
-    struct km_set_boot_params_req req = {
+    struct km_boot_params params = {
         .os_version = os_version,
         .os_patchlevel = os_patchlevel,
         .device_locked = (uint32_t)device_locked,
         .verified_boot_state = (uint32_t)verified_boot_state,
         .verified_boot_key_hash_size = verified_boot_key_hash_size,
+        .verified_boot_key_hash = (uint8_t *)verified_boot_key_hash,
     };
+    uint8_t *req = NULL;
+    uint32_t req_size = 0;
+    int rc = km_boot_params_serialize(&params, &req, &req_size);
 
-    return km_do_tipc(KM_SET_BOOT_PARAMS, &req, sizeof(req),
-                      verified_boot_key_hash, verified_boot_key_hash_size,
-                      false);
+    if (rc < 0) {
+        trusty_error("failed (%d) to serialize request\n", rc);
+        goto end;
+    }
+    rc = km_do_tipc(KM_SET_BOOT_PARAMS, req, req_size, false);
+
+end:
+    if (req) {
+        trusty_free(req);
+    }
+    return rc;
 }
 
-int trusty_set_attestation_key(uint8_t *key, uint32_t key_size,
+static int trusty_send_attestation_data(uint32_t cmd, const uint8_t *data,
+                                        uint32_t data_size,
+                                        keymaster_algorithm_t algorithm)
+{
+    struct km_attestation_data attestation_data = {
+        .algorithm = (uint32_t)algorithm,
+        .data_size = data_size,
+        .data = (uint8_t *)data,
+    };
+    uint8_t *req = NULL;
+    uint32_t req_size = 0;
+    int rc = km_attestation_data_serialize(&attestation_data, &req, &req_size);
+
+    if (rc < 0) {
+        trusty_error("failed (%d) to serialize request\n", rc);
+        goto end;
+    }
+    rc = km_do_tipc(cmd, req, req_size, true);
+
+end:
+    if (req) {
+        trusty_free(req);
+    }
+    return rc;
+}
+
+int trusty_set_attestation_key(const uint8_t *key, uint32_t key_size,
                                keymaster_algorithm_t algorithm)
 {
-    struct km_set_attestation_key_req req = {
-        .algorithm = (uint32_t)algorithm,
-        .key_size = key_size
-    };
-    trusty_debug("key_size: %d\n", key_size);
-
-    return km_do_tipc(KM_SET_ATTESTATION_KEY, &req, sizeof(req), key, key_size,
-                      true);
+    return trusty_send_attestation_data(KM_SET_ATTESTATION_KEY, key, key_size,
+                                        algorithm);
 }
 
-int trusty_append_attestation_cert_chain(uint8_t *cert, uint32_t cert_size,
+int trusty_append_attestation_cert_chain(const uint8_t *cert,
+                                         uint32_t cert_size,
                                          keymaster_algorithm_t algorithm)
 {
-    struct km_append_attestation_cert_chain_req req = {
-        .algorithm = (uint32_t)algorithm,
-        .cert_size = cert_size
-    };
-    trusty_debug("cert_size: %d\n", cert_size);
-
-    return km_do_tipc(KM_APPEND_ATTESTATION_CERT_CHAIN, &req, sizeof(req), cert,
-                      cert_size, true);
+    return trusty_send_attestation_data(KM_APPEND_ATTESTATION_CERT_CHAIN,
+                                        cert, cert_size, algorithm);
 }
 
 int trusty_provision_keybox(uint8_t *keybox, uint32_t keybox_size)
 {
-    struct km_provision_keybox_req req = {
-        .keybox_size = keybox_size
+    struct km_provision_data provision_data = {
+        .data_size = keybox_size,
+        .data = (uint8_t *)keybox,
     };
-    trusty_debug("keybox_size: %d\n", keybox_size);
+    uint8_t *req = NULL;
+    uint32_t req_size = 0;
+    int rc = km_provision_data_serialize(&provision_data, &req, &req_size);
 
-    return km_do_tipc(KM_PROVISION_KEYBOX, &req, sizeof(req), keybox,
-                      keybox_size, true);
+    if (rc < 0) {
+        trusty_error("failed (%d) to serialize request\n", rc);
+        goto end;
+    }
+    rc = km_do_tipc(KM_PROVISION_KEYBOX, req, req_size, true);
+
+end:
+    if (req) {
+        trusty_free(req);
+    }
+    return rc;
 }
