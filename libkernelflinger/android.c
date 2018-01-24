@@ -1954,7 +1954,10 @@ static EFI_STATUS setup_command_line_abl(
 #endif
 #ifdef USE_AVB
 #ifdef USE_SLOT
-        if (slot_data && slot_data->ab_suffix)
+        if (!slot_data)
+                goto out;
+
+        if (slot_data->ab_suffix)
                 ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
                                            slot_data->ab_suffix);
         else
