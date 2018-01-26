@@ -9,19 +9,23 @@ Android<sup>TM</sup>/Brillo<sup>TM</sup>. It is compatible with the
 [UEFI 2.4 specification](http://www.uefi.org/sites/default/files/resources/2_4_Errata_B.pdf).
 
 Kernelflinger implements the Google Bootloader requirements for
-Android<sup>TM</sup> L and M desserts.
+Android<sup>TM</sup> L, M, N and O desserts.
 
 The key features are:
 
 1. [Google verified boot](https://source.android.com/security/verifiedboot/verified-boot.html)
    support.
-2. [Fastboot](./doc/fastboot.md) support over USB and TCP.
-3. [Installer](./doc/installer.md): Standalone EFI application that
+2. [Android verified boot](https://android.googlesource.com/platform/external/avb/)
+   support.
+3. [Fastboot](./doc/fastboot.md) support over USB and TCP.
+4. [Installer](./doc/installer.md): Standalone EFI application that
    can be used to flash a device from the EFI shell using an external
    storage.
-4. [Crashmode](./doc/crashmode.md): provides a simple access using adb
+5. [Crashmode](./doc/crashmode.md): provides a simple access using adb
    commmand to retrieve data from memory, partitions, EFI variables or
    ACPI tables in case of OS crash.
+6. [Trusty](./libqltipc/ql-tipc/README.md): support load and verify
+   TEE OS, and setup the IPC between TEE OS.
 
 Basic architecture
 ------------------
@@ -40,6 +44,8 @@ Basic architecture
   callbacks.
 * libtransport: is a framework to abstract the transport layer.  Used
   by both libfastboot and libadb to support USB and TCP transport.
+* libqltipc: used for setup the IPC between TEE OS.
+* libheci: support HECI protocol.
 * kernelflinger.c: main program that implements the boot flow.
 * installer.c: main program of the [Installer](./doc/installer.md)
 
@@ -103,6 +109,11 @@ Kerneflinger specific configuration flags:
    because the BoringSSL does not support the PKCS7 message format
    which is used by the RMA force unlock feature
    (Cf. [Bootloader Policy and Factory Reset Protection](./doc/FRP.md)).
+* `BOARD_AVB_ENABLE`: support AVB (Android Verify Boot)
+* `BOARD_SLOT_AB_ENABLE`: support AVB A/B slot.
+* `KERNELFLINGER_USE_RPMB`: support use RPMB, it can be used by Trusty,
+   or save the AVB rollback index.
+* `BUILD_ANDROID_THINGS`: enable some feature for Android Things.
 
 Command line parameters
 -----------------------
