@@ -6,13 +6,13 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := wrapper.c
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)
 FIRST_BUILD_ID := $(shell echo $(BUILD_ID) | cut -c 1)
-ifeq ($(FIRST_BUILD_ID),O)
+#ifeq ($(FIRST_BUILD_ID),O)
 LOCAL_CFLAGS := -I $(LOCAL_PATH)/../include/libkernelflinger
 LOCAL_STATIC_LIBRARIES := libgnuefi libefi
 #libkernelflinger-$(TARGET_BUILD_VARIANT) #cause dependency cycle error in Android O
-else
-LOCAL_STATIC_LIBRARIES := libgnuefi libefi libkernelflinger-$(TARGET_BUILD_VARIANT)
-endif
+#else
+#LOCAL_STATIC_LIBRARIES := libgnuefi libefi libkernelflinger-$(TARGET_BUILD_VARIANT)
+#endif
 LOCAL_MODULE := libsslsupport
 include $(BUILD_EFI_STATIC_LIBRARY)
 
@@ -71,6 +71,7 @@ LOCAL_CFLAGS += -Ibionic/libc/include
 LOCAL_CFLAGS += -Ibionic/libc/kernel/uapi
 LOCAL_CFLAGS += -Ibionic/libc/kernel/uapi/asm-x86
 LOCAL_CFLAGS += -Ibionic/libc/kernel/android/uapi
+LOCAL_CFLAGS += -D_LIBCPP_BUILDING_LIBRARY
 include $(BUILD_EFI_STATIC_LIBRARY)
 
 #######################################
@@ -103,9 +104,9 @@ endif
 ifneq (,$(filter boringssl, $(KERNELFLINGER_SSL_LIBRARY)))
 include $(LOCAL_PATH)/sources.mk
 LOCAL_SRC_FILES := $(crypto_sources) $(linux_$(LOCAL_ARCH)_sources)
-ifeq ($(FIRST_BUILD_ID),O)
+#ifeq ($(FIRST_BUILD_ID),O)
 LOCAL_CFLAGS += -I$(KERNELFLINGER_SSLSUPPORT_PATH)/borningssl
-endif
+#endif
 endif
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := libuefi_ssl_static
@@ -126,4 +127,5 @@ LOCAL_CFLAGS += -Ibionic/libc/include
 LOCAL_CFLAGS += -Ibionic/libc/kernel/uapi
 LOCAL_CFLAGS += -Ibionic/libc/kernel/uapi/asm-x86
 LOCAL_CFLAGS += -Ibionic/libc/kernel/android/uapi
+LOCAL_CFLAGS += -D_LIBCPP_BUILDING_LIBRARY
 include $(BUILD_EFI_STATIC_LIBRARY)
