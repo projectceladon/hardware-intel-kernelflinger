@@ -119,6 +119,26 @@ EFI_STATUS clear_teedata_flag(void)
 }
 
 #ifndef USER
+static EFI_STATUS erase_simulate_rpmb_all_blocks(void)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	UINT32 blk_offset = 0;
+	UINT16 i = 0;
+
+	memset(rpmb_buffer, 0, sizeof(rpmb_buffer));
+
+	for (i = 0; i < RPMB_ALL_BLOCK_TOTAL_COUNT; i++) {
+		blk_offset = i * RPMB_BLOCK_SIZE;
+		ret = emmc_simulate_write_rpmb_data(blk_offset, rpmb_buffer, RPMB_BLOCK_SIZE);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to write simulate rpmb data");
+			return ret;
+		}
+	}
+
+	return ret;
+}
+
 EFI_STATUS erase_rpmb_all_blocks(void)
 {
 	EFI_STATUS ret;
@@ -128,19 +148,22 @@ EFI_STATUS erase_rpmb_all_blocks(void)
 #ifndef __SUPPORT_ABL_BOOT
 	sbflags = is_efi_secure_boot_enabled();
 #else
-	sbflags = is_abl_secure_boot_enabled();
+	sbflags = is_eom_and_secureboot_enabled();
 #endif
 
 	if (sbflags) {
 		ret = emmc_write_rpmb_data(NULL, RPMB_ALL_BLOCK_TOTAL_COUNT, 0, rpmb_buffer, rpmb_key, &rpmb_result);
 		debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to erase whole rpmb partition");
+			efi_perror(ret, L"Failed to erase rpmb partition");
 			return ret;
 		}
 	} else {
-		error(L"Not support erase physical RPMB on non-fused board.");
-		return EFI_UNSUPPORTED;
+		ret = erase_simulate_rpmb_all_blocks();
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to erase teedata partition");
+			return ret;
+		}
 	}
 
 	return EFI_SUCCESS;
