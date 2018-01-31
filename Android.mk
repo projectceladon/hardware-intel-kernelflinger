@@ -316,8 +316,11 @@ LOCAL_STATIC_LIBRARIES += \
 	libefiwrapper-$(TARGET_BUILD_VARIANT) \
 	libefiwrapper_drivers-$(TARGET_BUILD_VARIANT) \
 	efiwrapper-$(TARGET_BUILD_VARIANT) \
-	libqltipc-$(TARGET_BUILD_VARIANT) \
 	libelfloader-$(TARGET_BUILD_VARIANT)
+
+ifeq ($(TARGET_USE_TRUSTY),true)
+    LOCAL_STATIC_LIBRARIES += libqltipc-$(TARGET_BUILD_VARIANT)
+endif
 
 ifeq ($(BOARD_AVB_ENABLE),true)
     LOCAL_STATIC_LIBRARIES += libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
@@ -422,8 +425,11 @@ LOCAL_STATIC_LIBRARIES += \
 	libefiwrapper-$(TARGET_BUILD_VARIANT) \
 	libefiwrapper_drivers-$(TARGET_BUILD_VARIANT) \
 	efiwrapper-$(TARGET_BUILD_VARIANT) \
-	libqltipc-$(TARGET_BUILD_VARIANT) \
 	libelfloader-$(TARGET_BUILD_VARIANT)
+
+ifeq ($(TARGET_USE_TRUSTY),true)
+    LOCAL_STATIC_LIBRARIES += libqltipc-$(TARGET_BUILD_VARIANT)
+endif
 
 ifneq ($(TARGET_BUILD_VARIANT),user)
     LOCAL_STATIC_LIBRARIES += libadb-$(TARGET_BUILD_VARIANT)

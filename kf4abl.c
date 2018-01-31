@@ -53,7 +53,11 @@
 #include "libavb_ab/libavb_ab.h"
 #endif
 #include "security.h"
+
+#ifdef USE_TRUSTY
 #include <libtipc.h>
+#endif
+
 #ifdef RPMB_STORAGE
 #include "rpmb.h"
 #include "rpmb_storage.h"
