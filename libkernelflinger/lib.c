@@ -173,6 +173,22 @@ CHAR8 *strncpy(CHAR8 *dest, const CHAR8 *src, size_t n)
         return dest;
 }
 
+size_t strlcat(CHAR8 *dst, const CHAR8 *src, size_t siz)
+{
+	size_t max, i;
+	size_t sl = strlen(src);
+	size_t dl = strlen(dst);
+
+	CHAR8 *p = dst + dl;
+	max = siz > (sl + dl) ? sl : (siz - dl - 1);
+
+	for (i = 0; i < max; i++)
+		p[i] = src[i];
+
+	p[i] = '\0';
+	return max;
+}
+
 int strncasecmp(const char *s1, const char *s2, size_t n)
 {
         if (!n)

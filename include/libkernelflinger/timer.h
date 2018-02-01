@@ -45,6 +45,6 @@ enum TM_POINT {
 
 unsigned boottime_in_msec(void);
 void set_boottime_stamp(int num);
-void format_stages_boottime(CHAR16 *time_str);
+void construct_stages_boottime(CHAR8 *time_str, size_t buf_len);
 
 #endif

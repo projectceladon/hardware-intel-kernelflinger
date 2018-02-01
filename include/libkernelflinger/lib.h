@@ -148,6 +148,9 @@ CHAR8 *strcpy(CHAR8 *dest, const CHAR8 *src)
 CHAR8 *strncpy(CHAR8 *dest, const CHAR8 *src, size_t n)
     __attribute__((weak));
 
+size_t strlcat(CHAR8 *dst, const CHAR8 *src, size_t siz)
+    __attribute__((weak));
+
 size_t strlen(const CHAR8 *s)
     __attribute__((weak));
 

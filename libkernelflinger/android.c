@@ -1934,8 +1934,7 @@ static EFI_STATUS setup_command_line_abl(
         EFI_GUID system_uuid;
 #endif
         UINTN abl_cmd_len = 0;
-        CHAR8 time_str8[128] = "";
-        CHAR16 time_str16[64] = L"";
+        CHAR8 time_str8[64] = {0};
 
         if (abl_cmd_line != NULL)
                abl_cmd_len = strlen(abl_cmd_line);
@@ -2091,8 +2090,7 @@ static EFI_STATUS setup_command_line_abl(
 
         /* append stages boottime */
         set_boottime_stamp(TM_JMP_KERNEL);
-        format_stages_boottime(time_str16);
-        str_to_stra(time_str8, time_str16, StrLen(time_str16) + 1);
+        construct_stages_boottime(time_str8, sizeof(time_str8));
         cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.boottime", time_str8);
 
         buf->hdr.cmd_line_ptr = (UINT32)(UINTN)cmdline;
