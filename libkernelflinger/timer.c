@@ -36,16 +36,15 @@
 #include <lib.h>
 #include "timer.h"
 
-#define BOOT_STAGE_FIRMWARE L"FWS"
-#define BOOT_STAGE_OSLOADER L"OLS"
-#define BOOT_STAGE_CHECK_BCB L"CBS"
-#define BOOT_STAGE_VERIFY_BOOT L"VBS"
-#define BOOT_STAGE_VERIFY_TRUSTY L"VTS"
-#define BOOT_STAGE_START_KERNEL L"SKS"
+#define BOOT_STAGE_FIRMWARE "FWS"
+#define BOOT_STAGE_OSLOADER "OLS"
+#define BOOT_STAGE_CHECK_BCB "CBS"
+#define BOOT_STAGE_VERIFY_BOOT "VBS"
+#define BOOT_STAGE_VERIFY_TRUSTY "VTS"
+#define BOOT_STAGE_START_KERNEL "SKS"
 
 //Array for recording boot time of every stage
 static unsigned bt_stamp[TM_POINT_LAST];
-
 
 typedef union
 {
@@ -112,75 +111,53 @@ void set_boottime_stamp(int num)
 	bt_stamp[num] = boottime_in_msec();
 }
 
-void format_stages_boottime(CHAR16 *time_str)
+void construct_stages_boottime(CHAR8 *time_str, size_t buf_len)
 {
-	CHAR8 time_str8[128] = "";
-	CHAR16 *str = NULL;
+	CHAR8 interval_str[16] = {0};
 
 	if (!time_str)
 		return;
 
-	StrCat(time_str, BOOT_STAGE_FIRMWARE);
-	StrCat(time_str, L":");
-	itoa(bt_stamp[TM_EFI_MAIN], time_str8, 10);
-	str = stra_to_str(time_str8);
-	if (str == NULL)
-		return;
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_FIRMWARE, buf_len);
+	strlcat(time_str, (CHAR8 *)":", buf_len);
+	itoa(bt_stamp[TM_EFI_MAIN], interval_str, 10);
+	strlcat(time_str, interval_str, buf_len);
 
-	StrCat(time_str, str);
-	FreePool(str);
-	StrCat(time_str, L",");
+	strlcat(time_str, (CHAR8 *)",", buf_len);
 #ifdef USE_AVB
-	StrCat(time_str, BOOT_STAGE_CHECK_BCB);
-	StrCat(time_str, L":");
-	itoa(bt_stamp[TM_AVB_START] - bt_stamp[TM_EFI_MAIN], time_str8, 10);
-	str = stra_to_str(time_str8);
-	if (str == NULL)
-		return;
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_CHECK_BCB, buf_len);
+	strlcat(time_str, (CHAR8 *)":", buf_len);
+	itoa(bt_stamp[TM_AVB_START] - bt_stamp[TM_EFI_MAIN], interval_str, 10);
+	strlcat(time_str, interval_str, buf_len);
 
-	StrCat(time_str, str);
-	FreePool(str);
-	StrCat(time_str, L",");
-	StrCat(time_str, BOOT_STAGE_VERIFY_BOOT);
-	StrCat(time_str, L":");
-	itoa(bt_stamp[TM_VERIFY_BOOT_DONE] - bt_stamp[TM_AVB_START], time_str8, 10);
-	str = stra_to_str(time_str8);
-	if (str == NULL)
-		return;
+	strlcat(time_str, (CHAR8 *)",", buf_len);
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_VERIFY_BOOT, buf_len);
+	strlcat(time_str, (CHAR8 *)":", buf_len);
+	itoa(bt_stamp[TM_VERIFY_BOOT_DONE] - bt_stamp[TM_AVB_START], interval_str, 10);
+	strlcat(time_str, interval_str, buf_len);
 
-	StrCat(time_str, str);
-	FreePool(str);
-	StrCat(time_str, L",");
+	strlcat(time_str, (CHAR8 *)",", buf_len);
 #ifdef USE_TRUSTY
-	StrCat(time_str, BOOT_STAGE_VERIFY_TRUSTY);
-	StrCat(time_str, L":");
-	itoa(bt_stamp[TM_VERIFY_TOS_DONE] - bt_stamp[TM_VERIFY_BOOT_DONE], time_str8, 10);
-	str = stra_to_str(time_str8);
-	if (str == NULL)
-		return;
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_VERIFY_TRUSTY, buf_len);
+	strlcat(time_str, (CHAR8 *)":", buf_len);
+	itoa(bt_stamp[TM_VERIFY_TOS_DONE] - bt_stamp[TM_VERIFY_BOOT_DONE], interval_str, 10);
+	strlcat(time_str, interval_str, buf_len);
 
-	StrCat(time_str, str);
-	FreePool(str);
-	StrCat(time_str, L",");
+	strlcat(time_str, (CHAR8 *)",", buf_len);
 #endif
-	StrCat(time_str, BOOT_STAGE_START_KERNEL);
-	StrCat(time_str, L":");
-
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_START_KERNEL, buf_len);
+	strlcat(time_str, (CHAR8 *)":", buf_len);
 #ifdef USE_TRUSTY
-	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_VERIFY_TOS_DONE], time_str8, 10);
+	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_VERIFY_TOS_DONE], interval_str, 10);
 #else
-	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_VERIFY_BOOT_DONE], time_str8, 10);
+	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_VERIFY_BOOT_DONE], interval_str, 10);
 #endif
 
 #else //#ifdef USE_AVB
-	StrCat(time_str, BOOT_STAGE_OSLOADER);
-	StrCat(time_str, L":");
-	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_EFI_MAIN], time_str8, 10);
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_OSLOADER, buf_len);
+	strlcat(time_str, (CHAR8 *)":", buf_len);
+	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_EFI_MAIN], interval_str, 10);
 #endif
-	str = stra_to_str(time_str8);
-	if (str == NULL)
-		return;
 
-	StrCat(time_str, str);
-	FreePool(str);
+	strlcat(time_str, interval_str, buf_len);
 }
