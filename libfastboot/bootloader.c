@@ -38,6 +38,7 @@
 #include "bootloader.h"
 #include "text_parser.h"
 #include "uefi_utils.h"
+#include "slot.h"
 
 #define BOOTLOADER_TMP_PART	BOOTLOADER_LABEL L"2"
 #define MANIFEST_PATH		L"\\manifest.txt"
@@ -220,14 +221,21 @@ EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 	EFI_HANDLE handle;
 	EFI_GUID type;
 	UINTN i;
+	CHAR16 *label;
 
-	ret = gpt_get_partition_type(BOOTLOADER_LABEL, &type, LOGICAL_UNIT_USER);
+	label = (CHAR16 *)slot_label(BOOTLOADER_LABEL);
+	ret = gpt_get_partition_type(label, &type, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret))
 		return ret;
 
 	/* Not the EFI System Partition. */
 	if (memcmp(&type, &EfiPartTypeSystemPartitionGuid, sizeof(type)))
-		return flash_partition(data, size, BOOTLOADER_LABEL);
+		return flash_partition(data, size, label);
+
+	if (StrCmp(label, BOOTLOADER_LABEL)) {
+		error(L"bootloader slot partition is not supported.");
+		return EFI_UNSUPPORTED;
+	}
 
 	ret = flash_partition(data, size, BOOTLOADER_TMP_PART);
 	if (EFI_ERROR(ret))
