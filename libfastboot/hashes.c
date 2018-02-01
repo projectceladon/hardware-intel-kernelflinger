@@ -274,12 +274,12 @@ static EFI_STATUS get_esp_hash(void)
 	return EFI_SUCCESS;
 }
 
-EFI_STATUS get_bootloader_hash(__attribute__((__unused__)) const CHAR16 *label)
+EFI_STATUS get_bootloader_hash(const CHAR16 *label)
 {
 	EFI_STATUS ret;
 	EFI_GUID type;
 
-	ret = gpt_get_partition_type(BOOTLOADER_LABEL, &type, LOGICAL_UNIT_USER);
+	ret = gpt_get_partition_type(label, &type, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -289,7 +289,7 @@ EFI_STATUS get_bootloader_hash(__attribute__((__unused__)) const CHAR16 *label)
 	/* Not the EFI System Partition. */
 	/* bootloader with two ias image (ifwi + osloader)*/
 	iasoffset = BOOTLOADER_2ND_IAS_OFFSET;
-	ret = get_fs_hash(BOOTLOADER_LABEL);
+	ret = get_fs_hash(label);
 	iasoffset = 0;
 
 	return ret;
