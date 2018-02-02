@@ -97,10 +97,6 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define SYSTEM_LABEL		L"system"
 #define OEM_LABEL		L"oem"
 #define BOOTLOADER_LABEL	L"bootloader"
-#ifdef USE_SLOT
-#define BOOTLOADER_LABEL_A	L"bootloader_a"
-#define BOOTLOADER_LABEL_B	L"bootloader_b"
-#endif
 #define MULTIBOOT_LABEL		L"multiboot"
 #define TOS_LABEL		L"tos"
 
