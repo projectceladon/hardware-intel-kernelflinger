@@ -439,7 +439,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				/* Parse "trusty.param_addr=xxxxx" */
 				case TRUSTY_PARAM: {
 #ifdef USE_TRUSTY
-					UINT32 num;
+					UINTN num;
 					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
 					num = strtoul((char *)nptr, 0, 16);
 					debug(L"Parsed trusty param addr is 0x%x", num);
@@ -647,7 +647,7 @@ static EFI_STATUS launch_trusty_os(trusty_startup_params_t *param)
 
 	asm volatile(
 		"vmcall; \n"
-		: : "a"(TRUSTY_VMCALL_SMC), "D"((uint32_t)param));
+		: : "a"(TRUSTY_VMCALL_SMC), "D"((UINTN)param));
 
 	return EFI_SUCCESS;
 }
@@ -874,7 +874,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	AvbSlotVerifyData *slot_data_tos = NULL;
 	UINT8 tos_state = BOOT_STATE_GREEN;
 	const uint8_t *vbmeta_pub_key;
-	uint32_t vbmeta_pub_key_len;
+	UINTN vbmeta_pub_key_len;
 	UINTN load_base;
 	AvbPartitionData *tos;
 	trusty_startup_params_t trusty_startup_params;
