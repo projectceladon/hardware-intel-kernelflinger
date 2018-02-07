@@ -1867,7 +1867,6 @@ BOOLEAN recovery_in_boot_partition(void)
         return ret == EFI_NOT_FOUND;
 }
 
-
 #ifdef  __SUPPORT_ABL_BOOT
 static UINTN cmd_line_add_str (CHAR8 *cmd_buf, UINTN max_cmd_size, UINTN pos, CHAR8 prefix, const CHAR8 *str)
 {
@@ -2141,6 +2140,11 @@ static inline EFI_STATUS handover_jump_abl(struct boot_params *boot_params,
 
 #ifdef RPMB_STORAGE
         clear_rpmb_key();
+#endif
+
+#if __LP64__
+        /* The 64-bit kernel entry is 512 bytes after the start. */
+        kernel_start += 512;
 #endif
 
         log(L"jmp 0x%X (setup @0x%x)\n", (UINTN)kernel_start, (UINTN)boot_params);
