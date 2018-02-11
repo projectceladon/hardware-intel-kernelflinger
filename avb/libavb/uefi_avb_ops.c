@@ -82,7 +82,7 @@ static AvbIOResult read_from_partition(AvbOps* ops,
   /* Check if num_bytes goes beyond partition end. If so, don't read beyond
    * this boundary -- do a partial I/O instead.
    */
-  if (num_bytes > partition_size - offset_from_partition)
+  if (num_bytes > (size_t)(partition_size - offset_from_partition))
     *out_num_read = partition_size - offset_from_partition;
   else
     *out_num_read = num_bytes;
