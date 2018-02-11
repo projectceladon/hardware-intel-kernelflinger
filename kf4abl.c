@@ -762,6 +762,35 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		efi_perror(ret, L"Failed to get avb slot a/b flow result for boot");
 		goto fail;
 	}
+
+#ifdef  __SUPPORT_ABL_BOOT
+	if (slot_data->ab_suffix) {
+		CHAR8 *capsule_buf;
+		UINTN capsule_buf_len = 0;
+		CHAR16 *AB_SUFFIX = NULL;
+		CHAR16 *ABL_AB_SUFFIX = NULL;
+
+		AB_SUFFIX = stra_to_str((const CHAR8 *)slot_data->ab_suffix);
+		ABL_AB_SUFFIX = stra_to_str((const CHAR8 *)abl_cmd_line);
+		if (!(StrCmp(AB_SUFFIX, L"_a")) && (!(StrStr(ABL_AB_SUFFIX, L"ABL.suffix=0")))) {
+			capsule_buf = (CHAR8 *)"m1:@0";
+			capsule_buf_len = strlen(capsule_buf);
+		} else if (!(StrCmp(AB_SUFFIX, L"_b")) && (!(StrStr(ABL_AB_SUFFIX, L"ABL.suffix=1")))) {
+			capsule_buf = (CHAR8 *)"m2:@0";
+			capsule_buf_len = strlen(capsule_buf);
+		}
+		if (capsule_buf_len != 0 ) {
+			error(L"Avb flow suffix %a doesn't equal to ABL suffix, reboot and update ABL.", slot_data->ab_suffix);
+			ret = set_efi_variable(&loader_guid, IFWI_CAPSULE_UPDATE, capsule_buf_len + 1,
+						   capsule_buf, TRUE, TRUE);
+			if (EFI_ERROR(ret)) {
+				error(L"Unable to set slot %a into %a", slot_data->ab_suffix, IFWI_CAPSULE_UPDATE);
+				goto fail;
+			}
+			reboot_to_target(NORMAL_BOOT, EfiResetCold);
+		}
+	}
+#endif
 #else
 	verify_result = avb_slot_verify(ops,
 					requested_partitions,

@@ -191,7 +191,6 @@ static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
 }
 
 #ifdef __SUPPORT_ABL_BOOT
-#define IFWI_CAPSULE_UPDATE			L"IfwiCapsuleUpdate"
 static void cmd_oem_fw_update(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
