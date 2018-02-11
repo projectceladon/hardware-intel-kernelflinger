@@ -104,6 +104,10 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define MULTIBOOT_LABEL		L"multiboot"
 #define TOS_LABEL		L"tos"
 
+#ifdef __SUPPORT_ABL_BOOT
+#define IFWI_CAPSULE_UPDATE	L"IfwiCapsuleUpdate"
+#endif
+
 BOOLEAN device_is_unlocked(void);
 BOOLEAN device_is_locked(void);
 BOOLEAN get_off_mode_charge(void);
