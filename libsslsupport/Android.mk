@@ -25,7 +25,7 @@ ifneq (,$(filter boringssl, $(KERNELFLINGER_SSL_LIBRARY)))
 endif
 
 ifneq (,$(filter openssl, $(KERNELFLINGER_SSL_LIBRARY)))
-    KERNELFLINGER_SSL_LIBRARY_PATH := vendor/intel/external/openssl
+    KERNELFLINGER_SSL_LIBRARY_PATH := $(INTEL_PATH_VENDOR)/external/openssl
 endif
 
 include $(CLEAR_VARS)
