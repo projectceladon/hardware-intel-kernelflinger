@@ -44,11 +44,19 @@ static unsigned long smc(unsigned long r0,
                          unsigned long r3)
 {
     asm volatile(
-    "pushl %%ebx;" /* save the rbx */
+#if ARCH_X86_32
+    "pushl %%ebx;" /* save the ebx */
     "movl %8, %%ebx;"
     "vmcall; \n"
     "movl %%ebx, %3;"
-    "popl %%ebx;" /* restore the old rbx */
+    "popl %%ebx;" /* restore the old ebx */
+#elif ARCH_X86_64
+    "pushq %%rbx;" /* save the rbx */
+    "movq %8, %%rbx;"
+    "vmcall; \n"
+    "movq %%rbx, %3;"
+    "popq %%rbx;" /* restore the old rbx */
+#endif
 
     : "=D"(r0), "=S"(r1), "=d"(r2), "=r"(r3)
     : "a"(TRUSTY_VMCALL_SMC), "D"(r0), "S"(r1), "d"(r2), "r"(r3)

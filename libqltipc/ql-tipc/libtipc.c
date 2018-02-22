@@ -56,7 +56,8 @@ void trusty_ipc_shutdown(void)
 
 static int rpmb_read_keybox_magic_data(uint32_t *data)
 {
-    int rc = 0;
+#ifdef RPMB_STORAGE
+    EFI_STATUS rc = 0;
 
     rc = read_rpmb_keybox_magic(KEYBOX_PROVISION_ADDR,  data);
     if (EFI_ERROR(rc)) {
@@ -65,11 +66,17 @@ static int rpmb_read_keybox_magic_data(uint32_t *data)
     }
 
     return 0;
+#else
+    (void)data;
+    trusty_error("RPMB storage unsupported.\n");
+    return -1;
+#endif
 }
 
 static int rpmb_write_keybox_magic_data(uint32_t data)
 {
-    int rc = 0;
+#ifdef RPMB_STORAGE
+    EFI_STATUS rc = 0;
 
     rc = write_rpmb_keybox_magic(KEYBOX_PROVISION_ADDR, &data);
     if (EFI_ERROR(rc)) {
@@ -78,6 +85,11 @@ static int rpmb_write_keybox_magic_data(uint32_t data)
     }
 
     return 0;
+#else
+    (void)data;
+    trusty_error("RPMB storage unsupported.\n");
+    return -1;
+#endif
 }
 
 int is_keybox_provisioned(void)
@@ -128,6 +140,7 @@ int trusty_ipc_init(void)
         return rc;
     }
 
+#ifdef RPMB_STORAGE
     /* get storage rpmb */
     if (is_use_sim_rpmb()) {
         trusty_info("Simulation RPMB is in use.\n");
@@ -151,6 +164,9 @@ int trusty_ipc_init(void)
            return rc;
        }
     }
+#else
+    (void)rpmb_ctx;
+#endif
 
     /*
     trusty_info("Initializing Trusty AVB client\n");

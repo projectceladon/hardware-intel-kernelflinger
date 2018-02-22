@@ -24,12 +24,13 @@
 
 #include <trusty/trusty_dev.h>
 #include <trusty/util.h>
+#include <stdint.h>
 
 #define NS_MAIR_NORMAL_UNCACHED            0x44 /* uncached */
 
 int trusty_encode_page_info(struct ns_mem_page_info *inf, void *va)
 {
-    uint32_t par = (uint32_t)va;
+    uint64_t par = (uint64_t)(uintptr_t)va;
 
     /* ToDo */
     /* _PAGE_USER */
