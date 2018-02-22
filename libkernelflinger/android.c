@@ -239,10 +239,6 @@ typedef void(*kernel_func)(void *, struct boot_params *);
 #define SEGMENT_GRANULARITY_4KB       1
 #define DESCRIPTOR_TYPE_CODE_OR_DATA  1
 
-#ifdef __SUPPORT_ABL_BOOT
-#define KERNEL_DEST 0x100000
-#endif
-
 static EFI_STATUS setup_gdt(void)
 {
         EFI_STATUS ret;
@@ -1180,7 +1176,7 @@ static void setup_screen_info_from_gop(struct screen_info *pinfo)
 
         ret = LibLocateProtocol(&GraphicsOutputProtocol, (void **)&gop);
         if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Unable to locate graphics output protocol");
+                debug(L"Unable to locate graphics output protocol: %r", ret);
                 return;
         }
 
@@ -1192,7 +1188,39 @@ static void setup_screen_info_from_gop(struct screen_info *pinfo)
         pinfo->lfb_linelength = gop->Mode->Info->PixelsPerScanLine * 4;
 }
 
-static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
+static inline EFI_STATUS handover_jump_abl(struct boot_params *boot_params,
+                                       EFI_PHYSICAL_ADDRESS kernel_start)
+{
+        EFI_STATUS ret = EFI_LOAD_ERROR;
+        UINTN map_key;
+
+        ret = setup_memory_map(boot_params, &map_key);
+        if (EFI_ERROR(ret)) {
+             efi_perror(ret, L"Failed to setup memory map");
+             return ret;
+        }
+
+#ifdef RPMB_STORAGE
+        clear_rpmb_key();
+#endif
+
+#if __LP64__
+        /* The 64-bit kernel entry is 512 bytes after the start. */
+        kernel_start += 512;
+#endif
+
+        log(L"jmp 0x%X (setup @0x%x)\n", (UINTN)kernel_start, (UINTN)boot_params);
+        __asm__ __volatile__ ("cli;  jmp *%0"
+                                  : /* no outputs */
+                                  : "m" (kernel_start), "a" (0), "S" (boot_params), "D"(0)
+                                  : "memory");
+
+        /* Shouldn't get here. */
+        return EFI_LOAD_ERROR;
+}
+
+static EFI_STATUS handover_kernel(CHAR8 *bootimage,
+                                  __attribute__((unused))EFI_HANDLE parent_image)
 {
         EFI_PHYSICAL_ADDRESS kernel_start;
         EFI_PHYSICAL_ADDRESS boot_addr;
@@ -1263,7 +1291,11 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
                ((CHAR8 *)buf)[0x201] + 0x202 - offsetof(struct boot_params, hdr));
         boot_params->hdr.code32_start = (UINT32)((UINT64)kernel_start);
 
+#ifdef __SUPPORT_ABL_BOOT
+        ret = handover_jump_abl(boot_params, kernel_start);
+#else
         ret = handover_jump(parent_image, boot_params, kernel_start);
+#endif
         /* Shouldn't get here */
         efi_perror(ret, L"handover to Linux kernel has failed");
 
@@ -2101,112 +2133,6 @@ out:
         return ret;
 }
 
-static EFI_STATUS setup_ramdisk_abl(UINT8 *bootimage)
-{
-        struct boot_img_hdr *aosp_header;
-        struct boot_params *bp;
-        UINT32 roffset, rsize;
-
-        aosp_header = (struct boot_img_hdr *)bootimage;
-        bp = (struct boot_params *)(bootimage + aosp_header->page_size);
-
-        roffset = aosp_header->page_size + pagealign(aosp_header,
-                        aosp_header->kernel_size);
-        rsize = aosp_header->ramdisk_size;
-        if (!rsize) {
-                debug(L"boot image has no ramdisk");
-                return EFI_SUCCESS; // no ramdisk, so nothing to do
-        }
-
-        debug(L"ramdisk size %d", rsize);
-        bp->hdr.ramdisk_len = rsize;
-        bp->hdr.ramdisk_start = (UINT32)(UINTN)bootimage + roffset;
-        return EFI_SUCCESS;
-}
-
-
-static inline EFI_STATUS handover_jump_abl(struct boot_params *boot_params,
-                                       EFI_PHYSICAL_ADDRESS kernel_start)
-{
-        EFI_STATUS ret = EFI_LOAD_ERROR;
-        UINTN map_key;
-
-        ret = setup_memory_map(boot_params, &map_key);
-        if (EFI_ERROR(ret)) {
-             efi_perror(ret, L"Failed to setup memory map");
-             return ret;
-        }
-
-#ifdef RPMB_STORAGE
-        clear_rpmb_key();
-#endif
-
-#if __LP64__
-        /* The 64-bit kernel entry is 512 bytes after the start. */
-        kernel_start += 512;
-#endif
-
-        log(L"jmp 0x%X (setup @0x%x)\n", (UINTN)kernel_start, (UINTN)boot_params);
-        __asm__ __volatile__ ("cli;  jmp *%0"
-                                  : /* no outputs */
-                                  : "m" (kernel_start), "a" (0), "S" (boot_params), "D"(0)
-                                  : "memory");
-
-        /* Shouldn't get here. */
-        return EFI_LOAD_ERROR;
-}
-
-
-static EFI_STATUS handover_kernel_abl(CHAR8 *bootimage)
-{
-        EFI_PHYSICAL_ADDRESS kernel_start;
-        struct boot_params *boot_params;
-        EFI_STATUS ret;
-        struct boot_img_hdr *aosp_header;
-        struct boot_params *buf;
-        UINT8 setup_sectors;
-        UINT32 setup_size;
-        UINT32 ksize;
-        UINT32 koffset;
-
-        aosp_header = (struct boot_img_hdr *)bootimage;
-        buf = (struct boot_params *)(bootimage + aosp_header->page_size);
-
-        koffset = aosp_header->page_size;
-        setup_sectors = buf->hdr.setup_secs;
-        setup_sectors++; /* Add boot sector */
-        setup_size = (UINT32)setup_sectors * 512;
-        ksize = aosp_header->kernel_size - setup_size;
-        kernel_start = buf->hdr.pref_address;
-        buf->hdr.loader_id = 0x1;
-        memset(&buf->screen_info, 0x0, sizeof(buf->screen_info));
-
-        memcpy ((void *)KERNEL_DEST, bootimage + koffset + setup_size, ksize);
-        kernel_start = (EFI_PHYSICAL_ADDRESS)((UINTN)KERNEL_DEST);
-        boot_params = (struct boot_params *)AllocatePool(sizeof(struct boot_params));
-        if (boot_params == NULL)
-        {
-                ret = EFI_OUT_OF_RESOURCES;
-                goto out;
-        }
-        memset(boot_params, 0x0, sizeof(struct boot_params));
-
-        /* Copy first two sectors to boot_params */
-        memcpy(&boot_params->hdr, (CHAR8 *)(&buf->hdr), sizeof(struct setup_header));
-        boot_params->hdr.code32_start = (UINT32)((UINT64)kernel_start);
-
-        boot_params->hdr.loader_id = 0xFF;
-        boot_params->hdr.load_flags = 1;
-
-        ret = handover_jump_abl(boot_params, kernel_start);
-        /* Shouldn't get here */
-        efi_perror(ret, L"handover to Linux kernel has failed");
-
-out:
-        return ret;
-}
-
-
 #ifdef USE_AVB
 EFI_STATUS android_image_start_buffer_abl(
                 IN VOID *bootimage,
@@ -2280,7 +2206,7 @@ EFI_STATUS android_image_start_buffer_abl(
 
         if (!recovery_in_boot_partition() || boot_target == RECOVERY) {
                 debug(L"Loading the ramdisk");
-                ret = setup_ramdisk_abl(bootimage);
+                ret = setup_ramdisk(bootimage);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"setup_ramdisk");
                         goto out_cmdline;
@@ -2288,8 +2214,8 @@ EFI_STATUS android_image_start_buffer_abl(
         }
 
         debug(L"Loading the kernel_abl");
-        ret = handover_kernel_abl(bootimage);
-        efi_perror(ret, L"handover_kernel_abl");
+        ret = handover_kernel(bootimage, NULL);
+        efi_perror(ret, L"handover_kernel");
 
         efree(buf->hdr.ramdisk_start, buf->hdr.ramdisk_len);
         buf->hdr.ramdisk_start = 0;
