@@ -1216,7 +1216,7 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         ksize = aosp_header->kernel_size - setup_size;
         kernel_start = buf->hdr.pref_address;
         init_size = buf->hdr.init_size;
-        buf->hdr.loader_id = 0x1;
+        buf->hdr.loader_id = 0xFF;
         memset(&buf->screen_info, 0x0, sizeof(buf->screen_info));
 
         setup_screen_info_from_gop(&buf->screen_info);
