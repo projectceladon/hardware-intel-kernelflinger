@@ -201,6 +201,7 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
         return TRUSTY_ERR_GENERIC;
     }
 
+#ifdef RPMB_STORAGE
     /* keybox not privisioned yet, then provision it */
     if (!is_keybox_provisioned()) {
         /* set the attestation_key and append the attest cert:
@@ -218,6 +219,7 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
             return TRUSTY_ERR_GENERIC;
         }
     }
+#endif
 
     return TRUSTY_ERR_NONE;
 }

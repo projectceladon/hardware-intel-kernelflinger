@@ -43,6 +43,7 @@
 #include "targets.h"
 #include "gpt.h"
 #include "efilinux.h"
+#include "libtipc.h"
 
 /* Trusty OS (TOS) definitions */
 #define TOS_HEADER_MAGIC         0x6d6d76656967616d
@@ -316,8 +317,19 @@ EFI_STATUS set_trusty_param(IN VOID *param_data)
 
 EFI_STATUS start_trusty(VOID *tosimage)
 {
+        EFI_STATUS ret;
         if (!tosimage)
                 return EFI_INVALID_PARAMETER;
 
-        return start_tos_image(tosimage, rot_data);
+        ret = start_tos_image(tosimage, rot_data);
+        if (EFI_ERROR(ret))
+                return ret;
+
+        // set up ql-ipc connection
+        if (trusty_ipc_init() != 0) {
+                error(L"Unable to set up ql-ipc connection; continue to boot");
+        }
+        trusty_ipc_shutdown();
+
+        return EFI_SUCCESS;
 }

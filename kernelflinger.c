@@ -97,6 +97,10 @@ static const CHAR16 __attribute__((used)) magic[] = L"### kernelflinger ###";
  * reset to zero. */
 #define WATCHDOG_DELAY       (10 * 60)
 
+#ifdef USE_TRUSTY
+struct rot_data_t g_rot_data = {0};
+#endif
+
 static EFI_HANDLE g_disk_device;
 static EFI_LOADED_IMAGE *g_loaded_image;
 static VOID die(VOID) __attribute__ ((noreturn));
@@ -948,6 +952,8 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                         efi_perror(ret, L"Load tos image failed");
                         die();
                 }
+                memcpy(&g_rot_data, &rot_data, sizeof(struct rot_data_t));
+
                 ret = start_trusty(tosimage);
                 if (EFI_ERROR(ret)) {
 #ifndef BUILD_ANDROID_THINGS
