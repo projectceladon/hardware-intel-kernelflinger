@@ -220,6 +220,7 @@ static EFI_STATUS select_highest_priority_slot(void)
 EFI_STATUS slot_init(void)
 {
 	EFI_STATUS ret;
+	CHAR8 *magic;
 	UINTN i;
 	UINTN nb_slot;
 
@@ -254,6 +255,23 @@ EFI_STATUS slot_init(void)
 			return EFI_SUCCESS;
 		efi_perror(ret, L"Failed to read A/B metadata");
 		return ret;
+	}
+
+	if (!boot_ctrl.magic) {
+		debug(L"No A/B metadata");
+		return EFI_SUCCESS;
+	}
+	debug(L"Avb magic 0x%x, 0x%x, 0x%x, 0x%x", boot_ctrl.magic[0], boot_ctrl.magic[1], boot_ctrl.magic[2], boot_ctrl.magic[3]);
+
+	magic = (CHAR8 *)AVB_AB_MAGIC;
+	if ((boot_ctrl.magic[0] == magic[0]) && \
+		(boot_ctrl.magic[1] == magic[1]) && \
+		(boot_ctrl.magic[2] == magic[2]) && \
+		(boot_ctrl.magic[3] == magic[3])) {
+		debug(L"Avb magic is right");
+	} else {
+		error(L"A/B metadata is corrupted, re-initialize");
+		slot_reset();
 	}
 
 	is_used = TRUE;
