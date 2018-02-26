@@ -158,6 +158,7 @@ BOOLEAN device_is_class_A(VOID);
 UINT8 min_boot_state_policy();
 EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size);
 #endif
+BOOLEAN is_UEFI(VOID);
 #ifndef USERDEBUG
 #define oem_cert NULL
 #define oem_cert_size 0
