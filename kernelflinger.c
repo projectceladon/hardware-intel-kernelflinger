@@ -1306,8 +1306,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #ifdef RPMB_STORAGE
         // Init the rpmb
         emmc_rpmb_init(g_disk_device);
-        rpmb_storage_init(false);  // Set to use simulate RPMB now. Please does not chenge to true in Joule.
-#endif
+#if defined(RPMB_SIMULATE) || !defined(USER)
+        rpmb_storage_init(FALSE);
+#else
+        rpmb_storage_init(FALSE);  // Still set to use simulate RPMB now. Please does not chenge to true in Joule.
+#endif  // defined(RPMB_SIMULATE) || !defined(USER)
+#endif  // RPMB_STORAGE
 
         ret = slot_init();
         if (EFI_ERROR(ret)) {
