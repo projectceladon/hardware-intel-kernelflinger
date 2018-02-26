@@ -1258,8 +1258,9 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         boot_params = (struct boot_params *)(UINTN)boot_addr;
         memset(boot_params, 0x0, 16384);
 
-        /* Copy first two sectors to boot_params */
-        memcpy(boot_params, (CHAR8 *)buf, 2 * 512);
+        /* See Linux Documentation/x86/boot.txt */
+        memcpy(&boot_params->hdr, (CHAR8 *)(&buf->hdr),
+               ((CHAR8 *)buf)[0x201] + 0x202 - offsetof(struct boot_params, hdr));
         boot_params->hdr.code32_start = (UINT32)((UINT64)kernel_start);
 
         ret = handover_jump(parent_image, boot_params, kernel_start);
