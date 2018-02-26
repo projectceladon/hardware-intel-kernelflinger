@@ -978,3 +978,22 @@ UINT8 min_boot_state_policy()
 	}
 }
 #endif	/* BOOTLOADER_POLICY */
+
+BOOLEAN is_UEFI(VOID)
+{
+	static bool_value_t val;
+	EFI_STATUS ret;
+	EFI_GUID EFIWRAPPER_GUID =
+		{ 0x59d0d866, 0x5637, 0x47a9,
+		  { 0xb7, 0x50, 0x42, 0x60, 0x0a, 0x54, 0x5b, 0x63 }};
+	void *unused;
+
+	if (val.is_cached)
+		return val.value;
+
+        ret = LibLocateProtocol(&EFIWRAPPER_GUID, &unused);
+	val.value = !!EFI_ERROR(ret);
+	val.is_cached = 1;
+
+	return val.value;
+}
