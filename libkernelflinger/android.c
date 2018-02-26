@@ -1716,7 +1716,7 @@ EFI_STATUS android_image_start_buffer(
         }
 
         if (!buf->hdr.relocatable_kernel) {
-                Print(L"Expected relocatable kernel\n");
+                error(L"Expected relocatable kernel\n");
                 return EFI_INVALID_PARAMETER;
         }
 
