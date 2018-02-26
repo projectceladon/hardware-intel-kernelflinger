@@ -383,20 +383,24 @@ static EFI_STATUS setup_memory_map(struct boot_params *boot_params, UINTN *key)
         if (!mem_entries)
                 return EFI_OUT_OF_RESOURCES;
 
-        efi->efi_systab = (UINT32)(UINTN)ST;
-        efi->efi_memdesc_size = entry_sz;
-        efi->efi_memdesc_version = entry_ver;
-        efi->efi_memmap = (UINT32)(UINTN)mem_entries;
-        efi->efi_memmap_size = entry_sz * nr_entries;
+        if (is_UEFI()) {
+                efi->efi_systab = (UINT32)(UINTN)ST;
+                efi->efi_memdesc_size = entry_sz;
+                efi->efi_memdesc_version = entry_ver;
+                efi->efi_memmap = (UINT32)(UINTN)mem_entries;
+                efi->efi_memmap_size = entry_sz * nr_entries;
 #ifdef  __LP64__
-        efi->efi_systab_hi = (EFI_PHYSICAL_ADDRESS)ST >> 32;
-        efi->efi_memmap_hi = (EFI_PHYSICAL_ADDRESS)mem_entries >> 32;
+                efi->efi_systab_hi = (EFI_PHYSICAL_ADDRESS)ST >> 32;
+                efi->efi_memmap_hi = (EFI_PHYSICAL_ADDRESS)mem_entries >> 32;
 #endif
 
-        memcpy(&efi->efi_loader_signature,
-               EFI_LOADER_SIGNATURE, sizeof(efi->efi_loader_signature));
+                memcpy(&efi->efi_loader_signature,
+                       EFI_LOADER_SIGNATURE, sizeof(efi->efi_loader_signature));
+        }
 
         setup_e820_map(boot_params, mem_entries, nr_entries, entry_sz);
+        if (!is_UEFI())
+                FreePool(mem_entries);
 
         return EFI_SUCCESS;
 }
