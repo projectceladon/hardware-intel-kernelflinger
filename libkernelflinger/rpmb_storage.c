@@ -33,8 +33,10 @@
 #include <openssl/engine.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
+#ifdef __SUPPORT_ABL_BOOT
 #include <openssl/hkdf.h>
 #include <openssl/mem.h>
+#endif
 #include <openssl/sha.h>
 #include "protocol/Mmc.h"
 #include "protocol/SdHostIo.h"
@@ -109,6 +111,7 @@ EFI_STATUS get_rpmb_derived_key(OUT UINT8 **d_key, OUT UINT8 *number_d_key)
 	return ret;
 }
 
+#ifdef __SUPPORT_ABL_BOOT
 EFI_STATUS derive_rpmb_key_with_seed(IN VOID *seed, OUT VOID *rpmb_key)
 {
 	EFI_STATUS ret;
@@ -149,6 +152,7 @@ EFI_STATUS derive_rpmb_key_with_seed(IN VOID *seed, OUT VOID *rpmb_key)
 out:
 	return ret;
 }
+#endif  // __SUPPORT_ABL_BOOT
 
 void clear_rpmb_key(void)
 {

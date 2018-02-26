@@ -39,7 +39,7 @@ extern char _binary_avb_pk_end;
 #define avb_pk (&_binary_avb_pk_start)
 #define avb_pk_size (&_binary_avb_pk_end - &_binary_avb_pk_start)
 
-static AvbIOResult read_from_partition(AvbOps* ops,
+static AvbIOResult read_from_partition(__attribute__((unused)) AvbOps* ops,
                                        const char* partition_name,
                                        int64_t offset_from_partition,
                                        size_t num_bytes,
@@ -105,7 +105,7 @@ static AvbIOResult read_from_partition(AvbOps* ops,
   return AVB_IO_RESULT_OK;
 }
 
-static AvbIOResult write_to_partition(AvbOps* ops,
+static AvbIOResult write_to_partition(__attribute__((unused)) AvbOps* ops,
                                       const char* partition_name,
                                       int64_t offset_from_partition,
                                       size_t num_bytes,
@@ -168,7 +168,7 @@ static AvbIOResult write_to_partition(AvbOps* ops,
   return AVB_IO_RESULT_OK;
 }
 
-static AvbIOResult get_size_of_partition(AvbOps* ops,
+static AvbIOResult get_size_of_partition(__attribute__((unused)) AvbOps* ops,
                                          const char* partition_name,
                                          uint64_t* out_size) {
   EFI_STATUS efi_ret;
@@ -202,11 +202,11 @@ static AvbIOResult get_size_of_partition(AvbOps* ops,
 }
 
 static AvbIOResult validate_vbmeta_public_key(
-    AvbOps* ops,
+    __attribute__((unused)) AvbOps* ops,
     const uint8_t* public_key_data,
     size_t public_key_length,
-    const uint8_t* public_key_metadata,
-    size_t public_key_metadata_length,
+    __attribute__((unused)) const uint8_t* public_key_metadata,
+    __attribute__((unused)) size_t public_key_metadata_length,
     bool* out_key_is_trusted) {
 
   if (out_key_is_trusted != NULL) {
@@ -227,45 +227,56 @@ static AvbIOResult validate_vbmeta_public_key(
   return AVB_IO_RESULT_OK;
 }
 
-static AvbIOResult read_rollback_index(AvbOps* ops,
+static AvbIOResult read_rollback_index(__attribute__((unused)) AvbOps* ops,
                                        size_t rollback_index_slot,
                                        uint64_t* out_rollback_index) {
-#ifdef RPMB_STORAGE
-  EFI_STATUS ret;
+  EFI_STATUS ret = AVB_IO_RESULT_OK;
+
+  if (out_rollback_index == NULL)
+    return ret;
+
+#if defined(SECURE_STORAGE_EFIVAR)
+  ret = read_efi_rollback_index(rollback_index_slot, out_rollback_index);
+#elif defined(SECURE_STORAGE_RPMB)
+  ret = read_rpmb_rollback_index(rollback_index_slot, out_rollback_index);
+#else
+  *out_rollback_index = 0;
 #endif
 
-  if (out_rollback_index != NULL) {
-#ifdef RPMB_STORAGE
-    ret = read_rpmb_rollback_index(rollback_index_slot, out_rollback_index);
-    if (EFI_ERROR(ret)) {
-      efi_perror(ret, L"Couldn't read rollback index");
-      return AVB_IO_RESULT_ERROR_IO;
-    }
-#else
+  if (ret == EFI_NOT_FOUND) {
     *out_rollback_index = 0;
-#endif
+    ret = EFI_SUCCESS;
   }
-  return AVB_IO_RESULT_OK;
+  if (EFI_ERROR(ret)) {
+    efi_perror(ret, L"Couldn't read rollback index");
+    return AVB_IO_RESULT_ERROR_IO;
+  }
+
+  return ret;
 }
 
-static AvbIOResult write_rollback_index(AvbOps* ops,
+static AvbIOResult write_rollback_index(__attribute__((unused)) AvbOps* ops,
                                         size_t rollback_index_slot,
                                         uint64_t rollback_index) {
-#ifdef RPMB_STORAGE
-  EFI_STATUS ret;
+  EFI_STATUS ret = AVB_IO_RESULT_OK;
 
-  if (rollback_index != 0) {
-    ret = write_rpmb_rollback_index(rollback_index_slot, rollback_index);
-    if (EFI_ERROR(ret)) {
-      efi_perror(ret, L"Couldn't write rollback index");
-      return AVB_IO_RESULT_ERROR_IO;
-    }
-  }
+  if (rollback_index == 0)
+    return ret;
+
+#if defined(SECURE_STORAGE_EFIVAR)
+  ret = write_efi_rollback_index(rollback_index_slot, rollback_index);
+#elif defined(SECURE_STORAGE_RPMB)
+  ret = write_rpmb_rollback_index(rollback_index_slot, rollback_index);
 #endif
-  return AVB_IO_RESULT_OK;
+  if (EFI_ERROR(ret)) {
+    efi_perror(ret, L"Couldn't write rollback index");
+    return AVB_IO_RESULT_ERROR_IO;
+  }
+
+  return ret;
 }
 
-static AvbIOResult read_is_device_unlocked(AvbOps* ops, bool* out_is_unlocked) {
+static AvbIOResult read_is_device_unlocked(__attribute__((unused)) AvbOps* ops, bool* out_is_unlocked) {
   avb_debug("read_is_device_unlocked().\n");
   *out_is_unlocked = device_is_unlocked();
   return AVB_IO_RESULT_OK;
@@ -277,7 +288,7 @@ static void set_hex(char* buf, uint8_t value) {
   buf[1] = hex_digits[value & 0x0f];
 }
 
-static AvbIOResult get_unique_guid_for_partition(AvbOps* ops,
+static AvbIOResult get_unique_guid_for_partition(__attribute__((unused)) AvbOps* ops,
                                                  const char* partition,
                                                  char* guid_buf,
                                                  size_t guid_buf_size) {

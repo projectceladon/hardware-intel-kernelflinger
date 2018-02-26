@@ -157,6 +157,11 @@ BOOLEAN blpolicy_is_flashed(VOID);
 BOOLEAN device_is_class_A(VOID);
 UINT8 min_boot_state_policy();
 EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size);
+#endif  // BOOTLOADER_POLICY
+
+#if defined(SECURE_STORAGE_EFIVAR) && defined(USE_AVB)
+EFI_STATUS read_efi_rollback_index(UINTN rollback_index_slot, uint64_t* out_rollback_index);
+EFI_STATUS write_efi_rollback_index(UINTN rollback_index_slot, uint64_t rollback_index);
 #endif
 BOOLEAN is_UEFI(VOID);
 #ifndef USERDEBUG

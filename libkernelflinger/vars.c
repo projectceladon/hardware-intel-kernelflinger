@@ -61,6 +61,7 @@
 #define OVERRIDE_AUTHORIZATION_KEY	L"OAK"
 #define BOOTLOADER_POLICY_MASK		L"BPM"
 #endif
+#define ROLLBACK_INDEX_FMT		L"RollbackIndex_%04x"
 
 #ifdef BOOTLOADER_POLICY
 typedef union {
@@ -257,18 +258,18 @@ enum device_state get_current_state()
 	EFI_STATUS ret;
 	UINT32 flags;
 	BOOLEAN enduser;
-#ifdef RPMB_STORAGE
+#ifdef SECURE_STORAGE_RPMB
 	UINT8 val;
 #endif
 
 	if (current_state == UNKNOWN_STATE) {
-#ifdef RPMB_STORAGE
-	ret = read_rpmb_device_state(&val);
-	stored_state = &val;
-	dsize = 1;
-	flags = EFI_VARIABLE_NON_VOLATILE;
+#ifdef SECURE_STORAGE_RPMB
+		ret = read_rpmb_device_state(&val);
+		stored_state = &val;
+		dsize = 1;
+		flags = EFI_VARIABLE_NON_VOLATILE;
 #else
-	ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK,
+		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK,
 				       &dsize, (void **)&stored_state, &flags);
 #endif
 		if (ret == EFI_NOT_FOUND) {
@@ -336,7 +337,7 @@ EFI_STATUS set_current_state(enum device_state state)
 		return EFI_INVALID_PARAMETER;
 	}
 
-#ifdef RPMB_STORAGE
+#ifdef SECURE_STORAGE_RPMB
 	ret = write_rpmb_device_state(stored_state);
 #else
 	ret = set_efi_variable(&fastboot_guid, OEM_LOCK,
@@ -951,7 +952,8 @@ EFI_STATUS get_oak_hash(unsigned char **data_p, UINTN *size)
 
 	return EFI_SUCCESS;
 }
-#else
+
+#else  // BOOTLOADER_POLICY_EFI_VAR
 static bpm_t get_bpm()
 {
 	bpm_t bpm = { .raw = BOOTLOADER_POLICY };
@@ -997,3 +999,46 @@ BOOLEAN is_UEFI(VOID)
 
 	return val.value;
 }
+
+#if defined(SECURE_STORAGE_EFIVAR) && defined(USE_AVB)
+EFI_STATUS read_efi_rollback_index(UINTN rollback_index_slot, uint64_t* out_rollback_index)
+{
+	EFI_STATUS ret;
+	CHAR16 name[32];
+	UINTN size;
+	UINT32 flags;
+	VOID *data;
+
+	SPrint(name, sizeof(name), ROLLBACK_INDEX_FMT, rollback_index_slot);
+	ret = get_efi_variable(&fastboot_guid, name,
+			       &size, (VOID **)&data, &flags);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read %s EFI variable", name);
+		return ret;
+	} else
+		debug(L"Success to read %s EFI variable: 0x%llx ", name, *(uint64_t *)data);
+
+	if (size != sizeof(*out_rollback_index))
+		return EFI_COMPROMISED_DATA;
+
+	*out_rollback_index = *(uint64_t *)data;
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS write_efi_rollback_index(UINTN rollback_index_slot, uint64_t rollback_index)
+{
+	EFI_STATUS ret;
+	CHAR16 name[32];
+
+	SPrint(name, sizeof(name), ROLLBACK_INDEX_FMT, rollback_index_slot);
+	ret = set_efi_variable(&fastboot_guid, name,
+			       sizeof(rollback_index), &rollback_index, TRUE, FALSE);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to set %s EFI variable", name);
+	else
+		debug(L"Success to set %s EFI variable: 0x%llx ", name, rollback_index);
+
+	return ret;
+}
+#endif // defined(SECURE_STORAGE_EFIVAR) && defined(USE_AVB)

@@ -58,7 +58,11 @@ typedef struct rpmb_storage {
 void rpmb_storage_init(BOOLEAN real);
 EFI_STATUS get_rpmb_derived_key(OUT UINT8 **d_key, OUT UINT8 *number_d_key);
 EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key);
+
+#ifdef __SUPPORT_ABL_BOOT
 EFI_STATUS derive_rpmb_key_with_seed(IN VOID *seed, OUT VOID *rpmb_key);
+#endif
+
 void clear_rpmb_key(void);
 void set_rpmb_key(UINT8 *key);
 EFI_STATUS clear_teedata_flag(void);

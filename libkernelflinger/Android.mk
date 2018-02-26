@@ -196,7 +196,11 @@ endif
 
 ifeq ($(KERNELFLINGER_USE_RPMB),true)
     LOCAL_SRC_FILES += rpmb_storage.c
+else  # KERNELFLINGER_USE_RPMB == false
+ifeq ($(KERNELFLINGER_USE_RPMB_SIMULATE),true)
+    LOCAL_SRC_FILES += rpmb_storage.c
 endif
+endif  # KERNELFLINGER_USE_RPMB
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(LOCAL_PATH)/../ \
