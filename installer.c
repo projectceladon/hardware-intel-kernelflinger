@@ -535,7 +535,8 @@ static void installer_boot(INTN argc, CHAR8 **argv)
 	}
 
 	ret = android_image_start_buffer(g_parent_image, bootimage,
-                                         NORMAL_BOOT, BOOT_STATE_ORANGE, NULL, NULL);
+                                         NORMAL_BOOT, BOOT_STATE_ORANGE, NULL,
+					 NULL, NULL);
 	if (EFI_ERROR(ret))
 		inst_perror(ret, "Failed to start %s image", filename);
 	else

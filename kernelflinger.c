@@ -979,11 +979,11 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
         ret = android_image_start_buffer(g_parent_image, bootimage,
                                          boot_target, boot_state, NULL,
 #ifdef USE_AVB
-                                         slot_data
+                                         slot_data,
 #else
-                                         verifier_cert
+                                         verifier_cert,
 #endif
-                                         );
+                                         NULL);
         if (EFI_ERROR(ret))
                 efi_perror(ret, L"Couldn't load Boot image");
 
