@@ -239,6 +239,7 @@ typedef void(*kernel_func)(void *, struct boot_params *);
 #define SEGMENT_GRANULARITY_4KB       1
 #define DESCRIPTOR_TYPE_CODE_OR_DATA  1
 
+#ifndef __SUPPORT_ABL_BOOT
 static EFI_STATUS setup_gdt(void)
 {
         EFI_STATUS ret;
@@ -293,6 +294,7 @@ static EFI_STATUS setup_gdt(void)
 
         return EFI_SUCCESS;
 }
+#endif  /* __SUPPORT_ABL_BOOT */
 
 /* WARNING: Do not make any call that might change the memory mapping
  * (allocation, print, ...) in this function.  */
@@ -410,14 +412,19 @@ static inline EFI_STATUS handover_jump(EFI_HANDLE image,
                                        EFI_PHYSICAL_ADDRESS kernel_start)
 {
         EFI_STATUS ret = EFI_LOAD_ERROR;
-        kernel_func kf;
         UINTN map_key, i;
 
+#ifdef RPMB_STORAGE
+        clear_rpmb_key();
+#endif
+
+#ifndef __SUPPORT_ABL_BOOT
         ret = setup_gdt();
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Failed to setup GDT");
                 return ret;
         }
+#endif  /* __SUPPORT_ABL_BOOT */
 
         /* According to UEFI specification 2.4 Chapter 6.4
          * EFI_BOOT_SERVICES.ExitBootServices(), Firmware
@@ -452,14 +459,15 @@ boot:
         kernel_start += 512;
 #endif
 
-        /* Disable interruptions. */
-        asm volatile ("cli");
-
+#ifndef __SUPPORT_ABL_BOOT
         /* Load GDT. */
         asm volatile ("lgdt %0" :: "m" (*gdt));
+#endif  /* __SUPPORT_ABL_BOOT */
 
-        kf = (kernel_func)((UINTN)kernel_start);
-        kf(NULL, boot_params);
+        asm volatile ("cli; jmp *%0"
+                      : /* no outputs */
+                      : "m" (kernel_start), "a" (0), "S" (boot_params), "D"(0)
+                      : "memory");
 
         /* Shouldn't get here. */
         return EFI_LOAD_ERROR;
@@ -1197,39 +1205,7 @@ static void setup_screen_info_from_gop(struct screen_info *pinfo)
         pinfo->lfb_linelength = gop->Mode->Info->PixelsPerScanLine * 4;
 }
 
-static inline EFI_STATUS handover_jump_abl(struct boot_params *boot_params,
-                                       EFI_PHYSICAL_ADDRESS kernel_start)
-{
-        EFI_STATUS ret = EFI_LOAD_ERROR;
-        UINTN map_key;
-
-        ret = setup_memory_map(boot_params, &map_key);
-        if (EFI_ERROR(ret)) {
-             efi_perror(ret, L"Failed to setup memory map");
-             return ret;
-        }
-
-#ifdef RPMB_STORAGE
-        clear_rpmb_key();
-#endif
-
-#if __LP64__
-        /* The 64-bit kernel entry is 512 bytes after the start. */
-        kernel_start += 512;
-#endif
-
-        log(L"jmp 0x%X (setup @0x%x)\n", (UINTN)kernel_start, (UINTN)boot_params);
-        __asm__ __volatile__ ("cli;  jmp *%0"
-                                  : /* no outputs */
-                                  : "m" (kernel_start), "a" (0), "S" (boot_params), "D"(0)
-                                  : "memory");
-
-        /* Shouldn't get here. */
-        return EFI_LOAD_ERROR;
-}
-
-static EFI_STATUS handover_kernel(CHAR8 *bootimage,
-                                  __attribute__((unused))EFI_HANDLE parent_image)
+static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
 {
         EFI_PHYSICAL_ADDRESS kernel_start;
         EFI_PHYSICAL_ADDRESS boot_addr;
@@ -1300,11 +1276,7 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage,
                ((CHAR8 *)buf)[0x201] + 0x202 - offsetof(struct boot_params, hdr));
         boot_params->hdr.code32_start = (UINT32)((UINT64)kernel_start);
 
-#ifdef __SUPPORT_ABL_BOOT
-        ret = handover_jump_abl(boot_params, kernel_start);
-#else
         ret = handover_jump(parent_image, boot_params, kernel_start);
-#endif
         /* Shouldn't get here */
         efi_perror(ret, L"handover to Linux kernel has failed");
 
