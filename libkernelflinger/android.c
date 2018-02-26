@@ -594,6 +594,7 @@ error:
 }
 
 
+#ifndef __SUPPORT_ABL_BOOT
 static CHAR16 *get_wake_reason(void)
 {
         enum wake_sources wake_source;
@@ -697,6 +698,7 @@ done:
         del_reboot_reason();
         return bootreason;
 }
+#endif
 
 static EFI_STATUS prepend_command_line(CHAR16 **cmdline, CHAR16 *fmt, ...)
 {
@@ -895,6 +897,7 @@ static EFI_STATUS add_bootvars(VOID *bootimage, CHAR16 **cmdline16)
 #define ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init root="
 
 #ifndef USE_AVB
+#ifndef __SUPPORT_ABL_BOOT
 static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_cert)
 {
         EFI_GUID system_uuid;
@@ -930,9 +933,9 @@ static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_c
 
         return ret;
 }
-#endif // USE_AVB
+#endif  /* __SUPPORT_ABL_BOOT */
 
-#ifdef USE_AVB
+#else
 #define AVB_ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init"
 #define DISABLE_AVB_ROOTFS_PREFIX L" root="
 static EFI_STATUS avb_prepend_command_line_rootfs(
@@ -955,6 +958,7 @@ static EFI_STATUS avb_prepend_command_line_rootfs(
 }
 #endif  // defined USE_AVB and USE_SLOT
 
+#ifndef __SUPPORT_ABL_BOOT
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
@@ -1169,6 +1173,7 @@ out:
 
         return ret;
 }
+#endif
 
 extern EFI_GUID GraphicsOutputProtocol;
 #define VIDEO_TYPE_EFI 0x70
@@ -1674,237 +1679,7 @@ fail:
 }
 #endif // USE_AVB
 
-EFI_STATUS android_image_start_buffer(
-                IN EFI_HANDLE parent_image,
-                IN VOID *bootimage,
-                IN enum boot_target boot_target,
-                IN UINT8 boot_state,
-                IN EFI_GUID *swap_guid,
-#ifdef USE_AVB
-                IN AvbSlotVerifyData *slot_data
-#else
-                IN X509 *verity_cert
-#endif
-                )
-{
-        struct boot_img_hdr *aosp_header;
-        struct boot_params *buf;
-        EFI_STATUS ret;
-
-        if (!bootimage)
-                return EFI_INVALID_PARAMETER;
-
-        aosp_header = (struct boot_img_hdr *)bootimage;
-        if (memcmp(aosp_header->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
-                error(L"buffer does not appear to contain an Android boot image");
-                return EFI_INVALID_PARAMETER;
-        }
-
-        buf = (struct boot_params *)(bootimage + aosp_header->page_size);
-
-        /* Check boot sector signature */
-        if (buf->hdr.signature != 0xAA55) {
-                error(L"bzImage kernel corrupt");
-                return EFI_INVALID_PARAMETER;
-        }
-
-        if (buf->hdr.header != SETUP_HDR) {
-                error(L"Setup code version is invalid");
-                return EFI_INVALID_PARAMETER;
-        }
-
-        if (buf->hdr.version < 0x20c) {
-                /* Protocol 2.12, kernel 3.8 required */
-                error(L"Kernel header version %x too old", buf->hdr.version);
-                return EFI_INVALID_PARAMETER;
-        }
-
-        if (!buf->hdr.relocatable_kernel) {
-                error(L"Expected relocatable kernel\n");
-                return EFI_INVALID_PARAMETER;
-        }
-
-        debug(L"Creating command line");
-        ret = setup_command_line(bootimage, boot_target, swap_guid, boot_state,
-#ifdef USE_AVB
-                                 slot_data
-#else
-                                 verity_cert
-#endif
-                                 );
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"setup_command_line");
-                return ret;
-        }
-
-        if (!recovery_in_boot_partition() || boot_target == RECOVERY) {
-                debug(L"Loading the ramdisk");
-                ret = setup_ramdisk(bootimage);
-                if (EFI_ERROR(ret)) {
-                        efi_perror(ret, L"setup_ramdisk");
-                        goto out_cmdline;
-                }
-        }
-
-        debug(L"Loading the kernel");
-        ret = handover_kernel(bootimage, parent_image);
-        efi_perror(ret, L"handover_kernel");
-
-        efree(buf->hdr.ramdisk_start, buf->hdr.ramdisk_len);
-        buf->hdr.ramdisk_start = 0;
-        buf->hdr.ramdisk_len = 0;
-out_cmdline:
-        free_pages(buf->hdr.cmd_line_ptr,
-                        strlena((CHAR8 *)(UINTN)buf->hdr.cmd_line_ptr) + 1);
-        buf->hdr.cmd_line_ptr = 0;
-        return ret;
-}
-
-
-#if DEBUG_MESSAGES
-VOID dump_bcb(IN struct bootloader_message *bcb)
-{
-        if (bcb->command && bcb->status)
-                debug(L"BCB: cmd '%a' status '%a'", bcb->command, bcb->status);
-}
-#else
-#define dump_bcb(b) (void)0
-#endif
-
-EFI_STATUS read_bcb(
-                IN const CHAR16 *label,
-                OUT struct bootloader_message *bcb)
-{
-        EFI_STATUS ret;
-        struct gpt_partition_interface gpart;
-        UINTN partition_start;
-
-        debug(L"Locating BCB");
-        ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
-        if (EFI_ERROR(ret))
-                return EFI_INVALID_PARAMETER;
-        partition_start = gpart.part.starting_lba * gpart.bio->Media->BlockSize;
-
-        debug(L"Reading BCB");
-        ret = uefi_call_wrapper(gpart.dio->ReadDisk, 5, gpart.dio,
-                                gpart.bio->Media->MediaId,
-                                partition_start, sizeof(*bcb), bcb);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"ReadDisk (bcb)");
-                return ret;
-        }
-        bcb->command[31] = '\0';
-        bcb->status[31] = '\0';
-        dump_bcb(bcb);
-
-        return EFI_SUCCESS;
-}
-
-
-
-EFI_STATUS write_bcb(
-                IN const CHAR16 *label,
-                IN struct bootloader_message *bcb)
-{
-        EFI_STATUS ret;
-        struct gpt_partition_interface gpart;
-        UINTN partition_start;
-
-        debug(L"Locating BCB");
-        ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
-        if (EFI_ERROR(ret))
-                return EFI_INVALID_PARAMETER;
-        partition_start = gpart.part.starting_lba * gpart.bio->Media->BlockSize;
-
-        debug(L"Writing BCB");
-        ret = uefi_call_wrapper(gpart.dio->WriteDisk, 5, gpart.dio,
-                                gpart.bio->Media->MediaId,
-                                partition_start, sizeof(*bcb), bcb);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"WriteDisk (bcb)");
-                return ret;
-        }
-        dump_bcb(bcb);
-
-        return EFI_SUCCESS;
-}
-
-
-EFI_STATUS android_clear_memory()
-{
-        EFI_STATUS ret = EFI_SUCCESS;
-        UINTN nr_entries, key, entry_sz;
-        CHAR8 *mem_entries;
-        UINT32 entry_ver;
-        UINTN i;
-        CHAR8 *mem_map;
-        EFI_TPL OldTpl;
-
-        OldTpl = uefi_call_wrapper(BS->RaiseTPL, 1, TPL_NOTIFY);
-        mem_entries = (CHAR8 *)LibMemoryMap(&nr_entries, &key, &entry_sz, &entry_ver);
-        if (!mem_entries) {
-                uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
-                return EFI_OUT_OF_RESOURCES;
-        }
-
-        sort_memory_map(mem_entries, nr_entries, entry_sz);
-        mem_map = mem_entries;
-
-#ifndef __LP64__
-        ret = pae_init(mem_entries, nr_entries, entry_sz);
-        if (EFI_ERROR(ret))
-                goto err;
-#endif
-
-        for (i = 0; i < nr_entries; mem_entries += entry_sz, i++) {
-                EFI_MEMORY_DESCRIPTOR *entry;
-                EFI_PHYSICAL_ADDRESS start;
-                UINT64 map_sz, len;
-                void *buf;
-
-                entry = (EFI_MEMORY_DESCRIPTOR *)mem_entries;
-                if (entry->Type != EfiConventionalMemory)
-                        continue;
-
-                start = entry->PhysicalStart;
-                map_sz = entry->NumberOfPages * EFI_PAGE_SIZE;
-
-                for (; map_sz > 0; map_sz -= len, start += len) {
-                        len = map_sz;
-#ifdef __LP64__
-                        buf = (void *)start;
-#else
-                        ret = pae_map(start, (unsigned char **)&buf, &len);
-                        if (EFI_ERROR(ret))
-                                goto pae_err;
-#endif
-                        uefi_call_wrapper(BS->SetMem, 3, buf, len, 0);
-                }
-        }
-
-#ifndef __LP64__
-pae_err:
-        pae_exit();
-err:
-#endif
-        uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
-        FreePool((void *)mem_map);
-        return ret;
-}
-
-BOOLEAN recovery_in_boot_partition(void)
-{
-        EFI_STATUS ret;
-        struct gpt_partition_interface gpart;
-
-        if (!use_slot())
-                return FALSE;
-
-        ret = gpt_get_partition_by_label(RECOVERY_LABEL, &gpart, LOGICAL_UNIT_USER);
-        return ret == EFI_NOT_FOUND;
-}
-
-#ifdef  __SUPPORT_ABL_BOOT
+#ifdef __SUPPORT_ABL_BOOT
 static UINTN cmd_line_add_str (CHAR8 *cmd_buf, UINTN max_cmd_size, UINTN pos, CHAR8 prefix, const CHAR8 *str)
 {
         UINTN len;
@@ -2136,34 +1911,25 @@ out:
         FreePool(cmdline16);
         return ret;
 }
-
-#ifdef USE_AVB
-EFI_STATUS android_image_start_buffer_abl(
-                IN VOID *bootimage,
-                IN enum boot_target boot_target,
-                IN UINT8 boot_state,
-                IN EFI_GUID *swap_guid,
-                AvbSlotVerifyData *slot_data,
-                IN const CHAR8 *abl_cmd_line)
-#else
-EFI_STATUS android_image_start_buffer_abl(
-                IN VOID *bootimage,
-                IN enum boot_target boot_target,
-                IN UINT8 boot_state,
-                IN EFI_GUID *swap_guid,
-                IN X509 *verity_cert,
-                IN const CHAR8 *abl_cmd_line)
 #endif
+
+EFI_STATUS android_image_start_buffer(
+                IN EFI_HANDLE parent_image,
+                IN VOID *bootimage,
+                IN enum boot_target boot_target,
+                IN UINT8 boot_state,
+                IN __attribute__((unused)) EFI_GUID *swap_guid,
+#ifdef USE_AVB
+                IN AvbSlotVerifyData *slot_data,
+#else
+                IN __attribute__((unused)) X509 *verity_cert,
+#endif
+                IN __attribute__((unused)) const CHAR8 *abl_cmd_line)
 {
         struct boot_img_hdr *aosp_header;
         struct boot_params *buf;
         EFI_STATUS ret;
 
-        boot_state = boot_state;
-        swap_guid = swap_guid;
-#ifndef USE_AVB
-        verity_cert = verity_cert;
-#endif
         if (!bootimage)
                 return EFI_INVALID_PARAMETER;
 
@@ -2198,10 +1964,28 @@ EFI_STATUS android_image_start_buffer_abl(
         }
 
         debug(L"Creating command line");
+
+#ifdef __SUPPORT_ABL_BOOT
 #ifdef USE_AVB
-        ret = setup_command_line_abl(bootimage, boot_target, abl_cmd_line, slot_data, boot_state);
+        ret = setup_command_line_abl(bootimage, boot_target,
+                                     abl_cmd_line,
+                                     slot_data,
+                                     boot_state);
 #else
-        ret = setup_command_line_abl(bootimage, boot_target, abl_cmd_line, boot_state);
+        ret = setup_command_line_abl(bootimage, boot_target,
+                                     abl_cmd_line,
+                                     boot_state);
+#endif
+#else
+        ret = setup_command_line(bootimage, boot_target,
+                                 swap_guid,
+                                 boot_state,
+#ifdef USE_AVB
+                                 slot_data
+#else
+                                 verity_cert
+#endif
+                                 );
 #endif
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"setup_command_line");
@@ -2217,8 +2001,8 @@ EFI_STATUS android_image_start_buffer_abl(
                 }
         }
 
-        debug(L"Loading the kernel_abl");
-        ret = handover_kernel(bootimage, NULL);
+        debug(L"Loading the kernel");
+        ret = handover_kernel(bootimage, parent_image);
         efi_perror(ret, L"handover_kernel");
 
         efree(buf->hdr.ramdisk_start, buf->hdr.ramdisk_len);
@@ -2230,7 +2014,150 @@ out_cmdline:
         buf->hdr.cmd_line_ptr = 0;
         return ret;
 }
-#endif  // __SUPPORT_ABL_BOOT
+
+
+#if DEBUG_MESSAGES
+VOID dump_bcb(IN struct bootloader_message *bcb)
+{
+        if (bcb->command && bcb->status)
+                debug(L"BCB: cmd '%a' status '%a'", bcb->command, bcb->status);
+}
+#else
+#define dump_bcb(b) (void)0
+#endif
+
+EFI_STATUS read_bcb(
+                IN const CHAR16 *label,
+                OUT struct bootloader_message *bcb)
+{
+        EFI_STATUS ret;
+        struct gpt_partition_interface gpart;
+        UINTN partition_start;
+
+        debug(L"Locating BCB");
+        ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
+        if (EFI_ERROR(ret))
+                return EFI_INVALID_PARAMETER;
+        partition_start = gpart.part.starting_lba * gpart.bio->Media->BlockSize;
+
+        debug(L"Reading BCB");
+        ret = uefi_call_wrapper(gpart.dio->ReadDisk, 5, gpart.dio,
+                                gpart.bio->Media->MediaId,
+                                partition_start, sizeof(*bcb), bcb);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"ReadDisk (bcb)");
+                return ret;
+        }
+        bcb->command[31] = '\0';
+        bcb->status[31] = '\0';
+        dump_bcb(bcb);
+
+        return EFI_SUCCESS;
+}
+
+
+
+EFI_STATUS write_bcb(
+                IN const CHAR16 *label,
+                IN struct bootloader_message *bcb)
+{
+        EFI_STATUS ret;
+        struct gpt_partition_interface gpart;
+        UINTN partition_start;
+
+        debug(L"Locating BCB");
+        ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
+        if (EFI_ERROR(ret))
+                return EFI_INVALID_PARAMETER;
+        partition_start = gpart.part.starting_lba * gpart.bio->Media->BlockSize;
+
+        debug(L"Writing BCB");
+        ret = uefi_call_wrapper(gpart.dio->WriteDisk, 5, gpart.dio,
+                                gpart.bio->Media->MediaId,
+                                partition_start, sizeof(*bcb), bcb);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"WriteDisk (bcb)");
+                return ret;
+        }
+        dump_bcb(bcb);
+
+        return EFI_SUCCESS;
+}
+
+
+EFI_STATUS android_clear_memory()
+{
+        EFI_STATUS ret = EFI_SUCCESS;
+        UINTN nr_entries, key, entry_sz;
+        CHAR8 *mem_entries;
+        UINT32 entry_ver;
+        UINTN i;
+        CHAR8 *mem_map;
+        EFI_TPL OldTpl;
+
+        OldTpl = uefi_call_wrapper(BS->RaiseTPL, 1, TPL_NOTIFY);
+        mem_entries = (CHAR8 *)LibMemoryMap(&nr_entries, &key, &entry_sz, &entry_ver);
+        if (!mem_entries) {
+                uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
+                return EFI_OUT_OF_RESOURCES;
+        }
+
+        sort_memory_map(mem_entries, nr_entries, entry_sz);
+        mem_map = mem_entries;
+
+#ifndef __LP64__
+        ret = pae_init(mem_entries, nr_entries, entry_sz);
+        if (EFI_ERROR(ret))
+                goto err;
+#endif
+
+        for (i = 0; i < nr_entries; mem_entries += entry_sz, i++) {
+                EFI_MEMORY_DESCRIPTOR *entry;
+                EFI_PHYSICAL_ADDRESS start;
+                UINT64 map_sz, len;
+                void *buf;
+
+                entry = (EFI_MEMORY_DESCRIPTOR *)mem_entries;
+                if (entry->Type != EfiConventionalMemory)
+                        continue;
+
+                start = entry->PhysicalStart;
+                map_sz = entry->NumberOfPages * EFI_PAGE_SIZE;
+
+                for (; map_sz > 0; map_sz -= len, start += len) {
+                        len = map_sz;
+#ifdef __LP64__
+                        buf = (void *)start;
+#else
+                        ret = pae_map(start, (unsigned char **)&buf, &len);
+                        if (EFI_ERROR(ret))
+                                goto pae_err;
+#endif
+                        uefi_call_wrapper(BS->SetMem, 3, buf, len, 0);
+                }
+        }
+
+#ifndef __LP64__
+pae_err:
+        pae_exit();
+err:
+#endif
+        uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
+        FreePool((void *)mem_map);
+        return ret;
+}
+
+BOOLEAN recovery_in_boot_partition(void)
+{
+        EFI_STATUS ret;
+        struct gpt_partition_interface gpart;
+
+        if (!use_slot())
+                return FALSE;
+
+        ret = gpt_get_partition_by_label(RECOVERY_LABEL, &gpart, LOGICAL_UNIT_USER);
+        return ret == EFI_NOT_FOUND;
+}
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */

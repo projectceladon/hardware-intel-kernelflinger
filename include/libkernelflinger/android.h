@@ -251,19 +251,7 @@ EFI_STATUS android_image_start_buffer(
                 IN UINT8 boot_state,
                 IN EFI_GUID *swap,
 #ifdef USE_AVB
-                IN AvbSlotVerifyData *slot_data
-#else
-                IN X509 *verity_cert
-#endif
-                );
-
-EFI_STATUS android_image_start_buffer_abl(
-                IN VOID *bootimage,
-                IN enum boot_target boot_target,
-                IN UINT8 boot_state,
-                IN EFI_GUID *swap_guid,
-#ifdef USE_AVB
-                AvbSlotVerifyData *slot_data,
+                IN AvbSlotVerifyData *slot_data,
 #else
                 IN X509 *verity_cert,
 #endif
