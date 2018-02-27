@@ -728,7 +728,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
 	const uint8_t *vbmeta_pub_key;
-	uint32_t vbmeta_pub_key_len;
+	UINTN vbmeta_pub_key_len;
 
 	debug(L"Loading boot image");
 #ifndef USE_SLOT
