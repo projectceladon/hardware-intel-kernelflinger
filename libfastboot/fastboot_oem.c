@@ -52,18 +52,17 @@
 #ifdef USE_SLOT
 #include "libavb/libavb.h"
 #include "libavb/uefi_avb_ops.h"
+#endif
 #ifdef USE_TPM
 #include "tpm2_security.h"
 #endif
-
-#define VBMETA_LABEL		L"vbmeta"
-#endif
-#define OFF_MODE_CHARGE		"off-mode-charge"
-#define CRASH_EVENT_MENU	"crash-event-menu"
-#define SLOT_FALLBACK		"slot-fallback"
 #ifdef RPMB_STORAGE
 #include "rpmb_storage.h"
 #endif
+
+#define OFF_MODE_CHARGE		"off-mode-charge"
+#define CRASH_EVENT_MENU	"crash-event-menu"
+#define SLOT_FALLBACK		"slot-fallback"
 
 static cmdlist_t cmdlist;
 #ifdef USE_TPM
@@ -247,7 +246,7 @@ static struct oem_hash {
 	{ TOS_LABEL,		get_boot_image_hash,	TRUE },
 #endif
 	{ BOOTLOADER_LABEL,	get_bootloader_hash,	FALSE },
-#ifdef USE_SLOT
+#ifdef USE_AVB
 	{ VBMETA_LABEL,		get_boot_image_hash,	FALSE },
 #endif
 	{ SYSTEM_LABEL,		get_fs_hash,		TRUE },
