@@ -271,7 +271,9 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	UINTN cmd_len = 0;
 	CHAR8 arg8[256] = "";
 	UINTN arglen;
+#if defined(USE_TRUSTY) || defined(RPMB_STORAGE)
 	UINTN num;
+#endif
 
 	enum CmdType
 	{
@@ -404,7 +406,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 					debug(L"Parsed trusty param addr is 0x%x", num);
 					set_trusty_param((VOID *)num);
 					continue;
-#endif
+#endif //USE_TRUSTY
+#ifdef RPMB_STORAGE
 				/* Parse "dev_sec_info.param_addr=" */
 				case DEV_SEC_INFO:
 					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
@@ -412,7 +415,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 					debug(L"Parsed device security information addr is 0x%x", num);
 					set_device_security_info((VOID *)num);
 					continue;
-
+#endif //RPMB_STORAGE
 				/* Parse "ABL.secureboot=x" */
 				case SECUREBOOT: {
 					UINT8 val;
