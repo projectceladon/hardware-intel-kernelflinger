@@ -743,11 +743,7 @@ static CHAR16 *get_command_line(IN struct boot_img_hdr *aosp_header,
         CHAR16 *cmdline_prepend = NULL;
         BOOLEAN needs_pause = FALSE;
 
-#ifndef __SUPPORT_ABL_BOOT
         if (boot_target == NORMAL_BOOT || boot_target == MEMORY) {
-#else
-        if (boot_target == NORMAL_BOOT) {
-#endif
                 cmdline16 = get_efi_variable_str8(&loader_guid, CMDLINE_REPLACE_VAR);
                 cmdline_append = get_efi_variable_str8(&loader_guid, CMDLINE_APPEND_VAR);
                 cmdline_prepend = get_efi_variable_str8(&loader_guid, CMDLINE_PREPEND_VAR);
@@ -1014,14 +1010,12 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 
-#ifndef __SUPPORT_ABL_BOOT
         if (boot_target == CHARGER) {
                 ret = prepend_command_line(&cmdline16,
                                 L"androidboot.mode=charger");
                 if (EFI_ERROR(ret))
                         goto out;
         }
-#endif
 
         bootreason = get_boot_reason();
         if (!bootreason) {
@@ -1098,11 +1092,7 @@ static EFI_STATUS setup_command_line(
         }
 
 #ifndef USE_AVB
-#ifndef __SUPPORT_ABL_BOOT
         if ((boot_target == NORMAL_BOOT || boot_target == CHARGER || boot_target == MEMORY) &&
-#else
-        if ((boot_target == NORMAL_BOOT) &&
-#endif
             recovery_in_boot_partition()) {
                 ret = prepend_command_line_rootfs(&cmdline16, verity_cert);
                 if (verity_cert)
