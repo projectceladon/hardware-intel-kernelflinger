@@ -99,6 +99,7 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define BOOTLOADER_LABEL	L"bootloader"
 #define MULTIBOOT_LABEL		L"multiboot"
 #define TOS_LABEL		L"tos"
+#define VBMETA_LABEL		L"vbmeta"
 
 #ifdef __SUPPORT_ABL_BOOT
 #define IFWI_CAPSULE_UPDATE	L"IfwiCapsuleUpdate"
