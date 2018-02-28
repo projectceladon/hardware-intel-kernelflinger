@@ -50,14 +50,12 @@ static struct target {
         { CRASHMODE,      NULL,          L"Crashmode" },
 #endif
         /* Internal only */
-#ifndef __SUPPORT_ABL_BOOT
         { CHARGER,        L"charging",   L"Charger mode" },
         { ESP_BOOTIMAGE,  NULL,          L"ESP bootimage" },
         { ESP_EFI_BINARY, NULL,          L"ESP efi binary" },
         { MEMORY,         NULL,          L"RAM bootimage" },
         { POWER_OFF,      NULL,          L"Power Off" },
         { EXIT_SHELL,     NULL,          L"Exit to shell" },
-#endif
 };
 
 static struct target *find_entry(enum boot_target bt)

@@ -158,10 +158,10 @@ static enum boot_target check_bcb(CHAR16 **target_path, BOOLEAN *oneshot)
 	}
 
 	t = name_to_boot_target(target);
-	if (t != UNKNOWN_TARGET)
+	if (t != UNKNOWN_TARGET && t != CHARGER)
 		goto out;
 
-	error(L"Unknown boot target in BCB: '%s'", target);
+	error(L"Unknown/Unsupported boot target in BCB: '%s'", target);
 	t = NORMAL_BOOT;
 
 out:
