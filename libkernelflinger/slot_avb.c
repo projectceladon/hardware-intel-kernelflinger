@@ -352,14 +352,9 @@ const char *slot_get_active(void)
 	if (!data)
 		return NULL;
 
-	if (data->ab_suffix) {
-		cur_suffix = suffixes[SUFFIX_INDEX(data->ab_suffix)];
-		debug(L"slot_get_active from misc return %a", cur_suffix);
-		return cur_suffix;
-	} else {
-		return NULL;
-	}
-
+	slot_set_active_cached(data->ab_suffix);
+	debug(L"slot_get_active from misc return %a", cur_suffix);
+	return cur_suffix;
 }
 
 EFI_STATUS slot_set_active(const char *suffix)
@@ -390,8 +385,7 @@ EFI_STATUS slot_set_active(const char *suffix)
 	if (!data)
 		return EFI_SUCCESS;
 
-	if (data->ab_suffix)
-		cur_suffix = suffixes[SUFFIX_INDEX(data->ab_suffix)];
+	slot_set_active_cached(data->ab_suffix);
 	return EFI_SUCCESS;
 }
 
@@ -524,4 +518,13 @@ EFI_STATUS slot_boot_failed(enum boot_target target)
 	select_highest_priority_slot();
 
 	return EFI_SUCCESS;
+}
+
+void slot_set_active_cached(const char *suffix)
+{
+	if (suffixes == NULL || SUFFIX_INDEX(suffix) < 0 || SUFFIX_INDEX(suffix) >= (int)(sizeof(suffixes) / sizeof(suffixes[0])))
+		cur_suffix = NULL;
+	else
+		cur_suffix = suffixes[SUFFIX_INDEX(suffix)];
+	return;
 }

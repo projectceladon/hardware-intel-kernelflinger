@@ -273,6 +273,12 @@ EFI_STATUS android_image_load_partition_avb(
                 UINT8* boot_state,
                 AvbSlotVerifyData **slot_data);
 
+EFI_STATUS android_image_load_partition_avb_ab(
+                IN const char *label,
+                OUT VOID **bootimage_p,
+                UINT8* boot_state,
+                AvbSlotVerifyData **slot_data);
+
 EFI_STATUS get_avb_result(
                 IN AvbSlotVerifyData *slot_data,
                 IN bool allow_verification_error,
