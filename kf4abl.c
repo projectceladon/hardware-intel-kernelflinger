@@ -765,6 +765,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		efi_perror(ret, L"Failed to get avb slot a/b flow result for boot");
 		goto fail;
 	}
+	slot_set_active_cached(slot_data->ab_suffix);
 
 #ifdef  __SUPPORT_ABL_BOOT
 	if (slot_data->ab_suffix) {

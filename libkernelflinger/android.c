@@ -1083,13 +1083,6 @@ static EFI_STATUS setup_command_line(
                 goto out;
 #endif
 
-        if (slot_get_active()) {
-                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
-                                           slot_get_active());
-                if (EFI_ERROR(ret))
-                        goto out;
-        }
-
 #ifndef USE_AVB
         if ((boot_target == NORMAL_BOOT || boot_target == CHARGER || boot_target == MEMORY) &&
             recovery_in_boot_partition()) {
@@ -1115,6 +1108,13 @@ static EFI_STATUS setup_command_line(
 #endif // AVB_CMDLINE
 
 #ifdef USE_SLOT
+        if (slot_get_active()) {
+                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
+                                           slot_get_active());
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+
 #ifdef AVB_CMDLINE
         if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root=")))
 #endif // AVB_CMDLINE
@@ -1638,6 +1638,50 @@ fail:
         *boot_state = BOOT_STATE_RED;
         return ret;
 }
+
+
+EFI_STATUS android_image_load_partition_avb_ab(
+                IN const char *label,
+                OUT VOID **bootimage_p,
+                IN OUT UINT8* boot_state,
+                AvbSlotVerifyData **slot_data)
+{
+#ifndef USE_SLOT
+        return android_image_load_partition_avb(label, bootimage_p, boot_state, slot_data);
+#else
+        EFI_STATUS ret = EFI_SUCCESS;
+        AvbABFlowResult flow_result;
+        AvbPartitionData *boot;
+        AvbSlotVerifyFlags flags;
+        const char *requested_partitions[] = {label, NULL};
+        VOID *bootimage = NULL;
+        bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
+        *bootimage_p = NULL;
+
+        flags = AVB_SLOT_VERIFY_FLAGS_NONE;
+        if (allow_verification_error)
+                flags |= AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR;
+
+        flow_result = avb_ab_flow(&ab_ops, requested_partitions, flags, AVB_HASHTREE_ERROR_MODE_RESTART, slot_data);
+        ret = get_avb_flow_result(*slot_data,
+                allow_verification_error,
+                flow_result,
+                boot_state);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to get avb slot a/b flow result for boot");
+                goto fail;
+        }
+        slot_set_active_cached((*slot_data)->ab_suffix);
+
+        boot = &(*slot_data)->loaded_partitions[0];
+        bootimage = boot->data;
+        *bootimage_p = bootimage;
+        return ret;
+fail:
+        *boot_state = BOOT_STATE_RED;
+        return ret;
+#endif // USE_SLOT
+}
 #endif // USE_AVB
 
 #ifdef __SUPPORT_ABL_BOOT
@@ -1793,17 +1837,12 @@ static EFI_STATUS setup_command_line_abl(
 #ifdef USE_AVB
         avb_prepend_command_line_rootfs(&cmdline16, boot_target);
 #ifdef USE_SLOT
-        if (!slot_data)
-                goto out;
-
-        if (slot_data->ab_suffix)
-                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
-                                           slot_data->ab_suffix);
-        else
+        if (slot_get_active()) {
                 ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
                                            slot_get_active());
-        if (EFI_ERROR(ret))
-                goto out;
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
 
         if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root="))) {
                 ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),

@@ -62,6 +62,12 @@ const char *slot_get_active(void);
 /* Sets the slot, associated to SUFFIX, as active. */
 EFI_STATUS slot_set_active(const char *suffix);
 
+/* Sets the active slot cached, associated to SUFFIX, as active.
+ * This function maybe used after some other functions changed the
+ * active slot stored in storage directly, then call this function
+ * to update the active slot in memory cached. */
+void slot_set_active_cached(const char *suffix);
+
 /* Returns the number and the array of slot suffixes. */
 UINTN slot_get_suffixes(char **suffixes_p[]);
 

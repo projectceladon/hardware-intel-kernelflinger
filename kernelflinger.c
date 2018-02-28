@@ -633,17 +633,7 @@ static EFI_STATUS avb_load_verify_boot_image(
         switch (boot_target) {
         case NORMAL_BOOT:
         case CHARGER:
-                ret = EFI_NOT_FOUND;
-                if (use_slot() && !slot_get_active())
-                        break;
-                do {
-                        ret = android_image_load_partition_avb("boot", bootimage, boot_state, slot_data);
-                        if (EFI_ERROR(ret)) {
-                                efi_perror(ret, L"Failed to load boot image from boot partition");
-                                if (use_slot())
-                                        slot_boot_failed(boot_target);
-                        }
-                } while (EFI_ERROR(ret) && slot_get_active());
+                ret = android_image_load_partition_avb_ab("boot", bootimage, boot_state, slot_data);
                 break;
         case RECOVERY:
                 if (recovery_in_boot_partition()) {
