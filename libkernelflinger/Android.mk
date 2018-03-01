@@ -260,6 +260,9 @@ ifeq ($(BOARD_AVB_ENABLE),true)
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb/libavb
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb/libavb_ab
+ifeq ($(BUILD_ANDROID_THINGS),true)
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../avb/libavb_atx
+endif
 endif
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../include/libqltipc
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../include/libheci
