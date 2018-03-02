@@ -774,7 +774,15 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		CHAR16 *ABL_AB_SUFFIX = NULL;
 
 		AB_SUFFIX = stra_to_str((const CHAR8 *)slot_data->ab_suffix);
+		if (!AB_SUFFIX) {
+			error(L"Cannot get a valid AVB flow suffix: %s", slot_data->ab_suffix);
+			goto fail;
+		}
 		ABL_AB_SUFFIX = stra_to_str((const CHAR8 *)abl_cmd_line);
+		if (!ABL_AB_SUFFIX) {
+			error(L"Cannot get a valid ABL suffix: %s", abl_cmd_line);
+			goto fail;
+		}
 		if (!(StrStr(ABL_AB_SUFFIX, L"ABL.suffix"))) {
 			debug(L"ABL.suffix is null");
 		} else if (!(StrCmp(AB_SUFFIX, L"_a")) && (!(StrStr(ABL_AB_SUFFIX, L"ABL.suffix=0")))) {
