@@ -59,7 +59,7 @@
  {
  	EFI_STATUS ret;
 	device_sec_info_t *dev_sec;
-	UINT8 rpmb_key[SECURITY_ABL_SEED_MAX_ENTRIES][RPMB_KEY_SIZE];
+	UINT8 rpmb_key[SECURITY_ABL_SEED_MAX_ENTRIES * RPMB_KEY_SIZE];
 	UINT8 i;
 
 	if (!security_data)

@@ -174,7 +174,7 @@ EFI_STATUS generate_rpmb_key_from_seed(VOID)
 {
 	EFI_STATUS ret;
 	UINT8 i;
-	UINT8 rpmb_key[RPMB_MAX_PARTITION_NUMBER][RPMB_KEY_SIZE] = { {0} };
+	UINT8 rpmb_key[RPMB_MAX_PARTITION_NUMBER * RPMB_KEY_SIZE] = { 0 };
 
 	for (i = 0; i < BOOTLOADER_SEED_MAX_ENTRIES; i++)
 	{
