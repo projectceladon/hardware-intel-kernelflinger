@@ -275,13 +275,6 @@ EFI_STATUS slot_init(void)
 	}
 
 	is_used = TRUE;
-
-	ret = select_highest_priority_slot();
-	if (EFI_ERROR(ret))
-		debug(L"No slot selected");
-	else
-		debug(L"Slot '%a' selected", cur_suffix);
-
 	return EFI_SUCCESS;
 }
 
