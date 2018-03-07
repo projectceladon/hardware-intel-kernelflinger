@@ -67,8 +67,12 @@ EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 	running = TRUE;
 
 #ifdef USER
+#ifdef __SUPPORT_ABL_BOOT
+	return EFI_SUCCESS;
+#else
 	if (!device_is_provisioning())
 		return EFI_SUCCESS;
+#endif // __SUPPORT_ABL_BOOT
 #endif
 
 	if (last_pos) {		/* Manage roll-over */
