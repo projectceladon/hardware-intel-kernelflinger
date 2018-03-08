@@ -50,9 +50,7 @@
 #include "avb_init.h"
 #include "libavb/libavb.h"
 #include "libavb/uefi_avb_ops.h"
-#ifdef USE_SLOT
 #include "libavb_ab/libavb_ab.h"
-#endif
 #endif
 #include "security.h"
 #include "security_interface.h"
@@ -557,13 +555,14 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 		efi_perror(ret, L"Failed to set os secure boot");
 #endif
 
-#ifndef USE_SLOT
-	ret = slot_boot(boot_target);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to write slot boot");
-		return ret;
+	if (!use_slot()) {
+		ret = slot_boot(boot_target);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to write slot boot");
+			return ret;
+		}
 	}
-#endif
+
 	log(L"chainloading boot image, boot state is %s\n",
 	boot_state_to_string(boot_state));
 #ifdef USE_AVB
@@ -734,11 +733,12 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	UINTN vbmeta_pub_key_len;
 
 	debug(L"Loading boot image");
-#ifndef USE_SLOT
-	if (boot_target == RECOVERY) {
-		requested_partitions[0] = "recovery";
+	if (!use_slot()) {
+		if (boot_target == RECOVERY) {
+			requested_partitions[0] = "recovery";
+		}
 	}
-#endif
+
 	set_boottime_stamp(TM_AVB_START);
 	ops = avb_init();
 	if (ops) {

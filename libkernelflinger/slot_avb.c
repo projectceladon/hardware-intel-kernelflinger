@@ -507,6 +507,14 @@ EFI_STATUS slot_restore(void)
 	return use_slot() ? write_boot_ctrl() : EFI_SUCCESS;
 }
 
+EFI_STATUS slot_boot(__attribute__((__unused__)) enum boot_target target)
+{
+	/*
+	 * Just set misc info by avb.
+	 */
+	return EFI_SUCCESS;
+}
+
 EFI_STATUS slot_boot_failed(enum boot_target target)
 {
 	EFI_STATUS ret;

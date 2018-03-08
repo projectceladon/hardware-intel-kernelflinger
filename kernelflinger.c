@@ -640,7 +640,8 @@ static EFI_STATUS avb_load_verify_boot_image(
                         ret = avb_load_verify_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot, boot_state, slot_data);
                         break;
                 }
-#if !defined(USE_AVB) || !defined(USE_SLOT)
+#if !defined(USE_AVB)
+                /* Tries count is handled by avb_ab_flow when AVB is enabled. */
                 if (use_slot() && !slot_recovery_tries_remaining()) {
                         ret = EFI_NOT_FOUND;
                         break;
@@ -777,7 +778,7 @@ static EFI_STATUS load_boot_image(
                         ret = load_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot);
                         break;
                 }
-#if ! defined (USE_AVB) || ! defined (USE_SLOT)
+#if ! defined (USE_AVB)
                 if (use_slot() && !slot_recovery_tries_remaining()) {
                         ret = EFI_NOT_FOUND;
                         break;
@@ -957,7 +958,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
         }
 #endif
 
-#if ! defined (USE_AVB) || ! defined (USE_SLOT)
+#if ! defined (USE_AVB)
         ret = slot_boot(boot_target);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Failed to write slot boot");
@@ -1494,7 +1495,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         if (slot_get_active())
                                 reboot_to_target(boot_target, EfiResetCold);
                 }
-#if ! defined (USE_AVB) || ! defined (USE_SLOT)
+#if ! defined (USE_AVB)
                 else if (slot_recovery_tries_remaining())
                         reboot_to_target(boot_target, EfiResetCold);
 #endif

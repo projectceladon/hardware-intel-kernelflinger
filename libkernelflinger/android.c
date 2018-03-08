@@ -950,16 +950,16 @@ static EFI_STATUS avb_prepend_command_line_rootfs(
         if (boot_target == RECOVERY)
                 return ret;
 
-#ifdef USE_SLOT
-        ret = prepend_command_line(cmdline16, AVB_ROOTFS_PREFIX);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Failed to add AVB rootfs prefix");
-                return ret;
+        if (use_slot()) {
+                ret = prepend_command_line(cmdline16, AVB_ROOTFS_PREFIX);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to add AVB rootfs prefix");
+                        return ret;
+                }
         }
-#endif
         return ret;
 }
-#endif  // defined USE_AVB and USE_SLOT
+#endif  // defined USE_AVB
 
 #ifndef __SUPPORT_ABL_BOOT
 static EFI_STATUS setup_command_line(
@@ -986,7 +986,7 @@ static EFI_STATUS setup_command_line(
         EFI_STATUS ret;
         struct boot_params *buf;
         struct boot_img_hdr *aosp_header;
-#ifdef USE_SLOT
+#ifdef USE_AVB
         EFI_GUID system_uuid;
 #endif
 
@@ -1107,31 +1107,31 @@ static EFI_STATUS setup_command_line(
         }
 #endif // AVB_CMDLINE
 
-#ifdef USE_SLOT
-        if (slot_get_active()) {
-                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
-                                           slot_get_active());
-                if (EFI_ERROR(ret))
-                        goto out;
-        }
-
-#ifdef AVB_CMDLINE
-        if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root=")))
-#endif // AVB_CMDLINE
-        {
-                ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
-                                                        &system_uuid, LOGICAL_UNIT_USER);
-                if (EFI_ERROR(ret)) {
-                        efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
-                        goto out;
+        if (use_slot()) {
+                if (slot_get_active()) {
+                        ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
+                                                   slot_get_active());
+                        if (EFI_ERROR(ret))
+                                goto out;
                 }
 
-                ret = prepend_command_line(&cmdline16, DISABLE_AVB_ROOTFS_PREFIX "PARTUUID=%g",
-                                           &system_uuid);
-                if (EFI_ERROR(ret))
-                        goto out;
+#ifdef AVB_CMDLINE
+                if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root=")))
+#endif // AVB_CMDLINE
+                {
+                        ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
+                                                                &system_uuid, LOGICAL_UNIT_USER);
+                        if (EFI_ERROR(ret)) {
+                                efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
+                                goto out;
+                        }
+
+                        ret = prepend_command_line(&cmdline16, DISABLE_AVB_ROOTFS_PREFIX "PARTUUID=%g",
+                                                   &system_uuid);
+                        if (EFI_ERROR(ret))
+                                goto out;
+                }
         }
-#endif // USE_SLOT
 #endif // USE_AVB
 
         /* Documentation/x86/boot.txt: "The kernel command line can be located
@@ -1602,13 +1602,13 @@ EFI_STATUS android_image_load_partition_avb(
                 goto fail;
         }
 
-#ifdef USE_SLOT
-        slot_suffix = slot_get_active();
-        if (!slot_suffix) {
-                error(L"suffix is null");
-                slot_suffix = "";
+        if (use_slot()) {
+                slot_suffix = slot_get_active();
+                if (!slot_suffix) {
+                        error(L"suffix is null");
+                        slot_suffix = "";
+                }
         }
-#endif
 
         flags = AVB_SLOT_VERIFY_FLAGS_NONE;
         if (allow_verification_error)
@@ -1750,7 +1750,7 @@ static EFI_STATUS setup_command_line_abl(
         char   *serialno = NULL;
         CHAR16 *serialport = NULL;
         CHAR16 *bootreason = NULL;
-#ifdef USE_SLOT
+#ifdef USE_AVB
         EFI_GUID system_uuid;
 #endif
         UINTN abl_cmd_len = 0;
@@ -1839,28 +1839,29 @@ static EFI_STATUS setup_command_line_abl(
 #endif
 #ifdef USE_AVB
         avb_prepend_command_line_rootfs(&cmdline16, boot_target);
-#ifdef USE_SLOT
-        if (slot_get_active()) {
-                ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
-                                           slot_get_active());
-                if (EFI_ERROR(ret))
-                        goto out;
-        }
 
-        if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root="))) {
-                ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
-                                                        &system_uuid, LOGICAL_UNIT_USER);
-                if (EFI_ERROR(ret)) {
-                        efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
-                        goto out;
+        if (use_slot()) {
+                if (slot_get_active()) {
+                        ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
+                                                   slot_get_active());
+                        if (EFI_ERROR(ret))
+                                goto out;
                 }
 
-                ret = prepend_command_line(&cmdline16, DISABLE_AVB_ROOTFS_PREFIX "PARTUUID=%g",
-                                           &system_uuid);
-                if (EFI_ERROR(ret))
-                        goto out;
+                if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root="))) {
+                        ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
+                                                                &system_uuid, LOGICAL_UNIT_USER);
+                        if (EFI_ERROR(ret)) {
+                                efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
+                                goto out;
+                        }
+
+                        ret = prepend_command_line(&cmdline16, DISABLE_AVB_ROOTFS_PREFIX "PARTUUID=%g",
+                                                   &system_uuid);
+                        if (EFI_ERROR(ret))
+                                goto out;
+                }
         }
-#endif
 #endif
 
         cmdlen = StrLen(cmdline16);
