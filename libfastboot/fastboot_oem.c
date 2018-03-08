@@ -49,7 +49,7 @@
 #include "fastboot_oem.h"
 #include "intel_variables.h"
 #include "text_parser.h"
-#ifdef USE_SLOT
+#ifdef USE_AVB
 #include "libavb/libavb.h"
 #include "libavb/uefi_avb_ops.h"
 #endif
