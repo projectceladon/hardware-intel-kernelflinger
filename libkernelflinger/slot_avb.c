@@ -298,6 +298,9 @@ const CHAR16 *slot_label(const CHAR16 *base)
 	if (!use_slot())
 		return base;
 
+	if (!base)
+		return NULL;
+
 	nb_slot = get_part_nb_slot(base);
 	if (!nb_slot) {
 		/*
