@@ -225,7 +225,7 @@ typedef struct {
         struct segment_descriptor *base;
 } __attribute__((packed)) dt_addr_t;
 
-dt_addr_t *gdt;
+static dt_addr_t *gdt;
 
 typedef void(*kernel_func)(void *, struct boot_params *);
 
