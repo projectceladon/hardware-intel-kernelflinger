@@ -459,10 +459,9 @@ boot:
         kernel_start += 512;
 #endif
 
-#ifndef __SUPPORT_ABL_BOOT
         /* Load GDT. */
-        asm volatile ("lgdt %0" :: "m" (*gdt));
-#endif  /* __SUPPORT_ABL_BOOT */
+        if (gdt)
+                asm volatile ("lgdt %0" :: "m" (*gdt));
 
         asm volatile ("cli; jmp *%0"
                       : /* no outputs */
