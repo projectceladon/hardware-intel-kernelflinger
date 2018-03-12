@@ -176,6 +176,8 @@ EFI_STATUS start_trusty(VOID *tosimage)
 		goto fail;
 	}
 
+	return ret;
+
 fail:
 	uefi_call_wrapper(BS->FreePages, 2, TRUSTY_BASE_ADRRESS, EFI_SIZE_TO_PAGES(TRUSTY_MEM_SIZE));
 
