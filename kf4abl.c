@@ -869,6 +869,9 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 
 fail:
+	if (slot_data)
+		avb_slot_verify_data_free(slot_data);
+
 	return ret;
 }
 #endif

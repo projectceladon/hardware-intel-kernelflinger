@@ -354,6 +354,8 @@ const char *slot_get_active(void)
 
 	slot_set_active_cached(data->ab_suffix);
 	debug(L"slot_get_active from misc return %a", cur_suffix);
+	avb_slot_verify_data_free(data);
+
 	return cur_suffix;
 }
 
@@ -386,6 +388,8 @@ EFI_STATUS slot_set_active(const char *suffix)
 		return EFI_SUCCESS;
 
 	slot_set_active_cached(data->ab_suffix);
+	avb_slot_verify_data_free(data);
+
 	return EFI_SUCCESS;
 }
 
