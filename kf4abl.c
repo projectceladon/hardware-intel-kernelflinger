@@ -421,7 +421,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 					UINT8 val;
 					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
 					val = (UINT8)strtoul((char *)nptr, 0, 10);
-					ret = set_abl_secure_boot(val);
+					ret = set_platform_secure_boot(val);
 					if (EFI_ERROR(ret))
 						efi_perror(ret, L"Failed to set secure boot");
 					break;
@@ -542,7 +542,7 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 
 #ifdef USER
 	if (boot_state == BOOT_STATE_RED) {
-		if (is_abl_secure_boot_enabled()) {
+		if (is_platform_secure_boot_enabled()) {
 			return EFI_SECURITY_VIOLATION;
 		}
 	}

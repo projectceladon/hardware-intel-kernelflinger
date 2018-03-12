@@ -44,13 +44,8 @@
    is a pre-requisite for Verified Boot.  */
 static EFI_STATUS publish_secureboot(void)
 {
-#ifndef __SUPPORT_ABL_BOOT
 	return fastboot_publish("secureboot",
-				is_efi_secure_boot_enabled() ? "yes" : "no" );
-#else
-	return fastboot_publish("secureboot",
-				is_abl_secure_boot_enabled() ? "yes" : "no" );
-#endif
+				is_platform_secure_boot_enabled() ? "yes" : "no" );
 }
 
 /* "product-name": Reports "product_name" field in DMI.  */

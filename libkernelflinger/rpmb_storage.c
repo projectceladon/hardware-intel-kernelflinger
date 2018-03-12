@@ -205,11 +205,7 @@ EFI_STATUS erase_rpmb_all_blocks(void)
 	RPMB_RESPONSE_RESULT rpmb_result;
 	BOOLEAN sbflags;
 
-#ifndef __SUPPORT_ABL_BOOT
-	sbflags = is_efi_secure_boot_enabled();
-#else
 	sbflags = is_eom_and_secureboot_enabled();
-#endif
 
 	if (sbflags) {
 		ret = emmc_write_rpmb_data(NULL, RPMB_ALL_BLOCK_TOTAL_COUNT, 0, rpmb_buffer, rpmb_key, &rpmb_result);

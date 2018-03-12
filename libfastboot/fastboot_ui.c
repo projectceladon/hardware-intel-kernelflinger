@@ -128,12 +128,12 @@ static const char *fastboot_ui_info_serial_number(void)
 
 static const char *fastboot_ui_info_secure_boot(void)
 {
-	return is_efi_secure_boot_enabled() ? "ENABLED" : "DISABLED";
+	return is_platform_secure_boot_enabled() ? "ENABLED" : "DISABLED";
 }
 
 static EFI_GRAPHICS_OUTPUT_BLT_PIXEL *fastboot_ui_info_secure_boot_color(void)
 {
-	return is_efi_secure_boot_enabled() ? &COLOR_GREEN : &COLOR_RED;
+	return is_platform_secure_boot_enabled() ? &COLOR_GREEN : &COLOR_RED;
 }
 
 struct info_text_fun {

@@ -42,6 +42,9 @@
 #define BOOT_SIGNATURE_MAX_SIZE  4096
 #define ROT_DATA_STRUCT_VERSION2 0x02
 
+#define SETUP_MODE_VAR	        L"SetupMode"
+#define SECURE_BOOT_VAR         L"SecureBoot"
+
 /* Compute sums of the public key value of X509 input CERT */
 EFI_STATUS pub_key_sha256(X509 *cert, UINT8 **hash_p);
 EFI_STATUS pub_key_sha1(X509 *cert, UINT8 **hash_p);
@@ -73,14 +76,9 @@ UINT8 verify_android_boot_image(
         OUT CHAR16 *target,
         OUT X509 **verifier_cert);
 
-/* Determines if UEFI Secure Boot is enabled or not. */
-BOOLEAN is_efi_secure_boot_enabled(VOID);
-
-#ifdef __SUPPORT_ABL_BOOT
-BOOLEAN is_abl_secure_boot_enabled(VOID);
+BOOLEAN is_platform_secure_boot_enabled(VOID);
 BOOLEAN is_eom_and_secureboot_enabled(VOID);
-EFI_STATUS set_abl_secure_boot(UINT8 secure);
-#endif
+EFI_STATUS set_platform_secure_boot(UINT8 secure);
 EFI_STATUS set_os_secure_boot(BOOLEAN secure);
 
 #ifdef BOOTLOADER_POLICY
