@@ -2,7 +2,6 @@ KERNELFLINGER_LOCAL_PATH := $(call my-dir)
 KERNELFLINGER_CFLAGS := -Wall -Wextra -Werror -mrdrnd
 
 ifeq ($(TARGET_UEFI_ARCH),x86_64)
-    KERNELFLINGER_CFLAGS += -mpreferred-stack-boundary=5
     KERNELFLINGER_CFLAGS += -D__STDC_VERSION__=199901L
     KERNELFLINGER_CFLAGS += -DARCH_X86_64=1
 endif
@@ -121,8 +120,6 @@ KERNELFLINGER_STATIC_LIBRARIES := \
 	libgnuefi \
 	libsslsupport \
 	libefi
-
-LOCAL_CLANG_EXCEPTION_PROJECTS += $(KERNELFLINGER_LOCAL_PATH)
 
 include $(call all-subdir-makefiles)
 LOCAL_PATH := $(KERNELFLINGER_LOCAL_PATH)
