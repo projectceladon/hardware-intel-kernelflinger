@@ -1361,7 +1361,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #ifdef USERDEBUG
         debug(L"checking device state");
 
-        if (!is_efi_secure_boot_enabled() && !device_is_provisioning()) {
+        if (!is_platform_secure_boot_enabled() && !device_is_provisioning()) {
                 debug(L"uefi secure boot is disabled");
                 boot_state = BOOT_STATE_ORANGE;
                 lock_prompted = TRUE;

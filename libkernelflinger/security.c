@@ -48,9 +48,6 @@
 #include "vars.h"
 #include "life_cycle.h"
 
-#define SETUP_MODE_VAR	        L"SetupMode"
-#define SECURE_BOOT_VAR         L"SecureBoot"
-
 #ifdef USE_IPP_SHA256
 #include "sha256_ipps.h"
 #endif
@@ -498,80 +495,6 @@ out:
 }
 #endif
 
-/* UEFI specification 2.4. Section 3.3
-   The platform firmware is operating in secure boot mode if the value
-   of the SetupMode variable is 0 and the SecureBoot variable is set
-   to 1. A platform cannot operate in secure boot mode if the
-   SetupMode variable is set to 1. The SecureBoot variable should be
-   treated as read- only. */
-BOOLEAN is_efi_secure_boot_enabled(VOID)
-{
-        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
-        EFI_STATUS ret;
-        UINT8 value;
-
-        ret = get_efi_variable_byte(&global_guid, SETUP_MODE_VAR, &value);
-        if (EFI_ERROR(ret))
-                return FALSE;
-
-        if (value != 0)
-                return FALSE;
-
-        ret = get_efi_variable_byte(&global_guid, SECURE_BOOT_VAR, &value);
-        if (EFI_ERROR(ret))
-                return FALSE;
-
-        return value == 1;
-}
-
-#ifdef __SUPPORT_ABL_BOOT
-BOOLEAN is_abl_secure_boot_enabled(VOID)
-{
-        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
-        EFI_STATUS ret;
-        UINT8 value;
-        UINTN cursize;
-        UINT8 *curdata;
-
-        ret = get_efi_variable(&global_guid, SECURE_BOOT_VAR, &cursize, (VOID **)&curdata, NULL);
-        if (EFI_ERROR(ret))
-        {
-                efi_perror(ret, L"Failed to get secure boot var");
-                return FALSE;
-        }
-        value = curdata[0];
-
-        debug(L"Getting abl secure boot to value[%d], size[%d]", value, cursize);
-
-        return value == 1;
-}
-
-BOOLEAN is_eom_and_secureboot_enabled(VOID)
-{
-        BOOLEAN sbflags;
-        EFI_STATUS ret;
-        BOOLEAN enduser;
-
-        ret = life_cycle_is_enduser(&enduser);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Failed to get eom var");
-                return FALSE;
-        }
-
-        sbflags = is_abl_secure_boot_enabled();
-
-        return sbflags && enduser;
-}
-
-EFI_STATUS set_abl_secure_boot(UINT8 secure)
-{
-        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
-
-        debug(L"Setting abl secure boot to %d", secure);
-        return set_efi_variable(&global_guid, SECURE_BOOT_VAR, sizeof(secure),
-                                &secure, FALSE, FALSE);
-}
-#endif
 
 EFI_STATUS set_os_secure_boot(BOOLEAN secure)
 {

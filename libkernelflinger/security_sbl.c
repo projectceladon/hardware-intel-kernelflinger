@@ -33,6 +33,8 @@
 #include <efilib.h>
 #include "security_interface.h"
 #include "rpmb_storage.h"
+#include "life_cycle.h"
+#include "security.h"
 
 #define SECURITY_SBL_RPMB_KEY_SIZE 64
 #define SECURITY_SBL_SEED_SIZE 64
@@ -113,4 +115,51 @@ EFI_STATUS set_device_security_info(IN VOID *security_data)
 	}
 
 	return ret;
+}
+
+BOOLEAN is_platform_secure_boot_enabled(VOID)
+{
+        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+        EFI_STATUS ret;
+        UINT8 value;
+        UINTN cursize;
+        UINT8 *curdata;
+
+        ret = get_efi_variable(&global_guid, SECURE_BOOT_VAR, &cursize, (VOID **)&curdata, NULL);
+        if (EFI_ERROR(ret))
+        {
+                efi_perror(ret, L"Failed to get secure boot var");
+                return FALSE;
+        }
+        value = curdata[0];
+
+        debug(L"Getting platform secure boot to value[%d], size[%d]", value, cursize);
+
+        return value == 1;
+}
+
+BOOLEAN is_eom_and_secureboot_enabled(VOID)
+{
+        BOOLEAN sbflags;
+        EFI_STATUS ret;
+        BOOLEAN enduser;
+
+        ret = life_cycle_is_enduser(&enduser);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to get eom var");
+                return FALSE;
+        }
+
+        sbflags = is_platform_secure_boot_enabled();
+
+        return sbflags && enduser;
+}
+
+EFI_STATUS set_platform_secure_boot(UINT8 secure)
+{
+        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+
+        debug(L"Setting platform secure boot to %d", secure);
+        return set_efi_variable(&global_guid, SECURE_BOOT_VAR, sizeof(secure),
+                                &secure, FALSE, FALSE);
 }
