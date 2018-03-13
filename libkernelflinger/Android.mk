@@ -165,7 +165,11 @@ else
 ifeq ($(KERNELFLINGER_TRUSTY_PLATFORM),abl)
     LOCAL_SRC_FILES += trusty_abl.c
 else
+ifeq ($(KERNELFLINGER_TRUSTY_PLATFORM),vsbl)
+    LOCAL_SRC_FILES += trusty_vsbl.c
+else
     LOCAL_SRC_FILES += trusty_efi.c
+endif
 endif
 endif
 endif
