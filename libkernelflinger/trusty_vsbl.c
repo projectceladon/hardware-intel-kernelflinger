@@ -68,7 +68,8 @@ typedef struct tos_startup_params {
 	uint32_t version;
 	uint32_t runtime_addr;
 	uint32_t entry_point;
-} __attribute__((packed)) trusty_startup_params_t;
+	uint32_t runtime_size;
+} __attribute__((aligned(8))) trusty_startup_params_t;
 
 /* Make sure the header address is 8-byte aligned */
 struct tos_image_header {
@@ -107,23 +108,37 @@ static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UIN
 	memset(param, 0, sizeof(trusty_startup_params_t));
 	param->size_of_this_struct = sizeof(trusty_startup_params_t);
 	param->runtime_addr = boot_param->trusty_mem_base;
-	param->entry_point = entry_addr;
+	param->entry_point = entry_addr + 0x400;
+	param->version = 1;
+	param->runtime_size = TRUSTY_MEM_SIZE;
 
 	return EFI_SUCCESS;
 }
 
-#define TRUSTY_VMCALL_SMC 0x74727500
+#ifdef __LP64__
+#define ACRN_HC_LAUNCH_TRUSTY 0x80000070
 static EFI_STATUS launch_trusty_os(trusty_startup_params_t *param)
 {
+	EFI_STATUS ret = EFI_SUCCESS;
+	register signed long smc_id asm("r8") = ACRN_HC_LAUNCH_TRUSTY;
+
 	if (!param)
 		return EFI_INVALID_PARAMETER;
 
-	asm volatile(
-		"vmcall; \n"
-		: : "a"(TRUSTY_VMCALL_SMC), "D"((UINTN)param));
+	asm volatile (
+		"vmcall;"
+		: "=a"(ret)
+		: "r"(smc_id), "D"((UINTN)param));
 
-	return EFI_SUCCESS;
+	return ret;
 }
+#else
+static EFI_STATUS launch_trusty_os(__attribute__((unused)) trusty_startup_params_t *param)
+{
+	efi_perror(ret, L"Unsupport to launch trusty on 32bit");
+	return EFI_UNSUPPORTED;
+}
+#endif
 
 EFI_STATUS set_trusty_param(__attribute__((unused)) IN VOID *param_data)
 {
@@ -169,12 +184,14 @@ EFI_STATUS start_trusty(VOID *tosimage)
 	trusty_ipc_init();
 	trusty_ipc_shutdown();
 
-	// Send EOP heci messages
+	//Need to implement virtual HECI otherwise it would cause crash
+#if 0
 	ret = heci_end_of_post();
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to send EOP message to CSE FW, halt");
 		goto fail;
 	}
+#endif
 
 	return ret;
 
