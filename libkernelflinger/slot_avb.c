@@ -485,12 +485,21 @@ EFI_STATUS slot_reset(void)
 		return EFI_SUCCESS;
 	}
 
-	/*
-	 * boot_ctrl is initialized by avb_ab_flow.
-	 * So remove avb_ab_data_init(&boot_ctrl);
-	 */
 	is_used = TRUE;
-	return EFI_SUCCESS;
+
+	/*
+	 * Init avb for fastboot mode, and update misc with default value.
+	 */
+	if (ops == NULL) {
+		ops = uefi_avb_ops_new();
+		if (ops == NULL)
+			error(L"Error allocating AvbOps when slot_reset.");
+	}
+	ab_ops.ops = ops;
+	ab_ops.read_ab_metadata = avb_ab_data_read;
+	ab_ops.write_ab_metadata = avb_ab_data_write;
+	avb_ab_data_init(&boot_ctrl);
+	return write_boot_ctrl();
 }
 
 EFI_STATUS slot_restore(void)
