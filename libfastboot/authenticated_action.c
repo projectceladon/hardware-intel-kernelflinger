@@ -47,7 +47,7 @@ typedef struct action {
 } action_t;
 
 static UINT8 VERSION = 0;
-static CHAR8 current_nonce[3 + NONCE_RANDOM_BYTE_LENGTH * 2 + 3 + SERIALNO_MAX_SIZE + 1];
+static CHAR8 current_nonce[3 + NONCE_RANDOM_BYTE_LENGTH * 2 + 4 + SERIALNO_MAX_SIZE + 1];
 static const struct action *current_action;
 static UINT64 expiration_ctime;
 
