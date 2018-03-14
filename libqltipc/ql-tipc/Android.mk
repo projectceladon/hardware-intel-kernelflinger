@@ -31,6 +31,11 @@ LOCAL_SRC_FILES := \
 	sysdeps_osloader.c \
 	util.c \
 	keymaster.c \
-	rpmb_sim.c \
+	rpmb_sim.c
+
+ifeq ($(KERNELFLINGER_TRUSTY_PLATFORM),vsbl)
+LOCAL_CFLAGS += -DHYPERVISOR_ACRN
+endif
+
 
 include $(BUILD_EFI_STATIC_LIBRARY)
