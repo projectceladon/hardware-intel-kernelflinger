@@ -27,43 +27,13 @@
 
 #include "sm_err.h"
 #include "smcall.h"
+#include "hypercall.h"
 
 struct trusty_dev;
 
 #define LOCAL_LOG 0
 
 #define UNUSED(x) (void)(x)
-
-/*
- * Execute SMC call into trusty
- */
-#define TRUSTY_VMCALL_SMC 0x74727500
-static unsigned long smc(unsigned long r0,
-                         unsigned long r1,
-                         unsigned long r2,
-                         unsigned long r3)
-{
-    asm volatile(
-#if ARCH_X86_32
-    "pushl %%ebx;" /* save the ebx */
-    "movl %8, %%ebx;"
-    "vmcall; \n"
-    "movl %%ebx, %3;"
-    "popl %%ebx;" /* restore the old ebx */
-#elif ARCH_X86_64
-    "pushq %%rbx;" /* save the rbx */
-    "movq %8, %%rbx;"
-    "vmcall; \n"
-    "movq %%rbx, %3;"
-    "popq %%rbx;" /* restore the old rbx */
-#endif
-
-    : "=D"(r0), "=S"(r1), "=d"(r2), "=r"(r3)
-    : "a"(TRUSTY_VMCALL_SMC), "D"(r0), "S"(r1), "d"(r2), "r"(r3)
-    );
-
-    return r0;
-}
 
 static int32_t trusty_fast_call32(struct trusty_dev *dev, uint32_t smcnr,
                                   uint32_t a0, uint32_t a1, uint32_t a2)
