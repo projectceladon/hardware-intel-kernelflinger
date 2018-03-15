@@ -81,6 +81,9 @@
 #define EXT_CSD_PART_CONF		179
 #define MMC_SWITCH_MODE_WRITE_BYTE	3
 
+/* here 1024 means 1024 blocks, so 1024 blocks * 256 B = 256KB */
+#define RPMB_ADDR_BOUNDARY_SIZE 1024
+
 #define CPU_TO_BE16_SWAP(x)	\
 	((((x) & 0xFF00) >> 8) | (((x) & 0x00FF) << 8))
 #define CPU_TO_BE32_SWAP(x)	\
@@ -1641,18 +1644,42 @@ EFI_STATUS emmc_get_counter(void *rpmb_dev, UINT32 *write_counter, const void *k
 EFI_STATUS emmc_read_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
 			const void *key, RPMB_RESPONSE_RESULT *result)
 {
+	if (blk_addr >= RPMB_ADDR_BOUNDARY_SIZE) {
+		error(L"Cannot access address greater than 256KB for physical read, addr is 0x%0x", blk_addr);
+		*result = RPMB_RES_ADDRESS_FAILURE;
+		return EFI_INVALID_PARAMETER;
+	}
+
 	return def_emmc_rpmb_ops->emmc_read_rpmb_data(rpmb_dev, blk_count, blk_addr, buffer, key, result);
 }
 
 EFI_STATUS emmc_write_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
 			const void *key, RPMB_RESPONSE_RESULT *result)
 {
+	if (blk_addr >= RPMB_ADDR_BOUNDARY_SIZE) {
+		error(L"Cannot access address greater than 256KB for physical write, addr is 0x%0x", blk_addr);
+		*result = RPMB_RES_ADDRESS_FAILURE;
+		return EFI_INVALID_PARAMETER;
+	}
+
 	return def_emmc_rpmb_ops->emmc_write_rpmb_data(rpmb_dev, blk_count, blk_addr, buffer, key, result);
 }
 
 EFI_STATUS emmc_rpmb_send_request(void *rpmb_dev,
 			rpmb_data_frame *data_frame, UINT8 count, BOOLEAN is_rel_write)
 {
+	UINT16 trusty_addr;
+
+	if (BE16_TO_CPU_SWAP(data_frame->req_resp) == RPMB_REQUEST_AUTH_WRITE
+		|| BE16_TO_CPU_SWAP(data_frame->req_resp) == RPMB_REQUEST_AUTH_READ) {
+		trusty_addr = BE16_TO_CPU_SWAP(data_frame->address);
+		if (trusty_addr < RPMB_ADDR_BOUNDARY_SIZE) {
+			error(L"Cannot access address less than 256KB for trusty usage, addr is 0x%0x, cmd is 0x%0x",
+                              trusty_addr, BE16_TO_CPU_SWAP(data_frame->req_resp));
+			return EFI_INVALID_PARAMETER;
+		}
+	}
+
 	return def_emmc_rpmb_ops->emmc_rpmb_send_request(rpmb_dev, data_frame, count, is_rel_write);
 }
 
