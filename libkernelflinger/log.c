@@ -67,7 +67,10 @@ EFI_STATUS log_flush_to_var(BOOLEAN nonvol)
 	running = TRUE;
 
 #ifdef USER
-	if (!device_is_provisioning() || !is_UEFI())
+	if (!is_UEFI())
+		return EFI_SUCCESS;
+
+	if (!device_is_provisioning())
 		return EFI_SUCCESS;
 #endif
 
