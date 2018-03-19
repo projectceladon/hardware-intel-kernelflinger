@@ -38,6 +38,11 @@ EFI_STATUS set_device_security_info(__attribute__((unused)) IN VOID *security_da
 	return EFI_UNSUPPORTED;
 }
 
+EFI_STATUS set_platform_secure_boot(__attribute__((unused)) IN UINT8 secure)
+{
+	return EFI_UNSUPPORTED;
+}
+
 /* UEFI specification 2.4. Section 3.3
    The platform firmware is operating in secure boot mode if the value
    of the SetupMode variable is 0 and the SecureBoot variable is set
