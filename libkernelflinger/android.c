@@ -1260,6 +1260,9 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         boot_params = (struct boot_params *)(UINTN)boot_addr;
         memset(boot_params, 0x0, 16384);
 
+        /* Save screen_info */
+        memcpy(&boot_params->screen_info, &buf->screen_info,
+                sizeof(struct screen_info));
         /* See Linux Documentation/x86/boot.txt */
         memcpy(&boot_params->hdr, (CHAR8 *)(&buf->hdr),
                ((CHAR8 *)buf)[0x201] + 0x202 - offsetof(struct boot_params, hdr));
