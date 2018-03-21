@@ -67,7 +67,7 @@ static UINT8 rpmb_buffer[RPMB_BLOCK_SIZE];
 #define TEEDATA_KEY_MAGIC_ADDR          0
 #define TEEDATA_KEY_MAGIC_LENGTH        7
 
-static UINT8 *derived_key;
+static UINT8 *derived_key = NULL;
 static UINT8 number_derived_key;
 
 EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key)
@@ -156,6 +156,13 @@ out:
 
 void clear_rpmb_key(void)
 {
+	if (derived_key && number_derived_key) {
+		memset(derived_key, 0, number_derived_key * RPMB_KEY_SIZE);
+		number_derived_key = 0;
+		FreePool(derived_key);
+		derived_key = NULL;
+	}
+
 	memset(rpmb_key, 0, RPMB_KEY_SIZE);
 }
 

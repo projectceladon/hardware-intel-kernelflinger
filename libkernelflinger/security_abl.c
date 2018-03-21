@@ -78,6 +78,7 @@
 			memset(rpmb_key + i * RPMB_KEY_SIZE, 0, RPMB_KEY_SIZE);
 			break;
 		}
+		memset(dev_sec->seed_list[i].seed, 0, SECURITY_ABL_SEED_LEN);
 	}
 
 	if (i > 0)

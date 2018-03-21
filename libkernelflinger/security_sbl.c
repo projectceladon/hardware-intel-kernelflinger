@@ -102,6 +102,7 @@ EFI_STATUS set_device_security_info(IN VOID *security_data)
 		if (!memcmp(dev_sec->rpmb_key[i], invlida_key, length_cmp))
 			break;
 		memcpy(rpmb_key[i], dev_sec->rpmb_key[i], length_cmp);
+		memset(dev_sec->rpmb_key[i], 0, length_cmp);
 	}
 
 	if (i > 0)
