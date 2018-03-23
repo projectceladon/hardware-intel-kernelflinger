@@ -603,3 +603,9 @@ void slot_set_active_cached(const char *suffix)
 		cur_suffix = suffixes[SUFFIX_INDEX(suffix)];
 	return;
 }
+
+EFI_STATUS slot_init_use_misc(void)
+{
+	/* Slot_init() has initialize the current suffix. */
+	return EFI_SUCCESS;
+}

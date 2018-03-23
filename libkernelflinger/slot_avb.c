@@ -362,8 +362,6 @@ const char *slot_get_active(void)
 EFI_STATUS slot_set_active(const char *suffix)
 {
 	slot_metadata_t *slot;
-	AvbSlotVerifyData *data;
-	const char *requested_partitions[] = {"boot", NULL};
 	const char *suffix_translate[] = {"_a", "_b"};
 
 	if(*suffix == 'a')
@@ -382,14 +380,7 @@ EFI_STATUS slot_set_active(const char *suffix)
 	 */
 
 	avb_ab_mark_slot_active(&ab_ops, SUFFIX_INDEX(suffix));
-	avb_ab_flow(&ab_ops, requested_partitions, AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR,\
-			AVB_HASHTREE_ERROR_MODE_RESTART, &data);
-	if (!data)
-		return EFI_SUCCESS;
-
-	slot_set_active_cached(data->ab_suffix);
-	avb_slot_verify_data_free(data);
-
+	slot_set_active_cached(suffix);
 	return EFI_SUCCESS;
 }
 
@@ -548,4 +539,38 @@ void slot_set_active_cached(const char *suffix)
 	else
 		cur_suffix = suffixes[SUFFIX_INDEX(suffix)];
 	return;
+}
+
+EFI_STATUS slot_init_use_misc(void)
+{
+	EFI_STATUS ret;
+	CHAR8 *magic;
+
+	if (!use_slot())
+		return EFI_SUCCESS;
+
+	ret = read_boot_ctrl();
+	if (EFI_ERROR(ret)) {
+		if (ret == EFI_NOT_FOUND)
+			return EFI_SUCCESS;
+		efi_perror(ret, L"Failed to read A/B metadata");
+		return ret;
+	}
+
+	if (!boot_ctrl.magic) {
+		debug(L"No A/B metadata");
+		return EFI_SUCCESS;
+	}
+	debug(L"Avb magic 0x%x, 0x%x, 0x%x, 0x%x", boot_ctrl.magic[0], boot_ctrl.magic[1], boot_ctrl.magic[2], boot_ctrl.magic[3]);
+
+	magic = (CHAR8 *)AVB_AB_MAGIC;
+	if ((boot_ctrl.magic[0] == magic[0]) && \
+		(boot_ctrl.magic[1] == magic[1]) && \
+		(boot_ctrl.magic[2] == magic[2]) && \
+		(boot_ctrl.magic[3] == magic[3])) {
+		debug(L"Avb magic is right");
+	}
+
+	select_highest_priority_slot();
+	return EFI_SUCCESS;
 }
