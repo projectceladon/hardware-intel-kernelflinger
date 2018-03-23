@@ -329,7 +329,9 @@ int rpmb_storage_proxy_poll(void)
         /* Check for RPMB events */
         rc = trusty_ipc_poll_for_event(&proxy_chan);
         if (rc < 0) {
+#ifndef USER
             trusty_error("%a: failed (%d) to get rpmb event\n", __func__, rc);
+#endif
             return rc;
         }
     }
