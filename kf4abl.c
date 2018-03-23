@@ -563,7 +563,7 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 		}
 	}
 
-	log(L"chainloading boot image, boot state is %s\n",
+	debug(L"chainloading boot image, boot state is %s\n",
 	boot_state_to_string(boot_state));
 #ifdef USE_AVB
 	ret = android_image_start_buffer(NULL, bootimage,

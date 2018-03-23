@@ -210,7 +210,9 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
         * otherwise the inputs will be real keybox buffer which get in the bootloader(fastboot). */
         rc = trusty_provision_keybox(NULL, 0);
         if (rc != KM_ERROR_OK) {
+#ifndef USER
             trusty_error("provision keybox has failed( %d )\n", rc);
+#endif
             return TRUSTY_ERR_GENERIC;
         }
 

@@ -180,7 +180,9 @@ int trusty_ipc_init(void)
     trusty_info("Initializing Trusty Keymaster client\n");
     rc = km_tipc_init(_ipc_dev);
     if (rc != 0) {
+#ifndef USER
         trusty_error("Initlializing Trusty Keymaster client failed (%d)\n", rc);
+#endif
         return rc;
     }
 
