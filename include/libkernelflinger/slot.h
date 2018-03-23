@@ -40,6 +40,9 @@ extern const CHAR16 *SLOT_STORAGE_PART;
 
 EFI_STATUS slot_init(void);
 
+/* Get current suffix directly from misc, used in FASTBOOT mode. */
+EFI_STATUS slot_init_use_misc(void);
+
 /* Return TRUE if slot management is in used, FALSE otherwise. */
 BOOLEAN use_slot(void);
 

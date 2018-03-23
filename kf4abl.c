@@ -979,6 +979,14 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	}
 #endif
 
+	if (target == FASTBOOT) {
+		ret = slot_init_use_misc();
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Slot management initialization failed by misc");
+			return ret;
+		}
+	}
+
 	for (;;) {
 		switch (target) {
 		case NORMAL_BOOT:
