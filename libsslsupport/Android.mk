@@ -107,6 +107,7 @@ include $(LOCAL_PATH)/sources.mk
 LOCAL_SRC_FILES := $(crypto_sources) $(linux_$(LOCAL_ARCH)_sources)
 #ifeq ($(FIRST_BUILD_ID),O)
 LOCAL_CFLAGS += -I$(KERNELFLINGER_SSLSUPPORT_PATH)/borningssl
+LOCAL_CFLAGS += -Wno-error
 #endif
 endif
 LOCAL_MODULE_TAGS := optional
