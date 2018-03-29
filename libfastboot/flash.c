@@ -139,7 +139,7 @@ static EFI_STATUS flash_into_esp(VOID *data, UINTN size, CHAR16 *label)
 	return uefi_write_file_with_dir(io, label, data, size);
 }
 
-#define MBR_SIZE 512
+#define MBR_LB_SIZE (is_cur_storage_ufs()? 4096:512)
 
 static EFI_STATUS get_full_gpt_header(VOID **data_p, UINTN *size_p)
 {
@@ -147,13 +147,13 @@ static EFI_STATUS get_full_gpt_header(VOID **data_p, UINTN *size_p)
 	UINTN size = *size_p;
 	struct gpt_header *gh;
 
-	if (size < MBR_SIZE)
+	if (size < MBR_LB_SIZE)
 		return EFI_NOT_FOUND;
 
-	gh = data + MBR_SIZE;
+	gh = data + MBR_LB_SIZE;
 	size -= MBR_SIZE;
 
-	if (size != 2 * (GPT_HEADER_SIZE + (GPT_ENTRIES * GPT_ENTRY_SIZE)) ||
+	if (size < (GPT_HEADER_SIZE + (GPT_ENTRIES * GPT_ENTRY_SIZE)) ||
 	    CompareMem(gh->signature, EFI_PTAB_HEADER_ID, sizeof(gh->signature)))
 		return EFI_NOT_FOUND;
 

@@ -38,6 +38,7 @@
 #include <efi.h>
 #include <efigpt.h>
 #include "gpt_bin.h"
+#include "storage.h"
 
 #define MBR_CODE_SIZE	440
 #define GPT_NAME_LEN	36
@@ -78,7 +79,7 @@ struct gpt_partition {
 
 #define GPT_ENTRIES	128
 #define GPT_ENTRY_SIZE	128
-#define GPT_HEADER_SIZE 512
+#define GPT_HEADER_SIZE (is_cur_storage_ufs()? 4096:512)
 
 struct gpt_partition_interface {
 	struct gpt_partition part;
@@ -86,11 +87,6 @@ struct gpt_partition_interface {
 	EFI_DISK_IO *dio;
 	EFI_HANDLE handle;
 };
-
-typedef enum {
-	LOGICAL_UNIT_USER,
-	LOGICAL_UNIT_FACTORY,
-} logical_unit_t;
 
 EFI_STATUS gpt_get_partition_by_label(const CHAR16 *label, struct gpt_partition_interface *gpart, logical_unit_t log_unit);
 EFI_STATUS gpt_list_partition(struct gpt_partition_interface **gpartlist, UINTN *part_count, logical_unit_t log_unit);

@@ -34,7 +34,6 @@
 #define _STORAGE_H_
 
 #include <efi.h>
-#include "gpt.h"
 
 enum storage_type {
 	STORAGE_EMMC,
@@ -45,6 +44,12 @@ enum storage_type {
 	STORAGE_VIRTUAL,
 	STORAGE_ALL,
 };
+
+typedef enum {
+	LOGICAL_UNIT_USER,
+	LOGICAL_UNIT_FACTORY,
+} logical_unit_t;
+
 
 /* It is faster to erase multiple block at once */
 #define N_BLOCK (4096)
@@ -67,5 +72,6 @@ EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA st
 EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 		     VOID *pattern, UINTN pattern_blocks);
 EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
+BOOLEAN is_cur_storage_ufs();
 
 #endif	/* _STORAGE_H_ */
