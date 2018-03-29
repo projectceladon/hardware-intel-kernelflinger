@@ -14,6 +14,7 @@ LOCAL_STATIC_LIBRARIES := libgnuefi libefi
 #LOCAL_STATIC_LIBRARIES := libgnuefi libefi libkernelflinger-$(TARGET_BUILD_VARIANT)
 #endif
 LOCAL_MODULE := libsslsupport
+LOCAL_CFLAGS += -Wno-error
 include $(BUILD_EFI_STATIC_LIBRARY)
 
 ifeq ($(KERNELFLINGER_SSL_LIBRARY),)
@@ -58,7 +59,7 @@ ifneq (,$(filter boringssl, $(KERNELFLINGER_SSL_LIBRARY)))
 include $(LOCAL_PATH)/crypto-sources.mk
 endif
 LOCAL_SRC_FILES := $(LOCAL_SRC_FILES_$(LOCAL_ARCH))
-LOCAL_CFLAGS += $(LOCAL_CFLAGS_$(LOCAL_ARCH)) $(LOCAL_CFLAGS_$(LOCAL_2ND_ARCH)) $(openssl_cflags_static_$(LOCAL_2ND_ARCH))
+LOCAL_CFLAGS += $(LOCAL_CFLAGS_$(LOCAL_ARCH)) $(LOCAL_CFLAGS_$(LOCAL_2ND_ARCH)) $(openssl_cflags_static_$(LOCAL_2ND_ARCH)) -Wno-error
 LOCAL_SRC_FILES_x86 :=
 LOCAL_SRC_FILES_x86_64 :=
 LOCAL_CFLAGS_32 :=
