@@ -358,6 +358,7 @@ PCI_DEVICE_PATH *get_boot_device(void)
 	return boot_device.Header.Type == 0 ? NULL : &boot_device;
 }
 
+
 EFI_STATUS get_boot_device_type(enum storage_type *type)
 {
 	PCI_DEVICE_PATH *boot_device;
@@ -373,4 +374,12 @@ EFI_STATUS get_boot_device_type(enum storage_type *type)
 	}
 	else
 		return EFI_DEVICE_ERROR;
+}
+
+BOOLEAN is_cur_storage_ufs()
+{
+	if (cur_storage == &STORAGE(STORAGE_UFS))
+		return TRUE;
+	else
+		return FALSE;
 }
