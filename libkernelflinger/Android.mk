@@ -107,8 +107,8 @@ LOCAL_SRC_FILES := \
 	timer.c \
 	nvme.c \
 	virtual_media.c
-ifeq ($(or $(IOC_USE_SLCAN),$(IOC_USE_CBC)),true)
-        LOCAL_SRC_FILES += ioc_can.c
+ifneq (,$(filter true,$(IOC_USE_SLCAN) $(IOC_USE_CBC)))
+	LOCAL_SRC_FILES += ioc_can.c
 endif
 
 ifneq ($(BOARD_AVB_ENABLE),true)
