@@ -769,8 +769,14 @@ static void cmd_erase(INTN argc, CHAR8 **argv)
 		return;
 	}
 
-	if (!StrCmp(label, SLOT_STORAGE_PART))
-		slot_restore();
+	if (!StrCmp(label, SLOT_STORAGE_PART)) {
+		ret = publish_slots();
+		if (EFI_ERROR(ret)) {
+			FreePool(label);
+			fastboot_fail("Failed to refresh slot variables from misc, %r", ret);
+			return;
+		}
+	}
 
 	FreePool(label);
 	ui_print(L"Erase done.");
