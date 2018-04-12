@@ -38,8 +38,12 @@
 #define CDB_LENGTH			10
 #define BLOCK_TIMEOUT			10000	/* 100ns units => 1ms by block */
 #define UFS_UNMAP			0x42
+#define UFS_SECURITY_PROTOCOL_IN	0xa2
+#define UFS_SECURITY_PROTOCOL_OUT	0xb5
+#define UFS_RPMB_LUN			0x44c1
 
-struct command_descriptor_block {
+
+struct command_descriptor_block_unmap {
 	__be8 op_code;		/* Operation Code (must be 0x42 for unmap) */
 	__be8 reserved;
 	__be32 reserved2;
@@ -60,6 +64,18 @@ struct unmap_parameter {
 	__be16 block_desc_length; /* length in bytes of the unmap block descriptor */
 	__be32 reserved;
 	struct unmap_block_descriptor block_desc;
+} __attribute__((packed));
+
+struct command_descriptor_block_security_protocol {
+	__be8 op_code;
+	__be8 sec_protocol;
+	__be16 sec_protocol_specific;
+	__be8 reserved1:7;
+	__be8 inc_512:1;
+	__be8 reserved2;
+	__be32 allocation_transfer_length;
+	__be8 reserved3;
+	__be8 control;
 } __attribute__((packed));
 
 #endif	/* _UFS_PROTOCOL_H_ */

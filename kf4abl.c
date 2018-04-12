@@ -669,7 +669,7 @@ EFI_STATUS  osloader_rpmb_key_init(VOID)
 
 	for (i = 0; i < number_derived_key; i++) {
 		memcpy(key, out_key + i * RPMB_KEY_SIZE, RPMB_KEY_SIZE);
-		ret = rpmb_read_counter(key, &result);
+		ret = rpmb_read_counter_in_sim_real(key, &result);
 		if (ret == EFI_SUCCESS)
 			break;
 
@@ -694,7 +694,7 @@ EFI_STATUS  osloader_rpmb_key_init(VOID)
 
 	if (!is_rpmb_programed()) {
 		debug(L"rpmb not programmed");
-		ret = program_rpmb_key(key);
+		ret = program_rpmb_key_in_sim_real(key);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"rpmb key program failed");
 			return ret;
@@ -946,7 +946,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
 
 #ifdef RPMB_STORAGE
-	emmc_rpmb_init(NULL);
+	rpmb_init(NULL);
 	rpmb_storage_init(is_eom_and_secureboot_enabled());
 #endif
 

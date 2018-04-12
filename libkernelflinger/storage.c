@@ -352,6 +352,25 @@ PCI_DEVICE_PATH *get_boot_device(void)
 		ret = identify_boot_device(STORAGE_ALL);
 		if (EFI_ERROR(ret))
 			efi_perror(ret, L"Failed to get boot device");
+		else
+			initialized = TRUE;
 	}
 	return boot_device.Header.Type == 0 ? NULL : &boot_device;
+}
+
+EFI_STATUS get_boot_device_type(enum storage_type *type)
+{
+	PCI_DEVICE_PATH *boot_device;
+
+	if (!type)
+		return EFI_INVALID_PARAMETER;
+
+	boot_device = get_boot_device();
+
+	if (boot_device) {
+		*type = boot_device_type;
+		return EFI_SUCCESS;
+	}
+	else
+		return EFI_DEVICE_ERROR;
 }
