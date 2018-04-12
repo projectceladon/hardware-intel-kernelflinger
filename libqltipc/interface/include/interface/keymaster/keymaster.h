@@ -31,8 +31,9 @@
 #define KEYMASTER_MAX_BUFFER_LENGTH 4096
 
 enum keymaster_command {
-	KEYMASTER_RESP_BIT              = 1,
-	KEYMASTER_REQ_SHIFT             = 1,
+	KEYMASTER_RESP_BIT               = 1,
+	KEYMASTER_STOP_BIT               = 2,
+	KEYMASTER_REQ_SHIFT              = 2,
 
 	KM_GENERATE_KEY                 = (0 << KEYMASTER_REQ_SHIFT),
 	KM_BEGIN_OPERATION              = (1 << KEYMASTER_REQ_SHIFT),
@@ -238,4 +239,16 @@ struct km_provision_data {
     uint32_t data_size;
     uint8_t *data;
 } TRUSTY_ATTR_PACKED;
+
+/**
+ * km_raw_buffer - represents a single raw buffer
+ *
+ * @data_size: size of |data|
+ * @data: pointer to the buffer
+ */
+struct km_raw_buffer {
+    uint32_t data_size;
+    const uint8_t *data;
+} TRUSTY_ATTR_PACKED;
+
 #endif /* TRUSTY_INTERFACE_KEYMASTER_H_ */
