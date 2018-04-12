@@ -368,11 +368,25 @@ EFI_STATUS bootmgr_register_entries(CHAR16 *part_label,
 	EFI_STATUS ret;
 	UINT16 *entries;
 	UINTN i;
+	UINT16 *old_entries = NULL;
+	UINTN size = 0;
+	UINT32 flags;
+
+	// Maybe find in some AMI BIOS
+	EFI_GUID EfiDefaultBootOrderGuid  = { 0x45cf35f6, 0x0d6e, 0x4d04, {0x85, 0x6a, 0x03, 0x70, 0xa5, 0xb1, 0x6f, 0x53} };
 
 	if (load_option_nb == 0) {
 		error(L"Cannot register 0 load options");
 		return EFI_INVALID_PARAMETER;
 	}
+
+	ret = get_efi_variable(&EfiDefaultBootOrderGuid, L"DefaultBootOrder", &size,
+			       (VOID **)&old_entries, &flags);
+	if (! EFI_ERROR(ret)) {
+		error(L"Skip set the boot option, since has the DefaultBootOrder");
+		return EFI_SUCCESS;
+	}
+	debug(L"Beginto set the boot option");
 
 	entries = AllocatePool(load_option_nb * sizeof(*entries));
 	if (!entries)
