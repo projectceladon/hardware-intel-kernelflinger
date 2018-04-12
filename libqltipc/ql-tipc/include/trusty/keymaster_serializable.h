@@ -73,5 +73,14 @@ int km_attestation_data_serialize(const struct km_attestation_data *data,
  * ownership of |*out|. Returns one of trusty_err.
  */
 int km_provision_data_serialize(const struct km_provision_data *data,
-                                 uint8_t** out, uint32_t *out_size);
+                                uint8_t** out, uint32_t *out_size);
+
+/**
+ * Serializes a km_raw_buffer structure. On success, allocates |*out_size|
+ * bytes to |*out| and writes the serialized |data| to |*out|. Caller takes
+ * ownership of |*out|. Returns one of trusty_err.
+ */
+int km_raw_buffer_serialize(const struct km_raw_buffer *buf, uint8_t** out,
+                            uint32_t *out_size);
+
 #endif /* TRUSTY_KEYMASTER_SERIALIZABLE_H_ */

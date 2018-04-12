@@ -32,7 +32,7 @@
 #include "../include/libkernelflinger/rpmb_storage.h"
 
 #define LOCAL_LOG 0
-#define TRUSTY_QL_TIPC_MAX_BUFFER_LEN (68*1024)
+#define TRUSTY_QL_TIPC_MAX_BUFFER_LEN PAGE_SIZE
 
 static struct trusty_ipc_dev *_ipc_dev;
 static struct trusty_dev _tdev; /* There should only be one trusty device */
