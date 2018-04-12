@@ -96,7 +96,7 @@ inline uint16_t swap16(uint16_t val)
 
 static int rpmb_sim_read(void *buffer, uint32_t size, uint32_t offset)
 {
-    int ret = emmc_simulate_read_rpmb_data(offset, buffer, size);
+    int ret = simulate_read_rpmb_data(offset, buffer, size);
     if (EFI_ERROR(ret)) {
         trusty_error("rpmb_sim_read: failed.\n");
         return -1;
@@ -107,7 +107,7 @@ static int rpmb_sim_read(void *buffer, uint32_t size, uint32_t offset)
 
 static int rpmb_sim_write(void *buffer, uint32_t size, uint32_t offset)
 {
-    int ret = emmc_simulate_write_rpmb_data(offset, buffer, size);
+    int ret = simulate_write_rpmb_data(offset, buffer, size);
 
     if (EFI_ERROR(ret)) {
         trusty_error("rpmb_sim_write: failed.\n");

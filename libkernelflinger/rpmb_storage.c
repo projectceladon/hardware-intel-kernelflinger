@@ -55,7 +55,7 @@
 #define DEVICE_STATE_MAGIC 0xDC
 #define RPMB_ALL_BLOCK_TOTAL_COUNT        10
 
-static rpmb_storage_t rpmb_ops;
+static rpmb_sim_real_storage_interface_t rpmb__sim_real_storage_ops;
 static UINT8 rpmb_key[RPMB_KEY_SIZE] = { 0 };
 static UINT8 rpmb_buffer[RPMB_BLOCK_SIZE];
 /*
@@ -178,7 +178,7 @@ EFI_STATUS clear_teedata_flag(void)
 
 	debug(L"enter clear teedata flag.");
 
-	ret = emmc_simulate_write_rpmb_data(TEEDATA_KEY_MAGIC_ADDR, data, TEEDATA_KEY_MAGIC_LENGTH + RPMB_KEY_SIZE);
+	ret = simulate_write_rpmb_data(TEEDATA_KEY_MAGIC_ADDR, data, TEEDATA_KEY_MAGIC_LENGTH + RPMB_KEY_SIZE);
 	if (EFI_ERROR(ret)) {
 		debug(L"clear teedata_flag failed for magic.");
 		return ret;
@@ -200,7 +200,7 @@ static EFI_STATUS erase_simulate_rpmb_all_blocks(void)
 
 	for (i = 0; i < RPMB_ALL_BLOCK_TOTAL_COUNT; i++) {
 		blk_offset = i * RPMB_BLOCK_SIZE;
-		ret = emmc_simulate_write_rpmb_data(blk_offset, rpmb_buffer, RPMB_BLOCK_SIZE);
+		ret = simulate_write_rpmb_data(blk_offset, rpmb_buffer, RPMB_BLOCK_SIZE);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to write simulate rpmb data");
 			return ret;
@@ -219,7 +219,7 @@ EFI_STATUS erase_rpmb_all_blocks(void)
 	sbflags = is_eom_and_secureboot_enabled();
 
 	if (sbflags) {
-		ret = emmc_write_rpmb_data(NULL, RPMB_ALL_BLOCK_TOTAL_COUNT, 0, rpmb_buffer, rpmb_key, &rpmb_result);
+		ret = write_rpmb_data(NULL, RPMB_ALL_BLOCK_TOTAL_COUNT, 0, rpmb_buffer, rpmb_key, &rpmb_result);
 		debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to erase rpmb partition");
@@ -239,47 +239,47 @@ EFI_STATUS erase_rpmb_all_blocks(void)
 
 BOOLEAN is_rpmb_programed(void)
 {
-	return rpmb_ops.is_rpmb_programed();
+	return rpmb__sim_real_storage_ops.is_rpmb_programed();
 }
 
-EFI_STATUS program_rpmb_key(UINT8 *key)
+EFI_STATUS program_rpmb_key_in_sim_real(UINT8 *key)
 {
-	return rpmb_ops.program_rpmb_key(key);
+	return rpmb__sim_real_storage_ops.program_rpmb_key(key);
 }
 
-EFI_STATUS rpmb_read_counter(const void *key, RPMB_RESPONSE_RESULT *result)
+EFI_STATUS rpmb_read_counter_in_sim_real(const void *key, RPMB_RESPONSE_RESULT *result)
 {
-	return rpmb_ops.rpmb_read_counter(key, result);
+	return rpmb__sim_real_storage_ops.rpmb_read_counter(key, result);
 }
 
 EFI_STATUS write_rpmb_device_state(UINT8 state)
 {
-	return rpmb_ops.write_rpmb_device_state(state);
+	return rpmb__sim_real_storage_ops.write_rpmb_device_state(state);
 }
 
 EFI_STATUS read_rpmb_device_state(UINT8 *state)
 {
-	return rpmb_ops.read_rpmb_device_state(state);
+	return rpmb__sim_real_storage_ops.read_rpmb_device_state(state);
 }
 
 EFI_STATUS write_rpmb_rollback_index(size_t index, UINT64 in_rollback_index)
 {
-	return rpmb_ops.write_rpmb_rollback_index(index, in_rollback_index);
+	return rpmb__sim_real_storage_ops.write_rpmb_rollback_index(index, in_rollback_index);
 }
 
 EFI_STATUS read_rpmb_rollback_index(size_t index, UINT64 *out_rollback_index)
 {
-	return rpmb_ops.read_rpmb_rollback_index(index, out_rollback_index);
+	return rpmb__sim_real_storage_ops.read_rpmb_rollback_index(index, out_rollback_index);
 }
 
 EFI_STATUS write_rpmb_keybox_magic(UINT16 offset, void *buffer)
 {
-	return rpmb_ops.write_rpmb_keybox_magic(offset, buffer);
+	return rpmb__sim_real_storage_ops.write_rpmb_keybox_magic(offset, buffer);
 }
 
 EFI_STATUS read_rpmb_keybox_magic(UINT16 offset, void *buffer)
 {
-	return rpmb_ops.read_rpmb_keybox_magic(offset, buffer);
+	return rpmb__sim_real_storage_ops.read_rpmb_keybox_magic(offset, buffer);
 }
 
 static BOOLEAN is_rpmb_programed_real(void)
@@ -288,7 +288,7 @@ static BOOLEAN is_rpmb_programed_real(void)
 	UINT32 write_counter;
 	RPMB_RESPONSE_RESULT rpmb_result;
 
-	ret = emmc_get_counter(NULL, &write_counter, (const void *)rpmb_key, &rpmb_result);
+	ret = get_rpmb_counter(NULL, &write_counter, (const void *)rpmb_key, &rpmb_result);
 	debug(L"get_counter ret=%d, wc=%d", ret, write_counter);
 	if (EFI_ERROR(ret) && (rpmb_result == RPMB_RES_NO_AUTH_KEY_PROGRAM)) {
 		debug(L"rpmb key is not programmed");
@@ -303,7 +303,7 @@ static EFI_STATUS program_rpmb_key_real(UINT8 *key)
 	RPMB_RESPONSE_RESULT rpmb_result;
 
 	memcpy(rpmb_key, key, RPMB_KEY_SIZE);
-	ret = emmc_program_key(NULL, (const void *)key, &rpmb_result);
+	ret = program_rpmb_key(NULL, (const void *)key, &rpmb_result);
 
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to program rpmb key");
@@ -317,7 +317,7 @@ static EFI_STATUS rpmb_read_counter_real(const void *key, RPMB_RESPONSE_RESULT *
 	EFI_STATUS ret;
 	UINT32 write_counter;
 
-	ret = emmc_get_counter(NULL, &write_counter, key, result);
+	ret = get_rpmb_counter(NULL, &write_counter, key, result);
 	if(EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read counter for physical rpmb");
 		return ret;
@@ -331,7 +331,7 @@ static EFI_STATUS write_rpmb_device_state_real(UINT8 state)
 	EFI_STATUS ret;
 	RPMB_RESPONSE_RESULT rpmb_result;
 
-	ret = emmc_read_rpmb_data(NULL, RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = read_rpmb_data(NULL, RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read device state");
 		return ret;
@@ -339,7 +339,7 @@ static EFI_STATUS write_rpmb_device_state_real(UINT8 state)
 
 	rpmb_buffer[0] = DEVICE_STATE_MAGIC;
 	rpmb_buffer[1] = state;
-	ret = emmc_write_rpmb_data(NULL, RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = write_rpmb_data(NULL, RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to write device state");
@@ -353,7 +353,7 @@ static EFI_STATUS read_rpmb_device_state_real(UINT8 *state)
 	EFI_STATUS ret;
 	RPMB_RESPONSE_RESULT rpmb_result;
 
-	ret = emmc_read_rpmb_data(NULL, RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = read_rpmb_data(NULL, RPMB_DEVICE_STATE_BLOCK_COUNT, RPMB_DEVICE_STATE_BLOCK_ADDR, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read device state");
@@ -378,7 +378,7 @@ static EFI_STATUS write_rpmb_rollback_index_real(size_t index, UINT64 in_rollbac
         blk_addr += index / RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK;
         blk_offset = (index % RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK) * sizeof(UINT64);
 
-	ret = emmc_read_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = read_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read rollback index");
@@ -390,7 +390,7 @@ static EFI_STATUS write_rpmb_rollback_index_real(size_t index, UINT64 in_rollbac
 	}
 
         memcpy(rpmb_buffer + blk_offset, &in_rollback_index, sizeof(UINT64));
-	ret = emmc_write_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = write_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to write rollback index");
@@ -408,7 +408,7 @@ static EFI_STATUS read_rpmb_rollback_index_real(size_t index, UINT64 *out_rollba
 
         blk_addr += index / RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK;
         blk_offset = (index % RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK) * sizeof(UINT64);
-	ret = emmc_read_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
+	ret = read_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read rollback index");
@@ -424,7 +424,7 @@ static EFI_STATUS write_rpmb_keybox_magic_real(UINT16 offset, void *buffer)
         EFI_STATUS ret;
         RPMB_RESPONSE_RESULT rpmb_result;
 
-        ret = emmc_read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
+        ret = read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
         debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
         if (EFI_ERROR(ret)) {
                efi_perror(ret, L"Failed to read keybox magic data");
@@ -436,7 +436,7 @@ static EFI_STATUS write_rpmb_keybox_magic_real(UINT16 offset, void *buffer)
         }
 
         memcpy(rpmb_buffer, buffer, sizeof(UINT64));
-        ret = emmc_write_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
+        ret = write_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
         debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
         if (EFI_ERROR(ret)) {
                efi_perror(ret, L"Failed to write keybox magic data");
@@ -451,7 +451,7 @@ static EFI_STATUS read_rpmb_keybox_magic_real(UINT16 offset, void *buffer)
         EFI_STATUS ret;
         RPMB_RESPONSE_RESULT rpmb_result;
 
-        ret = emmc_read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
+        ret = read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
         debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
         if (EFI_ERROR(ret)) {
                efi_perror(ret, L"Failed to read keybox magic data");
@@ -469,7 +469,7 @@ static BOOLEAN is_rpmb_programed_simulate(void)
 	UINT32 write_counter;
 	RPMB_RESPONSE_RESULT rpmb_result;
 
-	ret = emmc_simulate_get_counter(&write_counter, (const void *)rpmb_key, &rpmb_result);
+	ret = simulate_get_rpmb_counter(&write_counter, (const void *)rpmb_key, &rpmb_result);
 	debug(L"get_counter ret=%d, wc=%d", ret, write_counter);
 	if (EFI_ERROR(ret) && (rpmb_result == RPMB_RES_NO_AUTH_KEY_PROGRAM)) {
 		debug(L"rpmb key is not programmed");
@@ -484,7 +484,7 @@ static EFI_STATUS program_rpmb_key_simulate(UINT8 *key)
 	RPMB_RESPONSE_RESULT rpmb_result;
 
 	memcpy(rpmb_key, key, RPMB_KEY_SIZE);
-	efi_ret = emmc_simulate_program_rpmb_key((const void *)key, &rpmb_result);
+	efi_ret = simulate_program_rpmb_key((const void *)key, &rpmb_result);
 
 	if (EFI_ERROR(efi_ret)) {
 		efi_perror(efi_ret, L"Failed to program rpmb key");
@@ -498,7 +498,7 @@ static EFI_STATUS rpmb_read_counter_simulate(const void *key, RPMB_RESPONSE_RESU
 	EFI_STATUS efi_ret;
 	UINT32 write_counter;
 
-	efi_ret = emmc_simulate_get_counter(&write_counter, key, result);
+	efi_ret = simulate_get_rpmb_counter(&write_counter, key, result);
 	if(EFI_ERROR(efi_ret)) {
 		efi_perror(efi_ret, L"Failed to read counter for simulate");
 		return efi_ret;
@@ -512,7 +512,7 @@ static EFI_STATUS write_rpmb_device_state_simulate(UINT8 state)
 	UINT32 byte_offset;
 
 	byte_offset = RPMB_DEVICE_STATE_BLOCK_ADDR * RPMB_BLOCK_SIZE;
-	ret = emmc_simulate_read_rpmb_data(byte_offset, rpmb_buffer, RPMB_BLOCK_SIZE);
+	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, RPMB_BLOCK_SIZE);
 	/*gpt not updated, force success*/
 	if (ret == EFI_NOT_FOUND) {
 		return EFI_SUCCESS;
@@ -524,7 +524,7 @@ static EFI_STATUS write_rpmb_device_state_simulate(UINT8 state)
 
 	rpmb_buffer[0] = DEVICE_STATE_MAGIC;
 	rpmb_buffer[1] = state;
-	ret = emmc_simulate_write_rpmb_data(byte_offset, rpmb_buffer, RPMB_BLOCK_SIZE);
+	ret = simulate_write_rpmb_data(byte_offset, rpmb_buffer, RPMB_BLOCK_SIZE);
 	debug(L"ret=%d", ret);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to write device state");
@@ -539,7 +539,7 @@ static EFI_STATUS read_rpmb_device_state_simulate(UINT8 *state)
 	UINT32 byte_offset;
 
 	byte_offset = RPMB_DEVICE_STATE_BLOCK_ADDR * RPMB_BLOCK_SIZE;
-	ret = emmc_simulate_read_rpmb_data(byte_offset, rpmb_buffer, RPMB_BLOCK_SIZE);
+	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, RPMB_BLOCK_SIZE);
 	debug(L"ret=%d", ret);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read device state");
@@ -561,7 +561,7 @@ static EFI_STATUS write_rpmb_rollback_index_simulate(size_t index, UINT64 in_rol
 
 	byte_offset = RPMB_ROLLBACK_INDEX_BLOCK_ADDR * RPMB_BLOCK_SIZE + index * sizeof(UINT64);
 
-	ret = emmc_simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
 	debug(L"ret=%d", ret);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read rollback index");
@@ -578,7 +578,7 @@ static EFI_STATUS write_rpmb_rollback_index_simulate(size_t index, UINT64 in_rol
 	}
 
         memcpy(rpmb_buffer, &in_rollback_index, sizeof(UINT64));
-	ret = emmc_simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+	ret = simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
 	debug(L"ret=%d", ret);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to write rollback index");
@@ -593,7 +593,7 @@ static EFI_STATUS read_rpmb_rollback_index_simulate(size_t index, UINT64 *out_ro
 	UINT32 byte_offset;
 
 	byte_offset = RPMB_ROLLBACK_INDEX_BLOCK_ADDR * RPMB_BLOCK_SIZE + index * sizeof(UINT64);
-	ret = emmc_simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
 	debug(L"ret=%d", ret);
 	/*gpt not updated, force success*/
 	if (ret == EFI_NOT_FOUND) {
@@ -615,7 +615,7 @@ static EFI_STATUS write_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
         UINT32 byte_offset;
 
         byte_offset = offset * RPMB_BLOCK_SIZE;
-        ret = emmc_simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+        ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
         debug(L"ret=%d", ret);
         if (EFI_ERROR(ret)) {
                efi_perror(ret, L"Failed to read keybox magic data");
@@ -632,7 +632,7 @@ static EFI_STATUS write_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
         }
 
         memcpy(rpmb_buffer, buffer, sizeof(UINT64));
-        ret = emmc_simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+        ret = simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
         debug(L"ret=%d", ret);
         if (EFI_ERROR(ret)) {
                efi_perror(ret, L"Failed to write keybox magic data");
@@ -648,7 +648,7 @@ static EFI_STATUS read_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
         UINT32 byte_offset;
 
         byte_offset = offset * RPMB_BLOCK_SIZE;
-        ret = emmc_simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+        ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
         debug(L"ret=%d", ret);
         /*gpt not updated, force success*/
         if (ret == EFI_NOT_FOUND) {
@@ -669,24 +669,24 @@ static EFI_STATUS read_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
 void rpmb_storage_init(BOOLEAN real)
 {
 	if (real) {
-		rpmb_ops.is_rpmb_programed = is_rpmb_programed_real;
-		rpmb_ops.program_rpmb_key = program_rpmb_key_real;
-		rpmb_ops.rpmb_read_counter = rpmb_read_counter_real;
-		rpmb_ops.write_rpmb_device_state = write_rpmb_device_state_real;
-		rpmb_ops.read_rpmb_device_state = read_rpmb_device_state_real;
-		rpmb_ops.write_rpmb_rollback_index = write_rpmb_rollback_index_real;
-		rpmb_ops.read_rpmb_rollback_index = read_rpmb_rollback_index_real;
-		rpmb_ops.write_rpmb_keybox_magic = write_rpmb_keybox_magic_real;
-		rpmb_ops.read_rpmb_keybox_magic = read_rpmb_keybox_magic_real;
+		rpmb__sim_real_storage_ops.is_rpmb_programed = is_rpmb_programed_real;
+		rpmb__sim_real_storage_ops.program_rpmb_key = program_rpmb_key_real;
+		rpmb__sim_real_storage_ops.rpmb_read_counter = rpmb_read_counter_real;
+		rpmb__sim_real_storage_ops.write_rpmb_device_state = write_rpmb_device_state_real;
+		rpmb__sim_real_storage_ops.read_rpmb_device_state = read_rpmb_device_state_real;
+		rpmb__sim_real_storage_ops.write_rpmb_rollback_index = write_rpmb_rollback_index_real;
+		rpmb__sim_real_storage_ops.read_rpmb_rollback_index = read_rpmb_rollback_index_real;
+		rpmb__sim_real_storage_ops.write_rpmb_keybox_magic = write_rpmb_keybox_magic_real;
+		rpmb__sim_real_storage_ops.read_rpmb_keybox_magic = read_rpmb_keybox_magic_real;
 	} else {
-		rpmb_ops.is_rpmb_programed = is_rpmb_programed_simulate;
-		rpmb_ops.program_rpmb_key = program_rpmb_key_simulate;
-		rpmb_ops.rpmb_read_counter = rpmb_read_counter_simulate;
-		rpmb_ops.write_rpmb_device_state = write_rpmb_device_state_simulate;
-		rpmb_ops.read_rpmb_device_state = read_rpmb_device_state_simulate;
-		rpmb_ops.write_rpmb_rollback_index = write_rpmb_rollback_index_simulate;
-		rpmb_ops.read_rpmb_rollback_index = read_rpmb_rollback_index_simulate;
-		rpmb_ops.write_rpmb_keybox_magic = write_rpmb_keybox_magic_simulate;
-		rpmb_ops.read_rpmb_keybox_magic = read_rpmb_keybox_magic_simulate;
+		rpmb__sim_real_storage_ops.is_rpmb_programed = is_rpmb_programed_simulate;
+		rpmb__sim_real_storage_ops.program_rpmb_key = program_rpmb_key_simulate;
+		rpmb__sim_real_storage_ops.rpmb_read_counter = rpmb_read_counter_simulate;
+		rpmb__sim_real_storage_ops.write_rpmb_device_state = write_rpmb_device_state_simulate;
+		rpmb__sim_real_storage_ops.read_rpmb_device_state = read_rpmb_device_state_simulate;
+		rpmb__sim_real_storage_ops.write_rpmb_rollback_index = write_rpmb_rollback_index_simulate;
+		rpmb__sim_real_storage_ops.read_rpmb_rollback_index = read_rpmb_rollback_index_simulate;
+		rpmb__sim_real_storage_ops.write_rpmb_keybox_magic = write_rpmb_keybox_magic_simulate;
+		rpmb__sim_real_storage_ops.read_rpmb_keybox_magic = read_rpmb_keybox_magic_simulate;
 	}
 }

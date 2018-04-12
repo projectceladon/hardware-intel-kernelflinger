@@ -1306,7 +1306,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 #ifdef RPMB_STORAGE
         // Init the rpmb
-        emmc_rpmb_init(g_disk_device);
+        rpmb_init(g_disk_device);
 #if defined(RPMB_SIMULATE) || !defined(USER)
         rpmb_storage_init(FALSE);
 #else
@@ -1324,7 +1324,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         if (!is_rpmb_programed()) {
                 debug(L"rpmb not programmed");
                 // Please do NOT program RPMB key in Joule platform, otherwise the board can't boot.
-                ret = program_rpmb_key(rpmb_key);
+                ret = program_rpmb_key_in_sim_real(rpmb_key);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"rpmb key program failed");
                         return ret;

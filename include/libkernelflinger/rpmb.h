@@ -61,30 +61,30 @@ typedef struct {
 } rpmb_data_frame;
 #pragma pack()
 
-EFI_STATUS emmc_rpmb_init(EFI_HANDLE disk_handle);
-EFI_STATUS get_emmc(void **rpmb_dev, EFI_HANDLE disk_handle);
-EFI_STATUS emmc_program_key(void *rpmb_dev, const void *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS get_emmc_partition_num(void *rpmb_dev, UINT8 *current_part);
-EFI_STATUS emmc_partition_switch(void *rpmb_dev, UINT8 part);
-EFI_STATUS emmc_get_counter(void *rpmb_dev, UINT32 *write_counter, const void *key,
+EFI_STATUS rpmb_init(EFI_HANDLE disk_handle);
+EFI_STATUS get_storage_protocol(void **rpmb_dev, EFI_HANDLE disk_handle);
+EFI_STATUS program_rpmb_key(void *rpmb_dev, const void *key, RPMB_RESPONSE_RESULT *result);
+EFI_STATUS get_storage_partition_num(void *rpmb_dev, UINT8 *current_part);
+EFI_STATUS storage_partition_switch(void *rpmb_dev, UINT8 part);
+EFI_STATUS get_rpmb_counter(void *rpmb_dev, UINT32 *write_counter, const void *key,
 		RPMB_RESPONSE_RESULT *result);
-EFI_STATUS emmc_read_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
+EFI_STATUS read_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
 		const void *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS emmc_write_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
+EFI_STATUS write_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
 		const void *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS emmc_rpmb_send_request(void *rpmb_dev,
+EFI_STATUS rpmb_send_request(void *rpmb_dev,
 		rpmb_data_frame *data_frame, UINT8 count, BOOLEAN is_rel_write);
-EFI_STATUS emmc_rpmb_get_response(void *rpmb_dev,
+EFI_STATUS rpmb_get_response(void *rpmb_dev,
 		rpmb_data_frame *data_frame, UINT8 count);
 
 
-EFI_STATUS emmc_simulate_get_counter(UINT32 *write_counter, const void *key,
+EFI_STATUS simulate_get_rpmb_counter(UINT32 *write_counter, const void *key,
 		RPMB_RESPONSE_RESULT *result);
-EFI_STATUS emmc_simulate_program_rpmb_key(const void *key,
+EFI_STATUS simulate_program_rpmb_key(const void *key,
 		RPMB_RESPONSE_RESULT *result);
-EFI_STATUS emmc_simulate_read_rpmb_data(UINT32 offset, void *buffer,
+EFI_STATUS simulate_read_rpmb_data(UINT32 offset, void *buffer,
 		UINT32 size);
-EFI_STATUS emmc_simulate_write_rpmb_data(UINT32 offset, void *buffer,
+EFI_STATUS simulate_write_rpmb_data(UINT32 offset, void *buffer,
 		UINT32 size);
 
 #endif	/* _RPMB_H_ */

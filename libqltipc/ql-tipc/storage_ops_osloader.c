@@ -36,7 +36,7 @@ void *rpmb_storage_get_ctx(void)
     EFI_STATUS ret;
     static void* rpmb_dev;
 
-    ret = get_emmc(&rpmb_dev, NULL);
+    ret = get_storage_protocol(&rpmb_dev, NULL);
     if (EFI_ERROR(ret)) {
         trusty_error("Failed to get emmc.\n");
         return NULL;
@@ -50,7 +50,7 @@ static int mmc_rpmb_request(void* rpmb_dev, rpmb_data_frame *s,
 {
     EFI_STATUS ret;
 
-    ret = emmc_rpmb_send_request(rpmb_dev, s, count, is_rel_write);
+    ret = rpmb_send_request(rpmb_dev, s, count, is_rel_write);
     if (EFI_ERROR(ret)) {
         trusty_error("Failed to send rpmb request.\n");
         return -1;
@@ -64,7 +64,7 @@ static int mmc_rpmb_response(void* rpmb_dev, rpmb_data_frame *s,
 {
     EFI_STATUS ret;
 
-    ret = emmc_rpmb_get_response(rpmb_dev, s, count);
+    ret = rpmb_get_response(rpmb_dev, s, count);
     if (EFI_ERROR(ret)) {
         trusty_error("Failed to send rpmb reponse.\n");
         return -1;
@@ -87,14 +87,14 @@ int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
         return TRUSTY_ERR_INVALID_ARGS;
     }
 
-    ret = get_emmc_partition_num(rpmb_dev, &original_part);
+    ret = get_storage_partition_num(rpmb_dev, &original_part);
     if (EFI_ERROR(ret)) {
         trusty_error("Failed to get emmc current part number.\n");
         return ret;
     }
 
     if (original_part != RPMB_PARTITION) {
-        ret = emmc_partition_switch(rpmb_dev, RPMB_PARTITION);
+        ret = storage_partition_switch(rpmb_dev, RPMB_PARTITION);
         if (EFI_ERROR(ret)) {
             trusty_error("Failed to switch RPMB parition.\n");
             return ret;
@@ -157,7 +157,7 @@ int rpmb_storage_send(void *rpmb_dev, const void *rel_write_data,
 end:
     /*back to original part*/
     if (original_part != RPMB_PARTITION) {
-        if (emmc_partition_switch((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev, original_part) != EFI_SUCCESS) {
+        if (storage_partition_switch((EFI_SD_HOST_IO_PROTOCOL *)rpmb_dev, original_part) != EFI_SUCCESS) {
             trusty_error("Failed to switch RPMB parition.\n");
             return TRUSTY_ERR_GENERIC;
         }

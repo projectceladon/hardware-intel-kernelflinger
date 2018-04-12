@@ -59,7 +59,7 @@ static EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EF
 	EFI_EXT_SCSI_PASS_THRU_PROTOCOL *scsi;
 	EFI_EXT_SCSI_PASS_THRU_SCSI_REQUEST_PACKET scsi_req;
 	struct unmap_parameter unmap;
-	struct command_descriptor_block cdb;
+	struct command_descriptor_block_unmap cdb;
 	EFI_HANDLE scsi_handle;
 	EFI_DEVICE_PATH *dp = DevicePathFromHandle(handle);
 	EFI_DEVICE_PATH *scsi_dp = dp;

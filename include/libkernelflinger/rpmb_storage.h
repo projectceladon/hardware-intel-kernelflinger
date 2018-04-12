@@ -40,7 +40,7 @@
 #define MMC_PROD_NAME_WITH_PSN_LEN   15
 #define RPMB_MAX_PARTITION_NUMBER 6
 
-typedef struct rpmb_storage {
+typedef struct rpmb_sim_real_storage_interface {
 	BOOLEAN (*is_rpmb_programed)(void);
 	EFI_STATUS (*program_rpmb_key)(UINT8 *key);
 	EFI_STATUS (*rpmb_read_counter)(const void *key, RPMB_RESPONSE_RESULT *result);
@@ -53,7 +53,7 @@ typedef struct rpmb_storage {
 
 	EFI_STATUS (*write_rpmb_keybox_magic)(UINT16 offset, void *buffer);
 	EFI_STATUS (*read_rpmb_keybox_magic)(UINT16 offset, void *buffer);
-} rpmb_storage_t;
+} rpmb_sim_real_storage_interface_t;
 
 void rpmb_storage_init(BOOLEAN real);
 EFI_STATUS get_rpmb_derived_key(OUT UINT8 **d_key, OUT UINT8 *number_d_key);
@@ -67,10 +67,10 @@ void clear_rpmb_key(void);
 void set_rpmb_key(UINT8 *key);
 EFI_STATUS clear_teedata_flag(void);
 EFI_STATUS erase_rpmb_all_blocks(void);
-EFI_STATUS rpmb_read_counter(const void *key, RPMB_RESPONSE_RESULT *result);
+EFI_STATUS rpmb_read_counter_in_sim_real(const void *key, RPMB_RESPONSE_RESULT *result);
 
 BOOLEAN is_rpmb_programed(void);
-EFI_STATUS program_rpmb_key(UINT8 *key);
+EFI_STATUS program_rpmb_key_in_sim_real(UINT8 *key);
 
 EFI_STATUS write_rpmb_device_state(UINT8 state);
 EFI_STATUS read_rpmb_device_state(UINT8 *state);
