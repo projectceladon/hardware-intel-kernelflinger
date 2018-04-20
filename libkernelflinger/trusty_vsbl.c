@@ -46,8 +46,9 @@
 #include "efilinux.h"
 #include "libelfloader.h"
 
-#define TRUSTY_BASE_ADRRESS 0x73000000
-#define TRUSTY_MEM_SIZE 0x1000000
+#define TRUSTY_MEM_SIZE		0x1000000
+#define TRUSTY_MEM_ALIGNED_16K	0x4000
+#define TRUSTY_MEM_MAX_ADDRESS	0xFFFFFFFF
 
 typedef struct trusty_boot_param {
 	/* Size of this structure */
@@ -159,15 +160,16 @@ EFI_STATUS start_trusty(VOID *tosimage)
 
 	header = (const struct boot_img_hdr *)tosimage;
 	load_base = (UINTN)(tosimage + header->page_size);
-	trusty_boot_params.trusty_mem_base = TRUSTY_BASE_ADRRESS;
-	trusty_boot_params.trusty_mem_size = TRUSTY_MEM_SIZE;
-	Memory = (EFI_PHYSICAL_ADDRESS)TRUSTY_BASE_ADRRESS;
-	ret = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAddress,
-				EfiRuntimeServicesData,  EFI_SIZE_TO_PAGES(TRUSTY_MEM_SIZE), &Memory);
+	Memory = (EFI_PHYSICAL_ADDRESS)(TRUSTY_MEM_MAX_ADDRESS - TRUSTY_MEM_SIZE - TRUSTY_MEM_ALIGNED_16K + 1);
+	ret = uefi_call_wrapper(BS->AllocatePages, 4, AllocateMaxAddress,
+				EfiRuntimeServicesData,  EFI_SIZE_TO_PAGES(TRUSTY_MEM_SIZE + TRUSTY_MEM_ALIGNED_16K), &Memory);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to allocate trusty pages");
 		goto fail;
 	}
+
+	trusty_boot_params.trusty_mem_base = ((UINT64)Memory + TRUSTY_MEM_ALIGNED_16K - 1) & ~(TRUSTY_MEM_ALIGNED_16K - 1);
+	trusty_boot_params.trusty_mem_size = TRUSTY_MEM_SIZE;
 
 	ret = init_trusty_startup_params(&trusty_startup_params, load_base, header->kernel_size, &trusty_boot_params);
 	if (EFI_ERROR(ret)) {
@@ -196,7 +198,7 @@ EFI_STATUS start_trusty(VOID *tosimage)
 	return ret;
 
 fail:
-	uefi_call_wrapper(BS->FreePages, 2, TRUSTY_BASE_ADRRESS, EFI_SIZE_TO_PAGES(TRUSTY_MEM_SIZE));
+	uefi_call_wrapper(BS->FreePages, 2, Memory, EFI_SIZE_TO_PAGES(TRUSTY_MEM_SIZE + TRUSTY_MEM_ALIGNED_16K));
 
 	return ret;
 }
