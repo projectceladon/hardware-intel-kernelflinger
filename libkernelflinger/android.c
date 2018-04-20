@@ -417,7 +417,7 @@ static inline EFI_STATUS handover_jump(EFI_HANDLE image,
 #ifdef RPMB_STORAGE
         clear_rpmb_key();
 #endif
-        debug(L"handover jump ...\n");
+        log(L"handover jump ...\n");
 
 #ifndef __SUPPORT_ABL_BOOT
         ret = setup_gdt();
