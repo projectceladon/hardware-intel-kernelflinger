@@ -27,7 +27,9 @@
 #include <lib.h>
 
 #define LOCAL_LOG 0
+#if !defined(__clang__)
 typedef unsigned long uintptr_t;
+#endif
 
 static int sync_ipc_on_connect_complete(struct trusty_ipc_chan *chan)
 {
