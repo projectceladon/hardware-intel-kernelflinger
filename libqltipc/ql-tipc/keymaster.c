@@ -191,7 +191,7 @@ static int km_do_tipc(uint32_t cmd, bool handle_rpmb, void* req,
                       uint32_t* resp_data_len)
 {
     int rc = TRUSTY_ERR_GENERIC;
-    struct km_no_response resp_header;
+    struct km_no_response resp_header  = { .error = 0 };
 
     rc = km_send_request(cmd, req, req_len);
     if (rc < 0) {
@@ -255,7 +255,7 @@ static int32_t MessageVersion(uint8_t major_ver, uint8_t minor_ver,
 static int km_get_version(int32_t *version)
 {
     int rc = TRUSTY_ERR_GENERIC;
-    struct km_get_version_resp resp;
+    struct km_get_version_resp resp = { .major_ver = 0, .minor_ver = 0, .subminor_ver = 0 };
 
     rc = km_send_request(KM_GET_VERSION, NULL, 0);
     if (rc < 0) {
