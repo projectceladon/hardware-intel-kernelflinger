@@ -315,7 +315,7 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
         return TRUSTY_ERR_GENERIC;
     }
 
-#ifdef RPMB_STORAGE
+#if defined(RPMB_STORAGE) && !defined(HYPERVISOR_ACRN)
     /* keybox not privisioned yet, then provision it */
     if (!is_keybox_provisioned()) {
         /* set the attestation_key and append the attest cert:
