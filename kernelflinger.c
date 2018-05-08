@@ -908,7 +908,6 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 {
         EFI_STATUS ret;
 #ifdef USE_TRUSTY
-        struct rot_data_t rot_data;
         VOID *tosimage = NULL;
 #endif
 #ifdef USER
@@ -943,22 +942,32 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 #endif
                 }
                 debug(L"loading trusty");
-#ifdef USE_AVB
-                ret = get_rot_data(bootimage, boot_state, NULL, 0, &rot_data);
-#else
-                ret = get_rot_data(bootimage, boot_state, verifier_cert, &rot_data);
-#endif
-                if (EFI_ERROR(ret)){
-                        efi_perror(ret, L"Unable to get the rot_data for trusty");
-                        die();
-                }
-                set_trusty_param((VOID *)&rot_data);
                 ret = load_tos_image(&tosimage);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"Load tos image failed");
                         die();
                 }
-                memcpy(&g_rot_data, &rot_data, sizeof(struct rot_data_t));
+#ifdef USE_AVB
+                const UINT8 *vbmeta_pub_key;
+                UINTN vbmeta_pub_key_len;
+
+                ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
+                        slot_data->vbmeta_images[0].vbmeta_size,
+                        &vbmeta_pub_key,
+                        &vbmeta_pub_key_len);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to get the vbmeta_pub_key");
+                        die();
+                }
+
+                ret = get_rot_data(bootimage, boot_state, vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
+#else
+                ret = get_rot_data(bootimage, boot_state, verifier_cert, &g_rot_data);
+#endif
+                if (EFI_ERROR(ret)){
+                        efi_perror(ret, L"Unable to get the root of trust data for trusty");
+                        die();
+                }
 
                 ret = start_trusty(tosimage);
                 if (EFI_ERROR(ret)) {
