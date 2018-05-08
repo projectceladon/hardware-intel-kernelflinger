@@ -39,6 +39,7 @@
 #define RPMB_NUMBER_KEY  10
 #define MMC_PROD_NAME_WITH_PSN_LEN   15
 #define RPMB_MAX_PARTITION_NUMBER 6
+#define RPMB_MAX_KEY_SIZE 64
 
 typedef struct rpmb_sim_real_storage_interface {
 	BOOLEAN (*is_rpmb_programed)(void);
