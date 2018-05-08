@@ -56,7 +56,11 @@ static struct algorithm {
 static const EVP_MD *selected_md;
 static unsigned int hash_len;
 
+#ifdef USE_SBL
+#define BOOTLOADER_2ND_IAS_OFFSET  0x1000000
+#else
 #define BOOTLOADER_2ND_IAS_OFFSET  0x7D0000
+#endif
 static UINT64 iasoffset = 0;
 
 EFI_STATUS set_hash_algorithm(const CHAR8 *algo)
