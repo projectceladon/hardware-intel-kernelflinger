@@ -171,7 +171,48 @@ out:
 static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 {
 	EFI_STATUS ret;
+	void* param = NULL;
 
+#ifdef USE_AVB
+	AvbOps *ops;
+	AvbSlotVerifyData *slot_data = NULL;
+	AvbABFlowResult flow_result;
+
+	const char *requested_partitions[] = {"boot", NULL};
+	UINT8 boot_state = BOOT_STATE_GREEN;
+	bool allow_verification_error = FALSE;
+	AvbSlotVerifyFlags flags;
+	debug(L"Processing boot image");
+
+	set_boottime_stamp(TM_AVB_START);
+	ops = avb_init();
+	if (ops) {
+		if (ops->read_is_device_unlocked(ops, &allow_verification_error) != AVB_IO_RESULT_OK) {
+			avb_fatal("Error determining whether device is unlocked.\n");
+			return EFI_ABORTED;
+		}
+	} else {
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	flags = AVB_SLOT_VERIFY_FLAGS_NONE;
+	if (allow_verification_error) {
+		flags |= AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR;
+	}
+
+	flow_result = avb_ab_flow(&ab_ops, requested_partitions, flags, AVB_HASHTREE_ERROR_MODE_RESTART, &slot_data);
+	ret = get_avb_flow_result(slot_data,
+			    allow_verification_error,
+			    flow_result,
+			    &boot_state);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get avb slot a/b flow result for boot");
+		goto fail;
+	}
+	slot_set_active_cached(slot_data->ab_suffix);
+	param = slot_data;
+fail:
+#endif
 	if (bootimage) {
 		/* 'fastboot boot' case, only allowed on unlocked devices.*/
 		if (device_is_unlocked()) {
@@ -185,7 +226,7 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 
 			ret = android_image_start_buffer(NULL, bootimage,
 								NORMAL_BOOT, BOOT_STATE_GREEN, NULL,
-								NULL, (const CHAR8 *)cmd_buf);
+								param, (const CHAR8 *)cmd_buf);
 			if (EFI_ERROR(ret)) {
 				efi_perror(ret, L"Couldn't load Boot image");
 				return ret;
