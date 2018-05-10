@@ -4,6 +4,7 @@ KERNELFLINGER_CFLAGS := -Wall -Wextra -Werror -mrdrnd
 ifeq ($(TARGET_UEFI_ARCH),x86_64)
     KERNELFLINGER_CFLAGS += -mpreferred-stack-boundary=5
     KERNELFLINGER_CFLAGS += -D__STDC_VERSION__=199901L
+    KERNELFLINGER_CFLAGS += -DARCH_X86_64=1
 endif
 
 ifeq ($(TARGET_USE_TRUSTY),true)

@@ -293,6 +293,7 @@ BOOLEAN uefi_exist_file_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename)
 {
 	EFI_STATUS ret;
 	EFI_FILE *root;
+	BOOLEAN ret2;
 
 	ret = uefi_call_wrapper(io->OpenVolume, 2, io, &root);
 	if (EFI_ERROR(ret)) {
@@ -300,7 +301,10 @@ BOOLEAN uefi_exist_file_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *filename)
 		return FALSE;
 	}
 
-	return uefi_exist_file(root, filename);
+	ret2 = uefi_exist_file(root, filename);
+	uefi_call_wrapper(root->Close, 1, root);
+
+	return ret2;
 }
 
 EFI_STATUS uefi_create_directory(EFI_FILE *parent, CHAR16 *dirname)
@@ -331,4 +335,77 @@ EFI_STATUS uefi_create_directory_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *dirname
 	}
 
 	return uefi_create_directory(root, dirname);
+}
+
+
+EFI_STATUS uefi_rename_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *oldname, CHAR16 *newname)
+{
+	EFI_STATUS ret;
+	EFI_FILE *file = NULL, *root = NULL;
+	EFI_FILE_INFO *info = NULL;
+	UINTN info_size;
+
+	ret = uefi_call_wrapper(io->OpenVolume, 2, io, &root);
+	if (EFI_ERROR(ret))
+		goto out;
+
+	ret = uefi_call_wrapper(root->Open, 5, root, &file, oldname,
+				EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0);
+	if (EFI_ERROR(ret)) {
+		goto out;
+	}
+
+	info_size = SIZE_OF_EFI_FILE_INFO + FILENAME_MAX_LENGTH;
+	info = AllocatePool(info_size);
+	if (!info) {
+		ret = EFI_OUT_OF_RESOURCES;
+		goto out;
+	}
+
+	ret = uefi_call_wrapper(file->GetInfo, 4, file, &GenericFileInfo, &info_size, info);
+	if (EFI_ERROR(ret))
+		goto out;
+
+	// Set the new file name
+	StrNCpy(info->FileName, newname, FILENAME_MAX_LENGTH / sizeof(CHAR16));
+	info->Size = SIZE_OF_EFI_FILE_INFO + StrLen(info->FileName) * 2 + 2;
+
+	ret = uefi_call_wrapper(file->SetInfo, 4, file, &GenericFileInfo, info->Size, info);
+
+out:
+	if (info != NULL)
+		FreePool(info);
+	if (file != NULL)
+		uefi_call_wrapper(file->Close, 1, file);
+	if (root != NULL)
+		uefi_call_wrapper(root->Close, 1, root);
+
+	return ret;
+}
+
+
+EFI_STATUS verify_image(EFI_HANDLE handle, CHAR16 *path)
+{
+	EFI_STATUS ret, unload_ret = EFI_SUCCESS;
+	EFI_DEVICE_PATH *edp;
+	EFI_HANDLE image;
+
+	edp = FileDevicePath(handle, path);
+	if (!edp) {
+		error(L"Couldn't generate a path for '%s'", path);
+		return EFI_INVALID_PARAMETER;
+	}
+
+	ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
+				edp, NULL, 0, &image);
+	FreePool(edp);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to load '%s'", path);
+	if (!EFI_ERROR(ret) || ret == EFI_SECURITY_VIOLATION) {
+		unload_ret = uefi_call_wrapper(BS->UnloadImage, 1, image);
+		if (EFI_ERROR(unload_ret))
+			efi_perror(unload_ret, L"Failed to unload image");
+	}
+
+	return EFI_ERROR(ret) ? ret : unload_ret;
 }
