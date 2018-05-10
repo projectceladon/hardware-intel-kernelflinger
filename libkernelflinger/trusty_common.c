@@ -116,9 +116,13 @@ EFI_STATUS load_tos_image(OUT VOID **bootimage)
         AvbSlotVerifyData *slot_data;
         BOOLEAN b_secureboot = is_platform_secure_boot_enabled();
 
-        if (!b_secureboot) {
+        if (!b_secureboot)
                 verify_state = BOOT_STATE_ORANGE;
-        }
+#ifndef USER
+        if (device_is_unlocked())
+                verify_state = BOOT_STATE_ORANGE;
+#endif
+
         verify_state_new = verify_state;
 
         ret = android_image_load_partition_avb("tos", bootimage, &verify_state_new, &slot_data);  // Do not try to switch slot if failed
