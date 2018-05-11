@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Intel Corporation
+ * Copyright (c) 2018, Intel Corporation
  * All rights reserved.
  *
  * Author: kwen <kui.wen@intel.com>
@@ -29,37 +29,12 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
-#ifndef _RPMB_H_
-#define _RPMB_H_
+#ifndef _RPMB_EMMC_H_
+#define _RPMB_EMMC_H_
 
 #include <lib.h>
 #include "rpmb_storage_common.h"
 
-EFI_STATUS rpmb_init(EFI_HANDLE disk_handle);
-EFI_STATUS get_storage_protocol(void **rpmb_dev, EFI_HANDLE disk_handle);
-EFI_STATUS program_rpmb_key(void *rpmb_dev, const void *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS get_storage_partition_num(void *rpmb_dev, UINT8 *current_part);
-EFI_STATUS storage_partition_switch(void *rpmb_dev, UINT8 part);
-EFI_STATUS get_rpmb_counter(void *rpmb_dev, UINT32 *write_counter, const void *key,
-		RPMB_RESPONSE_RESULT *result);
-EFI_STATUS read_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
-		const void *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS write_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
-		const void *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS rpmb_send_request(void *rpmb_dev,
-		rpmb_data_frame *data_frame, UINT8 count, BOOLEAN is_rel_write);
-EFI_STATUS rpmb_get_response(void *rpmb_dev,
-		rpmb_data_frame *data_frame, UINT8 count);
+rpmb_ops_func_t * get_emmc_storage_rpmb_ops(EFI_HANDLE disk_handle);
 
-
-EFI_STATUS simulate_get_rpmb_counter(UINT32 *write_counter, const void *key,
-		RPMB_RESPONSE_RESULT *result);
-EFI_STATUS simulate_program_rpmb_key(const void *key,
-		RPMB_RESPONSE_RESULT *result);
-EFI_STATUS simulate_read_rpmb_data(UINT32 offset, void *buffer,
-		UINT32 size);
-EFI_STATUS simulate_write_rpmb_data(UINT32 offset, void *buffer,
-		UINT32 size);
-
-#endif	/* _RPMB_H_ */
+#endif /* _RPMB_EMMC_H_ */
