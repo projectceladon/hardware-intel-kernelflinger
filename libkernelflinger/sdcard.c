@@ -34,6 +34,16 @@
 #include "storage.h"
 #include "sdio.h"
 
+static EMMC_DEVICE_PATH *get_sdcard_device_path(EFI_DEVICE_PATH *p)
+{
+	for (; !IsDevicePathEndType(p); p = NextDevicePathNode(p))
+		if (DevicePathType(p) == MESSAGING_DEVICE_PATH
+		    && DevicePathSubType(p) == 26) // MSG_SD_DP
+			return (EMMC_DEVICE_PATH *)p;
+
+	return NULL;
+}
+
 static BOOLEAN is_sdcard_type(CARD_TYPE type)
 {
 	switch (type) {
@@ -97,6 +107,12 @@ static BOOLEAN is_sdcard(EFI_DEVICE_PATH *p)
 	UINT16 address;
 
 	ret = sdio_get(p, &handle, &sdio);
+	if (ret == EFI_NOT_FOUND) {
+		/* If the UEFI BIOS does not support EFI_SD_HOST_IO_PROTOCOL,
+		   then parse the device path instead */
+		return get_sdcard_device_path(p) != NULL;
+	}
+
 	if (EFI_ERROR(ret))
 		return FALSE;
 
