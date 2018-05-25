@@ -48,10 +48,20 @@
 #define WRITE_COUNTER_SIZE		4
 
 /* here 1024 means 1024 blocks, so 1024 blocks * 256 B = 256KB */
-#define RPMB_ADDR_BOUNDARY_SIZE 1024
+#define RPMB_ADDR_BOUNDARY_NATIVE  1024
+#define RPMB_ADDR_BOUNDARY_VIRTUAL 200
+#define RPMB_ADDR_BOUNDARY_SIZE get_rpmb_addr_boundary_size()
 
 static BOOLEAN g_initialized = FALSE;
 static rpmb_ops_func_t *storage_rpmb_ops;
+
+static UINT32 get_rpmb_addr_boundary_size(VOID)
+{
+	if (is_boot_device_virtual())
+		return RPMB_ADDR_BOUNDARY_VIRTUAL;
+	else
+		return RPMB_ADDR_BOUNDARY_NATIVE;
+}
 
 static EFI_STATUS rpmb_simulate_read_write_teedata_partition(
 		BOOLEAN bread, UINT32 offset, UINT32 len, void *data)

@@ -47,11 +47,15 @@
 #include "security.h"
 
 #define RPMB_DEVICE_STATE_BLOCK_COUNT            1
-#define RPMB_DEVICE_STATE_BLOCK_ADDR             2
+#define RPMB_DEVICE_STATE_BLOCK_ADDR_NATIVE      2
+#define RPMB_ROLLBACK_INDEX_BLOCK_ADDR_NATIVE    3
+#define RPMB_DEVICE_STATE_BLOCK_ADDR_VIRTUAL     100
+#define RPMB_ROLLBACK_INDEX_BLOCK_ADDR_VIRTUAL   101
+#define RPMB_DEVICE_STATE_BLOCK_ADDR             get_device_state_block_addr()
+#define RPMB_ROLLBACK_INDEX_BLOCK_ADDR           get_rollback_index_block_addr()
 #define RPMB_BLOCK_SIZE                          256
 #define RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK      (RPMB_BLOCK_SIZE/8)
 #define RPMB_ROLLBACK_INDEX_BLOCK_TOTAL_COUNT    8
-#define RPMB_ROLLBACK_INDEX_BLOCK_ADDR           3
 #define DEVICE_STATE_MAGIC 0xDC
 #define RPMB_ALL_BLOCK_TOTAL_COUNT        10
 
@@ -80,6 +84,22 @@ static void dump_rpmb_key(__attribute__((unused)) UINT8 *key)
 		SPrint(buf + i * 2, sizeof(buf) - i * 2, L"%02x", key[i]);
 	debug(L"Key: %s", buf);
 #endif
+}
+
+static UINT32 get_device_state_block_addr(VOID)
+{
+	if (is_boot_device_virtual())
+		return RPMB_DEVICE_STATE_BLOCK_ADDR_VIRTUAL;
+	else
+		return RPMB_DEVICE_STATE_BLOCK_ADDR_NATIVE;
+}
+
+static UINT32 get_rollback_index_block_addr(VOID)
+{
+	if (is_boot_device_virtual())
+		return RPMB_ROLLBACK_INDEX_BLOCK_ADDR_VIRTUAL;
+	else
+		return RPMB_ROLLBACK_INDEX_BLOCK_ADDR_NATIVE;
 }
 
 EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key)
@@ -689,7 +709,7 @@ EFI_STATUS rpmb_key_init(void)
 	RPMB_RESPONSE_RESULT result;
 	EFI_STATUS ret = EFI_SUCCESS;
 
-	if (is_eom_and_secureboot_enabled()) {
+	if (is_boot_device_virtual() || is_eom_and_secureboot_enabled()) {
 		ret = clear_teedata_flag();
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Clear teedata flag failed");
@@ -757,9 +777,15 @@ EFI_STATUS rpmb_storage_init(void)
 
 #ifndef RPMB_SIMULATE
 	if (!is_boot_device_removable()) {
-		// For removable storage, such as USB disk, always use simulate RPMB
-		// Check life cycle and secure boot.
-		real = is_eom_and_secureboot_enabled();
+		// For removable storage, such as USB disk, always use simulate RPMB.
+		// For virtual storage, always use real rpmb interface but the decision to
+		// use simulate or physical are in device module side not in android osloader.
+		// For other cases, Check life cycle and secure boot.
+		if (is_boot_device_virtual())
+			real = TRUE;
+		else
+			real = is_eom_and_secureboot_enabled();
+
 		if (real) {
 			// If life cycle is END USER and secure boot is enabled,
 			// then init the physical RPMB now
