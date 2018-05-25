@@ -82,5 +82,6 @@ EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
 BOOLEAN is_cur_storage_ufs(void);
 EFI_STATUS get_logical_block_size(UINTN *logical_blk_size);
 BOOLEAN is_boot_device_removable(void);
+BOOLEAN is_boot_device_virtual(void);
 
 #endif	/* _STORAGE_H_ */

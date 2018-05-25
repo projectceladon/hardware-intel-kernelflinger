@@ -495,3 +495,8 @@ BOOLEAN is_boot_device_removable(void)
 	return FALSE;
 #endif
 }
+
+BOOLEAN is_boot_device_virtual(void)
+{
+	return cur_storage == &STORAGE(STORAGE_VIRTUAL);
+}

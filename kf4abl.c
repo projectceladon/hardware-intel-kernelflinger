@@ -63,6 +63,7 @@
 #include "trusty_interface.h"
 #include "trusty_common.h"
 #endif
+#include "storage.h"
 
 typedef union {
 	uint32_t raw;
@@ -927,6 +928,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	set_boottime_stamp(TM_EFI_MAIN);
 	InitializeLib(image, sys_table);
 	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
+
+	if (!get_boot_device()) {
+		// Get boot device failed
+		error(L"Failed to find boot device");
+		return EFI_NO_MEDIA;
+        }
 
 #ifdef RPMB_STORAGE
 	rpmb_storage_init();
