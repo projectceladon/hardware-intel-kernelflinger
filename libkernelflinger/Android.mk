@@ -103,7 +103,10 @@ LOCAL_SRC_FILES := \
 	watchdog.c \
 	life_cycle.c \
 	qsort.c \
-	rpmb.c \
+	rpmb/rpmb.c \
+	rpmb/rpmb_emmc.c \
+	rpmb/rpmb_ufs.c \
+	rpmb/rpmb_storage_common.c \
 	timer.c \
 	nvme.c \
 	virtual_media.c
@@ -199,10 +202,10 @@ else
 endif
 
 ifeq ($(KERNELFLINGER_USE_RPMB),true)
-    LOCAL_SRC_FILES += rpmb_storage.c
+    LOCAL_SRC_FILES += rpmb/rpmb_storage.c
 else  # KERNELFLINGER_USE_RPMB == false
 ifeq ($(KERNELFLINGER_USE_RPMB_SIMULATE),true)
-    LOCAL_SRC_FILES += rpmb_storage.c
+    LOCAL_SRC_FILES += rpmb/rpmb_storage.c
 endif
 endif  # KERNELFLINGER_USE_RPMB
 
