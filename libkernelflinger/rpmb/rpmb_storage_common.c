@@ -30,36 +30,66 @@
  *
  */
 
-#ifndef _RPMB_H_
-#define _RPMB_H_
+#include <openssl/engine.h>
+#include <openssl/hmac.h>
+#include <openssl/rand.h>
 
-#include <lib.h>
 #include "rpmb_storage_common.h"
 
-EFI_STATUS rpmb_init(EFI_HANDLE disk_handle);
-EFI_STATUS get_storage_protocol(void **rpmb_dev, EFI_HANDLE disk_handle);
-EFI_STATUS program_rpmb_key(void *rpmb_dev, const void *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS get_storage_partition_num(void *rpmb_dev, UINT8 *current_part);
-EFI_STATUS storage_partition_switch(void *rpmb_dev, UINT8 part);
-EFI_STATUS get_rpmb_counter(void *rpmb_dev, UINT32 *write_counter, const void *key,
-		RPMB_RESPONSE_RESULT *result);
-EFI_STATUS read_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
-		const void *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS write_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
-		const void *key, RPMB_RESPONSE_RESULT *result);
-EFI_STATUS rpmb_send_request(void *rpmb_dev,
-		rpmb_data_frame *data_frame, UINT8 count, BOOLEAN is_rel_write);
-EFI_STATUS rpmb_get_response(void *rpmb_dev,
-		rpmb_data_frame *data_frame, UINT8 count);
+/* length of the part of the frame used for HMAC computation */
+#define HMAC_DATA_LEN \
+	(sizeof(rpmb_data_frame) - offsetof(rpmb_data_frame, data))
 
+INT32 rpmb_calc_hmac_sha256(rpmb_data_frame *frames, UINT8 blocks_cnt,
+		const UINT8 key[], UINT32 key_size,
+		UINT8 mac[], UINT32 mac_size)
+{
+	HMAC_CTX ctx;
+	INT32 ret = 1;
+	UINT32 i;
 
-EFI_STATUS simulate_get_rpmb_counter(UINT32 *write_counter, const void *key,
-		RPMB_RESPONSE_RESULT *result);
-EFI_STATUS simulate_program_rpmb_key(const void *key,
-		RPMB_RESPONSE_RESULT *result);
-EFI_STATUS simulate_read_rpmb_data(UINT32 offset, void *buffer,
-		UINT32 size);
-EFI_STATUS simulate_write_rpmb_data(UINT32 offset, void *buffer,
-		UINT32 size);
+	HMAC_CTX_init(&ctx);
+	ret = HMAC_Init_ex(&ctx, key, key_size, EVP_sha256(), NULL);
+	if (ret == 0)
+		goto out;
 
-#endif	/* _RPMB_H_ */
+	for (i = 0; i < blocks_cnt; i++)
+		HMAC_Update(&ctx, frames[i].data, HMAC_DATA_LEN);
+
+	ret = HMAC_Final(&ctx, mac, &mac_size);
+	if (ret == 0)
+		goto out;
+	if (mac_size != RPMB_MAC_SIZE) {
+		ret = 0;
+		goto out;
+	}
+
+out:
+	HMAC_CTX_cleanup(&ctx);
+
+	return ret;
+}
+
+INT32 rpmb_check_mac(const UINT8 *key, rpmb_data_frame *frames, UINT8 cnt)
+{
+	UINT8 mac[RPMB_MAC_SIZE];
+	INT32 ret = 1;
+
+	if (cnt == 0) {
+		debug(L"RPMB 0 output frames");
+		return 0;
+	}
+
+	ret = rpmb_calc_hmac_sha256(frames, cnt, key, RPMB_KEY_SIZE, mac, RPMB_MAC_SIZE);
+	if (ret == 0) {
+		debug(L"calculate hmac failed");
+		return ret;
+	}
+
+	if (memcmp(mac, frames[cnt - 1].key_mac, RPMB_MAC_SIZE)) {
+		debug(L"RPMB hmac mismatch resule MAC");
+		return 0;
+	}
+
+	return ret;
+}

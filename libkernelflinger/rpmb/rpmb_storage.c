@@ -67,7 +67,7 @@ static UINT8 rpmb_buffer[RPMB_BLOCK_SIZE];
 #define TEEDATA_KEY_MAGIC_ADDR          0
 #define TEEDATA_KEY_MAGIC_LENGTH        7
 
-static UINT8 *derived_key = NULL;
+static UINT8 *derived_key;
 static UINT8 number_derived_key;
 
 EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key)
@@ -75,7 +75,7 @@ EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num
 	EFI_STATUS ret = EFI_SUCCESS;
 	UINT8 i;
 
-	if ((num_key > RPMB_NUMBER_KEY ) || !kbuf || ((num_key * RPMB_KEY_SIZE) > kbuf_len))
+	if ((num_key > RPMB_NUMBER_KEY) || !kbuf || ((num_key * RPMB_KEY_SIZE) > kbuf_len))
 		return EFI_INVALID_PARAMETER;
 
 	if (derived_key)
@@ -174,7 +174,7 @@ void set_rpmb_key(UINT8 *key)
 EFI_STATUS clear_teedata_flag(void)
 {
 	EFI_STATUS ret;
-	uint8_t data[ TEEDATA_KEY_MAGIC_LENGTH + RPMB_KEY_SIZE ] = {0};
+	uint8_t data[TEEDATA_KEY_MAGIC_LENGTH + RPMB_KEY_SIZE] = {0};
 
 	debug(L"enter clear teedata flag.");
 
@@ -318,7 +318,7 @@ static EFI_STATUS rpmb_read_counter_real(const void *key, RPMB_RESPONSE_RESULT *
 	UINT32 write_counter;
 
 	ret = get_rpmb_counter(NULL, &write_counter, key, result);
-	if(EFI_ERROR(ret)) {
+	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read counter for physical rpmb");
 		return ret;
 	}
@@ -375,8 +375,8 @@ static EFI_STATUS write_rpmb_rollback_index_real(size_t index, UINT64 in_rollbac
 	UINT16 blk_addr = RPMB_ROLLBACK_INDEX_BLOCK_ADDR;
 	UINT16 blk_offset;
 
-        blk_addr += index / RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK;
-        blk_offset = (index % RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK) * sizeof(UINT64);
+	blk_addr += index / RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK;
+	blk_offset = (index % RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK) * sizeof(UINT64);
 
 	ret = read_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
@@ -385,11 +385,11 @@ static EFI_STATUS write_rpmb_rollback_index_real(size_t index, UINT64 in_rollbac
 		return ret;
 	}
 
-        if (!memcmp(&in_rollback_index, rpmb_buffer + blk_offset, sizeof(UINT64))) {
+	if (!memcmp(&in_rollback_index, rpmb_buffer + blk_offset, sizeof(UINT64))) {
 		return EFI_SUCCESS;
 	}
 
-        memcpy(rpmb_buffer + blk_offset, &in_rollback_index, sizeof(UINT64));
+	memcpy(rpmb_buffer + blk_offset, &in_rollback_index, sizeof(UINT64));
 	ret = write_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
@@ -406,61 +406,61 @@ static EFI_STATUS read_rpmb_rollback_index_real(size_t index, UINT64 *out_rollba
 	UINT16 blk_addr = RPMB_ROLLBACK_INDEX_BLOCK_ADDR;
 	UINT16 blk_offset;
 
-        blk_addr += index / RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK;
-        blk_offset = (index % RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK) * sizeof(UINT64);
+	blk_addr += index / RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK;
+	blk_offset = (index % RPMB_ROLLBACK_INDEX_COUNT_PER_BLOCK) * sizeof(UINT64);
 	ret = read_rpmb_data(NULL, 1, blk_addr, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read rollback index");
 		return ret;
 	}
-        memcpy(out_rollback_index, rpmb_buffer + blk_offset, sizeof(UINT64));
+	memcpy(out_rollback_index, rpmb_buffer + blk_offset, sizeof(UINT64));
 	debug(L"rollback index=%16x", *out_rollback_index);
 	return EFI_SUCCESS;
 }
 
 static EFI_STATUS write_rpmb_keybox_magic_real(UINT16 offset, void *buffer)
 {
-        EFI_STATUS ret;
-        RPMB_RESPONSE_RESULT rpmb_result;
+	EFI_STATUS ret;
+	RPMB_RESPONSE_RESULT rpmb_result;
 
-        ret = read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
-        debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
-        if (EFI_ERROR(ret)) {
-               efi_perror(ret, L"Failed to read keybox magic data");
-               return ret;
-        }
+	ret = read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
+	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read keybox magic data");
+		return ret;
+	}
 
-        if (!memcmp(buffer, rpmb_buffer, sizeof(UINT64))) {
-               return EFI_SUCCESS;
-        }
+	if (!memcmp(buffer, rpmb_buffer, sizeof(UINT64))) {
+		return EFI_SUCCESS;
+	}
 
-        memcpy(rpmb_buffer, buffer, sizeof(UINT64));
-        ret = write_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
-        debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
-        if (EFI_ERROR(ret)) {
-               efi_perror(ret, L"Failed to write keybox magic data");
-               return ret;
-        }
+	memcpy(rpmb_buffer, buffer, sizeof(UINT64));
+	ret = write_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
+	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to write keybox magic data");
+		return ret;
+	}
 
-        return EFI_SUCCESS;
+	return EFI_SUCCESS;
 }
 
 static EFI_STATUS read_rpmb_keybox_magic_real(UINT16 offset, void *buffer)
 {
-        EFI_STATUS ret;
-        RPMB_RESPONSE_RESULT rpmb_result;
+	EFI_STATUS ret;
+	RPMB_RESPONSE_RESULT rpmb_result;
 
-        ret = read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
-        debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
-        if (EFI_ERROR(ret)) {
-               efi_perror(ret, L"Failed to read keybox magic data");
-               return ret;
-        }
+	ret = read_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
+	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read keybox magic data");
+		return ret;
+	}
 
-        memcpy(buffer, rpmb_buffer, sizeof(UINT64));
+	memcpy(buffer, rpmb_buffer, sizeof(UINT64));
 
-        return EFI_SUCCESS;
+	return EFI_SUCCESS;
 }
 
 static BOOLEAN is_rpmb_programed_simulate(void)
@@ -499,7 +499,7 @@ static EFI_STATUS rpmb_read_counter_simulate(const void *key, RPMB_RESPONSE_RESU
 	UINT32 write_counter;
 
 	efi_ret = simulate_get_rpmb_counter(&write_counter, key, result);
-	if(EFI_ERROR(efi_ret)) {
+	if (EFI_ERROR(efi_ret)) {
 		efi_perror(efi_ret, L"Failed to read counter for simulate");
 		return efi_ret;
 	}
@@ -573,11 +573,11 @@ static EFI_STATUS write_rpmb_rollback_index_simulate(size_t index, UINT64 in_rol
 		return EFI_SUCCESS;
 	}
 
-        if (!memcmp(&in_rollback_index, rpmb_buffer, sizeof(UINT64))) {
+	if (!memcmp(&in_rollback_index, rpmb_buffer, sizeof(UINT64))) {
 		return EFI_SUCCESS;
 	}
 
-        memcpy(rpmb_buffer, &in_rollback_index, sizeof(UINT64));
+	memcpy(rpmb_buffer, &in_rollback_index, sizeof(UINT64));
 	ret = simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
 	debug(L"ret=%d", ret);
 	if (EFI_ERROR(ret)) {
@@ -604,66 +604,66 @@ static EFI_STATUS read_rpmb_rollback_index_simulate(size_t index, UINT64 *out_ro
 		efi_perror(ret, L"Failed to read rollback index");
 		return ret;
 	}
-        memcpy(out_rollback_index, rpmb_buffer, sizeof(UINT64));
+	memcpy(out_rollback_index, rpmb_buffer, sizeof(UINT64));
 	debug(L"rollback index=%16x", *out_rollback_index);
 	return EFI_SUCCESS;
 }
 
 static EFI_STATUS write_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
 {
-        EFI_STATUS ret;
-        UINT32 byte_offset;
+	EFI_STATUS ret;
+	UINT32 byte_offset;
 
-        byte_offset = offset * RPMB_BLOCK_SIZE;
-        ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
-        debug(L"ret=%d", ret);
-        if (EFI_ERROR(ret)) {
-               efi_perror(ret, L"Failed to read keybox magic data");
-               return ret;
-        }
+	byte_offset = offset * RPMB_BLOCK_SIZE;
+	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+	debug(L"ret=%d", ret);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read keybox magic data");
+		return ret;
+	}
 
-        /*gpt not updated, force success*/
-        if (ret == EFI_NOT_FOUND) {
-                return EFI_SUCCESS;
-        }
+	/*gpt not updated, force success*/
+	if (ret == EFI_NOT_FOUND) {
+		return EFI_SUCCESS;
+	}
 
-        if (!memcmp(buffer, rpmb_buffer, sizeof(UINT64))) {
-                return EFI_SUCCESS;
-        }
+	if (!memcmp(buffer, rpmb_buffer, sizeof(UINT64))) {
+		return EFI_SUCCESS;
+	}
 
-        memcpy(rpmb_buffer, buffer, sizeof(UINT64));
-        ret = simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
-        debug(L"ret=%d", ret);
-        if (EFI_ERROR(ret)) {
-               efi_perror(ret, L"Failed to write keybox magic data");
-               return ret;
-        }
-        return EFI_SUCCESS;
+	memcpy(rpmb_buffer, buffer, sizeof(UINT64));
+	ret = simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+	debug(L"ret=%d", ret);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to write keybox magic data");
+		return ret;
+	}
+	return EFI_SUCCESS;
 
 }
 
 static EFI_STATUS read_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
 {
-        EFI_STATUS ret;
-        UINT32 byte_offset;
+	EFI_STATUS ret;
+	UINT32 byte_offset;
 
-        byte_offset = offset * RPMB_BLOCK_SIZE;
-        ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
-        debug(L"ret=%d", ret);
-        /*gpt not updated, force success*/
-        if (ret == EFI_NOT_FOUND) {
-                memset(buffer, 0, sizeof(UINT64));
-                return EFI_SUCCESS;
-        }
+	byte_offset = offset * RPMB_BLOCK_SIZE;
+	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+	debug(L"ret=%d", ret);
+	/*gpt not updated, force success*/
+	if (ret == EFI_NOT_FOUND) {
+		memset(buffer, 0, sizeof(UINT64));
+		return EFI_SUCCESS;
+	}
 
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Failed to read keybox magic data");
-                return ret;
-        }
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to read keybox magic data");
+		return ret;
+	}
 
-        memcpy(buffer, rpmb_buffer, sizeof(UINT64));
+	memcpy(buffer, rpmb_buffer, sizeof(UINT64));
 
-        return EFI_SUCCESS;
+	return EFI_SUCCESS;
 }
 
 void rpmb_storage_init(BOOLEAN real)

@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2018, Intel Corporation
  * All rights reserved.
  *
- * Author: Andrew Boie <andrew.p.boie@intel.com>
+ * Author: kwen <kui.wen@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,21 +30,11 @@
  *
  */
 
-#ifndef KERNELFLINGER_VERSION_H
-#define KERNELFLINGER_VERSION_H
+#ifndef _RPMB_UFS_H_
+#define _RPMB_UFS_H_
 
-#define WIDE_STR2(x) L ## x
-#define WIDE_STR(x) WIDE_STR2(x)
+#include "rpmb_storage_common.h"
 
-#if defined(USER)
-#define BUILD_VARIANT           ""
-#elif defined(USERDEBUG)
-#define BUILD_VARIANT           "-userdebug"
-#else
-#define BUILD_VARIANT           "-eng"
-#endif
-
-#define KERNELFLINGER_VERSION_8	"kernelflinger-05.0A" BUILD_VARIANT
-#define KERNELFLINGER_VERSION   WIDE_STR(KERNELFLINGER_VERSION_8)
+rpmb_ops_func_t * get_ufs_storage_rpmb_ops();
 
 #endif
