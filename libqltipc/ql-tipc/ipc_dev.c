@@ -179,7 +179,7 @@ int trusty_ipc_dev_create(struct trusty_ipc_dev **idev,
 
     /* allocate shared buffer */
     dev->buf_size = buf_size;
-    dev->buf_vaddr = trusty_membuf_alloc(&dev->buf_ns, buf_size);
+    dev->buf_vaddr = trusty_membuf_alloc_page_aligned(&dev->buf_ns, buf_size);
     if (!dev->buf_vaddr) {
         trusty_error("%a: failed to allocate shared memory\n", __func__);
         rc = TRUSTY_ERR_NO_MEMORY;
@@ -202,7 +202,7 @@ int trusty_ipc_dev_create(struct trusty_ipc_dev **idev,
 
 err_create_sec_dev:
 err_alloc_membuf:
-    trusty_membuf_free(dev->buf_vaddr);
+    trusty_membuf_free_page_aligned(dev->buf_vaddr, dev->buf_size);
     trusty_free(dev);
     return rc;
 }
@@ -221,7 +221,7 @@ void trusty_ipc_dev_shutdown(struct trusty_ipc_dev *dev)
         trusty_error("%a: failed (%d) to shutdown Trusty IPC device\n",
                      __func__, rc);
     }
-    trusty_membuf_free(dev->buf_vaddr);
+    trusty_membuf_free_page_aligned(dev->buf_vaddr, dev->buf_size);
     trusty_free(dev);
 }
 
