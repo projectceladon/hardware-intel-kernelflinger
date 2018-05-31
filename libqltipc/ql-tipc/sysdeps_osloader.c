@@ -107,32 +107,32 @@ void trusty_free(void *addr)
         FreePool(addr);
 }
 
-void *trusty_membuf_alloc(struct ns_mem_page_info *page_info, size_t size)
+void *trusty_membuf_alloc_page_aligned(struct ns_mem_page_info *page_info, size_t size)
 {
-    void *pa = NULL, *aligned_pa = NULL;
+    void *pa = NULL;
     int res;
     EFI_STATUS ret;
+    EFI_PHYSICAL_ADDRESS Memory = 0XFFFFFFFF;
 
-    ret = alloc_aligned(&pa, &aligned_pa, size, 4096);
-
+    ret = uefi_call_wrapper(BS->AllocatePages, 4, AllocateMaxAddress,
+                                            EfiLoaderData, EFI_SIZE_TO_PAGES(size), &Memory);
     if (EFI_ERROR(ret)) {
-        trusty_printf("alloc_aligned failed\n");
-    }
-
-    if (!aligned_pa)
+        trusty_printf("alloc page failed\n");
         return NULL;
+    }
 
     /* get memory attibutes */
-    res = trusty_encode_page_info(page_info, aligned_pa);
+    pa = (VOID *)(UINTN)Memory;
+    res = trusty_encode_page_info(page_info, pa);
     if (res) {
-        trusty_membuf_free(pa);
+        trusty_membuf_free_page_aligned(pa, size);
         return NULL;
     }
-    return aligned_pa;
+    return pa;
 }
 
-void trusty_membuf_free(void *pa)
+void trusty_membuf_free_page_aligned(void *pa, size_t size)
 {
     if (pa)
-        FreePool(pa);
+        uefi_call_wrapper(BS->FreePages, 2, (EFI_PHYSICAL_ADDRESS)(UINTN)pa, EFI_SIZE_TO_PAGES(size));
 }
