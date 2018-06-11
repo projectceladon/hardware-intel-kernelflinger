@@ -57,6 +57,7 @@ typedef enum {
 struct storage {
 	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
 	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
+	EFI_STATUS (*get_erase_block_size)(EFI_HANDLE handle, UINTN *erase_blk_size);
 	BOOLEAN (*probe)(EFI_DEVICE_PATH *p);
 	const CHAR16 *name;
 };
@@ -69,9 +70,11 @@ EFI_STATUS get_boot_device_type(enum storage_type *type);
 EFI_STATUS storage_set_boot_device(EFI_HANDLE device);
 EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
 EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
+EFI_STATUS storage_get_erase_block_size(UINTN *erase_blk_size);
 EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 		     VOID *pattern, UINTN pattern_blocks);
 EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
 BOOLEAN is_cur_storage_ufs();
+EFI_STATUS get_logical_block_size(UINTN *logical_blk_size);
 
 #endif	/* _STORAGE_H_ */
