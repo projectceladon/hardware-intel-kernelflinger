@@ -175,9 +175,41 @@ static EFI_STATUS mmc_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio,
 			  CARD_ADDRESS, erase_grp_size, timeout, TRUE);
 }
 
+static EFI_STATUS mmc_get_erase_block_size(EFI_HANDLE handle, UINTN *erase_blk_size)
+{
+	EFI_STATUS ret;
+	EFI_SD_HOST_IO_PROTOCOL *sdio;
+	EFI_HANDLE sdio_handle = NULL;
+	EFI_DEVICE_PATH *dev_path;
+	UINTN erase_grp_size = 0, timeout = 0;
+
+	dev_path = DevicePathFromHandle(handle);
+	if (!dev_path) {
+		error(L"Failed to get device path");
+		return EFI_UNSUPPORTED;
+	}
+
+	ret = sdio_get(dev_path, &sdio_handle, &sdio);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get SDIO protocol");
+		return ret;
+	}
+
+	ret = get_mmc_info(sdio, &erase_grp_size, &timeout);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get erase group size");
+		return ret;
+	}
+
+	*erase_blk_size = erase_grp_size;
+
+	return EFI_SUCCESS;
+}
+
 struct storage STORAGE(STORAGE_EMMC) = {
 	.erase_blocks = mmc_erase_blocks,
 	.check_logical_unit = mmc_check_logical_unit,
+	.get_erase_block_size = mmc_get_erase_block_size,
 	.probe = is_emmc,
 	.name = L"eMMC"
 };

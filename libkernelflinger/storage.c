@@ -33,6 +33,7 @@
 #include <log.h>
 #include <lib.h>
 #include "storage.h"
+#include "gpt.h"
 #include "pci.h"
 #include "protocol/EraseBlock.h"
 
@@ -382,4 +383,60 @@ BOOLEAN is_cur_storage_ufs()
 		return TRUE;
 	else
 		return FALSE;
+}
+
+EFI_STATUS get_logical_block_size(UINTN *logical_blk_size)
+{
+	struct gpt_partition_interface gparti;
+	EFI_STATUS ret;
+
+	ret = gpt_get_root_disk(&gparti, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get disk information");
+		return ret;
+	}
+
+	*logical_blk_size = gparti.bio->Media->BlockSize;
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS storage_get_erase_block_size(UINTN *erase_blk_size)
+{
+	EFI_STATUS ret;
+	EFI_HANDLE *handles;
+	UINTN nb_handle = 0;
+	UINTN i;
+	EFI_DEVICE_PATH *device_path = NULL;
+	struct gpt_partition_interface gparti;
+
+	if (cur_storage->get_erase_block_size){
+		ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol, &BlockIoProtocol, NULL, &nb_handle, &handles);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to locate Block IO Protocol");
+			return ret;
+		}
+
+		for (i = 0; i < nb_handle; i++) {
+			device_path = DevicePathFromHandle(handles[i]);
+			if (is_boot_device(device_path))
+				break;
+		}
+
+		if (i == nb_handle)
+			goto notfound;
+
+		return cur_storage->get_erase_block_size(handles[i], erase_blk_size);
+	}
+
+notfound:
+	ret = gpt_get_root_disk(&gparti, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get disk information");
+		return ret;
+	}
+
+	*erase_blk_size = gparti.bio->Media->BlockSize;
+
+	return EFI_SUCCESS;
 }
