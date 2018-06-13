@@ -997,10 +997,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		return ret;
 	}
 
-#ifdef __FORCE_FASTBOOT
-	target = FASTBOOT;
-#endif
-
 #ifndef __FORCE_FASTBOOT
 	debug(L"Before Check BCB target is %d", target);
 	bcb_target = check_bcb(&target_path, &oneshot);
@@ -1020,6 +1016,23 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	}
 #endif
 
+#ifdef __FORCE_FASTBOOT
+	ret = slot_init_use_misc();
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Slot management initialization failed by misc");
+		return ret;
+	}
+
+	for (;;) {
+#ifdef CRASHMODE_USE_ADB
+		if (target == CRASHMODE) {
+			enter_crashmode(&target);
+			continue;
+		}
+#endif
+		enter_fastboot_mode(&target);
+	}
+#else
 	if (target == FASTBOOT) {
 		ret = slot_init_use_misc();
 		if (EFI_ERROR(ret)) {
@@ -1056,6 +1069,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 			reboot_to_target(target, EfiResetCold);
 		}
 	}
-
+#endif
 	return EFI_SUCCESS;
 }
