@@ -181,32 +181,6 @@ static EFI_STATUS read_load_options(EFI_HANDLE handle)
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS verify_image(EFI_HANDLE handle, CHAR16 *path)
-{
-	EFI_STATUS ret, unload_ret = EFI_SUCCESS;
-	EFI_DEVICE_PATH *edp;
-	EFI_HANDLE image;
-
-	edp = FileDevicePath(handle, path);
-	if (!edp) {
-		error(L"Couldn't generate a path for '%s'", path);
-		return EFI_INVALID_PARAMETER;
-	}
-
-	ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
-				edp, NULL, 0, &image);
-	FreePool(edp);
-	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Failed to load '%s'", path);
-	if (!EFI_ERROR(ret) || ret == EFI_SECURITY_VIOLATION) {
-		unload_ret = uefi_call_wrapper(BS->UnloadImage, 1, image);
-		if (EFI_ERROR(unload_ret))
-			efi_perror(unload_ret, L"Failed to unload image");
-	}
-
-	return EFI_ERROR(ret) ? ret : unload_ret;
-}
-
 /* If the bootloader partition is the EFI System partition, we perform
  * a "safe flash procedure":
  * 1. write data to the BOOTLOADER_TMP_PART partition

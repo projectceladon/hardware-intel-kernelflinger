@@ -90,6 +90,7 @@
 #define DIR_BITS	(32 - PAGE_BITS)
 #define DIR_ATTRIBUTES	(1)			/* Directory is present */
 #define MAX_MEMMAP_SZ	(128 * PAGE_SIZE)
+#define MIN_MEMMAP_SZ	(32 * PAGE_SIZE)
 
 static struct memmap_context {
 	BOOLEAN initialized;
@@ -115,38 +116,47 @@ static volatile EFI_PHYSICAL_ADDRESS directory[1 << DIR_BITS]
 static volatile EFI_PHYSICAL_ADDRESS dir_ptr[1 << 2]
 	__attribute__((aligned(0x20)));
 
-static EFI_STATUS find_free_memory_region(CHAR8 *entries, UINTN nr_entries,
+static EFI_STATUS find_usable_memory_region(CHAR8 *entries, UINTN nr_entries,
 					  UINTN entry_sz)
 {
-	EFI_MEMORY_DESCRIPTOR *cur, *next;
+	EFI_MEMORY_DESCRIPTOR *cur;
 	EFI_PHYSICAL_ADDRESS cur_end, start, end;
-	UINT64 size, max_size = 0;
+	UINT64 size;
+	UINT32 type;
 	UINTN i;
 
-	if (nr_entries <= 1)
-		return EFI_NOT_FOUND;
-
-	for (i = 0; i < nr_entries - 1; i++) {
+	ctx.src.start = 0;
+	ctx.src.end = 0;
+	for (i = 0; i < nr_entries; i++) {
 		cur = (EFI_MEMORY_DESCRIPTOR *)(entries + entry_sz * i);
-		next = (EFI_MEMORY_DESCRIPTOR *)(entries + entry_sz * (i + 1));
-
 		if (cur->PhysicalStart > UINT32_MAX)
-			break;
+			continue;
+
+		type = cur->Type;
+		if (type != EfiLoaderCode && type != EfiBootServicesData
+			&& type != EfiBootServicesCode && type != EfiLoaderData
+			&& type != EfiConventionalMemory)
+				continue;
 
 		cur_end = cur->PhysicalStart +
 			cur->NumberOfPages * EFI_PAGE_SIZE;
-		start = ALIGN(cur_end, PAGE_SIZE);
-		end = ALIGN_DOWN(next->PhysicalStart, PAGE_SIZE);
+		end = ALIGN_DOWN(cur_end, PAGE_SIZE);
+		start = ALIGN(cur->PhysicalStart, PAGE_SIZE);
 
 		if (start >= end)
 			continue;
 
+		if (end - start < MIN_MEMMAP_SZ)
+			continue;
+
+		if (start < ctx.src.start)
+			continue;
+
 		size = min(end - start, (UINT64)MAX_MEMMAP_SZ);
-		if (size > max_size) {
-			ctx.src.start = start;
-			ctx.src.end = start + size;
-			max_size = ctx.size = size;
-		}
+
+		ctx.src.start = end - size;
+		ctx.src.end = end;
+		ctx.size = size;
 	}
 
 	return ctx.src.start ? EFI_SUCCESS : EFI_NOT_FOUND;
@@ -197,7 +207,7 @@ EFI_STATUS pae_init(CHAR8 *entries, UINTN nr_entries, UINTN entry_sz)
 	if (!(reg[3] & PAE_SUPPORT))
 		return EFI_UNSUPPORTED;
 
-	ret = find_free_memory_region(entries, nr_entries, entry_sz);
+	ret = find_usable_memory_region(entries, nr_entries, entry_sz);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -226,9 +236,6 @@ static EFI_STATUS memmap(EFI_PHYSICAL_ADDRESS addr)
 	if (!ctx.initialized)
 		return EFI_NOT_READY;
 
-	if (addr >= ctx.dst.start && addr < ctx.dst.end)
-		return EFI_SUCCESS;
-
 	addr &= ~(PAGE_SIZE - 1);
 	ctx.dst.start = addr;
 	for (src = ctx.src.start; src < ctx.src.end; src += PAGE_SIZE) {
@@ -253,7 +260,9 @@ EFI_STATUS pae_map(EFI_PHYSICAL_ADDRESS addr, unsigned char **to, UINT64 *len)
 			*len = UINT32_MAX;
 		if (addr > UINT32_MAX - *len)
 			*len = UINT32_MAX - addr;
-		return EFI_SUCCESS;
+
+		if (addr + *len <= ctx.dst.start || addr >= ctx.dst.end)
+			return EFI_SUCCESS;
 	}
 
 	ret = memmap(addr);

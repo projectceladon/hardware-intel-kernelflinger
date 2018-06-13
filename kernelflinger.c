@@ -64,6 +64,9 @@
 #include "trusty_interface.h"
 #include "trusty_common.h"
 #endif
+#include "gpt.h"
+#include "protocol.h"
+#include "uefi_utils.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const CHAR16 __attribute__((used)) magic[] = L"### kernelflinger ###";
@@ -90,6 +93,18 @@ static const CHAR16 __attribute__((used)) magic[] = L"### kernelflinger ###";
 
 /* BIOS Capsule update file */
 #define FWUPDATE_FILE             L"\\BIOSUPDATE.fv"
+
+#define KFSELF_FILE               L"\\EFI\\BOOT\\kernelflinger.efi"
+#define KFUPDATE_FILE             L"\\EFI\\BOOT\\kernelflinger_new.efi"
+#define KFBACKUP_FILE             L"\\EFI\\BOOT\\kernelflinger_bak.efi"
+
+#ifndef ARCH_X86_64
+#define BOOTLOADER_FILE           L"\\EFI\\BOOT\\bootia32.efi"
+#define BOOTLOADER_FILE_BAK       L"\\EFI\\BOOT\\bootia32_bak.efi"
+#else
+#define BOOTLOADER_FILE           L"\\EFI\\BOOT\\bootx64.efi"
+#define BOOTLOADER_FILE_BAK       L"\\EFI\\BOOT\\bootx64_bak.efi"
+#endif  // ARCH_X86_64
 
 /* Crash event menu settings:
  * Maximum time between the first and the last watchdog reset.  If the
@@ -893,7 +908,6 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 {
         EFI_STATUS ret;
 #ifdef USE_TRUSTY
-        struct rot_data_t rot_data;
         VOID *tosimage = NULL;
 #endif
 #ifdef USER
@@ -928,22 +942,32 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 #endif
                 }
                 debug(L"loading trusty");
-#ifdef USE_AVB
-                ret = get_rot_data(bootimage, boot_state, NULL, 0, &rot_data);
-#else
-                ret = get_rot_data(bootimage, boot_state, verifier_cert, &rot_data);
-#endif
-                if (EFI_ERROR(ret)){
-                        efi_perror(ret, L"Unable to get the rot_data for trusty");
-                        die();
-                }
-                set_trusty_param((VOID *)&rot_data);
                 ret = load_tos_image(&tosimage);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"Load tos image failed");
                         die();
                 }
-                memcpy(&g_rot_data, &rot_data, sizeof(struct rot_data_t));
+#ifdef USE_AVB
+                const UINT8 *vbmeta_pub_key;
+                UINTN vbmeta_pub_key_len;
+
+                ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
+                        slot_data->vbmeta_images[0].vbmeta_size,
+                        &vbmeta_pub_key,
+                        &vbmeta_pub_key_len);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to get the vbmeta_pub_key");
+                        die();
+                }
+
+                ret = get_rot_data(bootimage, boot_state, vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
+#else
+                ret = get_rot_data(bootimage, boot_state, verifier_cert, &g_rot_data);
+#endif
+                if (EFI_ERROR(ret)){
+                        efi_perror(ret, L"Unable to get the root of trust data for trusty");
+                        die();
+                }
 
                 ret = start_trusty(tosimage);
                 if (EFI_ERROR(ret)) {
@@ -1238,13 +1262,114 @@ static void flash_bootloader_policy(void)
 out:
         if (bootimage != NULL) {
 #ifdef USE_AVB
-            avb_slot_verify_data_free(bootimage);
+                avb_slot_verify_data_free(bootimage);
 #else
-            FreePool(bootimage);
+                FreePool(bootimage);
 #endif
        }
 }
 #endif
+
+EFI_STATUS check_kf_upgrade(void)
+{
+        EFI_STATUS ret;
+        EFI_FILE_IO_INTERFACE *io = NULL;
+        EFI_GUID SimpleFileSystemProtocol = SIMPLE_FILE_SYSTEM_PROTOCOL;
+        EFI_HANDLE esp_handle = NULL;
+        CHAR16 *self_path = BOOTLOADER_FILE;
+        CHAR16 *bak_path = BOOTLOADER_FILE_BAK;
+
+        ret = gpt_get_partition_handle(BOOTLOADER_LABEL, LOGICAL_UNIT_USER,
+                       &esp_handle);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to get ESP partition");
+                goto out;
+        }
+
+        ret = handle_protocol(esp_handle, &SimpleFileSystemProtocol,
+                (void **)&io);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"HandleProtocol for ESP partition failed");
+                goto out;
+        }
+
+        if (!uefi_exist_file_root(io, KFUPDATE_FILE)) {
+                debug(L"Kernelflinger upgrade file is not exist");
+                goto out;
+        }
+        debug(L"Kernelflinger upgrade file is exist");
+
+        ret = verify_image(esp_handle, KFUPDATE_FILE);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Verify upgrade image failed");
+                uefi_delete_file(io, KFUPDATE_FILE);
+                goto out;
+        }
+        debug(L"Success to verify the upgrade image");
+
+        if (g_loaded_image != NULL
+                        && g_loaded_image->FilePath != NULL
+                        && g_loaded_image->FilePath->Type == MEDIA_DEVICE_PATH
+                        && g_loaded_image->FilePath->SubType == MEDIA_FILEPATH_DP) {
+                debug(L"Self path name: %s", ((FILEPATH_DEVICE_PATH *)(g_loaded_image->FilePath))->PathName);
+                self_path = ((FILEPATH_DEVICE_PATH *)(g_loaded_image->FilePath))->PathName;
+                if (StrCmp(self_path, BOOTLOADER_FILE)) {
+                        if (StrCmp(self_path, KFSELF_FILE)) {
+                                error(L"Skip check the upgrade file");
+                                goto out;
+                        }
+                        bak_path = KFBACKUP_FILE;
+                }
+        } else {
+                // maybe loaded by the "fastboot boot" command, or the BIOS not support
+                // Use the default value
+                error(L"Loaded image or FilePath is NULL");
+        }
+
+        // Verify it again
+        if (!uefi_exist_file_root(io, self_path)) {
+                error(L"Can't find file %s", self_path);
+                ret = EFI_NOT_FOUND;
+                goto out;
+        }
+
+        if (uefi_exist_file_root(io, bak_path)) {
+                ret = uefi_delete_file(io, bak_path);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to delete %s", bak_path);
+                        goto out;
+                }
+                debug(L"Success to delete old %s", bak_path);
+        }
+        ret = uefi_rename_file(io, self_path, bak_path);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to rename the %s to %s", self_path, bak_path);
+                goto out;
+        }
+        debug(L"Success rename file %s to %s", self_path, bak_path);
+        ret = uefi_rename_file(io, KFUPDATE_FILE, self_path);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to rename the upgrade file %s to %s", KFUPDATE_FILE, self_path);
+                goto out;
+        }
+        debug(L"Success rename the upgrade file %s to %s", KFUPDATE_FILE, self_path);
+
+        // Check whether is the load options
+        if (g_loaded_image != NULL && g_loaded_image->LoadOptions != NULL) {
+                // There is load options
+                // Reboot now
+                error(L"I am about to reset the system after upgrade the boot loader, LoadOptionsSize: %d, option: %s",
+                                g_loaded_image->LoadOptionsSize, (CHAR16 *)g_loaded_image->LoadOptions);
+                reboot(NULL, EfiResetWarm);
+                return EFI_SUCCESS;
+        }
+        error(L"I am about to load the new boot loader after upgrade it");
+        enter_efi_binary(self_path, FALSE);
+        reboot(NULL, EfiResetCold);
+
+out:
+        return ret;
+}
 
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
@@ -1303,6 +1428,9 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 uefi_call_wrapper(RT->ResetSystem, 4, resetType, EFI_SUCCESS, 0,
                                 NULL);
         }
+
+        check_kf_upgrade();
+
 
 #ifdef RPMB_STORAGE
         // Init the rpmb

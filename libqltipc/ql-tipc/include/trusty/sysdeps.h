@@ -112,11 +112,11 @@ void trusty_free(void *addr);
  * @mem_inf:  Stores cache attributes
  * Returns:   vaddr of allocated memory
  */
-void *trusty_membuf_alloc(struct ns_mem_page_info *mem_inf,
+void *trusty_membuf_alloc_page_aligned(struct ns_mem_page_info *mem_inf,
                           size_t size) TRUSTY_ATTR_WARN_UNUSED_RESULT;
 /*
- * Frees memory at @vaddr allocated by trusty_membuf_alloc
+ * Frees memory at @vaddr allocated by trusty_membuf_alloc_page_aligned
  */
-void trusty_membuf_free(void *vaddr);
+void trusty_membuf_free_page_aligned(void *vaddr, size_t size);
 
 #endif /* TRUSTY_SYSDEPS_H_ */

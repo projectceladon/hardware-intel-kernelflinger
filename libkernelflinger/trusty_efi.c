@@ -44,11 +44,12 @@
 #include "gpt.h"
 #include "efilinux.h"
 #include "libtipc.h"
+#include "rpmb_storage.h"
 
 /* Trusty OS (TOS) definitions */
 #define TOS_HEADER_MAGIC         0x6d6d76656967616d
 #define TOS_HIGH_ADDR            0x3fffffff   /* Less than 1 GB */
-#define TOS_STARTUP_VERSION      0x01
+#define TOS_STARTUP_VERSION      0x02
 #define SIPI_AP_HIGH_ADDR        0x100000  /* Less than 1MB */
 #define SIPI_AP_MEMORY_LENGTH    0x1000  /* 4KB in length */
 #define VMM_MEM_BASE             0x34C00000
@@ -56,32 +57,58 @@
 #define TRUSTY_MEM_BASE          0x32C00000
 #define TRUSTY_MEM_SIZE          0x01000000
 
-/* This is structure to proivde required data to Trusty when calling Trusty entry.
- * It is required to send the public key used to verify the android boot image,
- * the state of the device, the EFI memory map which is contained in the platform
- * info structure and the return address
+#define BOOTLOADER_SEED_MAX_ENTRIES  10
+#define SECURITY_EFI_TRUSTY_SEED_LEN 64
+
+/* structure of seed info */
+typedef struct _seed_info {
+        UINT8 svn;
+        UINT8 padding[3];
+        UINT8 seed[SECURITY_EFI_TRUSTY_SEED_LEN];
+} __attribute__((packed)) seed_info_t;
+
+ /*
+ * this is the startup structure containes the informations for ikgt and trusty
+ * boot requirement(memory base/size, num_seed, seedlist, serials etc.)
+ * and shared between ikgt and bootloader.
  */
 struct tos_startup_info {
         /* version of TOS startup info structure, currently set it as 1 */
         UINT32 version;
         /* Size of this structure for mismatching check */
         UINT32 size;
-        /* root of trust fields */
-         struct rot_data_t rot;
         /* UEFI memory map address */
         UINT64 efi_memmap;
         /* UEFI memory map size */
         UINT32 efi_memmap_size;
         /* Reserved for AP's wake-up */
         UINT32 sipi_ap_wkup_addr;
-        /* Bootloader retrieves the trust/vmm IMRs froom CSE/BIOS */
         UINT64 trusty_mem_base;
         UINT64 vmm_mem_base;
         UINT32 trusty_mem_size;
         UINT32 vmm_mem_size;
-} ;
+        /*
+        rpmb keys, Currently HMAC-SHA256 is used in RPMB spec and 256-bit (32byte) is enough.
+        Hence only lower 32 bytes will be used for now for each entry. But keep higher 32 bytes
+        for future extension. Note that, RPMB keys are already tied to storage device serial number.
+        If there are multiple RPMB partitions, then we will get multiple available RPMB keys.
+        And if rpmb_key[n][64] == 0, then the n-th RPMB key is unavailable (Either because of no such
+        RPMB partition, or because OSloader doesn't want to share the n-th RPMB key with Trusty)
+        */
+        UINT8 rpmb_key[RPMB_MAX_PARTITION_NUMBER][RPMB_MAX_KEY_SIZE];
+        /* Seed */
+        UINT32 num_seeds;
+        seed_info_t seed_list[BOOTLOADER_SEED_MAX_ENTRIES];
+        /* Concatenation of mmc product name with a string representation of PSN */
+        UINT8 serial[MMC_PROD_NAME_WITH_PSN_LEN];
+} __attribute__((packed)) ;
 
-/* Make sure the header address is 8-byte aligned */
+/*
+* this is the private image headrer of TOS image, which is packed at the begining of the
+* image and shared between bootloader and ikgt, every boottime the bootloader
+* is responsible to parse it and verify it.
+* note: make sure the header address is 8-byte aligned
+*/
 struct tos_image_header {
         /* a 64bit magic value */
         UINT64 magic;
@@ -97,11 +124,8 @@ struct tos_image_header {
         *  this allocated space
         */
         UINT32 tos_ldr_size;
-        /* Trusty IMR base + seed_msg_dst_offset */
-        UINT32 seed_msg_dst_offset;
-};
-
-static struct rot_data_t *rot_data;
+        UINT32 reserved;
+} ;
 
 /* Get the TOS image header from the bootimage
  * Parameters:
@@ -167,6 +191,26 @@ static EFI_STATUS get_address_size_trusty(OUT UINT64 *trusty_mem_base, OUT UINT3
         return EFI_SUCCESS;
 }
 
+/* initially hardcoded all seeds as 0, and svn is expected as descending order */
+static EFI_STATUS get_seeds(IN UINT32 *num_seeds, OUT VOID *seed_list)
+{
+        UINT32 i;
+        for (i = 0; i < BOOTLOADER_SEED_MAX_ENTRIES; i++) {
+                seed_info_t* tmp = (seed_info_t *)(seed_list+i*sizeof(seed_info_t));
+                tmp->svn = BOOTLOADER_SEED_MAX_ENTRIES -i-1;
+                memset(tmp->seed, 0, SECURITY_EFI_TRUSTY_SEED_LEN);
+        }
+        *num_seeds = BOOTLOADER_SEED_MAX_ENTRIES;
+        return EFI_SUCCESS;
+}
+
+/* initially hardcoded all rpmb keys as 0 */
+static EFI_STATUS get_rpmb_keys(IN UINT32 num_partition, OUT UINT8 rpmb_key_list[][RPMB_MAX_KEY_SIZE])
+{
+        memset(rpmb_key_list, 0, num_partition * RPMB_MAX_KEY_SIZE);
+        return EFI_SUCCESS;
+}
+
 /*
  * 1. Boot loader gets the tos image header address from kernel slot in
  *    android boot image (aosp_header + page_size)
@@ -174,7 +218,7 @@ static EFI_STATUS get_address_size_trusty(OUT UINT64 *trusty_mem_base, OUT UINT3
  *    address of ldr_mem_base, and then call into
  *    the entry of entry[32/64]_offset+ldr_mem_base.
  */
-static EFI_STATUS start_tos_image(IN VOID *bootimage, IN struct rot_data_t *rot_data)
+static EFI_STATUS start_tos_image(IN VOID *bootimage)
 {
         EFI_STATUS ret;
         UINTN map_key, desc_size;
@@ -193,7 +237,7 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage, IN struct rot_data_t *rot_
 
         /* Find tos header in memory */
         debug(L"Reading TOS image header");
-        if (!bootimage || !rot_data)
+        if (!bootimage)
                 return EFI_INVALID_PARAMETER;
 
         tos_header = get_tosimage_header(bootimage);
@@ -260,10 +304,22 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage, IN struct rot_data_t *rot_
         /* Initialize startup struct */
         startup_info->version = TOS_STARTUP_VERSION;
         startup_info->size = sizeof(struct tos_startup_info);
-        memcpy(&startup_info->rot, rot_data, sizeof(*rot_data));
         startup_info->efi_memmap = (UINT64)(UINTN)memory_map;
         startup_info->efi_memmap_size = desc_size * nr_entries;
         startup_info->sipi_ap_wkup_addr = (UINT32)sipi_ap_addr;
+
+        ret = get_seeds(&startup_info->num_seeds, (VOID*)startup_info->seed_list);
+        if (EFI_ERROR(ret)){
+                efi_perror(ret, L"Get trusty seed failed");
+                goto cleanup;
+        }
+
+        ret = get_rpmb_keys(RPMB_MAX_PARTITION_NUMBER, startup_info->rpmb_key);
+        if (EFI_ERROR(ret)){
+                efi_perror(ret, L"Get rpmb key list failed");
+                goto cleanup;
+        }
+
         ret = get_address_size_vmm(&temp_vmm_base_address, &temp_vmm_address_size);
         if (EFI_ERROR(ret)){
                 efi_perror(ret, L"Get VMM address failed");
@@ -308,11 +364,9 @@ cleanup:
         return ret;
 }
 
-EFI_STATUS set_trusty_param(IN VOID *param_data)
+EFI_STATUS set_trusty_param(__attribute__((unused))  IN VOID *param_data)
 {
-        rot_data = (struct rot_data_t *)param_data;
-
-	return EFI_SUCCESS;
+        return EFI_UNSUPPORTED;
 }
 
 EFI_STATUS start_trusty(VOID *tosimage)
@@ -321,9 +375,11 @@ EFI_STATUS start_trusty(VOID *tosimage)
         if (!tosimage)
                 return EFI_INVALID_PARAMETER;
 
-        ret = start_tos_image(tosimage, rot_data);
-        if (EFI_ERROR(ret))
-                return ret;
+        ret = start_tos_image(tosimage);
+        if (EFI_ERROR(ret)) {
+            efi_perror(ret, L"Failed to launch tos image");
+            return ret;
+        }
 
         // set up ql-ipc connection
         if (trusty_ipc_init() != 0) {
