@@ -97,6 +97,7 @@ LOCAL_SRC_FILES := \
     libavb/avb_chain_partition_descriptor.c \
     libavb/avb_crc32.c \
     libavb/avb_crypto.c \
+    libavb/avb_cmdline.c \
     libavb/avb_descriptor.c \
     libavb/avb_footer.c \
     libavb/avb_hash_descriptor.c \
