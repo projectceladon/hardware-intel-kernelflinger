@@ -1116,7 +1116,7 @@ static EFI_STATUS setup_command_line(
                 }
 
 #ifdef AVB_CMDLINE
-                if (slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root=")))
+                if (slot_data && slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root=")))
 #endif // AVB_CMDLINE
                 {
                         ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
