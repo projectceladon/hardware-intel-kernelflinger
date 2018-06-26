@@ -172,13 +172,6 @@ EFI_STATUS start_trusty(VOID *tosimage)
 	trusty_ipc_init();
 	trusty_ipc_shutdown();
 
-	// Send EOP heci messages
-	ret = heci_end_of_post();
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to send EOP message to CSE FW, halt");
-		goto fail;
-	}
-
 	return ret;
 
 fail:
