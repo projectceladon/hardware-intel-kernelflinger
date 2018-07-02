@@ -323,7 +323,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		SECUREBOOT,
 		BOOTVERSION,
 		SERIALNO,
-		DEV_SEC_INFO
+		IMAGE_BOOT_PARAMS_ADDR
 	};
 
 	struct Cmdline
@@ -370,9 +370,9 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			SERIALNO
 		},
 		{
-			(CHAR8 *)"dev_sec_info.param_addr=",
-			strlen((CHAR8 *)"dev_sec_info.param_addr="),
-			DEV_SEC_INFO
+			(CHAR8 *)"ImageBootParamsAddr=",
+			strlen((CHAR8 *)"ImageBootParamsAddr="),
+			IMAGE_BOOT_PARAMS_ADDR
 		},
 	};
 
@@ -414,6 +414,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				if((arglen > CmdlineArray[j].length) && !strncmp(arg8, CmdlineArray[j].name, CmdlineArray[j].length))
 					break;
 			}
+
 			if (j < sizeof(CmdlineArray)/sizeof(CmdlineArray[0])) {
 				switch(CmdlineArray[j].type) {
 				/* Parse "ABL.reset=xxx" */
@@ -447,8 +448,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 					continue;
 #endif //USE_TRUSTY
 #ifdef RPMB_STORAGE
-				/* Parse "dev_sec_info.param_addr=" */
-				case DEV_SEC_INFO:
+				/* Parse "ImageBootParamsAddr=" */
+				case IMAGE_BOOT_PARAMS_ADDR:
 					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
 					num = strtoul((char *)nptr, 0, 16);
 					debug(L"Parsed device security information addr is 0x%x", num);
