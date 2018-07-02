@@ -183,9 +183,13 @@ else
 ifeq ($(KERNELFLINGER_SECURITY_PLATFORM),sbl)
     LOCAL_SRC_FILES += security_sbl.c
 else
+ifeq ($(KERNELFLINGER_SECURITY_PLATFORM),vsbl)
+    LOCAL_SRC_FILES += security_vsbl.c
+else
     LOCAL_SRC_FILES += security_efi.c
 endif
 endif
+endif #KERNELFLINGER_SECURITY_PLATFORM
 
 ifneq ($(TARGET_UEFI_ARCH),x86_64)
     LOCAL_SRC_FILES += pae.c

@@ -35,6 +35,7 @@
 #include "life_cycle.h"
 #include "security.h"
 
+#ifdef RPMB_STORAGE
 #define SECURITY_ABL_SEED_LEN 32
 #define SECURITY_ABL_SEED_MAX_ENTRIES 4
 
@@ -93,7 +94,13 @@
 
 	return ret;
  }
+#else
 
+EFI_STATUS set_device_security_info(__attribute__((unused)) IN VOID *security_data)
+{
+	return EFI_UNSUPPORTED;
+}
+#endif
 
 BOOLEAN is_platform_secure_boot_enabled(VOID)
 {
