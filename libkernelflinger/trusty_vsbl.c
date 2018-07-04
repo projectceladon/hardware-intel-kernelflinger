@@ -46,14 +46,17 @@
 #include "efilinux.h"
 #include "libelfloader.h"
 
-#define TRUSTY_MEM_SIZE		0x1000000
-#define TRUSTY_MEM_ALIGNED_16K	0x4000
-#define TRUSTY_MEM_MAX_ADDRESS	0xFFFFFFFF
+#define TRUSTY_MEM_SIZE			0x1000000
+#define TRUSTY_MEM_ALIGNED_16K		0x4000
+#define TRUSTY_MEM_MAX_ADDRESS		0xFFFFFFFF
+#define TRUSTY_MEM_ADDRESS_511G		0x7FC0000000
+#define RPMB_KEY_SIZE_64		64
+#define TRUSTY_BOOT_PARAM_VERSION	2
 
 typedef struct trusty_boot_param {
 	/* Size of this structure */
-	uint32_t size_of_this_struct;
-	uint32_t version;
+	UINT32 size_of_this_struct;
+	UINT32 version;
 	UINT64 trusty_mem_base;
         UINT32 trusty_mem_size;
 } __attribute__((packed)) trusty_boot_param_t;
@@ -65,11 +68,18 @@ typedef struct trusty_boot_param {
  */
 typedef struct tos_startup_params {
 	/* Size of this structure */
-	uint32_t size_of_this_struct;
-	uint32_t version;
-	uint32_t runtime_addr;
-	uint32_t entry_point;
-	uint32_t runtime_size;
+	UINT32 size_of_this_struct;
+	UINT32 version;
+	UINT32 runtime_addr;
+	UINT32 entry_point;
+	UINT32 runtime_size;
+	UINT32 padding;
+	/* added in version 2,together with runtime_addr to compose 64bit address*/
+	UINT32 runtime_addr_hi;
+	/* added in version 2,together with entry_point to compose 64bit address*/
+	UINT32 entry_point_hi;
+	/* Added in version 2*/
+	UINT8 rpmb_key[RPMB_KEY_SIZE_64];
 } __attribute__((aligned(8))) trusty_startup_params_t;
 
 /* Make sure the header address is 8-byte aligned */
@@ -99,19 +109,20 @@ static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UIN
 
 	if (!param || !boot_param)
 		return EFI_INVALID_PARAMETER;
-
 	if (!relocate_elf_image(base, size, boot_param->trusty_mem_base + 0x1000,
 				(boot_param->trusty_mem_size << 10) - 0x1000, &entry_addr)) {
 		error(L"relocate tos image failed");
 		return EFI_INVALID_PARAMETER;
 	}
-
 	memset(param, 0, sizeof(trusty_startup_params_t));
 	param->size_of_this_struct = sizeof(trusty_startup_params_t);
-	param->runtime_addr = boot_param->trusty_mem_base;
-	param->entry_point = entry_addr + 0x400;
-	param->version = 1;
+	param->runtime_addr = boot_param->trusty_mem_base & 0xFFFFFFFF;
+	param->runtime_addr_hi = (boot_param->trusty_mem_base >> 32)  & 0xFFFFFFFF;
+	param->entry_point = (entry_addr + 0x400) & 0xFFFFFFFF;
+	param->entry_point_hi = ((entry_addr + 0x400) >> 32) & 0xFFFFFFFF;
+	param->version = TRUSTY_BOOT_PARAM_VERSION;
 	param->runtime_size = TRUSTY_MEM_SIZE;
+	memset(param->rpmb_key, 0x0, sizeof(param->rpmb_key));
 
 	return EFI_SUCCESS;
 }
@@ -125,12 +136,12 @@ static EFI_STATUS launch_trusty_os(trusty_startup_params_t *param)
 
 	if (!param)
 		return EFI_INVALID_PARAMETER;
-
+	debug(L"launch_trusty_os before  vmcall");
 	asm volatile (
 		"vmcall;"
 		: "=a"(ret)
 		: "r"(smc_id), "D"((UINTN)param));
-
+	debug(L"launch_trusty_os after  vmcall");
 	return ret;
 }
 #else
@@ -153,34 +164,24 @@ EFI_STATUS start_trusty(VOID *tosimage)
 	UINTN load_base;
 	trusty_startup_params_t trusty_startup_params;
 	trusty_boot_param_t trusty_boot_params;
-	EFI_PHYSICAL_ADDRESS Memory;
 
 	if (!tosimage)
 		return EFI_INVALID_PARAMETER;
 
 	header = (const struct boot_img_hdr *)tosimage;
 	load_base = (UINTN)(tosimage + header->page_size);
-	Memory = (EFI_PHYSICAL_ADDRESS)(TRUSTY_MEM_MAX_ADDRESS - TRUSTY_MEM_SIZE - TRUSTY_MEM_ALIGNED_16K + 1);
-	ret = uefi_call_wrapper(BS->AllocatePages, 4, AllocateMaxAddress,
-				EfiRuntimeServicesData,  EFI_SIZE_TO_PAGES(TRUSTY_MEM_SIZE + TRUSTY_MEM_ALIGNED_16K), &Memory);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to allocate trusty pages");
-		goto fail;
-	}
-
-	trusty_boot_params.trusty_mem_base = ((UINT64)Memory + TRUSTY_MEM_ALIGNED_16K - 1) & ~(TRUSTY_MEM_ALIGNED_16K - 1);
+	trusty_boot_params.trusty_mem_base = TRUSTY_MEM_ADDRESS_511G;
 	trusty_boot_params.trusty_mem_size = TRUSTY_MEM_SIZE;
-
 	ret = init_trusty_startup_params(&trusty_startup_params, load_base, header->kernel_size, &trusty_boot_params);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to init trusty startup params");
-		goto fail;
+		return ret;
 	}
 
 	ret = launch_trusty_os(&trusty_startup_params);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to launch trusty os");
-		goto fail;
+		return ret;
 	}
 
 	trusty_ipc_init();
@@ -194,11 +195,6 @@ EFI_STATUS start_trusty(VOID *tosimage)
 		goto fail;
 	}
 #endif
-
-	return ret;
-
-fail:
-	uefi_call_wrapper(BS->FreePages, 2, Memory, EFI_SIZE_TO_PAGES(TRUSTY_MEM_SIZE + TRUSTY_MEM_ALIGNED_16K));
 
 	return ret;
 }
