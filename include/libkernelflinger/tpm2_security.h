@@ -45,4 +45,9 @@ EFI_STATUS tpm2_fuse_vbmeta_key_hash(void *data, uint32_t size);
 
 EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size);
 
+#ifndef USER
+EFI_STATUS tpm2_show_index(UINT32 index, CHAR8* out_buffer, UINTN out_buffer_size);
+EFI_STATUS tpm2_delete_index(UINT32 index);
+#endif  // USER
+
 #endif /* _TPM2_SECURITY_H_ */

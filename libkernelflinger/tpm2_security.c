@@ -148,6 +148,36 @@ static EFI_STATUS create_index_and_write_lock(TPM_NV_INDEX nv_index, TPMA_NV att
 	return ret;
 }
 
+#ifndef USER
+EFI_STATUS tpm2_show_index(UINT32 index, CHAR8* out_buffer, UINTN out_buffer_size)
+{
+	EFI_STATUS ret;
+	TPM2B_NV_PUBLIC NvPublic;
+	TPM2B_NAME NvName;
+
+	ret = Tpm2NvReadPublic(index, &NvPublic, &NvName);
+	if (EFI_ERROR(ret)) {
+		error(L"Read TPM NV index %x ret: %d", index, ret);
+		return ret;
+	}
+	efi_snprintf(out_buffer, out_buffer_size, (CHAR8 *)"Read TPM NV index %x success, public size: %d, nvIndex: 0x%x, nameAlg: %d, attributes: 0x%x, data size: %d, name size: %d",
+		index,
+		NvPublic.size, NvPublic.nvPublic.nvIndex, NvPublic.nvPublic.nameAlg, NvPublic.nvPublic.attributes, NvPublic.nvPublic.dataSize,
+		NvName.size);
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS tpm2_delete_index(UINT32 index)
+{
+	EFI_STATUS ret = Tpm2NvUndefineSpace(TPM_RH_PLATFORM, index, NULL);
+	if (EFI_ERROR(ret))
+		error(L"Delete TPM NV index failed, index: %x, ret: %d", index, ret);
+
+	return ret;
+}
+#endif // USER
+
 EFI_STATUS tpm2_fuse_trusty_seed(void)
 {
 	EFI_STATUS ret;
