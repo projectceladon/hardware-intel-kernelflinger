@@ -40,6 +40,7 @@
 #include <em.h>
 #include <transport.h>
 #include <slot.h>
+#include <storage.h>
 
 #include "uefi_utils.h"
 #include "gpt.h"
@@ -534,6 +535,49 @@ static const char *get_battery_soc_ok_var()
 		battery_soc_ok = "yes";
 
 	return battery_soc_ok;
+}
+
+static const char *get_erase_block_size_var()
+{
+	static char erase_block_size[MAX_VARIABLE_LENGTH];
+	int len;
+	UINTN blocksize;
+	EFI_STATUS ret;
+
+	ret = storage_get_erase_block_size(&blocksize);
+	if (EFI_ERROR(ret)) {
+		error(L"Failed to get erase block size");
+		return NULL;
+	}
+
+	len = efi_snprintf((CHAR8 *)erase_block_size, sizeof(erase_block_size),
+			   (CHAR8 *)"0x%X", blocksize);
+	if (len < 0 || len >= (int)sizeof(erase_block_size))
+		return NULL;
+
+	return erase_block_size;
+}
+
+static const char *get_logical_block_size_var()
+{
+	static char logical_block_size[MAX_VARIABLE_LENGTH];
+	int len;
+	UINTN blocksize;
+	EFI_STATUS ret;
+
+	ret = get_logical_block_size(&blocksize);
+	if (EFI_ERROR(ret)) {
+		error(L"Failed to get logical block size");
+		return NULL;
+	}
+
+	len = efi_snprintf((CHAR8 *)logical_block_size, sizeof(logical_block_size),
+			   (CHAR8 *)"0x%X", blocksize);
+	if (len < 0 || len >= (int)sizeof(logical_block_size))
+		return NULL;
+
+	return logical_block_size;
+
 }
 
 static EFI_STATUS fastboot_build_ack_msg(char *msg, const char *code, const char *fmt, va_list ap)
@@ -1222,6 +1266,14 @@ static EFI_STATUS fastboot_init()
 	}
 
 	ret = fastboot_publish("max-download-size", download_max_str);
+	if (EFI_ERROR(ret))
+		goto error;
+
+	ret = fastboot_publish_dynamic("erase-block-size", get_erase_block_size_var);
+	if (EFI_ERROR(ret))
+		goto error;
+
+	ret = fastboot_publish_dynamic("logical-block-size", get_logical_block_size_var);
 	if (EFI_ERROR(ret))
 		goto error;
 
