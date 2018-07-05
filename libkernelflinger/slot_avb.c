@@ -302,10 +302,10 @@ const CHAR16 *slot_label(const CHAR16 *base)
 		return base;
 	}
 
-	if (!base || !cur_suffix)
+	if (!base || !slot_get_active())
 		return NULL;
 
-	label = label_with_suffix(base, cur_suffix);
+	label = label_with_suffix(base, slot_get_active());
 
 	return label;
 }

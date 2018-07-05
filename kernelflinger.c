@@ -820,11 +820,13 @@ static EFI_STATUS load_boot_image(
 
 /* Chainload another EFI application on the ESP with the specified path,
  * optionally deleting the file before entering */
-static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
+static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete, UINT32 load_options_size, VOID *load_options)
 {
         EFI_DEVICE_PATH *edp;
         EFI_STATUS ret;
         EFI_HANDLE image;
+        EFI_LOADED_IMAGE *loaded_image;
+
 
         edp = FileDevicePath(g_disk_device, path);
         if (!edp) {
@@ -841,6 +843,22 @@ static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete)
                         ret = file_delete(g_disk_device, path);
                         if (EFI_ERROR(ret))
                                 efi_perror(ret, L"Couldn't delete %s", path);
+                }
+                if (load_options_size > 0) {
+                        // Set the command line option
+                        ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
+                                        &LoadedImageProtocol, (VOID **)&loaded_image,
+                                        image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+                        if (EFI_ERROR(ret)) {
+                                efi_perror(ret, L"OpenProtocol: LoadedImageProtocol");
+                                return ret;
+                        }
+                        if (loaded_image == NULL) {
+                                error(L"LoadedImageProtocol, but return image is NULL");
+                                return EFI_INVALID_PARAMETER;
+                        }
+                        loaded_image->LoadOptionsSize = load_options_size;
+                        loaded_image->LoadOptions = load_options;
                 }
                 ret = uefi_call_wrapper(BS->StartImage, 3, image, NULL, NULL);
                 uefi_call_wrapper(BS->UnloadImage, 1, image);
@@ -1354,17 +1372,8 @@ EFI_STATUS check_kf_upgrade(void)
         }
         debug(L"Success rename the upgrade file %s to %s", KFUPDATE_FILE, self_path);
 
-        // Check whether is the load options
-        if (g_loaded_image != NULL && g_loaded_image->LoadOptions != NULL) {
-                // There is load options
-                // Reboot now
-                error(L"I am about to reset the system after upgrade the boot loader, LoadOptionsSize: %d, option: %s",
-                                g_loaded_image->LoadOptionsSize, (CHAR16 *)g_loaded_image->LoadOptions);
-                reboot(NULL, EfiResetWarm);
-                return EFI_SUCCESS;
-        }
         error(L"I am about to load the new boot loader after upgrade it");
-        enter_efi_binary(self_path, FALSE);
+        enter_efi_binary(self_path, FALSE, g_loaded_image->LoadOptionsSize, g_loaded_image->LoadOptions);
         reboot(NULL, EfiResetCold);
 
 out:
@@ -1526,7 +1535,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 debug(L"entering EFI binary");
                 if (!target_path)
                         return EFI_INVALID_PARAMETER;
-                ret = enter_efi_binary(target_path, oneshot);
+                ret = enter_efi_binary(target_path, oneshot, 0, NULL);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"EFI Application exited abnormally");
                         pause(3);
