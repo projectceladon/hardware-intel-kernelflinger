@@ -67,6 +67,7 @@
 #include "gpt.h"
 #include "protocol.h"
 #include "uefi_utils.h"
+#include "security_interface.h"
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const CHAR16 __attribute__((used)) magic[] = L"### kernelflinger ###";
@@ -1398,9 +1399,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #endif
         CHAR16 *name = NULL;
         EFI_RESET_TYPE resetType;
-#ifdef RPMB_STORAGE
-        UINT8 rpmb_key[RPMB_KEY_SIZE + 1] = "12345ABCDEF1234512345ABCDEF12345";
-#endif
 
         /* gnu-efi initialization */
         InitializeLib(image, sys_table);
@@ -1429,6 +1427,15 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         error(L"Failed to set boot device");
         }
 
+        // Set the boot device now
+        if (!get_boot_device_handle()) {
+                if (!get_boot_device()) {
+                        // Get boot device failed
+                        error(L"Failed to find boot device");
+                        return EFI_NO_MEDIA;
+                }
+        }
+
         if (file_exists(g_disk_device, FWUPDATE_FILE)) {
                 name = FWUPDATE_FILE;
                 push_capsule(g_disk_device, name, &resetType);
@@ -1441,16 +1448,19 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
         check_kf_upgrade();
 
+        ret = set_device_security_info(NULL);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to init security info, enter fastboot mode");
+                boot_target = FASTBOOT;
+        }
 
 #ifdef RPMB_STORAGE
         // Init the rpmb
-        if (g_disk_device)
-                rpmb_init(g_disk_device);
-#if defined(RPMB_SIMULATE) || !defined(USER)
-        rpmb_storage_init(FALSE);
-#else
-        rpmb_storage_init(FALSE);  // Still set to use simulate RPMB now. Please does not chenge to true in Joule.
-#endif  // defined(RPMB_SIMULATE) || !defined(USER)
+        ret = rpmb_storage_init();
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"Failed to init RPMB, enter fastboot mode");
+                boot_target = FASTBOOT;
+        }
 #endif  // RPMB_STORAGE
 
         ret = slot_init();
@@ -1459,23 +1469,10 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 return ret;
         }
 
-#ifdef RPMB_STORAGE
-        if (!is_rpmb_programed()) {
-                debug(L"rpmb not programmed");
-                // Please do NOT program RPMB key in Joule platform, otherwise the board can't boot.
-                ret = program_rpmb_key_in_sim_real(rpmb_key);
-                if (EFI_ERROR(ret)) {
-                        efi_perror(ret, L"rpmb key program failed");
-                        return ret;
-                }
-        } else
-                debug(L"rpmb already programmed");
-#endif  // RPMB_STORAGE
-
-
         /* No UX prompts before this point, do not want to interfere
          * with magic key detection */
-        boot_target = choose_boot_target(&target_path, &oneshot);
+        if (boot_target == NORMAL_BOOT)
+                boot_target = choose_boot_target(&target_path, &oneshot);
         if (boot_target == EXIT_SHELL)
                 return EFI_SUCCESS;
         if (boot_target == CRASHMODE) {
@@ -1488,6 +1485,16 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 reboot_to_target(FASTBOOT);
 #endif
         }
+
+#ifdef RPMB_STORAGE
+        if (boot_target != CRASHMODE) {
+                ret = rpmb_key_init();
+                if (EFI_ERROR(ret)) {
+                        error(L"RPMB key init failure for osloader");
+                        boot_target = FASTBOOT;
+                }
+        }
+#endif
 
         if (boot_target == POWER_OFF)
                 halt_system();
