@@ -70,6 +70,18 @@ static UINT8 rpmb_buffer[RPMB_BLOCK_SIZE];
 static UINT8 *derived_key;
 static UINT8 number_derived_key;
 
+static void dump_rpmb_key(__attribute__((unused)) UINT8 *key)
+{
+#if 0  // Change to 1 for debug the RPMB keys
+	CHAR16 buf[RPMB_KEY_SIZE * 2 + 2];
+	UINT16 i;
+
+	for (i = 0; i < RPMB_KEY_SIZE; i++)
+		SPrint(buf + i * 2, sizeof(buf) - i * 2, L"%02x", key[i]);
+	debug(L"Key: %s", buf);
+#endif
+}
+
 EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
@@ -88,8 +100,10 @@ EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num
 		return ret;
 	}
 
-	for (i = 0; i < num_key; i++)
+	for (i = 0; i < num_key; i++) {
 		memcpy(derived_key + i * RPMB_KEY_SIZE, kbuf + i * RPMB_KEY_SIZE, RPMB_KEY_SIZE);
+		dump_rpmb_key(derived_key + i * RPMB_KEY_SIZE);
+	}
 	number_derived_key = num_key;
 
 	return ret;
@@ -666,9 +680,104 @@ static EFI_STATUS read_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
 	return EFI_SUCCESS;
 }
 
-void rpmb_storage_init(BOOLEAN real)
+EFI_STATUS rpmb_key_init(void)
 {
+	UINT8 key[RPMB_KEY_SIZE] = {0};
+	UINT8 *out_key;
+	UINT8 number_derived_key = 0;
+	UINT16 i;
+	RPMB_RESPONSE_RESULT result;
+	EFI_STATUS ret = EFI_SUCCESS;
+
+	if (is_eom_and_secureboot_enabled()) {
+		ret = clear_teedata_flag();
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Clear teedata flag failed");
+			return ret;
+		}
+	}
+
+	ret = get_rpmb_derived_key(&out_key, &number_derived_key);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"get_rpmb_derived_key failed");
+		return ret;
+	}
+
+	for (i = 0; i < number_derived_key; i++) {
+		memcpy(key, out_key + i * RPMB_KEY_SIZE, RPMB_KEY_SIZE);
+		dump_rpmb_key(key);
+		ret = rpmb_read_counter_in_sim_real(key, &result);
+		if (ret == EFI_SUCCESS)
+			break;
+
+		if (result == RPMB_RES_NO_AUTH_KEY_PROGRAM) {
+			efi_perror(ret, L"key is not programmed, use the first derived key.");
+			break;
+		}
+
+		if (result != RPMB_RES_AUTH_FAILURE) {
+			efi_perror(ret, L"rpmb_read_counter unexpected error: %d.", result);
+			goto err_get_rpmb_key;
+		}
+	}
+
+	if (i >= number_derived_key) {
+		error(L"All RPMB keys are not match!");
+		goto err_get_rpmb_key;
+	}
+
+	if (i != 0)
+		debug(L"RPMB seed/key changed to %d ", i);
+
+	if (!is_rpmb_programed()) {
+		debug(L"RPMB not programmed");
+		ret = program_rpmb_key_in_sim_real(key);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"RPMB key program failed");
+			return ret;
+		}
+	} else {
+		debug(L"RPMB already programmed");
+		set_rpmb_key(key);
+	}
+
+	// Should output this info, since there maybe some error log about some keys failed at before.
+	error(L"Init RPMB key successfully");
+
+err_get_rpmb_key:
+	memset(key, 0, sizeof(key));
+
+	return ret;
+}
+
+EFI_STATUS rpmb_storage_init(void)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	BOOLEAN real = FALSE;
+
+#ifndef RPMB_SIMULATE
+	if (!is_boot_device_removable()) {
+		// For removable storage, such as USB disk, always use simulate RPMB
+		// Check life cycle and secure boot.
+		real = is_eom_and_secureboot_enabled();
+		if (real) {
+			// If life cycle is END USER and secure boot is enabled,
+			// then init the physical RPMB now
+			ret = rpmb_init(get_boot_device_handle());
+			if (EFI_ERROR(ret)) {
+				if (ret != EFI_NOT_FOUND) {
+					efi_perror(ret, L"Init physical RPMB failed");
+					return ret;
+				}
+				debug(L"Can't find physical RPMB, use simulate RPMB now");
+				real = FALSE;
+			}
+		}
+	}
+#endif
+
 	if (real) {
+		debug(L"Use physical RPMB");
 		rpmb__sim_real_storage_ops.is_rpmb_programed = is_rpmb_programed_real;
 		rpmb__sim_real_storage_ops.program_rpmb_key = program_rpmb_key_real;
 		rpmb__sim_real_storage_ops.rpmb_read_counter = rpmb_read_counter_real;
@@ -679,6 +788,7 @@ void rpmb_storage_init(BOOLEAN real)
 		rpmb__sim_real_storage_ops.write_rpmb_keybox_magic = write_rpmb_keybox_magic_real;
 		rpmb__sim_real_storage_ops.read_rpmb_keybox_magic = read_rpmb_keybox_magic_real;
 	} else {
+		debug(L"Use simulate RPMB");
 		rpmb__sim_real_storage_ops.is_rpmb_programed = is_rpmb_programed_simulate;
 		rpmb__sim_real_storage_ops.program_rpmb_key = program_rpmb_key_simulate;
 		rpmb__sim_real_storage_ops.rpmb_read_counter = rpmb_read_counter_simulate;
@@ -689,4 +799,6 @@ void rpmb_storage_init(BOOLEAN real)
 		rpmb__sim_real_storage_ops.write_rpmb_keybox_magic = write_rpmb_keybox_magic_simulate;
 		rpmb__sim_real_storage_ops.read_rpmb_keybox_magic = read_rpmb_keybox_magic_simulate;
 	}
+
+	return ret;
 }

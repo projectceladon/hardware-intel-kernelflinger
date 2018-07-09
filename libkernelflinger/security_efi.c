@@ -31,11 +31,38 @@
 #include "security_interface.h"
 #include "lib.h"
 #include "security.h"
+#include "storage.h"
+
+#ifdef RPMB_STORAGE
+#include "rpmb_storage.h"
+
+static UINT8 fixed_rpmb_keys[][RPMB_KEY_SIZE] = {
+#ifdef FIXED_RPMB_KEY
+		FIXED_RPMB_KEY
+#else
+		"\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31\x31",
+		"12345ABCDEF1234512345ABCDEF12345"
+#endif
+};
+#endif
 
 /* now does not support this interface on UEFI platform */
-EFI_STATUS set_device_security_info(__attribute__((unused)) IN VOID *security_data)
+EFI_STATUS set_device_security_info(__attribute__((unused)) IN void *security_data)
 {
-	return EFI_UNSUPPORTED;
+	EFI_STATUS ret = EFI_SUCCESS;
+
+#ifdef RPMB_STORAGE
+	// Set the fixed RPMB key
+	if (is_boot_device_removable()) {
+		// For removable storage, such as USB disk, always use one fixed RPMB key.
+		return set_rpmb_derived_key(fixed_rpmb_keys, RPMB_KEY_SIZE, 1);
+	}
+
+	// Try to several possible fixed RPMB keys
+	ret = set_rpmb_derived_key(fixed_rpmb_keys, sizeof(fixed_rpmb_keys), ARRAY_SIZE(fixed_rpmb_keys));
+#endif
+
+	return ret;
 }
 
 EFI_STATUS set_platform_secure_boot(__attribute__((unused)) IN UINT8 secure)
@@ -44,37 +71,38 @@ EFI_STATUS set_platform_secure_boot(__attribute__((unused)) IN UINT8 secure)
 }
 
 /* UEFI specification 2.4. Section 3.3
-   The platform firmware is operating in secure boot mode if the value
-   of the SetupMode variable is 0 and the SecureBoot variable is set
-   to 1. A platform cannot operate in secure boot mode if the
-   SetupMode variable is set to 1. The SecureBoot variable should be
-   treated as read- only. */
+ * The platform firmware is operating in secure boot mode if the value
+ * of the SetupMode variable is 0 and the SecureBoot variable is set
+ * to 1. A platform cannot operate in secure boot mode if the
+ * SetupMode variable is set to 1. The SecureBoot variable should be
+ * treated as read- only.
+ */
 BOOLEAN is_platform_secure_boot_enabled(VOID)
 {
-        EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
-        EFI_STATUS ret;
-        UINT8 value;
+	EFI_GUID global_guid = EFI_GLOBAL_VARIABLE;
+	EFI_STATUS ret;
+	UINT8 value;
 
-        ret = get_efi_variable_byte(&global_guid, SETUP_MODE_VAR, &value);
-        if (EFI_ERROR(ret))
-                return FALSE;
+	ret = get_efi_variable_byte(&global_guid, SETUP_MODE_VAR, &value);
+	if (EFI_ERROR(ret))
+		return FALSE;
 
-        if (value != 0)
-                return FALSE;
+	if (value != 0)
+		return FALSE;
 
-        ret = get_efi_variable_byte(&global_guid, SECURE_BOOT_VAR, &value);
-        if (EFI_ERROR(ret))
-                return FALSE;
+	ret = get_efi_variable_byte(&global_guid, SECURE_BOOT_VAR, &value);
+	if (EFI_ERROR(ret))
+		return FALSE;
 
-        return value == 1;
+	return value == 1;
 }
 
 BOOLEAN is_eom_and_secureboot_enabled(VOID)
 {
-        BOOLEAN sbflags;
-        BOOLEAN enduser = TRUE;
+	BOOLEAN sbflags;
+	BOOLEAN enduser = TRUE;
 
-        sbflags = is_platform_secure_boot_enabled();
+	sbflags = is_platform_secure_boot_enabled();
 
-        return sbflags && enduser;
+	return sbflags && enduser;
 }

@@ -77,6 +77,10 @@ ifeq ($(KERNELFLINGER_USE_IPP_SHA256),true)
     LOCAL_CFLAGS += -msse4 -msha
 endif
 
+ifneq ($(KERNELFLINGER_FIXED_RPMB_KEY),)
+    LOCAL_CFLAGS += -DFIXED_RPMB_KEY=$(KERNELFLINGER_FIXED_RPMB_KEY)
+endif
+
 LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \

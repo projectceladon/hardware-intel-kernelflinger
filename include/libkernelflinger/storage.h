@@ -69,6 +69,7 @@ struct storage {
 
 EFI_STATUS identify_boot_device(enum storage_type type);
 PCI_DEVICE_PATH *get_boot_device(void);
+EFI_HANDLE get_boot_device_handle(void);
 EFI_STATUS get_boot_device_type(enum storage_type *type);
 EFI_STATUS storage_set_boot_device(EFI_HANDLE device);
 EFI_STATUS storage_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
@@ -77,7 +78,8 @@ EFI_STATUS storage_get_erase_block_size(UINTN *erase_blk_size);
 EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 		     VOID *pattern, UINTN pattern_blocks);
 EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
-BOOLEAN is_cur_storage_ufs();
+BOOLEAN is_cur_storage_ufs(void);
 EFI_STATUS get_logical_block_size(UINTN *logical_blk_size);
+BOOLEAN is_boot_device_removable(void);
 
 #endif	/* _STORAGE_H_ */

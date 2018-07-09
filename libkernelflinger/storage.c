@@ -42,6 +42,10 @@ static PCI_DEVICE_PATH boot_device = { .Function = -1, .Device = -1 };
 static enum storage_type boot_device_type;
 static BOOLEAN initialized = FALSE;
 
+// The EFI_HANDLE of boot device.
+// It maybe a handle to a partition of the kernelflinger loaded.
+static EFI_HANDLE boot_device_handle;
+
 static BOOLEAN is_boot_device(EFI_DEVICE_PATH *p)
 {
 	PCI_DEVICE_PATH *pci;
@@ -107,6 +111,7 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 	PCI_DEVICE_PATH *pci = NULL;
 	struct storage *storage;
 	enum storage_type type;
+	EFI_HANDLE new_boot_device_handle = NULL;
 
 	cur_storage = NULL;
 	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol,
@@ -138,6 +143,7 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 			memcpy(&boot_device, pci, sizeof(boot_device));
 			boot_device_type = type;
 			cur_storage = storage;
+			new_boot_device_handle = handles[i];
 			continue;
 		}
 
@@ -156,6 +162,7 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 		error(L"No PCI storage found");
 		return EFI_UNSUPPORTED;
 	}
+	boot_device_handle = new_boot_device_handle;
 
 	debug(L"%s storage selected", cur_storage->name);
 	return EFI_SUCCESS;
@@ -348,7 +355,13 @@ EFI_STATUS storage_set_boot_device(EFI_HANDLE device)
 
 	initialized = TRUE;
 	memcpy(&boot_device, pci, sizeof(boot_device));
+	boot_device_handle = device;
 	return EFI_SUCCESS;
+}
+
+EFI_HANDLE get_boot_device_handle(void)
+{
+	return boot_device_handle;
 }
 
 PCI_DEVICE_PATH *get_boot_device(void)
@@ -383,7 +396,7 @@ EFI_STATUS get_boot_device_type(enum storage_type *type)
 		return EFI_DEVICE_ERROR;
 }
 
-BOOLEAN is_cur_storage_ufs()
+BOOLEAN is_cur_storage_ufs(void)
 {
 	if (cur_storage == &STORAGE(STORAGE_UFS))
 		return TRUE;
@@ -445,4 +458,13 @@ notfound:
 	*erase_blk_size = gparti.bio->Media->BlockSize;
 
 	return EFI_SUCCESS;
+}
+
+BOOLEAN is_boot_device_removable(void)
+{
+#ifdef USB_STORAGE
+	return cur_storage == &STORAGE(STORAGE_USB);
+#else
+	return FALSE;
+#endif
 }

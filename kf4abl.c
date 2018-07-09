@@ -687,74 +687,6 @@ static UINT8 validate_bootimage(
 }
 #endif
 
-#ifdef RPMB_STORAGE
-EFI_STATUS  osloader_rpmb_key_init(VOID)
-{
-	UINT8 key[RPMB_KEY_SIZE] = {0};
-	UINT8 *out_key;
-	UINT8 number_derived_key = 0;
-	UINT16 i;
-	RPMB_RESPONSE_RESULT result;
-	EFI_STATUS ret = EFI_SUCCESS;
-
-	if (is_eom_and_secureboot_enabled()) {
-		ret = clear_teedata_flag();
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Clear teedata flag failed");
-			return ret;
-		}
-	}
-
-	ret = get_rpmb_derived_key(&out_key, &number_derived_key);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"get_rpmb_derived_key failed");
-		return ret;
-	}
-
-	for (i = 0; i < number_derived_key; i++) {
-		memcpy(key, out_key + i * RPMB_KEY_SIZE, RPMB_KEY_SIZE);
-		ret = rpmb_read_counter_in_sim_real(key, &result);
-		if (ret == EFI_SUCCESS)
-			break;
-
-		if (result == RPMB_RES_NO_AUTH_KEY_PROGRAM) {
-			efi_perror(ret, L"key is not programmed, use the first derived key.");
-			break;
-		}
-
-		if (result != RPMB_RES_AUTH_FAILURE) {
-			efi_perror(ret, L"rpmb_read_counter unexpected error: %d.", result);
-			goto err_get_rpmb_key;
-		}
-	}
-
-	if (i >= number_derived_key) {
-		error(L"All keys are not match!");
-		goto err_get_rpmb_key;
-	}
-
-	if (i != 0)
-		error(L"seed/key changed to %d ", i);
-
-	if (!is_rpmb_programed()) {
-		debug(L"rpmb not programmed");
-		ret = program_rpmb_key_in_sim_real(key);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"rpmb key program failed");
-			return ret;
-		}
-	} else {
-		debug(L"rpmb already programmed");
-		set_rpmb_key(key);
-	}
-
-err_get_rpmb_key:
-	memset(key, 0, sizeof(key));
-
-	return ret;
-}
-#endif
-
 #ifdef USE_AVB
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
@@ -990,8 +922,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
 
 #ifdef RPMB_STORAGE
-	rpmb_init(NULL);
-	rpmb_storage_init(is_eom_and_secureboot_enabled());
+	rpmb_storage_init();
 #endif
 
 	ret = slot_init();
@@ -1013,7 +944,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 #ifdef RPMB_STORAGE
 	if (target != CRASHMODE) {
-		ret = osloader_rpmb_key_init();
+		ret = rpmb_key_init();
 		if (EFI_ERROR(ret))
 			error(L"rpmb key init failure for osloader");
 	}
