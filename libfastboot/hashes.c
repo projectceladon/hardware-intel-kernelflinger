@@ -553,6 +553,8 @@ static EFI_STATUS get_iasimage_len(struct gpt_partition_interface *gparti,
 	struct ias_img_hdr hdr;
 	unsigned char tos_magic[ARRAY_SIZE(MULTIBOOT_MAGIC)];
 	UINT64 part_off, part_len;
+	UINT32 data_off, data_len;
+	UINTN files_num, i, j;
 
 	part_off = gparti->part.starting_lba * gparti->bio->Media->BlockSize;
 	part_len = (gparti->part.ending_lba + 1 - gparti->part.starting_lba) *
@@ -565,6 +567,8 @@ static EFI_STATUS get_iasimage_len(struct gpt_partition_interface *gparti,
 		efi_perror(ret, L"Failed to read the ias image header");
 		return ret;
 	}
+	data_len = hdr.data_len;
+	data_off = hdr.data_off;
 
 	/* Verify ias image magic. */
 	if (memcmp(IAS_IMAGE_MAGIC, hdr.magic, sizeof(hdr.magic))) {
@@ -573,22 +577,82 @@ static EFI_STATUS get_iasimage_len(struct gpt_partition_interface *gparti,
 	}
 
 	if (iasoffset == 0) {
-		ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
-					gparti->bio->Media->MediaId, part_off + hdr.data_off,
-					sizeof(tos_magic), &tos_magic);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to read the multiboot magic");
-			return ret;
-		}
+		/* SBL multiboot image add cmdline file before evmm payload. */
+		files_num = hdr.data_off - sizeof(hdr);
+		if (files_num != 0) {
+			void *files_num_data;
 
-		/* Verify multiboot-tos magic. */
-		if (memcmp(MULTIBOOT_MAGIC, tos_magic, sizeof(MULTIBOOT_MAGIC))) {
-			error(L"Bad multiboot magic");
-			return EFI_COMPROMISED_DATA;
+			files_num_data = AllocatePool(files_num);
+			if (!files_num_data)
+				return EFI_OUT_OF_RESOURCES;
+
+			ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
+				gparti->bio->Media->MediaId, part_off + iasoffset + sizeof(hdr),
+				files_num, files_num_data);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"Failed to multi files");
+				FreePool(files_num_data);
+				return ret;
+			}
+			/*
+			 * Self-adaption magic value in each file.
+			 * Reset the offset and length.
+			 */
+			BOOLEAN find_mulitboot = FALSE;
+			UINT32 *file_len = (UINT32 *)(files_num_data);
+
+			for (i = 0; i < (files_num/4); i++) {
+				UINT32 skip_files_len = 0;
+
+				for (j = 0; j < i; j++)
+					skip_files_len += file_len[j];
+				data_len = file_len[i];
+				data_off = hdr.data_off + skip_files_len;
+				debug(L"Checking multiboot with offset=%d, len=%d", data_off, data_len);
+				if (data_len > part_len) {
+					error(L"Get error file length");
+					FreePool(files_num_data);
+					return EFI_COMPROMISED_DATA;
+				}
+				ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
+					gparti->bio->Media->MediaId, part_off + data_off,
+					sizeof(tos_magic), &tos_magic);
+				if (EFI_ERROR(ret)) {
+					efi_perror(ret, L"Failed to read the multiboot magic");
+					FreePool(files_num_data);
+					return ret;
+				}
+
+				/* Verify multiboot-tos magic. */
+				if (!memcmp(MULTIBOOT_MAGIC, tos_magic, sizeof(MULTIBOOT_MAGIC))) {
+					find_mulitboot = TRUE;
+					debug(L"Found the multiboot in the %dth file", (i+1));
+					break;
+				}
+			}
+			FreePool(files_num_data);
+			if (!find_mulitboot) {
+				error(L"Bad multiboot magic");
+				return EFI_COMPROMISED_DATA;
+			}
+		} else {
+			ret = uefi_call_wrapper(gparti->dio->ReadDisk, 5, gparti->dio,
+					gparti->bio->Media->MediaId, part_off + data_off,
+					sizeof(tos_magic), &tos_magic);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"Failed to read the multiboot magic");
+				return ret;
+			}
+
+			/* Verify multiboot-tos magic. */
+			if (memcmp(MULTIBOOT_MAGIC, tos_magic, sizeof(MULTIBOOT_MAGIC))) {
+				error(L"Bad multiboot magic");
+				return EFI_COMPROMISED_DATA;
+			}
 		}
 	}
 
-	*len = ALIGN((hdr.data_off + hdr.data_len + IAS_CRC_SIZE), IAS_ALIGN);
+	*len = ALIGN((data_off + data_len + IAS_CRC_SIZE), IAS_ALIGN);
 	*len += IAS_RSA_SIGNATURE_SIZE + IAS_RSA_PUBLIC_KEY_SIZE + iasoffset;
 	if (*len > part_len) {
 		error(L"Ias-multiboot image is bigger than the partition");
@@ -651,6 +715,34 @@ EFI_STATUS get_boot_image_hash(const CHAR16 *label)
 
 	return report_hash(L"/", label, hash);
 }
+
+#ifdef USE_AVB
+EFI_STATUS get_vbmeta_image_hash(const CHAR16 *label)
+{
+	struct gpt_partition_interface gparti;
+	UINT64 len;
+	CHAR8 hash[EVP_MAX_MD_SIZE];
+	EFI_STATUS ret;
+
+	/*
+	 * Google hardcode the vbmeta length in the build/core/Makefile
+	 * by "BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS += --padding_size 4096"
+	 */
+	len = 4096;
+
+	ret = gpt_get_partition_by_label(label, &gparti, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get partition %s", label);
+		return ret;
+	}
+
+	ret = hash_partition(&gparti, len, hash);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	return report_hash(L"/", label, hash);
+}
+#endif
 
 static EFI_STATUS get_ext4_len(struct gpt_partition_interface *gparti, UINT64 *len)
 {
