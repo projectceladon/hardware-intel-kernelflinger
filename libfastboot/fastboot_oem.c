@@ -247,7 +247,7 @@ static struct oem_hash {
 #endif
 	{ BOOTLOADER_LABEL,	get_bootloader_hash,	FALSE },
 #ifdef USE_AVB
-	{ VBMETA_LABEL,		get_boot_image_hash,	FALSE },
+	{ VBMETA_LABEL,		get_vbmeta_image_hash,	FALSE },
 #endif
 	{ SYSTEM_LABEL,		get_fs_hash,		TRUE },
 	{ VENDOR_LABEL,		get_fs_hash,		FALSE }
