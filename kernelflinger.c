@@ -1373,7 +1373,7 @@ EFI_STATUS check_kf_upgrade(void)
         debug(L"Success rename the upgrade file %s to %s", KFUPDATE_FILE, self_path);
 
         error(L"I am about to load the new boot loader after upgrade it");
-        if (g_loaded_image != NULL && g_loaded_image->LoadOptions != NULL)
+        if (g_loaded_image != NULL)
                 enter_efi_binary(self_path, FALSE, g_loaded_image->LoadOptionsSize, g_loaded_image->LoadOptions);
         reboot(NULL, EfiResetCold);
 
