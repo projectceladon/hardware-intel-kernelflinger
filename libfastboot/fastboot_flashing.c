@@ -43,7 +43,7 @@
 
 static cmdlist_t cmdlist;
 
-static EFI_STATUS fastboot_flashing_publish(void)
+EFI_STATUS fastboot_flashing_publish(void)
 {
 	EFI_STATUS ret;
 

@@ -1277,6 +1277,10 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
+	ret = fastboot_publish_dynamic("boot-device", get_boot_device_var);
+	if (EFI_ERROR(ret))
+		goto error;
+
 	ret = publish_partsize();
 	if (EFI_ERROR(ret))
 		goto error;

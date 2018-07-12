@@ -39,4 +39,5 @@ void fastboot_flashing_free();
  * be sent.  */
 EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive);
 
+EFI_STATUS fastboot_flashing_publish(void);
 #endif	/* _FASTBOOT_FLASHING_H_ */

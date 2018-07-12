@@ -124,7 +124,8 @@ enum device_state {
 const char *get_current_state_string(void);
 EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color();
 EFI_STATUS set_current_state(enum device_state state);
-enum device_state get_current_state();
+enum device_state get_current_state(void);
+EFI_STATUS refresh_current_state(void);
 BOOLEAN device_is_provisioning(void);
 EFI_STATUS get_watchdog_status(UINT8 *counter, EFI_TIME *time);
 EFI_STATUS reset_watchdog_status(VOID);
