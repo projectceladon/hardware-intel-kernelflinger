@@ -191,22 +191,23 @@ static EFI_STATUS media_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_L
 	if (!dev_path) {
 		error(L"Failed to get device path");
 		return EFI_DEVICE_ERROR;
-        }
+	}
 
 	ret = uefi_call_wrapper(BS->LocateDevicePath, 3,
-                                &guid, &dev_path, &storage_handle);
+			&guid, &dev_path, &storage_handle);
 	if (EFI_ERROR(ret))
 		return EFI_UNSUPPORTED;
 
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3,
-                                storage_handle, &guid, (void **)&erase_blockp);
+			storage_handle, &guid, (void **)&erase_blockp);
 	if (EFI_ERROR(ret))
 		return EFI_UNSUPPORTED;
 
 	erase_granularity = erase_blockp->EraseLengthGranularity;
 
 	/* check if space to be erased is lesser than group size
-	   in such a case we cannot afford a group erase*/
+	 * in such a case we cannot afford a group erase.
+	 */
 	if ((end - start + 1) < erase_granularity) {
 		ret = fill_zero(bio, start, end);
 		if (EFI_ERROR(ret))
@@ -237,7 +238,7 @@ static EFI_STATUS media_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_L
 
 	size = (end - start + 1) * bio->Media->BlockSize;
 	ret = uefi_call_wrapper(erase_blockp->EraseBlocks, 5, erase_blockp, bio->Media->MediaId,
-                                start, NULL, size);
+			start, NULL, size);
 	if (EFI_ERROR(ret))
 		error(L"EFI_ERASE_BLOCK_PROTOCOL failed to erase block");
 
@@ -262,7 +263,8 @@ EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA st
 		return EFI_UNSUPPORTED;
 
 	/* check if underlying BIOS supports ERASE_BLOCK_PROTOCOL
-	   If so use ERASE_BLOCK_PROTOCOL to erase blocks*/
+	 * If so use ERASE_BLOCK_PROTOCOL to erase blocks.
+	 */
 	ret = media_erase_blocks(handle, bio, start, end);
 	if (ret == EFI_SUCCESS || ret != EFI_UNSUPPORTED)
 		return ret;
@@ -271,7 +273,7 @@ EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA st
 	return cur_storage->erase_blocks(handle, bio, start, end);
 }
 
-#define percent5(x, max) (x) * 20 / (max) * 5
+#define percent5(x, max) ((x) * 20 / (max) * 5)
 
 EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 			    VOID *pattern, UINTN pattern_blocks)
@@ -364,6 +366,32 @@ EFI_HANDLE get_boot_device_handle(void)
 	return boot_device_handle;
 }
 
+const char *get_boot_device_var(void)
+{
+	static char boot_device_var[64]; // MAX_VARIABLE_LENGTH
+	PCI_DEVICE_PATH *pci;
+	CHAR16 *dps;
+	EFI_DEVICE_PATH *device_path = DevicePathFromHandle(boot_device_handle);
+
+	if (!device_path) {
+		error(L"Failed to get device path from boot handle");
+		return NULL;
+	}
+
+	pci = get_pci_device_path(device_path);
+	if (!pci) {
+		error(L"Boot device is not PCI, unsupported");
+		return NULL;
+	}
+
+	dps = DevicePathToStr((EFI_DEVICE_PATH *)pci);
+	debug(L"The boot device is %s", dps);
+	efi_snprintf((CHAR8 *)boot_device_var, sizeof(boot_device_var), (CHAR8 *)"%s", dps);
+	FreePool(dps);
+
+	return boot_device_var;
+}
+
 PCI_DEVICE_PATH *get_boot_device(void)
 {
 	EFI_STATUS ret;
@@ -392,8 +420,7 @@ EFI_STATUS get_boot_device_type(enum storage_type *type)
 		*type = boot_device_type;
 		return EFI_SUCCESS;
 	}
-	else
-		return EFI_DEVICE_ERROR;
+	return EFI_DEVICE_ERROR;
 }
 
 BOOLEAN is_cur_storage_ufs(void)
@@ -429,7 +456,7 @@ EFI_STATUS storage_get_erase_block_size(UINTN *erase_blk_size)
 	EFI_DEVICE_PATH *device_path = NULL;
 	struct gpt_partition_interface gparti;
 
-	if (cur_storage->get_erase_block_size){
+	if (cur_storage->get_erase_block_size) {
 		ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol, &BlockIoProtocol, NULL, &nb_handle, &handles);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to locate Block IO Protocol");

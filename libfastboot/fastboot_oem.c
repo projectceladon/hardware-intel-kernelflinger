@@ -47,6 +47,7 @@
 #include "authenticated_action.h"
 
 #include "fastboot_oem.h"
+#include "fastboot_flashing.h"
 #include "intel_variables.h"
 #include "text_parser.h"
 #ifdef USE_AVB
@@ -59,6 +60,9 @@
 #ifdef RPMB_STORAGE
 #include "rpmb_storage.h"
 #endif
+#include "security.h"
+#include "vars.h"
+#include "security_interface.h"
 
 #define OFF_MODE_CHARGE		"off-mode-charge"
 #define CRASH_EVENT_MENU	"crash-event-menu"
@@ -90,13 +94,13 @@ static EFI_STATUS cmd_oem_set_boolean(INTN argc, CHAR8 **argv,
 		return EFI_INVALID_PARAMETER;
 	}
 
-	if (strcmp(argv[1], (CHAR8* )"1") && strcmp(argv[1], (CHAR8 *)"0")) {
+	if (strcmp(argv[1], (CHAR8 *)"1") && strcmp(argv[1], (CHAR8 *)"0")) {
 		fastboot_fail("Invalid value");
 		error(L"Please specify 1 or 0 to enable/disable %a", name);
 		return EFI_INVALID_PARAMETER;
 	}
 
-        ret = set_fun(!strcmp(argv[1], (CHAR8* )"1"));
+	ret = set_fun(!strcmp(argv[1], (CHAR8 *)"1"));
 	if (EFI_ERROR(ret))
 		fastboot_fail("Failed to set %a", OFF_MODE_CHARGE);
 
@@ -279,47 +283,102 @@ static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)
 	fastboot_okay("");
 }
 
-#ifndef USER
 static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 {
-	enum storage_type type;
 	EFI_STATUS ret;
+	enum storage_type types[STORAGE_ALL + 1];
+	INTN i, total_types = 0;
+	enum storage_type boot_device_type;
 
-	if (argc != 2) {
-		fastboot_fail("Supported storage: ufs, emmc, nvme");
+	if (argc < 2) {
+#ifdef USB_STORAGE
+		fastboot_info("Supported type: ufs emmc sata nvme sdcard usb");
+#else
+		fastboot_info("Supported type: ufs emmc sata nvme sdcard");
+#endif
+		fastboot_info("Example: fastboot oem set-storage ufs emmc");
+		fastboot_fail("Should add one or more type");
 		return;
 	}
 
-	if (!strcmp(argv[1], (CHAR8*)"emmc")) {
-		type = STORAGE_EMMC;
-		goto set;
+	for (i = 1; i < argc && total_types < (INTN)ARRAY_SIZE(types); i++) {
+		if (!strcmp(argv[i], (CHAR8 *)"emmc")) {
+			types[total_types++] = STORAGE_EMMC;
+			continue;
+		}
+		if (!strcmp(argv[i], (CHAR8 *)"ufs")) {
+			types[total_types++] = STORAGE_UFS;
+			continue;
+		}
+		if (!strcmp(argv[i], (CHAR8 *)"sata")) {
+			types[total_types++] = STORAGE_SATA;
+			continue;
+		}
+		if (!strcmp(argv[i], (CHAR8 *)"nvme")) {
+			types[total_types++] = STORAGE_NVME;
+			continue;
+		}
+		if (!strcmp(argv[i], (CHAR8 *)"sdcard")) {
+			types[total_types++] = STORAGE_SDCARD;
+			continue;
+		}
+		if (!strcmp(argv[i], (CHAR8 *)"usb")) {
+#ifdef USB_STORAGE
+			types[total_types++] = STORAGE_USB;
+#else
+			fastboot_info("USB storage is unsupported");
+#endif
+			continue;
+		}
+		fastboot_fail("Unsupported storage");
+		return;
 	}
-	if (!strcmp(argv[1], (CHAR8*)"ufs")) {
-		type = STORAGE_UFS;
-		goto set;
+
+	if (total_types == 0) {
+		fastboot_fail("All input types are skipped");
+		return;
 	}
-	if (!strcmp(argv[1], (CHAR8*)"nvme")) {
-		type = STORAGE_NVME;
-		goto set;
-	}
-	if (!strcmp(argv[1], (CHAR8*)"virtual_media")) {
-		type = STORAGE_VIRTUAL;
-		goto set;
-	}
-	fastboot_fail("Unsupported storage");
-	return;
-set:
-	ret = identify_boot_device(type);
+
+	ret = get_boot_device_type(&boot_device_type);
 	if (EFI_ERROR(ret)) {
-		fastboot_fail("Failed to set storage: %r", ret);
+		fastboot_fail("Failed to get current boot device type");
 		return;
 	}
+
+	for (i = 0; i < total_types; i++) {
+		if (boot_device_type == types[i]) {
+			fastboot_info("Already use such type device");
+			fastboot_okay("");
+			return;
+		}
+		ret = identify_boot_device(types[i]);
+		if (!EFI_ERROR(ret))
+			break;
+	}
+
+	if (i == total_types) {
+		fastboot_fail("Failed to find valid storage");
+		return;
+	}
+
+	set_device_security_info(NULL);
+
+#ifdef RPMB_STORAGE
+	rpmb_storage_init();
+	rpmb_key_init();
+#endif
 
 	ret = gpt_refresh();
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to refresh partition table: %r", ret);
 		return;
 	}
+
+	refresh_current_state();
+	fastboot_flashing_publish();
+#ifdef USE_UI
+	fastboot_ui_refresh();
+#endif
 
 	ret = refresh_partition_var();
 	if (EFI_ERROR(ret))
@@ -328,8 +387,10 @@ set:
 		fastboot_okay("");
 }
 
-static void cmd_oem_reprovision(__attribute__((__unused__)) INTN argc,
-			        __attribute__((__unused__)) CHAR8 **argv)
+#ifndef USER
+static void cmd_oem_reprovision(
+		__attribute__((__unused__)) INTN argc,
+		__attribute__((__unused__)) CHAR8 **argv)
 {
 	if (EFI_ERROR(reprovision_state_vars())) {
 		fastboot_fail("Unable to clear provisioning variables");
@@ -345,6 +406,7 @@ static void cmd_oem_rm(INTN argc, CHAR8 **argv)
 	const CHAR8 prefix[] = "/ESP/";
 	CHAR8 *filename;
 	CHAR16 *filename16;
+	CHAR8 *tmp;
 
 	if (argc != 2) {
 		fastboot_fail("Invalid parameter");
@@ -363,7 +425,6 @@ static void cmd_oem_rm(INTN argc, CHAR8 **argv)
 	}
 
 	filename = &argv[1][ARRAY_SIZE(prefix) - 1];
-	CHAR8 *tmp;
 	for (tmp = filename; *tmp; tmp++)
 		if (*tmp == '/')
 			*tmp = '\\';
@@ -647,7 +708,8 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ OFF_MODE_CHARGE,		LOCKED,		cmd_oem_off_mode_charge  },
 	/* The following commands are not part of the Google
 	 * requirements.  They are provided for engineering and
-	 * provisioning purpose only.  */
+	 * provisioning purpose only.
+	 */
 	{ CRASH_EVENT_MENU,		LOCKED,		cmd_oem_crash_event_menu  },
 	{ "setvar",			UNLOCKED,	cmd_oem_setvar  },
 	{ "garbage-disk",		UNLOCKED,	cmd_oem_garbage_disk  },
@@ -655,8 +717,8 @@ static struct fastboot_cmd COMMANDS[] = {
 #ifdef __SUPPORT_ABL_BOOT
 	{ "fw-update",			UNLOCKED,	cmd_oem_fw_update  },
 #endif
-#ifndef USER
 	{ "set-storage",		LOCKED,		cmd_oem_set_storage  },
+#ifndef USER
 	{ "reprovision",		LOCKED,		cmd_oem_reprovision  },
 	{ "rm",				LOCKED,		cmd_oem_rm },
 	{ "set-watchdog-counter-max",	LOCKED,		cmd_oem_set_watchdog_counter_max },
@@ -720,7 +782,7 @@ EFI_STATUS fastboot_oem_init(void)
 	return EFI_SUCCESS;
 }
 
-void fastboot_oem_free()
+void fastboot_oem_free(void)
 {
 	fastboot_cmdlist_unregister(&cmdlist);
 

@@ -354,6 +354,14 @@ EFI_STATUS set_current_state(enum device_state state)
 	return EFI_SUCCESS;
 }
 
+EFI_STATUS refresh_current_state(void)
+{
+	current_state = UNKNOWN_STATE;
+	get_current_state();
+
+	return EFI_SUCCESS;
+}
+
 #ifndef USER
 EFI_STATUS reprovision_state_vars(VOID)
 {

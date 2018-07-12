@@ -69,6 +69,7 @@ struct storage {
 
 EFI_STATUS identify_boot_device(enum storage_type type);
 PCI_DEVICE_PATH *get_boot_device(void);
+const char* get_boot_device_var(void);
 EFI_HANDLE get_boot_device_handle(void);
 EFI_STATUS get_boot_device_type(enum storage_type *type);
 EFI_STATUS storage_set_boot_device(EFI_HANDLE device);
