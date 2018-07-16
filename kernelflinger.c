@@ -1341,8 +1341,8 @@ EFI_STATUS check_kf_upgrade(void)
                         && g_loaded_image->FilePath->SubType == MEDIA_FILEPATH_DP) {
                 debug(L"Self path name: %s", ((FILEPATH_DEVICE_PATH *)(g_loaded_image->FilePath))->PathName);
                 self_path = ((FILEPATH_DEVICE_PATH *)(g_loaded_image->FilePath))->PathName;
-                if (StrCmp(self_path, BOOTLOADER_FILE)) {
-                        if (StrCmp(self_path, KFSELF_FILE)) {
+                if (StriCmp(self_path, BOOTLOADER_FILE)) {
+                        if (StriCmp(self_path, KFSELF_FILE)) {
                                 error(L"Skip check the upgrade file");
                                 goto out;
                         }
