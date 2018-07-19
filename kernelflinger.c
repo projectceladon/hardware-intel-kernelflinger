@@ -1373,7 +1373,8 @@ EFI_STATUS check_kf_upgrade(void)
         debug(L"Success rename the upgrade file %s to %s", KFUPDATE_FILE, self_path);
 
         error(L"I am about to load the new boot loader after upgrade it");
-        enter_efi_binary(self_path, FALSE, g_loaded_image->LoadOptionsSize, g_loaded_image->LoadOptions);
+        if (g_loaded_image != NULL)
+                enter_efi_binary(self_path, FALSE, g_loaded_image->LoadOptionsSize, g_loaded_image->LoadOptions);
         reboot(NULL, EfiResetCold);
 
 out:
@@ -1443,7 +1444,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 #ifdef RPMB_STORAGE
         // Init the rpmb
-        rpmb_init(g_disk_device);
+        if (g_disk_device)
+                rpmb_init(g_disk_device);
 #if defined(RPMB_SIMULATE) || !defined(USER)
         rpmb_storage_init(FALSE);
 #else
