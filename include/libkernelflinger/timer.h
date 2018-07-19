@@ -43,7 +43,7 @@ enum TM_POINT {
 	TM_POINT_LAST
 };
 
-unsigned boottime_in_msec(void);
+uint32_t boottime_in_msec(void);
 void set_boottime_stamp(int num);
 void construct_stages_boottime(CHAR8 *time_str, size_t buf_len);
 
