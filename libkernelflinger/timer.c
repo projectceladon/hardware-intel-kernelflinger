@@ -75,10 +75,10 @@ __RDTSC (void)
 	return (uint64_t) hi << 32 | lo;
 }
 
-static uint16_t get_cpu_freq(void)
+static uint32_t get_cpu_freq(void)
 {
-	uint16_t cpu_freq;
-	unsigned max_nb_ratio;
+	uint32_t cpu_freq;
+	uint32_t max_nb_ratio;
 	msr_t platform_info;
 
 	platform_info.val = __RDMSR (0xce);
@@ -88,11 +88,11 @@ static uint16_t get_cpu_freq(void)
 	return cpu_freq;
 }
 
-unsigned boottime_in_msec(void)
+uint32_t boottime_in_msec(void)
 {
-	unsigned tick;
-	unsigned bt_us, bt_ms;
-	unsigned cpu_freq;
+	uint64_t tick;
+	uint32_t bt_us, bt_ms;
+	uint32_t cpu_freq;
 
 	cpu_freq = get_cpu_freq();
 

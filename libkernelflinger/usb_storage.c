@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2017, Intel Corporation
+ * Copyright (c) 2018, Intel Corporation
  * All rights reserved.
  *
- * Author: Anisha Kulkarni <anisha.dattatraya.kulkarni@intel.com>
+ * Author: Ming Tan <ming.tan@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,26 +28,46 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * This file defines bootlogic data structures, try to keep it without
+ * any external definitions in order to ease export of it.
  */
 
-#ifndef _TPM2_SECURITY_H_
-#define _TPM2_SECURITY_H_
-
-#include <efi.h>
-#include <efilib.h>
 #include <lib.h>
+#include "storage.h"
 
-EFI_STATUS tpm2_fuse_trusty_seed(void);
+static USB_DEVICE_PATH *get_usb_device_path(EFI_DEVICE_PATH *p)
+{
+	for (; !IsDevicePathEndType(p); p = NextDevicePathNode(p))
+		if (DevicePathType(p) == MESSAGING_DEVICE_PATH
+				&& DevicePathSubType(p) == MSG_USB_DP)
+			return (USB_DEVICE_PATH *)p;
 
-EFI_STATUS tpm2_fuse_perm_attr(void *data, uint32_t size);
+	return NULL;
+}
 
-EFI_STATUS tpm2_fuse_vbmeta_key_hash(void *data, uint32_t size);
+static EFI_STATUS usb_erase_blocks(
+		__attribute__((unused)) EFI_HANDLE handle,
+		__attribute__((unused)) EFI_BLOCK_IO *bio,
+		__attribute__((unused)) EFI_LBA start,
+		__attribute__((unused)) EFI_LBA end)
+{
+	return EFI_UNSUPPORTED;
+}
 
-EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size);
+static EFI_STATUS usb_check_logical_unit(__attribute__((unused)) EFI_DEVICE_PATH *p,
+					  logical_unit_t log_unit)
+{
+	return log_unit == LOGICAL_UNIT_USER ? EFI_SUCCESS : EFI_UNSUPPORTED;
+}
 
-#ifndef USER
-EFI_STATUS tpm2_show_index(UINT32 index, CHAR8* out_buffer, UINTN out_buffer_size);
-EFI_STATUS tpm2_delete_index(UINT32 index);
-#endif  // USER
+static BOOLEAN is_usb(EFI_DEVICE_PATH *p)
+{
+	return get_usb_device_path(p) != NULL;
+}
 
-#endif /* _TPM2_SECURITY_H_ */
+struct storage STORAGE(STORAGE_USB) = {
+	.erase_blocks = usb_erase_blocks,
+	.check_logical_unit = usb_check_logical_unit,
+	.probe = is_usb,
+	.name = L"USB"
+};

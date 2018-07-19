@@ -42,6 +42,9 @@ enum storage_type {
 	STORAGE_SATA,
 	STORAGE_NVME,
 	STORAGE_VIRTUAL,
+#ifdef USB_STORAGE
+	STORAGE_USB,
+#endif
 	STORAGE_ALL,
 };
 
