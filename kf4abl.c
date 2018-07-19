@@ -274,9 +274,10 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 		if (*target == UNKNOWN_TARGET)
 			continue;
 
-		if ((*target == NORMAL_BOOT) || (*target == FASTBOOT))
-			reboot_to_target(*target, EfiResetCold);
-		break;
+		if (*target == CRASHMODE)
+			break;
+
+		reboot_to_target(*target, EfiResetCold);
 	}
 
 	return ret;

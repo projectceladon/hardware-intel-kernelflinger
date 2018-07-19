@@ -110,6 +110,11 @@ LOCAL_SRC_FILES := \
 	timer.c \
 	nvme.c \
 	virtual_media.c
+
+ifeq ($(KERNELFLINGER_SUPPORT_USB_STORAGE),true)
+	LOCAL_SRC_FILES += usb_storage.c
+endif
+
 ifneq (,$(filter true,$(IOC_USE_SLCAN) $(IOC_USE_CBC)))
 	LOCAL_SRC_FILES += ioc_can.c
 endif

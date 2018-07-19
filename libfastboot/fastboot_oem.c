@@ -525,6 +525,48 @@ static void cmd_oem_get_action_nonce(INTN argc, __attribute__((__unused__)) CHAR
 #endif
 
 #ifdef USE_TPM
+#ifndef USER
+static void cmd_oem_tpm_show_index(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	char *endptr;
+	CHAR8 out_buffer[2048];
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameters. Usage: fastboot oem tpm-show-index <index>");
+		return;
+	}
+
+	ret = tpm2_show_index(strtoul((const char *)argv[1], &endptr, 0), out_buffer, sizeof(out_buffer));
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("TPM show index failed, %r", ret);
+		return;
+	}
+	fastboot_info_long_string((char *)out_buffer, NULL);
+
+	fastboot_okay("");
+}
+
+static void cmd_oem_tpm_delete_index(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	char *endptr;
+
+	if (argc != 2) {
+		fastboot_fail("Invalid parameters, Usage: fastboot oem tpm-delete-index <index>");
+		return;
+	}
+
+	ret = tpm2_delete_index(strtoul((const char *)argv[1], &endptr, 0));
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("TPM delete index failed, %r", ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
+#endif // USER
+
 static void cmd_fuse(INTN argc, CHAR8 **argv)
 {
 	if (argc < 2) {
@@ -630,6 +672,10 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "get-action-nonce",		LOCKED,		cmd_oem_get_action_nonce },
 #endif
 #ifdef USE_TPM
+#ifndef USER
+	{ "tpm-show-index",		LOCKED,		cmd_oem_tpm_show_index },
+	{ "tpm-delete-index",		LOCKED,		cmd_oem_tpm_delete_index },
+#endif // USER
 	{ "fuse",			LOCKED,		cmd_fuse }
 #endif
 };
