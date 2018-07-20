@@ -173,6 +173,9 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	EFI_STATUS ret;
 	void* param = NULL;
 
+	if (!bootimage)
+		 return EFI_SUCCESS;
+
 #ifdef USE_AVB
 	AvbOps *ops;
 	AvbSlotVerifyData *slot_data = NULL;
@@ -213,24 +216,22 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	param = slot_data;
 fail:
 #endif
-	if (bootimage) {
-		/* 'fastboot boot' case, only allowed on unlocked devices.*/
-		if (device_is_unlocked()) {
-			UINT32 crc;
+	/* 'fastboot boot' case, only allowed on unlocked devices.*/
+	if (device_is_unlocked()) {
+		UINT32 crc;
 
-			ret = uefi_call_wrapper(BS->CalculateCrc32, 3, bootimage, imagesize, &crc);
-			if (EFI_ERROR(ret)) {
-				efi_perror(ret, L"CalculateCrc32 failed");
-				return ret;
-			}
+		ret = uefi_call_wrapper(BS->CalculateCrc32, 3, bootimage, imagesize, &crc);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"CalculateCrc32 failed");
+			return ret;
+		}
 
-			ret = android_image_start_buffer(NULL, bootimage,
-								NORMAL_BOOT, BOOT_STATE_GREEN, NULL,
-								param, (const CHAR8 *)cmd_buf);
-			if (EFI_ERROR(ret)) {
-				efi_perror(ret, L"Couldn't load Boot image");
-				return ret;
-			}
+		ret = android_image_start_buffer(NULL, bootimage,
+							NORMAL_BOOT, BOOT_STATE_GREEN, NULL,
+							param, (const CHAR8 *)cmd_buf);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Couldn't load Boot image");
+			return ret;
 		}
 	}
 
