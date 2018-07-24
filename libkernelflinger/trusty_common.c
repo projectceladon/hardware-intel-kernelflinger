@@ -181,7 +181,7 @@ cleanup_tos:
 #ifndef USERDEBUG
         if(EFI_SECURITY_VIOLATION == ret) {
                 error(L"Invalid TOS image. Boot anyway on ENG build");
-                ret = EFI_SUCCESS;
+                return EFI_SUCCESS;
         }
 #endif
         if (*bootimage)
