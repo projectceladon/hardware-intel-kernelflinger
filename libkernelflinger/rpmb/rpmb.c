@@ -39,6 +39,7 @@
 #include "rpmb_storage_common.h"
 #include "rpmb_ufs.h"
 #include "rpmb_emmc.h"
+#include "rpmb_virtual.h"
 #include "storage.h"
 
 #define MAGIC_KEY_OFFSET		0
@@ -230,7 +231,19 @@ EFI_STATUS rpmb_init(EFI_HANDLE disk_handle)
 			debug(L"init emmc rpmb success");
 			return EFI_SUCCESS;
 		}
-
+		error(L"init emmc rpmb protocol failed");
+		break;
+	case STORAGE_VIRTUAL:
+		storage_rpmb_ops = get_virtual_storage_rpmb_ops();
+		if (!storage_rpmb_ops) {
+			error(L"failed to get virtual rpmb operation instance");
+			return EFI_NOT_FOUND;
+		}
+		if ((storage_rpmb_ops->get_storage_protocol)((void **)(&rpmb_dev), disk_handle) == EFI_SUCCESS) {
+			debug(L"init virtual media rpmb using pass through success");
+			return EFI_SUCCESS;
+		}
+		error(L"init virtual media rpmb using pass through failed");
 		break;
 	default:
 		error(L"boot device not supported");
