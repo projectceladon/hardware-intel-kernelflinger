@@ -106,6 +106,7 @@ LOCAL_SRC_FILES := \
 	rpmb/rpmb.c \
 	rpmb/rpmb_emmc.c \
 	rpmb/rpmb_ufs.c \
+	rpmb/rpmb_virtual.c \
 	rpmb/rpmb_storage_common.c \
 	timer.c \
 	nvme.c \
