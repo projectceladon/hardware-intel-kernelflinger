@@ -325,6 +325,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		SECUREBOOT,
 		BOOTVERSION,
 		SERIALNO,
+		DEV_SEC_INFO,
 		IMAGE_BOOT_PARAMS_ADDR
 	};
 
@@ -370,6 +371,11 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			(CHAR8 *)"androidboot.serialno=",
 			strlen((CHAR8 *)"androidboot.serialno="),
 			SERIALNO
+		},
+		{
+			(CHAR8 *)"dev_sec_info.param_addr=",
+			strlen((CHAR8 *)"dev_sec_info.param_addr="),
+			DEV_SEC_INFO
 		},
 		{
 			(CHAR8 *)"ImageBootParamsAddr=",
@@ -450,7 +456,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 					continue;
 #endif //USE_TRUSTY
 #ifdef RPMB_STORAGE
-				/* Parse "ImageBootParamsAddr=" */
+				/* Parse "Add legacy DEV_SEC_INFO parameter for backward compatible to ABL usage" */
+				case DEV_SEC_INFO:
 				case IMAGE_BOOT_PARAMS_ADDR:
 					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
 					num = strtoul((char *)nptr, 0, 16);
