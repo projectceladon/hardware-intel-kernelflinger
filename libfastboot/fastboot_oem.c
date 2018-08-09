@@ -363,6 +363,11 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 
 	set_device_security_info(NULL);
 
+#ifdef USE_TPM
+	if (!is_boot_device_removable())
+		tpm2_init();
+#endif
+
 #ifdef RPMB_STORAGE
 	rpmb_storage_init();
 	rpmb_key_init();

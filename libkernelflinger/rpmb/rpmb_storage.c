@@ -802,3 +802,17 @@ EFI_STATUS rpmb_storage_init(void)
 
 	return ret;
 }
+
+EFI_STATUS get_rpmb_keys(IN UINT32 num_partition, OUT UINT8 rpmb_key_list[][RPMB_MAX_KEY_SIZE])
+{
+	/* initially hardcoded all rpmb keys as 0 */
+	memset(rpmb_key_list, 0, num_partition * RPMB_MAX_KEY_SIZE);
+
+	// Now only the first partition is supported, and only use 32 bytes
+#if RPMB_KEY_SIZE > RPMB_MAX_KEY_SIZE
+#error RPMB_KEY_SIZE should less or equal than RPMB_MAX_KEY_SIZE
+#endif
+	memcpy(rpmb_key_list[0], rpmb_key, RPMB_KEY_SIZE);
+
+	return EFI_SUCCESS;
+}

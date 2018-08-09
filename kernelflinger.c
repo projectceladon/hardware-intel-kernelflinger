@@ -68,6 +68,9 @@
 #include "protocol.h"
 #include "uefi_utils.h"
 #include "security_interface.h"
+#ifdef USE_TPM
+#include "tpm2_security.h"
+#endif
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const CHAR16 __attribute__((used)) magic[] = L"### kernelflinger ###";
@@ -1008,6 +1011,12 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                 return ret;
         }
 #endif
+
+#ifdef USE_TPM
+        // Make sure the TPM2 is ended
+        tpm2_end();
+#endif
+
         debug(L"chainloading boot image, boot state is %s",
                         boot_state_to_string(boot_state));
         ret = android_image_start_buffer(g_parent_image, bootimage,
@@ -1447,6 +1456,16 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         }
 
         check_kf_upgrade();
+
+#ifdef USE_TPM
+        if (!is_boot_device_removable()) {
+                ret = tpm2_init();
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to init TPM, enter fastboot mode");
+                        boot_target = FASTBOOT;
+                }
+        }
+#endif
 
         ret = set_device_security_info(NULL);
         if (EFI_ERROR(ret)) {

@@ -36,7 +36,6 @@
 #include "Tpm2CommandLib.h"
 #include "tpm2_security.h"
 
-#define TRUSTY_SEED_SIZE		32
 #define NV_INDEX_AT_PERM_ATTR		0x01500046
 #define NV_INDEX_TRUSTYOS_SEED		0x01500047
 #define NV_INDEX_VBMETA_KEY_HASH	0x01500048
@@ -108,6 +107,62 @@ EFI_STATUS tpm2_write_lock_nvindex(TPMI_RH_NV_INDEX nv_index)
 	return Tpm2NvWriteLock(auth_handle, nv_index, &session_data);
 }
 
+EFI_STATUS tpm2_read_nvindex(TPMI_RH_NV_INDEX nv_index,
+				UINT16 *data_size, BYTE *data, UINT16 offset)
+{
+	EFI_STATUS ret;
+	TPMS_AUTH_COMMAND session_data;
+	TPMI_RH_NV_AUTH auth_handle = TPM_RH_PLATFORM;
+	TPM2B_MAX_BUFFER nv_read_data;
+	UINT16 left_size = *data_size;
+	UINT16 read_size = 0;
+	UINT16 cur_size;
+
+	session_data.sessionHandle  = TPM_RS_PW;
+	session_data.nonce.size     = 0;
+	*((UINT8 *) &(session_data.sessionAttributes)) = 0;
+	session_data.hmac.size      = 0;
+
+	while (left_size > 0) {
+		cur_size = (left_size > sizeof(nv_read_data.buffer)) ? sizeof(nv_read_data.buffer) : left_size;
+		nv_read_data.size = cur_size;
+
+		ret = Tpm2NvRead(auth_handle, nv_index, &session_data, nv_read_data.size, read_size + offset, &nv_read_data);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Read NVIndex failed");
+			return ret;
+		}
+		if (nv_read_data.size > cur_size) {
+			// Overflow?
+			error(L"Overflow after read the NVindex");
+			return EFI_ABORTED;
+		}
+		if (nv_read_data.size == 0) {
+			// No data read
+			break;
+		}
+		memcpy(data + read_size, nv_read_data.buffer, nv_read_data.size);
+		left_size -= nv_read_data.size;
+		read_size += nv_read_data.size;
+	}
+	*data_size = read_size;
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS tpm2_read_lock_nvindex(TPMI_RH_NV_INDEX nv_index)
+{
+	TPMS_AUTH_COMMAND session_data;
+	TPMI_RH_NV_AUTH auth_handle = TPM_RH_PLATFORM;
+
+	session_data.sessionHandle  = TPM_RS_PW;
+	session_data.nonce.size     = 0;
+	*((UINT8 *)&(session_data.sessionAttributes)) = 0;
+	session_data.hmac.size      = 0;
+
+	return Tpm2NvReadLock(auth_handle, nv_index, &session_data);
+}
+
 static void set_attributes(TPMA_NV *attributes, BOOLEAN read_lock, BOOLEAN write_lock)
 {
 	attributes->TPMA_NV_PPREAD = 1;
@@ -149,7 +204,7 @@ static EFI_STATUS create_index_and_write_lock(TPM_NV_INDEX nv_index, TPMA_NV att
 }
 
 #ifndef USER
-EFI_STATUS tpm2_show_index(UINT32 index, CHAR8* out_buffer, UINTN out_buffer_size)
+EFI_STATUS tpm2_show_index(UINT32 index, uint8_t *out_buffer, UINTN out_buffer_size)
 {
 	EFI_STATUS ret;
 	TPM2B_NV_PUBLIC NvPublic;
@@ -160,10 +215,11 @@ EFI_STATUS tpm2_show_index(UINT32 index, CHAR8* out_buffer, UINTN out_buffer_siz
 		error(L"Read TPM NV index %x ret: %d", index, ret);
 		return ret;
 	}
-	efi_snprintf(out_buffer, out_buffer_size, (CHAR8 *)"Read TPM NV index %x success, public size: %d, nvIndex: 0x%x, nameAlg: %d, attributes: 0x%x, data size: %d, name size: %d",
+	efi_snprintf(out_buffer, out_buffer_size, (CHAR8 *)
+		"Read TPM NV index %x success, public size: %d, nvIndex: 0x%x, nameAlg: %d, attributes: 0x%x, data size: %d, name size: %d",
 		index,
-		NvPublic.size, NvPublic.nvPublic.nvIndex, NvPublic.nvPublic.nameAlg, NvPublic.nvPublic.attributes, NvPublic.nvPublic.dataSize,
-		NvName.size);
+		NvPublic.size, NvPublic.nvPublic.nvIndex, NvPublic.nvPublic.nameAlg,
+		NvPublic.nvPublic.attributes, NvPublic.nvPublic.dataSize, NvName.size);
 
 	return EFI_SUCCESS;
 }
@@ -171,6 +227,7 @@ EFI_STATUS tpm2_show_index(UINT32 index, CHAR8* out_buffer, UINTN out_buffer_siz
 EFI_STATUS tpm2_delete_index(UINT32 index)
 {
 	EFI_STATUS ret = Tpm2NvUndefineSpace(TPM_RH_PLATFORM, index, NULL);
+
 	if (EFI_ERROR(ret))
 		error(L"Delete TPM NV index failed, index: %x, ret: %d", index, ret);
 
@@ -178,25 +235,92 @@ EFI_STATUS tpm2_delete_index(UINT32 index)
 }
 #endif // USER
 
+static void dump_data(
+		__attribute__((unused)) UINT8 *data,
+		__attribute__((unused)) UINT16 data_size)
+{
+#if 0  // Change to 1 for dump the data
+	CHAR16 buf[2048 * 2 + 2];
+	UINT16 i;
+
+	for (i = 0; i < data_size && i < sizeof(buf) / 2 - 1; i++)
+		SPrint(buf + i * 2, sizeof(buf) - i * 2, L"%02x", data[i]);
+	debug(L"Data: %s", buf);
+#endif
+}
+
 EFI_STATUS tpm2_fuse_trusty_seed(void)
 {
 	EFI_STATUS ret;
 	TPM2B_DIGEST trusty_seed;
-	TPM2B_MAX_BUFFER seed_buffer;
 	TPMA_NV attributes = {0};
+	UINT8 read_seed[TRUSTY_SEED_SIZE];
+	UINT16 read_seed_size = TRUSTY_SEED_SIZE;
 
 	ret = Tpm2GetRandom(TRUSTY_SEED_SIZE, &trusty_seed);
 	if (EFI_ERROR(ret)) {
 		error(L"Tpm2GetRandom failed");
-		return ret;
+		goto out;
 	}
-
-	seed_buffer.size = sizeof(TPM2B_DIGEST) - 2;
-	memcpy(seed_buffer.buffer, trusty_seed.buffer,
-	       sizeof(seed_buffer.size));
+	dump_data(trusty_seed.buffer, TRUSTY_SEED_SIZE);
 
 	set_attributes(&attributes, TRUE, TRUE);
 	ret = create_index_and_write_lock(NV_INDEX_TRUSTYOS_SEED, attributes, TRUSTY_SEED_SIZE, trusty_seed.buffer);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to create and write trusty seed");
+		goto out;
+	}
+	debug(L"Success create and write trusty seed");
+
+	// Read the data again to verify it
+	ret = tpm2_read_nvindex(NV_INDEX_TRUSTYOS_SEED, &read_seed_size, read_seed, 0);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Read trusty seed back failed just after write it");
+		goto out;
+	}
+	if (memcmp(trusty_seed.buffer, read_seed, sizeof(read_seed))) {
+		error(L"Security error! Read trusty seed back but verify failed!");
+		dump_data(read_seed, TRUSTY_SEED_SIZE);
+		ret = EFI_SECURITY_VIOLATION;
+	}
+
+out:
+	// Always clear the memory
+	// Maybe be optimized?
+	memset(trusty_seed.buffer, 0, TRUSTY_SEED_SIZE);
+	memset(read_seed, 0, TRUSTY_SEED_SIZE);
+	return ret;
+}
+
+EFI_STATUS tpm2_read_trusty_seed(UINT8 seed[TRUSTY_SEED_SIZE])
+{
+	EFI_STATUS ret;
+	EFI_STATUS ret2;
+	UINT16 seed_size = TRUSTY_SEED_SIZE;
+
+	ret = tpm2_read_nvindex(NV_INDEX_TRUSTYOS_SEED, &seed_size, seed, 0);
+	ret2 = tpm2_read_lock_nvindex(NV_INDEX_TRUSTYOS_SEED);  // Lock anyway
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Read trusty seed failed");
+		goto out;
+	}
+	if (EFI_ERROR(ret2)) {
+		efi_perror(ret2, L"Security error! Set trusty seed read lock failed!");
+		// die?
+		ret = ret2;
+		goto out;
+	}
+	if (seed_size != TRUSTY_SEED_SIZE) {
+		efi_perror(ret, L"Read trusty seed failed, read %d bytes data, but expect %d",
+				TRUSTY_SEED_SIZE, seed_size);
+		ret = EFI_COMPROMISED_DATA;
+		goto out;
+	}
+	dump_data(seed, TRUSTY_SEED_SIZE);
+	return EFI_SUCCESS;
+
+out:
+	memset(seed, 0, TRUSTY_SEED_SIZE);
 	return ret;
 }
 
@@ -270,4 +394,45 @@ EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size)
 
 	debug(L"Bootloader policy created successfully");
 	return ret;
+}
+
+EFI_STATUS tpm2_init(void)
+{
+	EFI_STATUS ret;
+	TPM2B_NV_PUBLIC NvPublic;
+	TPM2B_NAME NvName;
+
+	// Check the SEED nvindex
+	ret = Tpm2NvReadPublic(NV_INDEX_TRUSTYOS_SEED, &NvPublic, &NvName);
+	if (!EFI_ERROR(ret)) {
+		// Success
+		if (NvPublic.nvPublic.dataSize == TRUSTY_SEED_SIZE) {
+			debug(L"Trusty seed already fused");
+			return EFI_SUCCESS;
+		}
+
+		// Find it, but the data is empty wrong.
+		error(L"Find trusty seed nv index, but the data is wrong");
+		return EFI_COMPROMISED_DATA;
+	}
+
+	if (ret != EFI_NOT_FOUND) {
+		efi_perror(ret, L"Read trusty seed index failed");
+		return ret;
+	}
+
+	// Can't find it, try to init it now
+	ret = tpm2_fuse_trusty_seed();
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to fuse trusty seed");
+
+	return ret;
+}
+
+EFI_STATUS tpm2_end(void)
+{
+	// Maybe set read lock again
+	tpm2_read_lock_nvindex(NV_INDEX_TRUSTYOS_SEED);
+
+	return EFI_SUCCESS;
 }

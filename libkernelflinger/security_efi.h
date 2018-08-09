@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2017, Intel Corporation
+ * Copyright (c) 2018, Intel Corporation
  * All rights reserved.
  *
- * Author: Anisha Kulkarni <anisha.dattatraya.kulkarni@intel.com>
+ * Author: Ming Tan <ming.tan@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,31 +29,22 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
-#ifndef _TPM2_SECURITY_H_
-#define _TPM2_SECURITY_H_
+#ifndef _SECURITY_EFI_H_
+#define _SECURITY_EFI_H_
 
 #include <efi.h>
 #include <efilib.h>
-#include <lib.h>
 
-#define TRUSTY_SEED_SIZE		32
+#define BOOTLOADER_SEED_MAX_ENTRIES  10
+#define SECURITY_EFI_TRUSTY_SEED_LEN 64
 
-EFI_STATUS tpm2_init(void);
-EFI_STATUS tpm2_end(void);
+/* structure of seed info */
+typedef struct {
+	UINT8 svn;
+	UINT8 padding[3];
+	UINT8 seed[SECURITY_EFI_TRUSTY_SEED_LEN];
+} __attribute__((packed)) seed_info_t;
 
-EFI_STATUS tpm2_fuse_trusty_seed(void);
-EFI_STATUS tpm2_read_trusty_seed(UINT8 seed[TRUSTY_SEED_SIZE]);
+EFI_STATUS get_seeds(IN UINT32 *num_seeds, OUT VOID *seed_list);
 
-EFI_STATUS tpm2_fuse_perm_attr(void *data, uint32_t size);
-
-EFI_STATUS tpm2_fuse_vbmeta_key_hash(void *data, uint32_t size);
-
-EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size);
-
-#ifndef USER
-EFI_STATUS tpm2_show_index(UINT32 index, uint8_t *out_buffer, UINTN out_buffer_size);
-EFI_STATUS tpm2_delete_index(UINT32 index);
-#endif  // USER
-
-#endif /* _TPM2_SECURITY_H_ */
+#endif // _SECURITY_EFI_H_
