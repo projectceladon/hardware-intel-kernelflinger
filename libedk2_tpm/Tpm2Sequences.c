@@ -514,3 +514,54 @@ Tpm2SequenceComplete (
 
   return EFI_SUCCESS;
 }
+
+/**
+  This command adds the last part of data, if any, to a hash/HMAC sequence and returns the result.
+
+  @param[in]  HashAlg           The hash algorithm to use for the hash sequence
+                                An Event sequence starts if this is TPM_ALG_NULL.
+  @param[in]  NumBuffers        The number of buffers
+  @param[in]  Buffers           The buffers for the hash sequence
+  @param[out] Result            The returned HMAC or digest in a sized buffer
+
+  @retval EFI_SUCCESS      Operation completed successfully.
+  @retval EFI_DEVICE_ERROR Unexpected device behavior.
+**/
+EFI_STATUS
+EFIAPI
+Tpm2HashSequence(
+  IN TPMI_ALG_HASH HashAlg,
+  IN UINT8 NumBuffers,
+  IN TPM2B_DIGEST *Buffers,
+  OUT TPM2B_DIGEST *Result )
+{
+  EFI_STATUS          Status = EFI_SUCCESS;
+  TPMI_DH_OBJECT      SequenceHandle;
+  TPM2B_MAX_BUFFER    HashBbuf;
+  UINT8 Index;
+
+  HashBbuf.size = 0;
+
+  Status = Tpm2HashSequenceStart (HashAlg, &SequenceHandle);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((EFI_D_ERROR, "Tpm2HashSequenceStart failed\r\n"));
+    return Status;
+  }
+
+
+  for (Index = 0; Index < NumBuffers; Index ++) {
+    Status = Tpm2SequenceUpdate (SequenceHandle, (TPM2B_MAX_BUFFER *)&Buffers[Index]);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((EFI_D_ERROR, "Tpm2SequenceUpdate failed\r\n"));
+      return Status;
+    }
+  }
+
+  Status = Tpm2SequenceComplete(SequenceHandle, &HashBbuf, Result);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((EFI_D_ERROR, "Tpm2SequenceComplete failed\r\n"));
+    return Status;
+  }
+
+  return EFI_SUCCESS;
+}

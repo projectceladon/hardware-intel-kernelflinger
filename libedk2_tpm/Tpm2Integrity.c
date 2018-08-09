@@ -78,6 +78,17 @@ typedef struct {
   TPMS_AUTH_RESPONSE         AuthSession;
 } TPM2_PCR_ALLOCATE_RESPONSE;
 
+typedef struct {
+  TPM2_COMMAND_HEADER       Header;
+  TPMI_SH_POLICY            PolicySession;
+  TPM2B_DIGEST              PcrDigest;
+  TPML_PCR_SELECTION        Pcrs;
+} TPM2_PCR_POLICYPCR_COMMAND;
+
+typedef struct {
+  TPM2_RESPONSE_HEADER       Header;
+} TPM2_PCR_POLICYPCR_RESPONSE;
+
 #pragma pack()
 
 /**
@@ -690,4 +701,87 @@ Tpm2PcrAllocateBanks (
 Done:
   ZeroMem(&LocalAuthSession.hmac, sizeof(LocalAuthSession.hmac));
   return Status;
+}
+
+/**
+  This command pass in the handle of the session and the PCRs selected and the pcrDigest just
+  calculated.
+
+  @param[in] PolicySession      Handle for the policy session being extended.
+  @param[in] PcrDigest          the current value of the policyHash of policySession
+  @param[in] Pcrs               The Pcr Selection
+
+  @retval EFI_SUCCESS           Operation completed successfully.
+  @retval EFI_DEVICE_ERROR      The command was unsuccessful.
+**/
+EFI_STATUS
+EFIAPI
+Tpm2PolicyPCR (
+  IN TPMI_SH_POLICY           PolicySession,
+  IN TPM2B_DIGEST             *PcrDigest,
+  IN TPML_PCR_SELECTION       *Pcrs
+  )
+{
+  EFI_STATUS                   Status;
+  TPM2_PCR_POLICYPCR_COMMAND   SendBuffer;
+  TPM2_PCR_POLICYPCR_RESPONSE  RecvBuffer;
+  UINT32                       SendBufferSize;
+  UINT32                       RecvBufferSize;
+  UINT8                        *Buffer;
+  UINTN                        Index;
+
+  SendBuffer.Header.tag         = SwapBytes16(TPM_ST_NO_SESSIONS);
+  SendBuffer.Header.commandCode = SwapBytes32(TPM_CC_PolicyPCR);
+
+  SendBuffer.PolicySession = SwapBytes32 (PolicySession);
+
+  Buffer = (UINT8 *)&SendBuffer.PcrDigest;
+
+  if(PcrDigest->size > sizeof(TPMU_HA)) {
+    DEBUG ((EFI_D_ERROR, "Tpm2PolicyPCR - PcrDigest buffer overflow\n"));
+    return EFI_INVALID_PARAMETER;
+  }
+  WriteUnaligned16 ((UINT16 *)Buffer, SwapBytes16(PcrDigest->size));
+  Buffer += sizeof(UINT16);
+  CopyMem (Buffer, PcrDigest->buffer, PcrDigest->size);
+  Buffer += PcrDigest->size;
+
+  if(Pcrs->count > HASH_COUNT) {
+    DEBUG ((EFI_D_ERROR, "Tpm2PolicyPCR - pcrSelections buffer overflow\n"));
+    return EFI_INVALID_PARAMETER;
+  }
+  WriteUnaligned32 ((UINT32 *)Buffer, SwapBytes32(Pcrs->count));
+  Buffer += sizeof(UINT32);
+  for (Index = 0; Index < Pcrs->count; Index++) {
+    WriteUnaligned16 ((UINT16 *)Buffer, SwapBytes16(Pcrs->pcrSelections[Index].hash));
+    Buffer += sizeof(UINT16);
+    *(UINT8 *)Buffer = Pcrs->pcrSelections[Index].sizeofSelect;
+    Buffer++;
+    if(Pcrs->pcrSelections[Index].sizeofSelect > PCR_SELECT_MAX) {
+      DEBUG ((EFI_D_ERROR, "Tpm2PolicyPCR - pcrSelect buffer overflow\n"));
+      return EFI_INVALID_PARAMETER;
+    }
+    CopyMem (Buffer, Pcrs->pcrSelections[Index].pcrSelect, Pcrs->pcrSelections[Index].sizeofSelect);
+    Buffer += Pcrs->pcrSelections[Index].sizeofSelect;
+  }
+  SendBufferSize = (UINT32)(Buffer - (UINT8 *)&SendBuffer);
+  SendBuffer.Header.paramSize = SwapBytes32(SendBufferSize);
+
+  RecvBufferSize = sizeof (RecvBuffer);
+  Status = Tpm2SubmitCommand (SendBufferSize, (UINT8 *)&SendBuffer, &RecvBufferSize, (UINT8 *)&RecvBuffer);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((EFI_D_ERROR, "Tpm2PolicyPCR - Tpm2SubmitCommand failed\n"));
+    return Status;
+  }
+
+  if (RecvBufferSize < sizeof (TPM2_RESPONSE_HEADER)) {
+    DEBUG ((EFI_D_ERROR, "Tpm2PolicyPCR - RecvBufferSize Error - %x\n", RecvBufferSize));
+    return EFI_DEVICE_ERROR;
+  }
+  if (SwapBytes32(RecvBuffer.Header.responseCode) != TPM_RC_SUCCESS) {
+    DEBUG ((EFI_D_ERROR, "Tpm2PolicyPCR - responseCode - %x\n", SwapBytes32(RecvBuffer.Header.responseCode)));
+    return EFI_DEVICE_ERROR;
+  }
+
+  return EFI_SUCCESS;
 }
