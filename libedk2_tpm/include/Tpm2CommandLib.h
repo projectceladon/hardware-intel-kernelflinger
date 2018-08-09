@@ -96,6 +96,27 @@ Tpm2SequenceComplete (
   );
 
 /**
+  This command adds the last part of data, if any, to a hash/HMAC sequence and returns the result.
+
+  @param[in]  HashAlg           The hash algorithm to use for the hash sequence
+                                An Event sequence starts if this is TPM_ALG_NULL.
+  @param[in]  NumBuffers        The number of buffers
+  @param[in]  BufferList        The buffer list for the hash sequence
+  @param[out] Result            The returned HMAC or digest in a sized buffer
+
+  @retval EFI_SUCCESS      Operation completed successfully.
+  @retval EFI_DEVICE_ERROR Unexpected device behavior.
+**/
+EFI_STATUS
+EFIAPI
+Tpm2HashSequence(
+  IN TPMI_ALG_HASH HashAlg,
+  IN UINT8 NumBuffers,
+  IN TPM2B_DIGEST *BufferList,
+  OUT TPM2B_DIGEST *Result
+  );
+
+/**
   Send Startup command to TPM2.
 
   @param[in] StartupType           TPM_SU_CLEAR or TPM_SU_STATE
@@ -911,11 +932,30 @@ Tpm2PolicyOR (
   );
 
 /**
+  This command pass in the handle of the session and the PCRs selected and the pcrDigest just
+  calculated.
+
+  @param[in] PolicySession      Handle for the policy session being extended.
+  @param[in] PcrDigest          the current value of the policyHash of policySession
+  @param[in] Pcrs               The Pcr Selection
+
+  @retval EFI_SUCCESS           Operation completed successfully.
+  @retval EFI_DEVICE_ERROR      The command was unsuccessful.
+**/
+EFI_STATUS
+EFIAPI
+Tpm2PolicyPCR (
+  IN TPMI_SH_POLICY           PolicySession,
+  IN TPM2B_DIGEST             *PcrDigest,
+  IN TPML_PCR_SELECTION       *Pcrs
+  );
+
+/**
   This command indicates that the authorization will be limited to a specific command code.
 
   @param[in]  PolicySession      Handle for the policy session being extended.
   @param[in]  Code               The allowed commandCode.
-  
+
   @retval EFI_SUCCESS            Operation completed successfully.
   @retval EFI_DEVICE_ERROR       The command was unsuccessful.
 **/
