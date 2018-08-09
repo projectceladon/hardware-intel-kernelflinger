@@ -45,6 +45,7 @@
 #include "efilinux.h"
 #include "libtipc.h"
 #include "rpmb_storage.h"
+#include "security_efi.h"
 
 /* Trusty OS (TOS) definitions */
 #define TOS_HEADER_MAGIC         0x6d6d76656967616d
@@ -56,16 +57,6 @@
 #define VMM_MEM_SIZE             0x01000000
 #define TRUSTY_MEM_BASE          0x32C00000
 #define TRUSTY_MEM_SIZE          0x01000000
-
-#define BOOTLOADER_SEED_MAX_ENTRIES  10
-#define SECURITY_EFI_TRUSTY_SEED_LEN 64
-
-/* structure of seed info */
-typedef struct _seed_info {
-        UINT8 svn;
-        UINT8 padding[3];
-        UINT8 seed[SECURITY_EFI_TRUSTY_SEED_LEN];
-} __attribute__((packed)) seed_info_t;
 
  /*
  * this is the startup structure containes the informations for ikgt and trusty
@@ -191,26 +182,6 @@ static EFI_STATUS get_address_size_trusty(OUT UINT64 *trusty_mem_base, OUT UINT3
         return EFI_SUCCESS;
 }
 
-/* initially hardcoded all seeds as 0, and svn is expected as descending order */
-static EFI_STATUS get_seeds(IN UINT32 *num_seeds, OUT VOID *seed_list)
-{
-        UINT32 i;
-        for (i = 0; i < BOOTLOADER_SEED_MAX_ENTRIES; i++) {
-                seed_info_t* tmp = (seed_info_t *)(seed_list+i*sizeof(seed_info_t));
-                tmp->svn = BOOTLOADER_SEED_MAX_ENTRIES -i-1;
-                memset(tmp->seed, 0, SECURITY_EFI_TRUSTY_SEED_LEN);
-        }
-        *num_seeds = BOOTLOADER_SEED_MAX_ENTRIES;
-        return EFI_SUCCESS;
-}
-
-/* initially hardcoded all rpmb keys as 0 */
-static EFI_STATUS get_rpmb_keys(IN UINT32 num_partition, OUT UINT8 rpmb_key_list[][RPMB_MAX_KEY_SIZE])
-{
-        memset(rpmb_key_list, 0, num_partition * RPMB_MAX_KEY_SIZE);
-        return EFI_SUCCESS;
-}
-
 /*
  * 1. Boot loader gets the tos image header address from kernel slot in
  *    android boot image (aosp_header + page_size)
@@ -314,11 +285,13 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
                 goto cleanup;
         }
 
+#ifdef RPMB_STORAGE
         ret = get_rpmb_keys(RPMB_MAX_PARTITION_NUMBER, startup_info->rpmb_key);
         if (EFI_ERROR(ret)){
                 efi_perror(ret, L"Get rpmb key list failed");
                 goto cleanup;
         }
+#endif
 
         ret = get_address_size_vmm(&temp_vmm_base_address, &temp_vmm_address_size);
         if (EFI_ERROR(ret)){

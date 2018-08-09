@@ -67,6 +67,7 @@ EFI_STATUS derive_rpmb_key_with_seed(IN VOID *seed, OUT VOID *rpmb_key);
 void clear_rpmb_key(void);
 void set_rpmb_key(UINT8 *key);
 EFI_STATUS rpmb_key_init(void);
+EFI_STATUS get_rpmb_keys(IN UINT32 num_partition, OUT UINT8 rpmb_key_list[][RPMB_MAX_KEY_SIZE]);
 EFI_STATUS clear_teedata_flag(void);
 EFI_STATUS erase_rpmb_all_blocks(void);
 EFI_STATUS rpmb_read_counter_in_sim_real(const void *key, RPMB_RESPONSE_RESULT *result);
@@ -78,7 +79,7 @@ EFI_STATUS write_rpmb_device_state(UINT8 state);
 EFI_STATUS read_rpmb_device_state(UINT8 *state);
 
 EFI_STATUS write_rpmb_rollback_index(size_t index, UINT64 in_rollback_index);
-EFI_STATUS read_rpmb_rollback_index(size_t index, UINT64* out_rollback_index);
+EFI_STATUS read_rpmb_rollback_index(size_t index, UINT64 *out_rollback_index);
 
 EFI_STATUS write_rpmb_keybox_magic(UINT16 offset, void *buffer);
 EFI_STATUS read_rpmb_keybox_magic(UINT16 offset, void *buffer);
