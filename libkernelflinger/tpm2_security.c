@@ -41,11 +41,127 @@
 #define NV_INDEX_VBMETA_KEY_HASH	0x01500048
 #define NV_INDEX_FB_BL_POLICY		0x01500049
 
+#define PCR_7   7
+
+#define Set_PcrSelect_Bit(pcrSelection, pcr) \
+				(pcrSelection).pcrSelect[((pcr)/8)] |= (1 << ((pcr) % 8));
+
+#define DIGEST_SIZE 32
+
+static EFI_STATUS build_pcr_policy(TPMI_SH_AUTH_SESSION *sessionhandle,
+				TPM2B_DIGEST *policy_digest,
+				TPMS_AUTH_COMMAND *policy_session,
+				BOOLEAN is_trial)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	TPM2B_ENCRYPTED_SECRET encryptedSalt;
+	TPMT_SYM_DEF symmetric = {.algorithm = TPM_ALG_NULL};
+	TPM2B_NONCE nonceCaller, nonceTpm;
+	TPM2B_DIGEST pcrDigest;
+	TPML_PCR_SELECTION pcrs;
+	TPML_DIGEST pcrValues;
+	UINT32 pcrUpdateCounter;
+	TPML_PCR_SELECTION pcrSelectionOut;
+
+	encryptedSalt.size = 0;
+	nonceCaller.size = DIGEST_SIZE;
+	ret = Tpm2GetRandom(DIGEST_SIZE, &nonceCaller);
+	if(EFI_ERROR(ret)) {
+		error(L"failed to get random: %d", ret);
+		return ret;
+	}
+
+	nonceTpm.size = sizeof(nonceTpm) - sizeof(UINT16);
+
+	ret = Tpm2StartAuthSession(TPM_RH_NULL,
+				TPM_RH_NULL,
+				&nonceCaller,
+				&encryptedSalt,
+				is_trial ? TPM_SE_TRIAL : TPM_SE_POLICY,
+				&symmetric,
+				TPM_ALG_SHA256,
+				sessionhandle,
+				&nonceTpm);
+
+	memset(nonceCaller.buffer, 0, DIGEST_SIZE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"StartAuthSession failed");
+		return ret;
+	}
+
+	pcrs.count = 1;
+	pcrs.pcrSelections[0].hash = TPM_ALG_SHA1;
+	pcrs.pcrSelections[0].sizeofSelect = 3;
+	pcrs.pcrSelections[0].pcrSelect[0] = 0;
+	pcrs.pcrSelections[0].pcrSelect[1] = 0;
+	pcrs.pcrSelections[0].pcrSelect[2] = 0;
+	Set_PcrSelect_Bit(pcrs.pcrSelections[0], PCR_7);
+
+	//1. Read PCRs (&pcrSelectionOut MUST NOT be NULL!!!!!)
+	ret = Tpm2PcrRead(&pcrs, &pcrUpdateCounter, &pcrSelectionOut, &pcrValues);
+	if(EFI_ERROR(ret)) {
+		efi_perror(ret, L"Tpm2PcrRead failed");
+		return ret;
+	}
+
+	if(pcrSelectionOut.count <= 0) {
+		error(L"pcrSelectionOut.count <= 0");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	// 2. Hash those PCRs together
+	pcrDigest.size = sizeof(pcrDigest) - sizeof(UINT16);
+	ret = Tpm2HashSequence(TPM_ALG_SHA256, pcrValues.count, &pcrValues.digests[0], &pcrDigest);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"HashSequence failed");
+		return ret;
+	}
+
+	//3. Apply selected PCRs' pcrDigest (as approvedPcrDigest) to policyDigest
+	ret = Tpm2PolicyPCR(*sessionhandle, &pcrDigest, &pcrs);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"PolicyPCR failed");
+		return ret;
+	}
+
+	//4. Get policyDigest hash
+	if(policy_digest) {
+		ret = Tpm2PolicyGetDigest(*sessionhandle, policy_digest);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"PolicyGetDigest failed");
+			return ret;
+		}
+	}
+
+	if (is_trial) {
+		// Need to flush the session here for trial policy only
+		ret = Tpm2FlushContext(*sessionhandle);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"FlushContext failed if trailsession");
+			return ret;
+		}
+	}
+
+	//5. Apply policy session handle
+	if(policy_session) {
+		policy_session->sessionHandle = *sessionhandle;
+		policy_session->hmac.size = 0;
+		policy_session->nonce.size = 0;
+		*((UINT8 *)((void *)&( policy_session->sessionAttributes))) = 0;
+		policy_session->sessionAttributes.continueSession = 1;
+	}
+
+	return EFI_SUCCESS;
+}
+
 EFI_STATUS tpm2_create_nvindex(TPMI_RH_NV_INDEX nv_index,
 			       TPMA_NV attributes,
 			       UINT32 data_size)
 {
-	TPMI_RH_PROVISION auth_handle = TPM_RH_PLATFORM;
+	EFI_STATUS ret;
+	TPMI_RH_PROVISION auth_handle = TPM_RH_OWNER;
+	TPMI_SH_AUTH_SESSION session_handle = 0;
+	TPM2B_DIGEST policy_digest;
 	TPM2B_NV_PUBLIC public_info;
 	TPM2B_AUTH nv_auth;
 
@@ -60,6 +176,16 @@ EFI_STATUS tpm2_create_nvindex(TPMI_RH_NV_INDEX nv_index,
 	public_info.nvPublic.authPolicy.size = 0;
 	public_info.nvPublic.dataSize = data_size;
 
+	ret = build_pcr_policy(&session_handle, &policy_digest, NULL, TRUE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"build PCR policy failed");
+		return ret;
+	}
+	public_info.nvPublic.authPolicy.size = policy_digest.size;
+	// enable policy for this index now
+	memcpy(public_info.nvPublic.authPolicy.buffer, policy_digest.buffer, policy_digest.size);
+	public_info.size += public_info.nvPublic.authPolicy.size;
+
 	return Tpm2NvDefineSpace(auth_handle, NULL,
 				 &nv_auth, &public_info);
 }
@@ -69,13 +195,17 @@ EFI_STATUS tpm2_write_nvindex(TPMI_RH_NV_INDEX nv_index,
 {
 	EFI_STATUS ret = EFI_SUCCESS;
 	TPMS_AUTH_COMMAND session_data = {0};
-	TPMI_RH_NV_AUTH auth_handle = TPM_RH_PLATFORM;
+	TPMI_SH_AUTH_SESSION session_handle = 0;
 	TPM2B_MAX_BUFFER nv_write_data;
 	UINT16 left_size = data_size;
 	UINT16 written_size = 0;
 	UINT16 cur_size;
 
-	session_data.sessionHandle = TPM_RS_PW;
+	ret = build_pcr_policy(&session_handle, NULL, &session_data, FALSE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"build PCR policy failed");
+		return ret;
+	}
 
 	// Make sure the data buffer not overflow, maybe write data several times.
 	// But if attributes->TPMA_NV_WRITEALL == 1, then write will failed.
@@ -83,7 +213,7 @@ EFI_STATUS tpm2_write_nvindex(TPMI_RH_NV_INDEX nv_index,
 		cur_size = (left_size > sizeof(nv_write_data.buffer)) ? sizeof(nv_write_data.buffer) : left_size;
 		nv_write_data.size = cur_size;
 		memcpy(nv_write_data.buffer, data + written_size, nv_write_data.size);
-		ret = Tpm2NvWrite(auth_handle, nv_index,
+		ret = Tpm2NvWrite(nv_index, nv_index,
 			   &session_data, &nv_write_data, written_size + offset);
 		if (EFI_ERROR(ret)) {
 			error(L"Write TPM NV index failed, index: 0x%x, size: %d, written_size: %d, ret: %d",
@@ -94,40 +224,64 @@ EFI_STATUS tpm2_write_nvindex(TPMI_RH_NV_INDEX nv_index,
 		written_size += cur_size;
 	}
 
+	ret = Tpm2FlushContext(session_handle);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"tpm2_write_nvindex - FlushContext failed");
+		return ret;
+	}
+
 	return ret;
 }
 
 EFI_STATUS tpm2_write_lock_nvindex(TPMI_RH_NV_INDEX nv_index)
 {
+	EFI_STATUS ret = EFI_SUCCESS;
 	TPMS_AUTH_COMMAND session_data = {0};
-	TPMI_RH_NV_AUTH auth_handle = TPM_RH_PLATFORM;
+	TPMI_SH_AUTH_SESSION session_handle = 0;
 
-	session_data.sessionHandle = TPM_RS_PW;
+	ret = build_pcr_policy(&session_handle, NULL, &session_data, FALSE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"build PCR policy failed");
+		return ret;
+	}
 
-	return Tpm2NvWriteLock(auth_handle, nv_index, &session_data);
+	ret = Tpm2NvWriteLock(nv_index, nv_index, &session_data);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Tpm2NvWriteLock nv_index 0x%x failed", nv_index);
+		return ret;
+	}
+
+	ret = Tpm2FlushContext(session_handle);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"tpm2_write_lock_nvindex - FlushContext failed");
+		return ret;
+	}
+
+	return ret;
 }
 
 EFI_STATUS tpm2_read_nvindex(TPMI_RH_NV_INDEX nv_index,
 				UINT16 *data_size, BYTE *data, UINT16 offset)
 {
 	EFI_STATUS ret;
-	TPMS_AUTH_COMMAND session_data;
-	TPMI_RH_NV_AUTH auth_handle = TPM_RH_PLATFORM;
+	TPMS_AUTH_COMMAND session_data = {0};
+	TPMI_SH_AUTH_SESSION session_handle = 0;
 	TPM2B_MAX_BUFFER nv_read_data;
 	UINT16 left_size = *data_size;
 	UINT16 read_size = 0;
 	UINT16 cur_size;
 
-	session_data.sessionHandle  = TPM_RS_PW;
-	session_data.nonce.size     = 0;
-	*((UINT8 *) &(session_data.sessionAttributes)) = 0;
-	session_data.hmac.size      = 0;
+	ret = build_pcr_policy(&session_handle, NULL, &session_data, FALSE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"build PCR policy failed");
+		return ret;
+	}
 
 	while (left_size > 0) {
 		cur_size = (left_size > sizeof(nv_read_data.buffer)) ? sizeof(nv_read_data.buffer) : left_size;
 		nv_read_data.size = cur_size;
 
-		ret = Tpm2NvRead(auth_handle, nv_index, &session_data, nv_read_data.size, read_size + offset, &nv_read_data);
+		ret = Tpm2NvRead(nv_index, nv_index, &session_data, nv_read_data.size, read_size + offset, &nv_read_data);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Read NVIndex failed");
 			return ret;
@@ -147,27 +301,73 @@ EFI_STATUS tpm2_read_nvindex(TPMI_RH_NV_INDEX nv_index,
 	}
 	*data_size = read_size;
 
+	ret = Tpm2FlushContext(session_handle);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"tpm2_read_nvindex - FlushContext failed");
+		return ret;
+	}
+
 	return EFI_SUCCESS;
 }
 
 EFI_STATUS tpm2_read_lock_nvindex(TPMI_RH_NV_INDEX nv_index)
 {
-	TPMS_AUTH_COMMAND session_data;
-	TPMI_RH_NV_AUTH auth_handle = TPM_RH_PLATFORM;
+	EFI_STATUS ret;
+	TPMS_AUTH_COMMAND session_data = {0};
+	TPMI_SH_AUTH_SESSION session_handle = 0;
 
-	session_data.sessionHandle  = TPM_RS_PW;
-	session_data.nonce.size     = 0;
-	*((UINT8 *)&(session_data.sessionAttributes)) = 0;
-	session_data.hmac.size      = 0;
+	ret = build_pcr_policy(&session_handle, NULL, &session_data, FALSE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"build PCR policy failed");
+		return ret;
+	}
 
-	return Tpm2NvReadLock(auth_handle, nv_index, &session_data);
+	ret = Tpm2NvReadLock(nv_index, nv_index, &session_data);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Tpm2NvReadLock failed");
+		return ret;
+	}
+
+	ret = Tpm2FlushContext(session_handle);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"tpm2_read_lock_nvindex - FlushContext failed");
+		return ret;
+	}
+
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS tpm2_set_nvbits(TPMI_RH_NV_INDEX nv_index, UINT64 set_bits)
+{
+	EFI_STATUS ret;
+	TPMS_AUTH_COMMAND session_data = {0};
+	TPMI_SH_AUTH_SESSION session_handle = 0;
+
+	ret = build_pcr_policy(&session_handle, NULL, &session_data, FALSE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"build PCR policy failed");
+		return ret;
+	}
+
+	ret = Tpm2NvSetBits(nv_index, nv_index, &session_data, set_bits);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"set nvbits failed");
+		return ret;
+	}
+
+	ret = Tpm2FlushContext(session_handle);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"tpm2_set_nvbits - FlushContext failed");
+		return ret;
+	}
+
+	return EFI_SUCCESS;
 }
 
 static void set_attributes(TPMA_NV *attributes, BOOLEAN read_lock, BOOLEAN write_lock)
 {
-	attributes->TPMA_NV_PPREAD = 1;
-	attributes->TPMA_NV_PPWRITE = 1;
-	attributes->TPMA_NV_PLATFORMCREATE = 1;
+	attributes->TPMA_NV_POLICYREAD = 1;
+	attributes->TPMA_NV_POLICYWRITE = 1;
 	attributes->TPMA_NV_WRITEALL = 1;
 	if (write_lock)
 		attributes->TPMA_NV_WRITEDEFINE = 1;
@@ -226,7 +426,7 @@ EFI_STATUS tpm2_show_index(UINT32 index, uint8_t *out_buffer, UINTN out_buffer_s
 
 EFI_STATUS tpm2_delete_index(UINT32 index)
 {
-	EFI_STATUS ret = Tpm2NvUndefineSpace(TPM_RH_PLATFORM, index, NULL);
+	EFI_STATUS ret = Tpm2NvUndefineSpace(TPM_RH_OWNER, index, NULL);
 
 	if (EFI_ERROR(ret))
 		error(L"Delete TPM NV index failed, index: %x, ret: %d", index, ret);
@@ -370,8 +570,6 @@ EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size)
 {
 	EFI_STATUS ret;
 	TPMA_NV attributes = {0};
-	TPMI_RH_NV_AUTH auth_handle = TPM_RH_PLATFORM;
-	TPMS_AUTH_COMMAND session_data = {0};
 	UINT64 set_bits = 0;
 
 	if (size != sizeof(set_bits)) {
@@ -379,7 +577,6 @@ EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size)
 		return EFI_INVALID_PARAMETER;
 	}
 
-	session_data.sessionHandle = TPM_RS_PW;
 	set_attributes(&attributes, FALSE, FALSE);
 	attributes.TPMA_NV_BITS = 1;
 
@@ -388,7 +585,7 @@ EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size)
 		return ret;
 
 	memcpy(&set_bits, data, size);
-	ret = Tpm2NvSetBits(auth_handle, NV_INDEX_FB_BL_POLICY, &session_data, set_bits);
+	ret = tpm2_set_nvbits(NV_INDEX_FB_BL_POLICY, set_bits);
 	if (EFI_ERROR(ret))
 		return ret;
 
