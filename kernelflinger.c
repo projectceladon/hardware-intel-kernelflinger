@@ -1291,13 +1291,13 @@ static void flash_bootloader_policy(void)
         if (!blpolicy_is_flashed())
                 debug(L"Bootloader Policy EFI variables are not flashed");
 out:
-        if (bootimage != NULL) {
 #ifdef USE_AVB
-                avb_slot_verify_data_free(bootimage);
+        if (slot_data != NULL)
+                avb_slot_verify_data_free(slot_data);
 #else
+        if (bootimage != NULL)
                 FreePool(bootimage);
 #endif
-       }
 }
 #endif
 
