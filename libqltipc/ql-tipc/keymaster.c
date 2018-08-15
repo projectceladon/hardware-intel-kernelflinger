@@ -317,12 +317,12 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
 
 #if defined(RPMB_STORAGE) && !defined(HYPERVISOR_ACRN)
     /* keybox not privisioned yet, then provision it */
-    if (!is_keybox_provisioned()) {
+    if (!is_keybox_retrieved()) {
         /* set the attestation_key and append the attest cert:
         * if the input is NULL, it means  it will retrieve the keybox from trusty side
         * and parsed by tinyxml2 then save the prikey and certs into the securestorage.
         * otherwise the inputs will be real keybox buffer which get in the bootloader(fastboot). */
-        rc = trusty_provision_keybox(NULL, 0);
+        rc = trusty_retrieve_keybox(NULL, 0);
         if (rc != KM_ERROR_OK) {
 #ifndef USER
             trusty_error("provision keybox has failed( %d )\n", rc);
@@ -423,7 +423,7 @@ int trusty_append_attestation_cert_chain(const uint8_t *cert,
                                         cert, cert_size, algorithm);
 }
 
-int trusty_provision_keybox(uint8_t *keybox, uint32_t keybox_size)
+int trusty_retrieve_keybox(uint8_t *keybox, uint32_t keybox_size)
 {
     struct km_provision_data provision_data = {
         .data_size = keybox_size,
