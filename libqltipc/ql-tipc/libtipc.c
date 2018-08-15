@@ -92,7 +92,7 @@ static int rpmb_write_keybox_magic_data(uint32_t data)
 #endif
 }
 
-int is_keybox_provisioned(void)
+int is_keybox_retrieved(void)
 {
     uint32_t data = 0;
     int rc = 0;
@@ -154,7 +154,7 @@ int trusty_ipc_init(void)
     trusty_info("1st Initlializing RPMB storage proxy service rc: (%d)\n", rc);
 
 
-    if (!is_keybox_provisioned()) {
+    if (!is_keybox_retrieved()) {
        /* start secure storage proxy service */
        trusty_info("Initializing RPMB storage proxy service\n");
        rc = rpmb_storage_proxy_init(_ipc_dev, rpmb_ctx);

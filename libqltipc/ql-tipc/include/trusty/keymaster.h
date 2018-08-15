@@ -88,7 +88,7 @@ int trusty_append_attestation_cert_chain(const uint8_t *cert,
  * @keybox: buffer of the dump data from keybox xml file
  * @keybox_size: size of keybox in bytes
  */
-int trusty_provision_keybox(uint8_t *keybox, uint32_t keybox_size);
+int trusty_retrieve_keybox(uint8_t *keybox, uint32_t keybox_size);
 
 #endif /* TRUSTY_KEYMASTER_H_ */
 
