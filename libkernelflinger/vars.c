@@ -977,8 +977,6 @@ BOOLEAN device_is_class_A(VOID)
 UINT8 min_boot_state_policy()
 {
 	switch (get_bpm().min_boot_state) {
-	case 0:
-		return BOOT_STATE_RED;
 	case 1:
 		return BOOT_STATE_ORANGE;
 	case 2:
@@ -986,6 +984,7 @@ UINT8 min_boot_state_policy()
 	case 3:
 		return BOOT_STATE_GREEN;
 	}
+	return BOOT_STATE_RED;
 }
 #endif	/* BOOTLOADER_POLICY */
 
