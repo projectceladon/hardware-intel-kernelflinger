@@ -107,6 +107,12 @@ EFI_STATUS set_device_security_info(IN VOID * security_data)
 		memset(dev_sec->rpmb_key[i], 0, length_cmp);
 	}
 
+	//Temporary workaround to force using full zero rpmb key because
+	//vrpmb backend currently also hardcode the key to all zero values.
+	//Need remove this workaround after the final rpmb key soultion is finalized.
+	memset(rpmb_key[0], 0, length_cmp);
+	i = 1;
+
 	if (i > 0)
 		ret = set_rpmb_derived_key(rpmb_key, sizeof(rpmb_key), i);
 	else
