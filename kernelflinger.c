@@ -51,6 +51,7 @@
 #include "em.h"
 #include "storage.h"
 #include "version.h"
+#include "timer.h"
 #ifdef HAL_AUTODETECT
 #include "blobstore.h"
 #endif
@@ -994,6 +995,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                         die();
                 }
 
+                set_boottime_stamp(TM_LOAD_TOS_DONE);
                 ret = start_trusty(tosimage);
                 if (EFI_ERROR(ret)) {
 #ifndef BUILD_ANDROID_THINGS
@@ -1004,6 +1006,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                         efi_perror(ret, L"Continue to boot");
 #endif
                 }
+                set_boottime_stamp(TM_PROCRSS_TRUSTY_DONE);
         }
 #endif
 
@@ -1412,6 +1415,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         CHAR16 *name = NULL;
         EFI_RESET_TYPE resetType;
 
+        set_boottime_stamp(TM_EFI_MAIN);
         /* gnu-efi initialization */
         InitializeLib(image, sys_table);
 
@@ -1594,6 +1598,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
         debug(L"Loading boot image");
 
+        set_boottime_stamp(TM_AVB_START);
 #ifdef USE_AVB
         ret = avb_load_verify_boot_image(boot_target, target_path, &bootimage, oneshot, &boot_state, &slot_data);
 #else
@@ -1616,6 +1621,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                            SHA256_DIGEST_LENGTH);
         }
 #endif
+        set_boottime_stamp(TM_VERIFY_BOOT_DONE);
 
         if (boot_state == BOOT_STATE_RED) {
                 if (boot_target == RECOVERY)

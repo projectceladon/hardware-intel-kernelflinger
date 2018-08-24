@@ -35,6 +35,7 @@
 #include <hecisupport.h>
 #include "vars.h"
 #include "lib.h"
+#include "timer.h"
 #include "security.h"
 #include "android.h"
 #include "options.h"
@@ -241,7 +242,7 @@ EFI_STATUS start_trusty(VOID *tosimage)
 		efi_perror(ret, L"Failed to launch trusty os");
 		goto fail;
 	}
-
+	set_boottime_stamp(TM_LAUNCH_TRUSTY_DONE);
 	trusty_ipc_init();
 	trusty_ipc_shutdown();
 

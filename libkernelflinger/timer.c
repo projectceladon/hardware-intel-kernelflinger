@@ -37,10 +37,11 @@
 #include "timer.h"
 
 #define BOOT_STAGE_FIRMWARE "FWS"
-#define BOOT_STAGE_OSLOADER "OLS"
-#define BOOT_STAGE_CHECK_BCB "CBS"
+#define BOOT_STAGE_OSLOADER_INIT "LIS"
 #define BOOT_STAGE_VERIFY_BOOT "VBS"
-#define BOOT_STAGE_VERIFY_TRUSTY "VTS"
+#define BOOT_STAGE_LOAD_TOS "VTS"
+#define BOOT_STAGE_LAUNCH_TRUSTY "LTS"
+#define BOOT_STAGE_POST_TRUSTY "PTS"
 #define BOOT_STAGE_START_KERNEL "SKS"
 
 //Array for recording boot time of every stage
@@ -120,43 +121,50 @@ void construct_stages_boottime(CHAR8 *time_str, size_t buf_len)
 
 	strlcat(time_str, (CHAR8 *)BOOT_STAGE_FIRMWARE, buf_len);
 	strlcat(time_str, (CHAR8 *)":", buf_len);
+#ifdef __SUPPORT_ABL_BOOT
+	itoa(EFI_ENTER_POINT, interval_str, 10);
+#else
 	itoa(bt_stamp[TM_EFI_MAIN], interval_str, 10);
+#endif
 	strlcat(time_str, interval_str, buf_len);
-
 	strlcat(time_str, (CHAR8 *)",", buf_len);
-#ifdef USE_AVB
-	strlcat(time_str, (CHAR8 *)BOOT_STAGE_CHECK_BCB, buf_len);
+
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_OSLOADER_INIT, buf_len);
 	strlcat(time_str, (CHAR8 *)":", buf_len);
-	itoa(bt_stamp[TM_AVB_START] - bt_stamp[TM_EFI_MAIN], interval_str, 10);
+	itoa(bt_stamp[TM_AVB_START] - EFI_ENTER_POINT, interval_str, 10);
 	strlcat(time_str, interval_str, buf_len);
-
 	strlcat(time_str, (CHAR8 *)",", buf_len);
+
 	strlcat(time_str, (CHAR8 *)BOOT_STAGE_VERIFY_BOOT, buf_len);
 	strlcat(time_str, (CHAR8 *)":", buf_len);
 	itoa(bt_stamp[TM_VERIFY_BOOT_DONE] - bt_stamp[TM_AVB_START], interval_str, 10);
 	strlcat(time_str, interval_str, buf_len);
-
 	strlcat(time_str, (CHAR8 *)",", buf_len);
 #ifdef USE_TRUSTY
-	strlcat(time_str, (CHAR8 *)BOOT_STAGE_VERIFY_TRUSTY, buf_len);
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_LOAD_TOS, buf_len);
 	strlcat(time_str, (CHAR8 *)":", buf_len);
-	itoa(bt_stamp[TM_VERIFY_TOS_DONE] - bt_stamp[TM_VERIFY_BOOT_DONE], interval_str, 10);
+	itoa(bt_stamp[TM_LOAD_TOS_DONE] - bt_stamp[TM_VERIFY_BOOT_DONE], interval_str, 10);
 	strlcat(time_str, interval_str, buf_len);
+	strlcat(time_str, (CHAR8 *)",", buf_len);
 
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_LAUNCH_TRUSTY, buf_len);
+	strlcat(time_str, (CHAR8 *)":", buf_len);
+	itoa(bt_stamp[TM_LAUNCH_TRUSTY_DONE] - bt_stamp[TM_LOAD_TOS_DONE], interval_str, 10);
+	strlcat(time_str, interval_str, buf_len);
+	strlcat(time_str, (CHAR8 *)",", buf_len);
+
+	strlcat(time_str, (CHAR8 *)BOOT_STAGE_POST_TRUSTY, buf_len);
+	strlcat(time_str, (CHAR8 *)":", buf_len);
+	itoa(bt_stamp[TM_PROCRSS_TRUSTY_DONE] - bt_stamp[TM_LAUNCH_TRUSTY_DONE], interval_str, 10);
+	strlcat(time_str, interval_str, buf_len);
 	strlcat(time_str, (CHAR8 *)",", buf_len);
 #endif
 	strlcat(time_str, (CHAR8 *)BOOT_STAGE_START_KERNEL, buf_len);
 	strlcat(time_str, (CHAR8 *)":", buf_len);
 #ifdef USE_TRUSTY
-	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_VERIFY_TOS_DONE], interval_str, 10);
+	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_PROCRSS_TRUSTY_DONE], interval_str, 10);
 #else
 	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_VERIFY_BOOT_DONE], interval_str, 10);
-#endif
-
-#else //#ifdef USE_AVB
-	strlcat(time_str, (CHAR8 *)BOOT_STAGE_OSLOADER, buf_len);
-	strlcat(time_str, (CHAR8 *)":", buf_len);
-	itoa(bt_stamp[TM_JMP_KERNEL] - bt_stamp[TM_EFI_MAIN], interval_str, 10);
 #endif
 
 	strlcat(time_str, interval_str, buf_len);
