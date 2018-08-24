@@ -38,10 +38,14 @@ enum TM_POINT {
 	TM_EFI_MAIN = 0,
 	TM_AVB_START,
 	TM_VERIFY_BOOT_DONE,
-	TM_VERIFY_TOS_DONE,
+	TM_LOAD_TOS_DONE,
+	TM_LAUNCH_TRUSTY_DONE,
+	TM_PROCRSS_TRUSTY_DONE,
 	TM_JMP_KERNEL,
 	TM_POINT_LAST
 };
+
+unsigned int EFI_ENTER_POINT;
 
 uint32_t boottime_in_msec(void);
 void set_boottime_stamp(int num);

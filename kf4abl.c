@@ -188,7 +188,6 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	AvbSlotVerifyFlags flags;
 	debug(L"Processing boot image");
 
-	set_boottime_stamp(TM_AVB_START);
 	ops = avb_init();
 	if (ops) {
 		if (ops->read_is_device_unlocked(ops, &allow_verification_error) != AVB_IO_RESULT_OK) {
@@ -327,7 +326,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		BOOTVERSION,
 		SERIALNO,
 		DEV_SEC_INFO,
-		IMAGE_BOOT_PARAMS_ADDR
+		IMAGE_BOOT_PARAMS_ADDR,
+		FIRMWARE_BOOTTIME
 	};
 
 	struct Cmdline
@@ -383,6 +383,11 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			strlen((CHAR8 *)"ImageBootParamsAddr="),
 			IMAGE_BOOT_PARAMS_ADDR
 		},
+		{
+			(CHAR8 *)"fw_boottime=",
+			strlen("fw_boottime="),
+			FIRMWARE_BOOTTIME
+		}
 	};
 
 	CHAR8 *nptr = NULL;
@@ -475,6 +480,14 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 					if (EFI_ERROR(ret))
 						efi_perror(ret, L"Failed to set secure boot");
 					break;
+				}
+				/* Parse "fw_boottime=xxxxx" */
+				case FIRMWARE_BOOTTIME: {
+					UINT32 VALUE;
+					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
+					VALUE = (UINT32)strtoul((char *)nptr, 0, 10);
+					EFI_ENTER_POINT = VALUE;
+					continue;
 				}
 
 				/* Parse "android.bootloader=xxxxx" */
@@ -723,7 +736,6 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		}
 	}
 
-	set_boottime_stamp(TM_AVB_START);
 	ops = avb_init();
 	if (ops) {
 		if (ops->read_is_device_unlocked(ops, &allow_verification_error) != AVB_IO_RESULT_OK) {
@@ -809,7 +821,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 
 	boot = &slot_data->loaded_partitions[0];
 	bootimage = boot->data;
-	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
+
 	ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
 			slot_data->vbmeta_images[0].vbmeta_size,
 			&vbmeta_pub_key,
@@ -825,6 +837,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		goto fail;
 	}
 
+	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
 #ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {
 		VOID *tosimage = NULL;
@@ -833,12 +846,13 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			efi_perror(ret, L"Load tos image failed");
 			goto fail;
 		}
+		set_boottime_stamp(TM_LOAD_TOS_DONE);
 		ret = start_trusty(tosimage);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Unable to start trusty: stop");
 			goto fail;
 		}
-		set_boottime_stamp(TM_VERIFY_TOS_DONE);
+		set_boottime_stamp(TM_PROCRSS_TRUSTY_DONE);
 	}
 #endif
 
@@ -885,6 +899,7 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		efi_perror(ret, L"Failed to init rot params");
 		goto exit;
 	}
+	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
 
 #ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {
@@ -894,11 +909,13 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			efi_perror(ret, L"Load tos image failed");
 			goto exit;
 		}
+		set_boottime_stamp(TM_LOAD_TOS_DONE);
 		ret = start_trusty(tosimage);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Unable to start trusty: stop");
 			goto exit;
 		}
+		set_boottime_stamp(TM_PROCRSS_TRUSTY_DONE);
 	}
 #endif
 
@@ -993,6 +1010,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		switch (target) {
 		case NORMAL_BOOT:
 		case RECOVERY:
+			set_boottime_stamp(TM_AVB_START);
 #ifdef USE_AVB
 			ret = avb_boot_android(target, cmd_buf);
 #else
