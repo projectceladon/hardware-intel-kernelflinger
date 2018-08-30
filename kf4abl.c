@@ -174,6 +174,7 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 {
 	EFI_STATUS ret;
 	void* param = NULL;
+	UINT8 boot_state = BOOT_STATE_GREEN;
 
 	if (!bootimage)
 		 return EFI_SUCCESS;
@@ -181,12 +182,18 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 #ifdef USE_AVB
 	AvbOps *ops;
 	AvbSlotVerifyData *slot_data = NULL;
+#ifndef USE_SLOT
+	const char *slot_suffix = "";
+	AvbSlotVerifyResult verify_result;
+#else
 	AvbABFlowResult flow_result;
+#endif
 
 	const char *requested_partitions[] = {"boot", NULL};
-	UINT8 boot_state = BOOT_STATE_GREEN;
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
+	const uint8_t *vbmeta_pub_key;
+	UINTN vbmeta_pub_key_len;
 	debug(L"Processing boot image");
 
 	ops = avb_init();
@@ -204,6 +211,7 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 		flags |= AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR;
 	}
 
+#ifdef USE_SLOT
 	flow_result = avb_ab_flow(&ab_ops, requested_partitions, flags, AVB_HASHTREE_ERROR_MODE_RESTART, &slot_data);
 	ret = get_avb_flow_result(slot_data,
 			    allow_verification_error,
@@ -214,7 +222,55 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 		goto fail;
 	}
 	slot_set_active_cached(slot_data->ab_suffix);
+#else
+	verify_result = avb_slot_verify(ops,
+					requested_partitions,
+					slot_suffix,
+					flags,
+					AVB_HASHTREE_ERROR_MODE_RESTART,
+					&slot_data);
+	ret = get_avb_result(slot_data,
+				allow_verification_error,
+				verify_result,
+				&boot_state);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get avb result for boot");
+		goto fail;
+	}
+#endif
 	param = slot_data;
+
+	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
+	ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
+			slot_data->vbmeta_images[0].vbmeta_size,
+			&vbmeta_pub_key,
+			&vbmeta_pub_key_len);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get the vbmeta_pub_key");
+		goto fail;
+	}
+
+	ret = get_rot_data(bootimage, boot_state, vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to init rot params");
+		goto fail;
+	}
+
+#ifdef USE_TRUSTY
+	VOID *tosimage = NULL;
+	ret = load_tos_image(&tosimage);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Load tos image failed");
+		goto fail;
+	}
+	set_boottime_stamp(TM_LOAD_TOS_DONE);
+	ret = start_trusty(tosimage);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Unable to start trusty: stop");
+		goto fail;
+	}
+	set_boottime_stamp(TM_PROCRSS_TRUSTY_DONE);
+#endif
 fail:
 #endif
 	/* 'fastboot boot' case, only allowed on unlocked devices.*/
@@ -228,7 +284,7 @@ fail:
 		}
 
 		ret = android_image_start_buffer(NULL, bootimage,
-							NORMAL_BOOT, BOOT_STATE_GREEN, NULL,
+							NORMAL_BOOT, boot_state, NULL,
 							param, (const CHAR8 *)cmd_buf);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Couldn't load Boot image");
