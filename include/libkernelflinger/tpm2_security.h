@@ -56,4 +56,6 @@ EFI_STATUS tpm2_show_index(UINT32 index, uint8_t *out_buffer, UINTN out_buffer_s
 EFI_STATUS tpm2_delete_index(UINT32 index);
 #endif  // USER
 
+EFI_STATUS tpm2_fuse_lock_owner(void);
+EFI_STATUS tpm2_fuse_provision_seed(void);
 #endif /* _TPM2_SECURITY_H_ */

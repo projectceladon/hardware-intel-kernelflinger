@@ -707,6 +707,43 @@ static void cmd_fuse_bootloader_policy(INTN argc, __attribute__((__unused__)) CH
 
 	fastboot_okay("");
 }
+
+/* lock owner authorization to prevent the created nv from being removed.
+IMPORTANCE: this command must be executed after all expected nv index are provisioned */
+static void cmd_fuse_tpm2_lock_owner(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	if (argc != 1) {
+		fastboot_fail("Invalid parameters");
+		return;
+	}
+
+	ret = tpm2_fuse_lock_owner();
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to lock owner, %r", ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
+
+static void cmd_fuse_tpm2_provision_trusty_seed(INTN argc, __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	if (argc != 1) {
+		fastboot_fail("Invalid parameters");
+		return;
+	}
+
+	ret = tpm2_fuse_provision_seed();
+	if (EFI_ERROR(ret)) {
+		fastboot_fail("Failed to provision trusty seed, %r", ret);
+		return;
+	}
+
+	fastboot_okay("");
+}
+
 #endif
 
 static struct fastboot_cmd COMMANDS[] = {
@@ -753,7 +790,9 @@ static struct fastboot_cmd COMMANDS_FUSE[] = {
 	{ "at-perm-attr",		LOCKED,		cmd_fuse_atperm },
 #endif
 	{ "vbmeta-key-hash",		UNLOCKED,	cmd_fuse_vbmeta_key_hash },
-	{ "bootloader-policy",		UNLOCKED,	cmd_fuse_bootloader_policy }
+	{ "bootloader-policy",		UNLOCKED,	cmd_fuse_bootloader_policy },
+	{ "lock-tpm2-owner",		LOCKED,	cmd_fuse_tpm2_lock_owner },
+	{ "provision-trusty-seed",		LOCKED,	cmd_fuse_tpm2_provision_trusty_seed }
 };
 #endif
 

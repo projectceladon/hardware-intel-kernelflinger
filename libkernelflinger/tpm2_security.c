@@ -35,8 +35,14 @@
 #include "Tcg2Protocol.h"
 #include "Tpm2CommandLib.h"
 #include "tpm2_security.h"
+#include "security.h"
 
+#ifdef BUILD_ANDROID_THINGS
+#define MAX_NV_NUMBER		4
 #define NV_INDEX_AT_PERM_ATTR		0x01500046
+#else
+#define MAX_NV_NUMBER		3
+#endif
 #define NV_INDEX_TRUSTYOS_SEED		0x01500047
 #define NV_INDEX_VBMETA_KEY_HASH	0x01500048
 #define NV_INDEX_FB_BL_POLICY		0x01500049
@@ -47,6 +53,51 @@
 				(pcrSelection).pcrSelect[((pcr)/8)] |= (1 << ((pcr) % 8));
 
 #define DIGEST_SIZE 32
+
+typedef struct {
+	TPMI_RH_NV_INDEX nv_index;
+	TPMA_NV attribute;
+} attribute_matrix_t;
+
+static const attribute_matrix_t config_table[MAX_NV_NUMBER] =
+{
+#ifdef BUILD_ANDROID_THINGS
+	{NV_INDEX_AT_PERM_ATTR,
+		{.TPMA_NV_POLICYREAD = 1,
+		.TPMA_NV_POLICYWRITE = 1,
+		.TPMA_NV_WRITEALL = 1,
+		.TPMA_NV_READ_STCLEAR = 1,
+		}
+	},
+#endif
+	{NV_INDEX_TRUSTYOS_SEED,
+		{.TPMA_NV_POLICYREAD = 1, /* The Index data may be read if the authPolicy is satisfied. */
+		.TPMA_NV_POLICYWRITE = 1, /* Authorizations to change the Index contents that require
+					USER role may be provided with a policy session. */
+		.TPMA_NV_WRITEALL = 1, /* A partial write of the Index data is not allowed. The write size
+					shall match the defined space size.  */
+		.TPMA_NV_WRITEDEFINE = 1, /* TPM2_NV_WriteLock may be used to prevent further writes
+					to this location regardless of TPM reset/restart. */
+		.TPMA_NV_READ_STCLEAR = 1, /* TPM2_NV_ReadLock may be used to SET TPMA_NV_READLOCKED
+					for this Index. When TPMA_NV_READLOCKED is set after calling TPM2_NV_ReadLock,
+					Reads of this Index are blocked until the next TPM Reset or TPM Restart*/
+		}
+	},
+	{NV_INDEX_VBMETA_KEY_HASH,
+		{.TPMA_NV_POLICYREAD = 1,
+		.TPMA_NV_POLICYWRITE = 1,
+		.TPMA_NV_WRITEALL = 1,
+		.TPMA_NV_READ_STCLEAR = 1,
+		}
+	},
+	{NV_INDEX_FB_BL_POLICY,
+		{.TPMA_NV_POLICYREAD = 1,
+		.TPMA_NV_POLICYWRITE = 1,
+		.TPMA_NV_WRITEALL = 1,
+		.TPMA_NV_BITS = 1
+		}
+	}
+};
 
 static EFI_STATUS build_pcr_policy(TPMI_SH_AUTH_SESSION *sessionhandle,
 				TPM2B_DIGEST *policy_digest,
@@ -364,19 +415,85 @@ static EFI_STATUS tpm2_set_nvbits(TPMI_RH_NV_INDEX nv_index, UINT64 set_bits)
 	return EFI_SUCCESS;
 }
 
-static void set_attributes(TPMA_NV *attributes, BOOLEAN read_lock, BOOLEAN write_lock)
+static EFI_STATUS check_provision_status(void)
 {
-	attributes->TPMA_NV_POLICYREAD = 1;
-	attributes->TPMA_NV_POLICYWRITE = 1;
-	attributes->TPMA_NV_WRITEALL = 1;
-	if (write_lock)
-		attributes->TPMA_NV_WRITEDEFINE = 1;
-	if (read_lock)
-		attributes->TPMA_NV_READ_STCLEAR = 1;
-
-#ifndef SOFT_FUSE
-	attributes->TPMA_NV_POLICY_DELETE = 1;
+	EFI_STATUS ret = EFI_SUCCESS;
+	TPM2B_NV_PUBLIC NvPublic;
+	TPM2B_NAME NvName;
+#ifdef BUILD_ANDROID_THINGS
+	TPMI_RH_NV_INDEX start_nv_index = NV_INDEX_AT_PERM_ATTR;
+#else
+	TPMI_RH_NV_INDEX start_nv_index = NV_INDEX_TRUSTYOS_SEED;
 #endif
+	UINT32 index_offset = 0;
+	attribute_matrix_t matrix, expected_table[MAX_NV_NUMBER];
+
+	memcpy(expected_table, config_table, sizeof(attribute_matrix_t) * MAX_NV_NUMBER);
+	for(index_offset = 0; index_offset < MAX_NV_NUMBER; index_offset ++) {
+		ret = Tpm2NvReadPublic(start_nv_index + index_offset, &NvPublic, &NvName);
+		if(EFI_ERROR(ret)) {
+			error(L"Tpm2NvReadPublic TPM NV index %x ret: %d", start_nv_index + index_offset, ret);
+			return ret;
+		}
+		matrix.nv_index = NvPublic.nvPublic.nvIndex;
+		/* TPMA_NV_WRITTEN = 1, Index has been written.
+		TPMA_NV_WRITELOCKED =1, Index cannot be written.
+		Check these two additional attributes after provision. They are set by TPM.
+		*/
+		expected_table[index_offset].attribute.TPMA_NV_WRITTEN = 1;
+		expected_table[index_offset].attribute.TPMA_NV_WRITELOCKED = 1;
+		matrix.attribute = NvPublic.nvPublic.attributes;
+		if(memcmp(&matrix, &(expected_table[index_offset]), sizeof(attribute_matrix_t)))
+			return EFI_DEVICE_ERROR;
+	}
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS tpm2_fuse_provision_seed(void)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+
+	ret = tpm2_delete_index(NV_INDEX_TRUSTYOS_SEED);
+	if (EFI_ERROR(ret)) {
+		error(L"failed to delete NV_INDEX_TRUSTYOS_SEED");
+		return ret;
+	}
+	return tpm2_fuse_trusty_seed();
+}
+
+EFI_STATUS tpm2_fuse_lock_owner(void)
+{
+	TPMS_AUTH_COMMAND session_data = {0};
+	TPM2B_AUTH owner_auth;
+	EFI_STATUS ret;
+
+	/* Check the provison and secure boot status */
+	if (!is_platform_secure_boot_enabled() || EFI_ERROR(check_provision_status())) {
+		error(L"Provision is not completed or secure boot is not enabled, DO NOT LOCK OWNER");
+		return EFI_DEVICE_ERROR;
+	}
+
+	session_data.sessionHandle = TPM_RS_PW;
+	session_data.nonce.size = 0;
+	session_data.hmac.size = 0;
+	*((UINT8 *)((void *)&session_data.sessionAttributes)) = 0;
+
+	ret = Tpm2GetRandom(DIGEST_SIZE, &owner_auth);
+	if(EFI_ERROR(ret)) {
+		error(L"failed to get random: %d", ret);
+		goto out;
+	}
+
+	ret = Tpm2HierarchyChangeAuth(TPM_RH_OWNER, &session_data, &owner_auth);
+	if(EFI_ERROR(ret)) {
+		error(L"failed to Tpm2HierarchyChangeAuth: %d", ret);
+		goto out;
+	}
+
+out:
+	memset(owner_auth.buffer, 0, DIGEST_SIZE);
+	return ret;
 }
 
 static EFI_STATUS create_index_and_write_lock(TPM_NV_INDEX nv_index, TPMA_NV attributes,
@@ -423,6 +540,7 @@ EFI_STATUS tpm2_show_index(UINT32 index, uint8_t *out_buffer, UINTN out_buffer_s
 
 	return EFI_SUCCESS;
 }
+#endif // USER
 
 EFI_STATUS tpm2_delete_index(UINT32 index)
 {
@@ -433,7 +551,6 @@ EFI_STATUS tpm2_delete_index(UINT32 index)
 
 	return ret;
 }
-#endif // USER
 
 static void dump_data(
 		__attribute__((unused)) UINT8 *data,
@@ -453,9 +570,9 @@ EFI_STATUS tpm2_fuse_trusty_seed(void)
 {
 	EFI_STATUS ret;
 	TPM2B_DIGEST trusty_seed;
-	TPMA_NV attributes = {0};
 	UINT8 read_seed[TRUSTY_SEED_SIZE];
 	UINT16 read_seed_size = TRUSTY_SEED_SIZE;
+	UINT16 config_index;
 
 	ret = Tpm2GetRandom(TRUSTY_SEED_SIZE, &trusty_seed);
 	if (EFI_ERROR(ret)) {
@@ -464,8 +581,9 @@ EFI_STATUS tpm2_fuse_trusty_seed(void)
 	}
 	dump_data(trusty_seed.buffer, TRUSTY_SEED_SIZE);
 
-	set_attributes(&attributes, TRUE, TRUE);
-	ret = create_index_and_write_lock(NV_INDEX_TRUSTYOS_SEED, attributes, TRUSTY_SEED_SIZE, trusty_seed.buffer);
+	config_index = NV_INDEX_TRUSTYOS_SEED - config_table[0].nv_index;
+	ret = create_index_and_write_lock(NV_INDEX_TRUSTYOS_SEED, config_table[config_index].attribute,
+					TRUSTY_SEED_SIZE, trusty_seed.buffer);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to create and write trusty seed");
 		goto out;
@@ -528,16 +646,15 @@ out:
 EFI_STATUS tpm2_fuse_perm_attr(void *data, uint32_t size)
 {
 	EFI_STATUS ret;
-	TPMA_NV attributes = {0};
+	UINT16 config_index;
 
 	if (size > 2048) {
 		error(L"AT Permanent attributes exceeds maximum size");
 		return EFI_INVALID_PARAMETER;
 	}
 
-	set_attributes(&attributes, FALSE, TRUE);
-
-	ret = create_index_and_write_lock(NV_INDEX_AT_PERM_ATTR, attributes, size, data);
+	config_index = NV_INDEX_AT_PERM_ATTR - config_table[0].nv_index;
+	ret = create_index_and_write_lock(NV_INDEX_AT_PERM_ATTR, config_table[config_index].attribute, size, data);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -549,16 +666,15 @@ EFI_STATUS tpm2_fuse_perm_attr(void *data, uint32_t size)
 EFI_STATUS tpm2_fuse_vbmeta_key_hash(void *data, uint32_t size)
 {
 	EFI_STATUS ret;
-	TPMA_NV attributes = {0};
+	UINT16 config_index;
 
 	if (size != 32) {
 		error(L"VBMETA Key Hash size is not 32 bytes");
 		return EFI_INVALID_PARAMETER;
 	}
 
-	set_attributes(&attributes, FALSE, TRUE);
-
-	ret = create_index_and_write_lock(NV_INDEX_VBMETA_KEY_HASH, attributes, size, data);
+	config_index = NV_INDEX_VBMETA_KEY_HASH - config_table[0].nv_index;
+	ret = create_index_and_write_lock(NV_INDEX_VBMETA_KEY_HASH, config_table[config_index].attribute, size, data);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -569,7 +685,7 @@ EFI_STATUS tpm2_fuse_vbmeta_key_hash(void *data, uint32_t size)
 EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size)
 {
 	EFI_STATUS ret;
-	TPMA_NV attributes = {0};
+	UINT16 config_index;
 	UINT64 set_bits = 0;
 
 	if (size != sizeof(set_bits)) {
@@ -577,10 +693,8 @@ EFI_STATUS tpm2_fuse_bootloader_policy(void *data, uint32_t size)
 		return EFI_INVALID_PARAMETER;
 	}
 
-	set_attributes(&attributes, FALSE, FALSE);
-	attributes.TPMA_NV_BITS = 1;
-
-	ret = tpm2_create_nvindex(NV_INDEX_FB_BL_POLICY, attributes, sizeof(set_bits));
+	config_index = NV_INDEX_FB_BL_POLICY - config_table[0].nv_index;
+	ret = tpm2_create_nvindex(NV_INDEX_FB_BL_POLICY, config_table[config_index].attribute, sizeof(set_bits));
 	if (EFI_ERROR(ret) && (ret != EFI_ALREADY_STARTED))
 		return ret;
 
