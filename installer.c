@@ -394,6 +394,13 @@ static void installer_flash_cmd(INTN argc, CHAR8 **argv)
 		return;
 	}
 
+	if (get_current_state() == LOCKED) {
+		error(L"Installer: Flash %a is prohibited in %a state.", argv[1],
+			  get_current_state_string());
+		fastboot_fail("Installer: Prohibited command in %a state.", get_current_state_string());
+		return;
+	}
+
 	ret = uefi_get_file_size(file_io_interface, filename, &size);
 	if (EFI_ERROR(ret)) {
 		inst_perror(ret, "Failed to get %s file size", filename);
