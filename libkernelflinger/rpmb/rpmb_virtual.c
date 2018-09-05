@@ -588,6 +588,7 @@ EFI_STATUS virtual_rpmb_program_key(void *rpmb_dev, const void *key, RPMB_RESPON
 		return EFI_INVALID_PARAMETER;
 
 	memset(&data_frame, 0, sizeof(data_frame));
+	memset(&status_frame, 0, sizeof(status_frame));
 	data_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_KEY_WRITE);
 	memcpy(data_frame.key_mac, key, RPMB_KEY_SIZE);
 
