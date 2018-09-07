@@ -117,7 +117,8 @@ LOCAL_SRC_FILES := \
 	virtual_media.c
 
 ifeq ($(KERNELFLINGER_SUPPORT_USB_STORAGE),true)
-	LOCAL_SRC_FILES += usb_storage.c
+	LOCAL_SRC_FILES += usb_storage.c \
+			   UsbMassBot.c
 endif
 
 ifneq (,$(filter true,$(IOC_USE_SLCAN) $(IOC_USE_CBC)))
@@ -241,6 +242,7 @@ endif # KERNELFLINGER_SUPPORT_NON_EFI_BOOT
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(LOCAL_PATH)/../ \
 		$(LOCAL_PATH)/../avb \
+		$(LOCAL_PATH)/../libefiusb/protocol \
 		$(res_intermediates)
 
 ifeq ($(BOARD_AVB_ENABLE),true)
