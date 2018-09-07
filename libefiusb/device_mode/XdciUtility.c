@@ -10,12 +10,16 @@
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
+#include <lib.h>
+#include <efiapi.h>
+#include <uefi_utils.h>
+#include <vars.h>
 
 #include "XdciUtility.h"
 
 VOID
 PrintDeviceDescriptor (
-  IN USB_DEVICE_DESCRIPTOR    *DevDesc
+  IN __attribute((unused)) USB_DEVICE_DESCRIPTOR    *DevDesc
   )
 {
   DEBUG ((DEBUG_INFO, "--- Device Descriptor ---\n"));
@@ -38,7 +42,7 @@ PrintDeviceDescriptor (
 
 VOID
 PrintConfigDescriptor (
-  IN EFI_USB_CONFIG_DESCRIPTOR    *ConfigDesc
+  IN __attribute((unused)) EFI_USB_CONFIG_DESCRIPTOR    *ConfigDesc
   )
 {
   DEBUG ((DEBUG_INFO, "--- Configuration Descriptor ---\n"));
@@ -55,7 +59,7 @@ PrintConfigDescriptor (
 
 VOID
 PrintInterfaceDescriptor (
-  IN EFI_USB_INTERFACE_DESCRIPTOR    *IfDesc
+  IN __attribute((unused)) EFI_USB_INTERFACE_DESCRIPTOR    *IfDesc
   )
 {
   DEBUG ((DEBUG_INFO, "--- Interface Descriptor ---\n"));
@@ -73,7 +77,7 @@ PrintInterfaceDescriptor (
 
 VOID
 PrintEpDescriptor (
-  IN EFI_USB_ENDPOINT_DESCRIPTOR    *EpDesc
+  IN __attribute((unused)) EFI_USB_ENDPOINT_DESCRIPTOR    *EpDesc
   )
 {
   DEBUG ((DEBUG_INFO, "--- Endpoint Descriptor ---\n"));
@@ -88,7 +92,7 @@ PrintEpDescriptor (
 
 VOID
 PrintEpCompDescriptor (
-  IN EFI_USB_ENDPOINT_COMPANION_DESCRIPTOR    *EpDesc
+  IN __attribute((unused)) EFI_USB_ENDPOINT_COMPANION_DESCRIPTOR    *EpDesc
   )
 {
   DEBUG ((DEBUG_INFO, "--- Endpoint Companion Descriptor ---\n"));
@@ -105,10 +109,7 @@ PrintStringDescriptor (
   IN USB_STRING_DESCRIPTOR    *StrDesc
   )
 {
-  UINT16 StrLen = 0;
-
   if (StrDesc->Length > 2) {
-    StrLen = ((StrDesc->Length - 2) >> 1);
     DEBUG ((DEBUG_INFO, "--- String Descriptor ---\n"));
     DEBUG ((DEBUG_INFO, "Length         : 0x%x\n", StrDesc->Length));
     DEBUG ((DEBUG_INFO, "DescriptorType : 0x%x\n", StrDesc->DescriptorType));
@@ -119,7 +120,7 @@ PrintStringDescriptor (
 
 VOID
 PrintDeviceRequest (
-  IN EFI_USB_DEVICE_REQUEST    *DevReq
+  IN __attribute__((unused)) EFI_USB_DEVICE_REQUEST    *DevReq
   )
 {
   DEBUG ((DEBUG_INFO, "--- Device Request ---\n"));
@@ -131,10 +132,9 @@ PrintDeviceRequest (
   DEBUG ((DEBUG_INFO, "\n"));
 }
 
-#ifdef SUPPORT_SUPER_SPEED
 VOID
 PrintBOSDescriptor (
-  IN EFI_USB_BOS_DESCRIPTOR    *BosDesc
+  IN __attribute__((unused)) EFI_USB_BOS_DESCRIPTOR    *BosDesc
   )
 {
   DEBUG ((DEBUG_INFO, "--- BOS Descriptor ---\n"));
@@ -144,5 +144,4 @@ PrintBOSDescriptor (
   DEBUG ((DEBUG_INFO, "NumDeviceCaps    : 0x%x\n", BosDesc->NumDeviceCaps));
   DEBUG ((DEBUG_INFO, "\n"));
 }
-#endif
 

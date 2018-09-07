@@ -14,7 +14,7 @@
 #ifndef _XDCI_UTILITY_H_
 #define _XDCI_UTILITY_H_
 
-#include <Library/UsbDeviceLib.h>
+#include "protocol/UsbDeviceLib.h"
 
 VOID
 PrintDeviceDescriptor (
@@ -51,12 +51,10 @@ PrintDeviceRequest (
   IN EFI_USB_DEVICE_REQUEST    *DevReq
   );
 
-#ifdef SUPPORT_SUPER_SPEED
 VOID
 PrintBOSDescriptor (
   IN EFI_USB_BOS_DESCRIPTOR    *BosDesc
   );
-#endif
 
 #endif
 

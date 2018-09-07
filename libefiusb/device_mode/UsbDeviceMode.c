@@ -11,16 +11,14 @@
 
 **/
 
-#include <Base.h>
-#include <Library/BaseLib.h>
-#include <Library/UefiBootServicesTableLib.h>
-#include <Library/IoLib.h>
-#include <PlatformBaseAddresses.h>
-#include <ScAccess.h>
+#include <lib.h>
+#include <uefi_utils.h>
+#include <vars.h>
 #include "XdciUtility.h"
-#include "UsbDeviceMode.h"
 #include "UsbDeviceDxe.h"
+#include "UsbDeviceMode.h"
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 //
 // Global USBD driver object. This is the main private driver object
 // that contains all data needed for this driver to operate.
@@ -53,7 +51,7 @@ USB_DEVICE_IO_REQ  mCtrlIoReq = {
 //
 BOOLEAN mXdciRun = FALSE;
 
-STATIC VOID
+VOID
 XhciSwitchSwid(BOOLEAN enable)
 {
   UINTN                             XhciPciMmBase;
@@ -61,7 +59,7 @@ XhciSwitchSwid(BOOLEAN enable)
   UINT32                            DualRoleCfg0;
   UINT32                            DualRoleCfg1;
 
-  XhciPciMmBase = MmPciAddress (0, 0, PCI_DEVICE_NUMBER_XHCI, PCI_FUNCTION_NUMBER_XHCI, 0);
+  XhciPciMmBase = MmPciAddress (0, 0, xhci_path.Device, xhci_path.Function, 0);
   XhciMemBaseAddress = MmioRead32 ((UINTN) (XhciPciMmBase + R_XHCI_MEM_BASE)) & B_XHCI_MEM_BASE_BA;
   DEBUG ((DEBUG_INFO, "XhciPciMmBase=%x, XhciMemBaseAddress=%x\n", XhciPciMmBase, XhciMemBaseAddress));
 
@@ -83,7 +81,7 @@ XhciSwitchSwid(BOOLEAN enable)
 VOID
 EFIAPI
 UsbdMonitorEvents (
-  IN EFI_EVENT            Event,
+  IN EFI_EVENT __attribute__((unused))Event,
   IN VOID                 *Context
   )
 {
@@ -238,7 +236,7 @@ UsbdInitEp (
 VOID
 EFIAPI
 UsbdXferDoneHndlr (
-  IN VOID                    *XdciHndl,
+  IN VOID __attribute((unused))*XdciHndl,
   IN USB_XFER_REQUEST        *XferReq
   )
 {
@@ -380,7 +378,7 @@ UsbdEpRxData (
 EFI_STATUS
 EFIAPI
 UsbdResetEvtHndlr (
-  IN USB_DEVICE_CALLBACK_PARAM  *Param
+  IN USB_DEVICE_CALLBACK_PARAM __attribute__((unused)) *Param
   )
 {
   EFI_STATUS    Status = EFI_DEVICE_ERROR;
@@ -410,7 +408,7 @@ UsbdResetEvtHndlr (
 EFI_STATUS
 EFIAPI
 UsbdConnDoneEvtHndlr (
-  IN USB_DEVICE_CALLBACK_PARAM *Param
+  IN USB_DEVICE_CALLBACK_PARAM __attribute__((unused))*Param
   )
 {
   EFI_STATUS    Status = EFI_DEVICE_ERROR;
@@ -477,7 +475,7 @@ UsbdSetupEvtHndlr (
 EFI_STATUS
 EFIAPI
 UsbdNrdyEvtHndlr (
-  IN USB_DEVICE_CALLBACK_PARAM *Param
+  IN USB_DEVICE_CALLBACK_PARAM __attribute((unused))*Param
   )
 {
   DEBUG ((DEBUG_INFO, "UsbdNrdyEvtHndlr\n"));
@@ -1205,7 +1203,7 @@ UsbdXferDoneHdlr (
 EFI_STATUS
 EFIAPI
 UsbDeviceBind (
-  IN EFI_USB_DEVICE_MODE_PROTOCOL               *This,
+  IN EFI_USB_DEVICE_MODE_PROTOCOL __attribute__((unused))*This,
   IN USB_DEVICE_OBJ                             *UsbdDevObj
   )
 {
@@ -1238,7 +1236,7 @@ UsbDeviceBind (
 EFI_STATUS
 EFIAPI
 UsbDeviceUnbind (
-  IN EFI_USB_DEVICE_MODE_PROTOCOL               *This
+  IN EFI_USB_DEVICE_MODE_PROTOCOL __attribute__((unused))*This
   )
 {
   mDrvObj.UsbdDevObj = NULL;
@@ -1281,10 +1279,11 @@ UsbDeviceRun (
   //
   // can only run if XDCI is initialized
   //
-  if ((mDrvObj.XdciInitialized == TRUE)) {
+  if (mDrvObj.XdciInitialized == TRUE) {
 
     if ((mDrvObj.State == UsbDevStateConfigured) && (XdciDevContext->XdciPollTimer == NULL)) {
-      Status = gBS->CreateEvent (
+      Status = uefi_call_wrapper(BS->CreateEvent,
+		      5,
                       EVT_TIMER | EVT_NOTIFY_SIGNAL,
                       TPL_NOTIFY,
                       UsbdMonitorEvents,
@@ -1292,7 +1291,7 @@ UsbDeviceRun (
                       &XdciDevContext->XdciPollTimer
                       );
       if (!EFI_ERROR (Status)) {
-        Status = gBS->SetTimer (XdciDevContext->XdciPollTimer, TimerPeriodic, EFI_TIMER_PERIOD_MILLISECONDS (20));
+        Status = uefi_call_wrapper(BS->SetTimer, 3, XdciDevContext->XdciPollTimer, TimerPeriodic,200000);
         DEBUG ((EFI_D_ERROR, "UsbDeviceRun Create Event\n"));
       }
     }
@@ -1316,8 +1315,8 @@ UsbDeviceRun (
       if (mXdciRun == FALSE) {
         if (XdciDevContext->XdciPollTimer != NULL) {
           DEBUG ((EFI_D_ERROR, "UsbDeviceRun close Event\n"));
-          gBS->SetTimer (XdciDevContext->XdciPollTimer, TimerCancel, 0);
-          gBS->CloseEvent (XdciDevContext->XdciPollTimer);
+          uefi_call_wrapper(BS->SetTimer, 3, XdciDevContext->XdciPollTimer, TimerCancel, 0);
+          uefi_call_wrapper(BS->CloseEvent, 1, XdciDevContext->XdciPollTimer);
           XdciDevContext->XdciPollTimer = NULL;
         }
         Status = EFI_SUCCESS;
@@ -1330,7 +1329,7 @@ UsbDeviceRun (
       //
       if (TimeoutMs == 0)
         return EFI_TIMEOUT;
-      gBS->Stall (50);
+      uefi_call_wrapper(BS->Stall, 1, 50);
       TimeoutMs--;
     }
   }
@@ -1348,7 +1347,7 @@ UsbDeviceRun (
 EFI_STATUS
 EFIAPI
 UsbDeviceStop (
-  IN EFI_USB_DEVICE_MODE_PROTOCOL               *This
+  IN EFI_USB_DEVICE_MODE_PROTOCOL __attribute__((unused))*This
   )
 {
   mXdciRun = FALSE; // set run flag to FALSE to stop processing
@@ -1412,7 +1411,7 @@ UsbDeviceInitXdci (
 EFI_STATUS
 EFIAPI
 UsbDeviceConnect(
-  IN EFI_USB_DEVICE_MODE_PROTOCOL               *This
+  IN EFI_USB_DEVICE_MODE_PROTOCOL __attribute((unused))*This
   )
 {
   EFI_STATUS  Status = EFI_DEVICE_ERROR;
@@ -1428,7 +1427,7 @@ UsbDeviceConnect(
 EFI_STATUS
 EFIAPI
 UsbDeviceDisConnect (
-  IN EFI_USB_DEVICE_MODE_PROTOCOL               *This
+  IN EFI_USB_DEVICE_MODE_PROTOCOL __attribute((unused))*This
   )
 {
   EFI_STATUS  Status = EFI_DEVICE_ERROR;
@@ -1447,7 +1446,7 @@ UsbDeviceDisConnect (
 EFI_STATUS
 EFIAPI
 UsbDeviceEpTxData(
-  IN EFI_USB_DEVICE_MODE_PROTOCOL               *This,
+  IN EFI_USB_DEVICE_MODE_PROTOCOL __attribute((unused))*This,
   IN USB_DEVICE_IO_REQ                          *IoRequest
   )
 {
@@ -1461,7 +1460,7 @@ UsbDeviceEpTxData(
 EFI_STATUS
 EFIAPI
 UsbDeviceEpRxData(
-  IN EFI_USB_DEVICE_MODE_PROTOCOL               *This,
+  IN EFI_USB_DEVICE_MODE_PROTOCOL __attribute((unused))*This,
   IN USB_DEVICE_IO_REQ                          *IoRequest
   )
 {
