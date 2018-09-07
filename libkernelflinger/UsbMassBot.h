@@ -17,8 +17,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #ifndef _EFI_USBMASS_BOT_H_
 #define _EFI_USBMASS_BOT_H_
 
-extern USB_MASS_TRANSPORT mUsbBotTransport;
-
 //
 // Usb Bulk-Only class specfic request
 //
@@ -188,6 +186,38 @@ UsbBotGetMaxLun (
 EFI_STATUS
 UsbBotCleanUp (
   IN  VOID                    *Context
+  );
+
+
+
+#define EFI_TIMER_PERIOD_SECONDS(Seconds)     ((UINT64)(Seconds) * 10000000)
+#define USB_COMMAND_RETRY 5
+#define USB_IS_IN_ENDPOINT(EndPointAddr)      (((EndPointAddr) & 0x80) == 0x80)
+#define USB_IS_OUT_ENDPOINT(EndPointAddr)     (((EndPointAddr) & 0x80) == 0)
+#define USB_IS_BULK_ENDPOINT(Attribute)       (((Attribute) & (0x01 | 0x02)) == USB_ENDPOINT_BULK)
+#define USB_IS_INTERRUPT_ENDPOINT(Attribute)  (((Attribute) & (0x01 | 0x02)) == USB_ENDPOINT_INTERRUPT)
+#define USB_IS_ERROR(Result, Error)           (((Result) & (Error)) != 0)
+
+#define USB_MASS_1_MILLISECOND  1000
+#define USB_MASS_1_SECOND       (1000 * USB_MASS_1_MILLISECOND)
+#define USB_BOOT_GENERAL_CMD_TIMEOUT       (5 * USB_MASS_1_SECOND)
+
+#define USB_MASS_CMD_SUCCESS    0
+#define USB_MASS_CMD_FAIL       1
+#define USB_MASS_CMD_PERSISTENT 2
+#define USB_MASS_STORE_BOT      0x50 ///< Bulk-Only Transport
+
+EFI_STATUS
+UsbBotExecCommandWithRetry (
+  IN  VOID                    *Context,
+  IN  VOID                    *Cmd,
+  IN  UINT8                   CmdLen,
+  IN  EFI_USB_DATA_DIRECTION  DataDir,
+  IN  VOID                    *Data,
+  IN  UINT32                  DataLen,
+  IN  UINT8                   Lun,
+  IN  UINT32                  Timeout,
+  OUT UINT32                  *CmdStatus
   );
 
 #endif

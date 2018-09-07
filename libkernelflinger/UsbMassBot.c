@@ -13,19 +13,43 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
 
-#include "UsbMass.h"
+#include <lib.h>
+#include "storage.h"
+#include "UsbIo.h"
+#include "protocol/DevicePath.h"
+#include "UsbMassBot.h"
 
-//
-// Definition of USB BOT Transport Protocol
-//
-USB_MASS_TRANSPORT mUsbBotTransport = {
-  USB_MASS_STORE_BOT,
-  UsbBotInit,
-  UsbBotExecCommand,
-  UsbBotResetDevice,
-  UsbBotGetMaxLun,
-  UsbBotCleanUp
-};
+static
+EFI_STATUS
+UsbClearEndpointStall (
+  IN EFI_USB_IO_PROTOCOL *UsbIo,
+  IN UINT8 Address
+  )
+{
+  EFI_USB_DEVICE_REQUEST    Request;
+  EFI_STATUS                Status;
+  UINT32                    CmdResult;
+  UINT32                    Timeout;
+
+  Request.RequestType = USB_DEV_CLEAR_FEATURE_REQ_TYPE_E;
+  Request.Request     = USB_REQ_CLEAR_FEATURE;
+  Request.Value       = USB_FEATURE_ENDPOINT_HALT;
+  Request.Index       = Address;
+  Request.Length      = 0;
+  Timeout             = USB_BOOT_GENERAL_CMD_TIMEOUT / USB_MASS_1_MILLISECOND;
+
+  Status = uefi_call_wrapper(UsbIo->UsbControlTransfer,
+                      7,
+                      UsbIo,
+                      &Request,
+                      EfiUsbNoData,
+                      Timeout,
+                      NULL,
+                      0,
+                      &CmdResult
+                      );
+return Status;
+}
 
 /**
   Initializes USB BOT protocol.
@@ -66,7 +90,7 @@ UsbBotInit (
   // Get the interface descriptor and validate that it
   // is a USB Mass Storage BOT interface.
   //
-  Status = UsbIo->UsbGetInterfaceDescriptor (UsbIo, &UsbBot->Interface);
+  Status = uefi_call_wrapper (UsbIo->UsbGetInterfaceDescriptor, 2, UsbIo, &UsbBot->Interface);
 
   if (EFI_ERROR (Status)) {
     goto ON_ERROR;
@@ -83,7 +107,7 @@ UsbBotInit (
   // Locate and save the first bulk-in and bulk-out endpoint
   //
   for (Index = 0; Index < Interface->NumEndpoints; Index++) {
-    Status = UsbIo->UsbGetEndpointDescriptor (UsbIo, Index, &EndPoint);
+    Status = uefi_call_wrapper (UsbIo->UsbGetEndpointDescriptor, 3, UsbIo, Index, &EndPoint);
 
     if (EFI_ERROR (Status) || !USB_IS_BULK_ENDPOINT (EndPoint.Attributes)) {
       continue;
@@ -173,7 +197,7 @@ UsbBotSendCommand (
   Cbw.Signature = USB_BOT_CBW_SIGNATURE;
   Cbw.Tag       = UsbBot->CbwTag;
   Cbw.DataLen   = TransLen;
-  Cbw.Flag      = (UINT8) ((DataDir == EfiUsbDataIn) ? BIT7 : 0);
+  Cbw.Flag      = (UINT8) ((DataDir == EfiUsbDataIn) ? 0x80 : 0);
   Cbw.Lun       = Lun;
   Cbw.CmdLen    = CmdLen;
 
@@ -187,7 +211,8 @@ UsbBotSendCommand (
   //
   // Use USB I/O Protocol to send the Command Block Wrapper to the device.
   //
-  Status = UsbBot->UsbIo->UsbBulkTransfer (
+  Status = uefi_call_wrapper(UsbBot->UsbIo->UsbBulkTransfer,
+                            6,
                             UsbBot->UsbIo,
                             UsbBot->BulkOutEndpoint->EndpointAddress,
                             &Cbw,
@@ -262,7 +287,8 @@ UsbBotDataTransfer (
   Result  = 0;
   Timeout = Timeout / USB_MASS_1_MILLISECOND;
 
-  Status = UsbBot->UsbIo->UsbBulkTransfer (
+  Status = uefi_call_wrapper(UsbBot->UsbIo->UsbBulkTransfer,
+                            6,
                             UsbBot->UsbIo,
                             Endpoint->EndpointAddress,
                             Data,
@@ -311,7 +337,7 @@ UsbBotDataTransfer (
 EFI_STATUS
 UsbBotGetStatus (
   IN  USB_BOT_PROTOCOL      *UsbBot,
-  IN  UINT32                TransLen,
+  IN  __attribute__((unused)) UINT32 TransLen,
   OUT UINT8                 *CmdStatus
   )
 {
@@ -337,7 +363,8 @@ UsbBotGetStatus (
     ZeroMem (&Csw, sizeof (USB_BOT_CSW));
     Result = 0;
     Len    = sizeof (USB_BOT_CSW);
-    Status = UsbIo->UsbBulkTransfer (
+    Status = uefi_call_wrapper (UsbIo->UsbBulkTransfer,
+                      6,
                       UsbIo,
                       Endpoint,
                       &Csw,
@@ -481,7 +508,7 @@ UsbBotResetDevice (
     //
     // If we need to do strictly reset, reset its parent hub port
     //
-    Status = UsbBot->UsbIo->UsbPortReset (UsbBot->UsbIo);
+    Status = uefi_call_wrapper (UsbBot->UsbIo->UsbPortReset, 1, UsbBot->UsbIo);
     if (EFI_ERROR (Status)) {
       return EFI_DEVICE_ERROR;
     }
@@ -498,7 +525,8 @@ UsbBotResetDevice (
   Request.Length      = 0;
   Timeout             = USB_BOT_RESET_DEVICE_TIMEOUT / USB_MASS_1_MILLISECOND;
 
-  Status = UsbBot->UsbIo->UsbControlTransfer (
+  Status = uefi_call_wrapper(UsbBot->UsbIo->UsbControlTransfer,
+                            7,
                             UsbBot->UsbIo,
                             &Request,
                             EfiUsbNoData,
@@ -517,7 +545,7 @@ UsbBotResetDevice (
   // complete. We can use this to sync the device and host. For
   // now just stall 100ms to wait for the device.
   //
-  gBS->Stall (USB_BOT_RESET_DEVICE_STALL);
+  uefi_call_wrapper (BS->Stall, 1, USB_BOT_RESET_DEVICE_STALL);
 
   //
   // Clear the Bulk-In and Bulk-Out stall condition.
@@ -529,85 +557,74 @@ UsbBotResetDevice (
 }
 
 
-/**
-  Get the max LUN (Logical Unit Number) of USB mass storage device.
-
-  @param  Context          The context of the BOT protocol, that is, USB_BOT_PROTOCOL
-  @param  MaxLun           Return pointer to the max number of LUN. (e.g. MaxLun=1 means LUN0 and
-                           LUN1 in all.)
-
-  @retval EFI_SUCCESS      Max LUN is got successfully.
-  @retval Others           Fail to execute this request.
-
-**/
 EFI_STATUS
-UsbBotGetMaxLun (
-  IN  VOID                    *Context,
-  OUT UINT8                   *MaxLun
+UsbBotExecCommandWithRetry (
+  IN  VOID                     *Context,
+  IN  VOID                     *Cmd,
+  IN  UINT8                    CmdLen,
+  IN  EFI_USB_DATA_DIRECTION   DataDir,
+  IN  VOID                     *Data,
+  IN  UINT32                   DataLen,
+  IN  UINT8                    Lun,
+  IN  UINT32                   Timeout,
+  OUT UINT32                   *CmdStatus
   )
 {
-  USB_BOT_PROTOCOL        *UsbBot;
-  EFI_USB_DEVICE_REQUEST  Request;
-  EFI_STATUS              Status;
-  UINT32                  Result;
-  UINT32                  Timeout;
+  EFI_STATUS             Status;
+  UINTN                  Retry;
+  VOID                   *timeout_evt;
 
-  if (Context == NULL || MaxLun == NULL) {
-    return EFI_INVALID_PARAMETER;
+  Retry  = 0;
+  Status = EFI_SUCCESS;
+  Status = uefi_call_wrapper(BS->CreateEvent,
+                             5,
+                             EVT_TIMER,
+                             TPL_CALLBACK,
+                             NULL,
+                             NULL,
+                             &timeout_evt
+                             );
+  if (EFI_ERROR (Status)){
+    debug(L"UsbBotExecCommandWithRetry: no event create\n");
+    return Status;
   }
 
-  UsbBot = (USB_BOT_PROTOCOL *) Context;
-
-  //
-  // Issue a class specific Bulk-Only Mass Storage get max lun reqest.
-  // according to section 3.2 of USB Mass Storage Class Bulk-Only Transport Spec, v1.0.
-  //
-  Request.RequestType = 0xA1;
-  Request.Request     = USB_BOT_GETLUN_REQUEST;
-  Request.Value       = 0;
-  Request.Index       = UsbBot->Interface.InterfaceNumber;
-  Request.Length      = 1;
-  Timeout             = USB_BOT_RESET_DEVICE_TIMEOUT / USB_MASS_1_MILLISECOND;
-
-  Status = UsbBot->UsbIo->UsbControlTransfer (
-                            UsbBot->UsbIo,
-                            &Request,
-                            EfiUsbDataIn,
-                            Timeout,
-                            (VOID *) MaxLun,
-                            1,
-                            &Result
-                            );
-  if (EFI_ERROR (Status) || *MaxLun > USB_BOT_MAX_LUN) {
-    //
-    // If the Get LUN request returns an error or the MaxLun is larger than
-    // the maximum LUN value (0x0f) supported by the USB Mass Storage Class
-    // Bulk-Only Transport Spec, then set MaxLun to 0.
-    //
-    // This improves compatibility with USB FLASH drives that have a single LUN
-    // and either do not return a max LUN value or return an invalid maximum LUN
-    // value.
-    //
-    *MaxLun = 0;
+  Status = uefi_call_wrapper(BS->SetTimer,
+                             3,
+                             timeout_evt,
+                             TimerRelative,
+                             EFI_TIMER_PERIOD_SECONDS(60)
+                             );
+  if (EFI_ERROR (Status)) {
+    debug(L"UsbBotExecCommandWithRetry: no timer set\n");
+    goto EXIT;
   }
 
-  return EFI_SUCCESS;
+  while (EFI_ERROR (uefi_call_wrapper(BS->CheckEvent, 1, timeout_evt))) {
+    Status = UsbBotExecCommand(Context,
+                               Cmd,
+                               CmdLen,
+                               DataDir,
+                               Data,
+                               DataLen,
+                               Lun,
+                               Timeout,
+                               CmdStatus
+                               );
+
+  if (Status == EFI_SUCCESS || Status == EFI_NO_MEDIA)
+    break;
+
+  if (Status == EFI_NOT_READY)
+    continue;
+
+  if (Retry++ >= USB_COMMAND_RETRY)
+    break;
 }
 
-/**
-  Clean up the resource used by this BOT protocol.
-
-  @param  Context         The context of the BOT protocol, that is, USB_BOT_PROTOCOL.
-
-  @retval EFI_SUCCESS     The resource is cleaned up.
-
-**/
-EFI_STATUS
-UsbBotCleanUp (
-  IN  VOID                    *Context
-  )
-{
-  FreePool (Context);
-  return EFI_SUCCESS;
+EXIT:
+  if (timeout_evt != NULL) {
+    uefi_call_wrapper(BS->CloseEvent, 1, timeout_evt);
 }
-
+  return Status;
+}
