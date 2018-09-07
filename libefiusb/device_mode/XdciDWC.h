@@ -16,6 +16,7 @@
 
 #include "XdciCommon.h"
 #include "XdciDevice.h"
+#include "protocol/UsbDeviceLib.h"
 
 #define DWC_XDCI_MAX_ENDPOINTS                             (16)
 #define DWC_XDCI_SS_CTRL_EP_MPS                            (512)

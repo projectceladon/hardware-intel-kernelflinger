@@ -14,15 +14,8 @@
 #ifndef _USB_DEVICE_MODE_DXE_H_
 #define _USB_DEVICE_MODE_DXE_H_
 
-#include <Uefi.h>
-#include <PiDxe.h>
-#include <Library/DebugLib.h>
-#include <Library/UefiDriverEntryPoint.h>
-#include <Library/UefiBootServicesTableLib.h>
-#include <Library/UsbDeviceLib.h>
-#include <Protocol/UsbDeviceModeProtocol.h>
-#include "XdciCommon.h"
-#include "XdciDevice.h"
+#include "protocol/UsbIo.h"
+#include "protocol/UsbDeviceModeProtocol.h"
 
 
 ///

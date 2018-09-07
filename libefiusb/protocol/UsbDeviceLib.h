@@ -90,6 +90,7 @@
 // USB Descriptor types
 //
 #define USB_DESC_TYPE_SS_ENDPOINT_COMPANION  0x30
+#define USB_DESC_TYPE_BOS                    0x0F
 
 
 //
@@ -173,6 +174,7 @@ typedef struct {
 	VOID                          *ConfigAll;
 	USB_DEVICE_INTERFACE_OBJ      *InterfaceObjs;
 } USB_DEVICE_CONFIG_OBJ;
+#pragma pack()
 
 typedef
 EFI_STATUS
@@ -193,10 +195,21 @@ EFI_STATUS
 	IN EFI_USB_DEVICE_XFER_INFO   *XferInfo
 	);
 
+#pragma pack(1)
+typedef struct {
+	UINT8      Length;
+	UINT8      DescriptorType;
+	UINT16     TotalLength;
+	UINT8      NumDeviceCaps;
+} EFI_USB_BOS_DESCRIPTOR;
+
 typedef struct {
 	USB_DEVICE_DESCRIPTOR       *DeviceDesc;
 	USB_DEVICE_CONFIG_OBJ       *ConfigObjs;
 	USB_STRING_DESCRIPTOR       *StringTable;
+#ifdef SUPPORT_SUPER_SPEED
+	EFI_USB_BOS_DESCRIPTOR      *BosDesc;
+#endif
 	UINT8                       StrTblEntries;
 	EFI_USB_CONFIG_CALLBACK     ConfigCallback;
 	EFI_USB_SETUP_CALLBACK      SetupCallback;
@@ -210,9 +223,8 @@ typedef struct {
 //
 typedef struct {
 	USB_DEVICE_OBJ              *UsbdDevObj;      /* pointer to a Device Object */
-	VOID                        *DciDrvObj;       /* Opaque handle to DCI driver */
-	UINT32                      MmioBar;          /* MMIO BAR */
-	BOOLEAN                     DciInitialized;   /* flag to specify if the DCI driver is initialized */
+	VOID                        *XdciDrvObj;       /* Opaque handle to DCI driver */
+	BOOLEAN                     XdciInitialized;   /* flag to specify if the DCI driver is initialized */
 	USB_DEVICE_CONFIG_OBJ       *ActiveConfigObj; /* pointer to currently active configuraiton */
 	USB_DEVICE_STATE            State;            /* current state of the USB Device state machine */
 	UINT8                       Address;          /* configured device address */

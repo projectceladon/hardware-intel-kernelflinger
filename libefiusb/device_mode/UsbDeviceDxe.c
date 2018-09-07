@@ -10,20 +10,17 @@
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
-
+#include <lib.h>
+#include <efiapi.h>
+#include <uefi_utils.h>
+#include <vars.h>
+#include "pci.h"
 #include "UsbDeviceDxe.h"
-#include <Guid/EventGroup.h>
+#include "UsbDeviceMode.h"
+#include "XdciDWC.h"
 
-EFI_DRIVER_BINDING_PROTOCOL mUsbDeviceDxeDriverBinding = {
-  UsbDeviceDxeDriverSupported,
-  UsbDeviceDxeDriverStart,
-  UsbDeviceDxeDriverStop,
-  0x1,
-  NULL,
-  NULL
-};
-
-
+static EFI_HANDLE xdci = 0;
+PCI_DEVICE_PATH xhci_path = {.Device = -1, .Function = -1};
 
 VOID
 EFIAPI
@@ -37,8 +34,8 @@ PlatformSpecificInit (
   XhciPciMmBase   = MmPciAddress (
                       0,
                       0,
-                      PCI_DEVICE_NUMBER_XHCI,
-                      PCI_FUNCTION_NUMBER_XHCI,
+                      xhci_path.Device,
+                      xhci_path.Function,
                       0
                       );
 
@@ -48,16 +45,15 @@ PlatformSpecificInit (
 
   MmioWrite32 ((UINTN)(XhciMemBaseAddress + R_XHCI_MEM_DUAL_ROLE_CFG0), 0x1310800);
 
-  PmicUSBSwitchControl (TRUE);//conduction USB switch.
   return;
 }
 
-
+static
 VOID
 EFIAPI
 UsbDeviceDxeExitBootService (
-  EFI_EVENT  Event,
-  VOID       *Context
+  __attribute__((unused))EFI_EVENT Event,
+  VOID *Context
   )
 {
   USB_XDCI_DEV_CONTEXT  *UsbXdciDevContext;
@@ -66,159 +62,100 @@ UsbDeviceDxeExitBootService (
   DEBUG ((EFI_D_INFO, "UsbDeviceDxeExitBootService enter\n"));
 
   if (UsbXdciDevContext->XdciPollTimer != NULL) {
-    gBS->SetTimer (UsbXdciDevContext->XdciPollTimer, TimerCancel, 0);
-    gBS->CloseEvent (UsbXdciDevContext->XdciPollTimer);
+    uefi_call_wrapper(BS->SetTimer,
+          3,
+          UsbXdciDevContext->XdciPollTimer,
+          TimerCancel,
+          0);
+
+    uefi_call_wrapper(BS->CloseEvent, 1, UsbXdciDevContext->XdciPollTimer);
     UsbXdciDevContext->XdciPollTimer = NULL;
-    }
+  }
 
   return;
 }
 
-/**
-  The USB bus driver entry pointer.
-
-  @param ImageHandle       The driver image handle.
-  @param SystemTable       The system table.
-
-  @return EFI_SUCCESS      The component name protocol is installed.
-  @return Others           Failed to init the usb driver.
-
-**/
-EFI_STATUS
-EFIAPI
-UsbDeviceDxeEntryPoint (
-  IN EFI_HANDLE           ImageHandle,
-  IN EFI_SYSTEM_TABLE     *SystemTable
-  )
+static EFI_STATUS find_usb_device_controller (EFI_HANDLE Controller)
 {
-  return EfiLibInstallDriverBindingComponentName2 (
-           ImageHandle,
-           SystemTable,
-           &mUsbDeviceDxeDriverBinding,
-           ImageHandle,
-           &mUsbDeviceDxeComponentName,
-           &mUsbDeviceDxeComponentName2
-           );
-}
+  EFI_STATUS status = EFI_UNSUPPORTED;
+  EFI_PCI_IO *pci;
+  USB_CLASSC class_reg;
+  UINTN seg;
+  UINTN bus;
+  UINTN dev;
+  UINTN fun;
 
-/**
-  Check whether USB bus driver support this device.
+  status = uefi_call_wrapper(BS->OpenProtocol,
+           6,
+           Controller,
+           &PciIoProtocol,
+           (VOID **) &pci,
+           g_parent_image,
+           Controller,
+           EFI_OPEN_PROTOCOL_GET_PROTOCOL);
 
-  @param  This                   The USB bus driver binding protocol.
-  @param  Controller             The controller handle to check.
-  @param  RemainingDevicePath    The remaining device path.
+  if (EFI_ERROR (status))
+    return status;
 
-  @retval EFI_SUCCESS            The bus supports this controller.
-  @retval EFI_UNSUPPORTED        This device isn't supported.
+  status = uefi_call_wrapper(pci->Pci.Read,
+           5,
+           pci,
+           EfiPciIoWidthUint8,
+           PCI_CLASSCODE_OFFSET,
+           sizeof (USB_CLASSC) / sizeof (UINT8),
+           &class_reg);
 
-**/
-EFI_STATUS
-EFIAPI
-UsbDeviceDxeDriverSupported (
-  IN EFI_DRIVER_BINDING_PROTOCOL  *This,
-  IN EFI_HANDLE                   Controller,
-  IN EFI_DEVICE_PATH_PROTOCOL     *RemainingDevicePath
-  )
-{
-  EFI_STATUS                Status;
-  EFI_PCI_IO_PROTOCOL       *PciIo;
-  USB_CLASSC                UsbClassCReg;
+  if (EFI_ERROR (status))
+    return status;
 
-
-  Status = gBS->OpenProtocol (
-                  Controller,
-                  &gEfiPciIoProtocolGuid,
-                  (VOID **) &PciIo,
-                  This->DriverBindingHandle,
-                  Controller,
-                  EFI_OPEN_PROTOCOL_BY_DRIVER
-                  );
-
-  if (EFI_ERROR (Status)) {
-    return EFI_UNSUPPORTED;
-  }
-
-  Status = PciIo->Pci.Read (
-                        PciIo,
-                        EfiPciIoWidthUint8,
-                        PCI_CLASSCODE_OFFSET,
-                        sizeof (USB_CLASSC) / sizeof (UINT8),
-                        &UsbClassCReg
-                        );
-
-  if (EFI_ERROR (Status)) {
-    Status = EFI_UNSUPPORTED;
-    goto ON_EXIT;
-  }
-
-  //
   // Test whether the controller belongs to USB device type
-  //
   // 0x0C03FE / 0x0C0380
-  //
-  if ((UsbClassCReg.BaseCode != PCI_CLASS_SERIAL) ||
-      (UsbClassCReg.SubClassCode != PCI_CLASS_SERIAL_USB) ||
-      ((UsbClassCReg.ProgInterface != PCI_IF_USBDEV) && (UsbClassCReg.ProgInterface != 0x80))) {
-    Status = EFI_UNSUPPORTED;
+
+  if ((class_reg.BaseCode == PCI_CLASS_SERIAL) &&
+      (class_reg.SubClassCode == PCI_CLASS_SERIAL_USB) &&
+      ((class_reg.ProgInterface == PCI_IF_USBDEV) ||
+      (class_reg.ProgInterface == 0x80))) {
+    return EFI_SUCCESS;
   }
 
-ON_EXIT:
-  gBS->CloseProtocol (
-         Controller,
-         &gEfiPciIoProtocolGuid,
-         This->DriverBindingHandle,
-         Controller
-         );
 
-  return Status;
+  if ((class_reg.BaseCode == PCI_CLASS_SERIAL) &&
+    (class_reg.SubClassCode == PCI_CLASS_SERIAL_USB) &&
+    (class_reg.ProgInterface == PCI_IF_XHCI)) {
+
+    status = uefi_call_wrapper(pci->GetLocation,
+             5,
+             pci,
+             &seg,
+             &bus,
+             &dev,
+             &fun);
+    xhci_path.Device = (UINT8)dev;
+    xhci_path.Function = (UINT8)fun;
+  }
+
+  return EFI_UNSUPPORTED;
 }
 
+EFI_GUID gEfiEventExitBootServicesGuid  =  EventExitBootServices;
 
-/**
-  Start to process the controller.
-
-  @param  This                   The USB bus driver binding instance.
-  @param  Controller             The controller to check.
-  @param  RemainingDevicePath    The remaining device patch.
-
-  @retval EFI_SUCCESS            The controller is controlled by the usb bus.
-  @retval EFI_ALREADY_STARTED    The controller is already controlled by the usb
-                                 bus.
-  @retval EFI_OUT_OF_RESOURCES   Failed to allocate resources.
-
-**/
-EFI_STATUS
-EFIAPI
-UsbDeviceDxeDriverStart (
-  IN EFI_DRIVER_BINDING_PROTOCOL  *This,
-  IN EFI_HANDLE                   Controller,
-  IN EFI_DEVICE_PATH_PROTOCOL     *RemainingDevicePath
-  )
+static EFI_STATUS usb_device_mode_start (EFI_HANDLE Controller)
 {
-  EFI_STATUS            Status;
-  USB_XDCI_DEV_CONTEXT  *UsbXdciDevContext;
-  EFI_PCI_IO_PROTOCOL   *PciIo;
-  EFI_EVENT             ExitBootServicesEvent;
+  EFI_STATUS Status;
+  USB_XDCI_DEV_CONTEXT *UsbXdciDevContext = NULL;
+  EFI_PCI_IO *PciIo;
+  EFI_EVENT ExitBootServicesEvent;
 
-  DEBUG ((USB_FUIO_DEBUG_LOAD, "UsbFunIoEntryPoint - Entry\n"));
-
-  UsbXdciDevContext = NULL;
-
-  //
   // Provide protocol interface
-  //
-  //
   // Get the PCI I/O Protocol on PciHandle
-  //
-  Status = gBS->OpenProtocol (
-                  Controller,
-                  &gEfiPciIoProtocolGuid,
-                  (VOID **) &PciIo,
-                  This->DriverBindingHandle,
-                  Controller,
-                  EFI_OPEN_PROTOCOL_BY_DRIVER
-                  );
-
+  Status = uefi_call_wrapper(BS->OpenProtocol,
+           6,
+           Controller,
+           &PciIoProtocol,
+           (VOID **) &PciIo,
+           g_parent_image,
+           Controller,
+           EFI_OPEN_PROTOCOL_GET_PROTOCOL);
   if (EFI_ERROR (Status)) {
     goto ErrorExit;
   }
@@ -229,167 +166,127 @@ UsbDeviceDxeDriverStart (
     goto ErrorExit;
   }
 
-  //
   // Initialize the driver context
   //
   UsbXdciDevContext->StartUpController = FALSE;
   UsbXdciDevContext->XdciHandle = Controller;
-  UsbXdciDevContext->FirstNodePtr = NULL;
   UsbXdciDevContext->Signature = EFI_USB_DEV_SIGNATURE;
 
-  PciIo->Pci.Read (
-               PciIo,
-               EfiPciIoWidthUint32,
-               R_OTG_BAR0,
-               1,
-               &UsbXdciDevContext->XdciMmioBarAddr
-               );
-
+  Status = uefi_call_wrapper(PciIo->Pci.Read,
+           5,
+           PciIo,
+           EfiPciIoWidthUint32,
+           R_OTG_BAR0,
+           1,
+           &UsbXdciDevContext->XdciMmioBarAddr);
   UsbXdciDevContext->XdciMmioBarAddr &= B_OTG_BAR0_BA;
-  DEBUG ((USB_FUIO_DEBUG_INFO, "USB DEV mode IO addr 0x%08x\n", UsbXdciDevContext->XdciMmioBarAddr));
 
-  CopyMem (
-    &(UsbXdciDevContext->UsbFunIoProtocol),
-    &mUsbFunIoProtocol,
-    sizeof (EFI_USBFN_IO_PROTOCOL)
-    );
+  UINT16 command = 0x6;
+  Status = uefi_call_wrapper(PciIo->Pci.Write,
+           5,
+           PciIo,
+           EfiPciIoWidthUint16,
+           R_XDCI_CMD_OFF,
+           1,
+           &command);
+  //read after write to ensure the former write take effect
+  command = 0;
+  Status = uefi_call_wrapper(PciIo->Pci.Read,
+           5,
+           PciIo,
+           EfiPciIoWidthUint16,
+           R_XDCI_CMD_OFF,
+           1,
+           &command);
 
-  CopyMem (
-    &(UsbXdciDevContext->UsbDevModeProtocol),
-    &mUsbDeviceModeProtocol,
-    sizeof (EFI_USB_DEVICE_MODE_PROTOCOL)
-    );
+  CopyMem (&(UsbXdciDevContext->UsbDevModeProtocol),
+     &mUsbDeviceModeProtocol,
+     sizeof (EFI_USB_DEVICE_MODE_PROTOCOL));
 
-  Status = gBS->CreateEventEx (
-                  EVT_NOTIFY_SIGNAL,
-                  TPL_NOTIFY,
-                  UsbDeviceDxeExitBootService,
-                  UsbXdciDevContext,
-                  &gEfiEventExitBootServicesGuid,
-                  &ExitBootServicesEvent
-                  );
+  Status = uefi_call_wrapper(BS->CreateEventEx,
+           6,
+           EVT_NOTIFY_SIGNAL,
+           TPL_NOTIFY,
+           UsbDeviceDxeExitBootService,
+           UsbXdciDevContext,
+           &gEfiEventExitBootServicesGuid,
+           &ExitBootServicesEvent);
+  if (EFI_ERROR (Status))
+    goto ErrorExit;
+
+  Status = uefi_call_wrapper(BS->InstallMultipleProtocolInterfaces,
+           4,
+           &UsbXdciDevContext->XdciHandle,
+           &gEfiUsbDeviceModeProtocolGuid,
+           &UsbXdciDevContext->UsbDevModeProtocol,
+           NULL);
+
   if (EFI_ERROR (Status)) {
+    efi_perror(Status, L"Failed to install upper protocol");
     goto ErrorExit;
   }
 
-  Status = gBS->InstallMultipleProtocolInterfaces (
-                  &UsbXdciDevContext->XdciHandle,
-                  &gEfiUsbFnIoProtocolGuid,
-                  &UsbXdciDevContext->UsbFunIoProtocol,
-                  &gEfiUsbDeviceModeProtocolGuid,
-                  &UsbXdciDevContext->UsbDevModeProtocol,
-                  NULL
-                  );
-  if (EFI_ERROR (Status)) {
-    DEBUG ((USB_FUIO_DEBUG_ERROR, "ERROR - Failed to install upper protocol, Status: %r\n", Status));
-    goto ErrorExit;
-  }
-
-  DEBUG ((USB_FUIO_DEBUG_LOAD, "Done - install upper protocol complete\n"));
-  DEBUG ((USB_FUIO_DEBUG_LOAD, "UsbFunIoEntryPoint - Exit\n"));
   return Status;
 
 ErrorExit:
-  gBS->CloseProtocol (
-         Controller,
-         &gEfiPciIoProtocolGuid,
-         This->DriverBindingHandle,
-         Controller
-         );
 
   if (UsbXdciDevContext != NULL) {
     if (UsbXdciDevContext->XdciPollTimer != NULL) {
-      gBS->CloseEvent (UsbXdciDevContext->XdciPollTimer);
+      uefi_call_wrapper(BS->CloseEvent,
+            1,
+            UsbXdciDevContext->XdciPollTimer);
       UsbXdciDevContext->XdciPollTimer = NULL;
     }
     FreePool (UsbXdciDevContext);
   }
 
-  DEBUG ((USB_FUIO_DEBUG_ERROR, "ERROR - UsbFunIoEntryPoint - Exit\n"));
+  efi_perror(Status, L"ERROR - install driver failed - Exit\n");
   return Status;
 }
 
-/**
-  Stop handle the controller by this USB bus driver.
-
-  @param  This                   The USB bus driver binding protocol.
-  @param  Controller             The controller to release.
-  @param  NumberOfChildren       The child of USB bus that opened controller
-                                 BY_CHILD.
-  @param  ChildHandleBuffer      The array of child handle.
-
-  @retval EFI_SUCCESS            The controller or children are stopped.
-  @retval EFI_DEVICE_ERROR       Failed to stop the driver.
-
-**/
-EFI_STATUS
-EFIAPI
-UsbDeviceDxeDriverStop (
-  IN EFI_DRIVER_BINDING_PROTOCOL  *This,
-  IN EFI_HANDLE                   Controller,
-  IN UINTN                        NumberOfChildren,
-  IN EFI_HANDLE                   *ChildHandleBuffer
-  )
+static BOOLEAN usb_xdci_enabled(void)
 {
-  EFI_USBFN_IO_PROTOCOL           *UsbFunIoProtocol;
-  EFI_STATUS                      Status;
-  USB_XDCI_DEV_CONTEXT            *UsbXdciDevContext;
+  EFI_STATUS ret;
+  UINTN NumberHandles, Index;
+  EFI_HANDLE *Handles;
 
-
-  //
-  // Locate USB_BUS for the current host controller
-  //
-  Status = gBS->OpenProtocol (
-                  Controller,
-                  &gEfiUsbFnIoProtocolGuid,
-                  (VOID **)&UsbFunIoProtocol,
-                  This->DriverBindingHandle,
-                  Controller,
-                  EFI_OPEN_PROTOCOL_GET_PROTOCOL
-                  );
-
-
-  if (EFI_ERROR (Status)) {
-    return Status;
+  ret = LibLocateHandle(ByProtocol,
+            &PciIoProtocol,
+            NULL,
+            &NumberHandles,
+            &Handles);
+  if (EFI_ERROR(ret)) {
+    efi_perror(ret, L"LibLocateProtocol: Handle not found\n");
+    return ret;
   }
 
-  UsbXdciDevContext = USBFUIO_CONTEXT_FROM_PROTOCOL (UsbFunIoProtocol);
-
-  //
-  // free pool
-  //
-  while (UsbXdciDevContext->FirstNodePtr != NULL) {
-    RemoveNode (UsbFunIoProtocol, UsbXdciDevContext->FirstNodePtr);
+  for (Index=0; Index < NumberHandles; Index++) {
+    ret = find_usb_device_controller(Handles[Index]);
+    if (!EFI_ERROR(ret)) {
+      xdci = Handles[Index];
+      break;
+    }
   }
 
-  Status = gBS->UninstallMultipleProtocolInterfaces (
-                  UsbXdciDevContext->XdciHandle,
-                  &gEfiUsbFnIoProtocolGuid,
-                  &UsbXdciDevContext->UsbFunIoProtocol,
-                  &gEfiUsbDeviceModeProtocolGuid,
-                  &UsbXdciDevContext->UsbDevModeProtocol,
-                  NULL
-                  );
-
-  if (UsbXdciDevContext->StartUpController == TRUE) {
-    Status = StopController (UsbFunIoProtocol);
-    DEBUG ((USB_FUIO_DEBUG_INFO, "USB DEV mode STOP UsbFnDeInitDevice %r\n", Status));
+  if (Handles) {
+    FreePool (Handles);
   }
 
-  if (UsbXdciDevContext->XdciPollTimer != NULL) {
-    gBS->SetTimer (UsbXdciDevContext->XdciPollTimer, TimerCancel, 0);
-    gBS->CloseEvent (UsbXdciDevContext->XdciPollTimer);
-    UsbXdciDevContext->XdciPollTimer = NULL;
-  }
+  if (!EFI_ERROR(ret))
+    return TRUE;
 
-  gBS->CloseProtocol (
-         Controller,
-         &gEfiPciIoProtocolGuid,
-         This->DriverBindingHandle,
-         Controller
-         );
-
-  FreePool (UsbXdciDevContext);
-  return EFI_SUCCESS;
+  return FALSE;
 }
 
+EFI_STATUS install_usb_device_mode_protocol(void)
+{
+  EFI_STATUS ret = EFI_UNSUPPORTED;
+
+  if (usb_xdci_enabled()) {
+    ret = usb_device_mode_start(xdci);
+  } else {
+    efi_perror(ret, L"XDCI is disabled, please enable it in BIOS");
+  }
+
+  return ret;
+}

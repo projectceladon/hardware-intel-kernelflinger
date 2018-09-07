@@ -10,15 +10,18 @@
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
+#include <lib.h>
+#include <efiapi.h>
+#include <uefi_utils.h>
+#include <vars.h>
 
-#include <Library/UsbDeviceLib.h>
 #include "XdciCommon.h"
 #include "XdciDevice.h"
 #include "XdciInterface.h"
 #include "XdciDWC.h"
-#include "UsbDeviceMode.h"
+#include "UsbDeviceDxe.h"
 
-static const struct UsbDeviceCoreDriver CoreDriverTbl[USB_CORE_ID_MAX] = {
+static const struct UsbDeviceCoreDriver CoreDriverTbl[USB_CORE_ID_MAX] = { {
   DwcXdciCoreInit,
   DwcXdciCoreDeinit,
   DwcXdciCoreRegisterCallback,
@@ -42,7 +45,7 @@ static const struct UsbDeviceCoreDriver CoreDriverTbl[USB_CORE_ID_MAX] = {
   DwcXdciEp0SendStatusPkt,
   DwcXdciEpTxData,
   DwcXdciEpRxData,
-  DwcXdciEpCancelTransfer
+  DwcXdciEpCancelTransfer}
 };
 
 const struct UsbDeviceCoreDriver *UsbDeviceGetCoreDriver(USB_CONTROLLER_ID id)

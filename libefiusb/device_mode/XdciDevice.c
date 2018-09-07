@@ -10,12 +10,15 @@
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
+#include <lib.h>
+#include <efiapi.h>
+#include <uefi_utils.h>
+#include <vars.h>
 
-#include <Library/UsbDeviceLib.h>
 #include "XdciCommon.h"
 #include "XdciDevice.h"
 #include "XdciInterface.h"
-#include "UsbDeviceMode.h"
+#include "UsbDeviceDxe.h"
 
 /**
   This function is used to initialize the device controller

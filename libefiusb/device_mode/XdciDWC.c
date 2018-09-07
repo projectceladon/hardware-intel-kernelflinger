@@ -10,11 +10,14 @@
   WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
+#include <lib.h>
+#include <efiapi.h>
+#include <uefi_utils.h>
+#include <vars.h>
 
-#include "UsbDeviceMode.h"
+#include "UsbDeviceDxe.h"
 #include "XdciInterface.h"
 #include "XdciDWC.h"
-
 
 UINT32
 UsbRegRead (
@@ -315,7 +318,7 @@ DwcXdciCoreIssueEpCmd (
     if (!(UsbRegRead (BaseAddr, DWC_XDCI_EPCMD_REG(EpNum)) & DWC_XDCI_EPCMD_CMD_ACTIVE_MASK))
       break;
     else
-      gBS->Stall (DWC_XDCI_MAX_DELAY_ITERATIONS);
+      uefi_call_wrapper(BS->Stall, 1, DWC_XDCI_MAX_DELAY_ITERATIONS);
   } while (--MaxDelayIter);
 
   if (!MaxDelayIter) {
@@ -365,7 +368,7 @@ DwcXdciCoreFlushAllFifos (
     if (!(UsbRegRead (BaseAddr, DWC_XDCI_DGCMD_REG) & DWC_XDCI_DGCMD_CMD_ACTIVE_MASK))
       break;
     else
-      gBS->Stall (DWC_XDCI_MAX_DELAY_ITERATIONS);
+      uefi_call_wrapper(BS->Stall, 1, DWC_XDCI_MAX_DELAY_ITERATIONS);
   } while (--MaxDelayIter);
 
   if (!MaxDelayIter) {
@@ -387,13 +390,12 @@ DwcXdciCoreFlushAllFifos (
 STATIC
 EFI_STATUS
 DwcXdciCoreFlushEpTxFifo (
-  IN XDCI_CORE_HANDLE    *CoreHandle,
-  IN UINT32              EpNum
+  XDCI_CORE_HANDLE    *CoreHandle,
+  __attribute__((unused)) UINT32 EpNum
   )
 {
   UINT32 BaseAddr;
   UINT32 MaxDelayIter = DWC_XDCI_MAX_DELAY_ITERATIONS;
-  UINT32 fifoNum;
 
   if (CoreHandle == NULL) {
     DEBUG ((DEBUG_INFO, "ERROR: DwcXdciCoreFlushEpTxFifo: INVALID handle\n"));
@@ -401,13 +403,6 @@ DwcXdciCoreFlushEpTxFifo (
   }
 
   BaseAddr = CoreHandle->BaseAddress;
-
-  //
-  // Translate to FIFOnum
-  // NOTE: Assuming this is a Tx EP
-  //
-  fifoNum = (EpNum >> 1);
-
   //
   // TODO: Currently we are only using TxFIFO 0. Later map these
   // Write the FIFO num/dir param for the generic command.
@@ -435,7 +430,7 @@ DwcXdciCoreFlushEpTxFifo (
     if (!(UsbRegRead(BaseAddr, DWC_XDCI_DGCMD_REG) & DWC_XDCI_DGCMD_CMD_ACTIVE_MASK))
       break;
     else
-      gBS->Stall (DWC_XDCI_MAX_DELAY_ITERATIONS);
+      uefi_call_wrapper(BS->Stall, 1, DWC_XDCI_MAX_DELAY_ITERATIONS);
   } while (--MaxDelayIter);
 
   if (!MaxDelayIter) {
@@ -1014,8 +1009,8 @@ DwcXdciProcessDeviceEvent (
 STATIC
 EFI_STATUS
 DwcXdciProcessEpXferNotReady (
-  IN XDCI_CORE_HANDLE    *CoreHandle,
-  IN UINT32              EpNum
+  __attribute__((unused)) XDCI_CORE_HANDLE *CoreHandle,
+  __attribute__((unused)) UINT32 EpNum
   )
 {
   //
@@ -1468,25 +1463,22 @@ DwcXdciCoreInit (
   LocalCoreHandle->DesiredSpeed = LocalCoreHandle->ActualSpeed = ConfigParams->Speed;
   LocalCoreHandle->Role = ConfigParams->Role;
 
-  DEBUG ((DEBUG_INFO, "Resetting the USB core\n"));
   UsbRegWrite (
     BaseAddr,
     DWC_XDCI_DCTL_REG,
-    UsbRegRead (BaseAddr, DWC_XDCI_DCTL_REG) | DWC_XDCI_DCTL_CSFTRST_MASK
-    );
-  //
+    UsbRegRead (BaseAddr, DWC_XDCI_DCTL_REG) | DWC_XDCI_DCTL_CSFTRST_MASK);
+
   // Wait until core soft reset completes
-  //
   do {
     if (!(UsbRegRead (BaseAddr, DWC_XDCI_DCTL_REG) & DWC_XDCI_DCTL_CSFTRST_MASK)) {
       break;
     } else {
-      gBS->Stall (DWC_XDCI_MAX_DELAY_ITERATIONS);
+      uefi_call_wrapper(BS->Stall, 1, DWC_XDCI_MAX_DELAY_ITERATIONS);
     }
   } while (--MaxDelayIter);
 
   if (!MaxDelayIter) {
-    DEBUG ((DEBUG_INFO, "Failed to reset device controller\n"));
+    efi_perror (status, L"Failed to reset device controller 0x%x",(UsbRegRead (BaseAddr, DWC_XDCI_DCTL_REG)));
     return EFI_DEVICE_ERROR;
   }
 
@@ -1644,13 +1636,13 @@ DwcXdciCoreInit (
   // force into High-Speed mode to aVOID anyone trying this
   // on Super Speed port
   //
-#ifdef SUPPORT_SUPER_SPEED
+
   UsbRegWrite (
     BaseAddr,
     DWC_XDCI_DCFG_REG,
     (UsbRegRead (BaseAddr, DWC_XDCI_DCFG_REG) & ~DWC_XDCI_DCFG_DESIRED_DEV_SPEED_MASK) | LocalCoreHandle->DesiredSpeed
     );
-#else
+#if 0
   UsbRegWrite (
     BaseAddr,
     DWC_XDCI_DCFG_REG,
@@ -1707,7 +1699,7 @@ DwcXdciCoreInit (
              );
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to init params for START_NEW_CONFIG EP command on xDCI\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to init params for START_NEW_CONFIG EP command on xDCI");
     return status;
   }
 
@@ -1722,7 +1714,7 @@ DwcXdciCoreInit (
              );
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to issue START_NEW_CONFIG EP command on xDCI\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to issue START_NEW_CONFIG EP command on xDCI");
     return status;
   }
 
@@ -1738,7 +1730,7 @@ DwcXdciCoreInit (
              );
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to init params for SET_EP_CONFIG command on xDCI for EP0\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to init params for SET_EP_CONFIG command on xDCI for EP0");
     return status;
   }
 
@@ -1752,7 +1744,7 @@ DwcXdciCoreInit (
              &EpCmdParams);
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to issue SET_EP_CONFIG command on xDCI for EP0\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to issue SET_EP_CONFIG command on xDCI for EP0");
     return status;
   }
 
@@ -1768,7 +1760,7 @@ DwcXdciCoreInit (
              );
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to init params for SET_EP_CONFIG command on xDCI for EP1\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to init params for SET_EP_CONFIG command on xDCI for EP1");
     return status;
   }
 
@@ -1783,7 +1775,7 @@ DwcXdciCoreInit (
              );
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to issue SET_EP_CONFIG command on xDCI for EP1\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to issue SET_EP_CONFIG command on xDCI for EP1");
     return status;
   }
 
@@ -1799,7 +1791,7 @@ DwcXdciCoreInit (
              );
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to init params for EPCMD_SET_EP_XFER_RES_CONFIG command on xDCI for EP0\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to init params for EPCMD_SET_EP_XFER_RES_CONFIG command on xDCI for EP0");
     return status;
   }
 
@@ -1814,7 +1806,7 @@ DwcXdciCoreInit (
              );
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to issue EPCMD_SET_EP_XFER_RES_CONFIG command on xDCI for EP0\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to issue EPCMD_SET_EP_XFER_RES_CONFIG command on xDCI for EP0");
     return status;
   }
 
@@ -1830,7 +1822,7 @@ DwcXdciCoreInit (
              );
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to init params for EPCMD_SET_EP_XFER_RES_CONFIG command on xDCI for EP1\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to init params for EPCMD_SET_EP_XFER_RES_CONFIG command on xDCI for EP1");
     return status;
   }
 
@@ -1845,7 +1837,7 @@ DwcXdciCoreInit (
              );
 
   if (status) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreInit: Failed to issue EPCMD_SET_EP_XFER_RES_CONFIG command on xDCI for EP1\n"));
+    efi_perror (status, L"DwcXdciCoreInit: Failed to issue EPCMD_SET_EP_XFER_RES_CONFIG command on xDCI for EP1");
     return status;
   }
 
@@ -1908,8 +1900,8 @@ DwcXdciCoreInit (
 EFI_STATUS
 EFIAPI
 DwcXdciCoreDeinit (
-  IN VOID      *CoreHandle,
-  IN UINT32    flags
+  VOID      *CoreHandle,
+  __attribute__((unused)) UINT32 flags
   )
 {
   FreePool (CoreHandle);
@@ -2246,17 +2238,16 @@ DwcXdciCoreConnect (
   UINT32              MaxDelayIter = DWC_XDCI_MAX_DELAY_ITERATIONS;
   UINT32              BaseAddr;
 
+  EFI_STATUS ret = EFI_DEVICE_ERROR;
   if (CoreHandle == NULL) {
-    DEBUG ((DEBUG_INFO, "DwcXdciCoreConnect: INVALID handle\n"));
+    efi_perror (ret, L"DwcXdciCoreConnect: INVALID handle\n");
     return EFI_DEVICE_ERROR;
   }
 
   BaseAddr = LocalCoreHandle->BaseAddress;
 
-  //
   // Clear KeepConnect bit so we can allow disconnect and re-connect
   // Also issue No action on state change to aVOID any link change
-  //
   UsbRegWrite (
     BaseAddr,
     DWC_XDCI_DCTL_REG,
@@ -2265,26 +2256,23 @@ DwcXdciCoreConnect (
 
   //
   // Set Run bit to connect to the host
-  //
   UsbRegWrite (
     BaseAddr,
     DWC_XDCI_DCTL_REG,
     UsbRegRead (BaseAddr, DWC_XDCI_DCTL_REG) | DWC_XDCI_DCTL_RUN_STOP_MASK
     );
 
-  //
   // Wait until core starts running
-  //
   do {
     if (!(UsbRegRead (BaseAddr, DWC_XDCI_DSTS_REG) & DWC_XDCI_DSTS_DEV_CTRL_HALTED_MASK)) {
       break;
     } else {
-      gBS->Stall (DWC_XDCI_MAX_DELAY_ITERATIONS);
+    efi_perror (ret, L"Stall for core run");
+      uefi_call_wrapper(BS->Stall, 1, DWC_XDCI_MAX_DELAY_ITERATIONS);
     }
   } while (--MaxDelayIter);
 
   if (!MaxDelayIter) {
-    DEBUG ((DEBUG_INFO, "Failed to run the device controller\n"));
     return EFI_DEVICE_ERROR;
   }
 
@@ -2354,7 +2342,7 @@ DwcXdciCoreDisconnect (
     if ((dsts & DWC_XDCI_DSTS_DEV_CTRL_HALTED_MASK) != 0){
       break;
     } else {
-      gBS->Stall (DWC_XDCI_MAX_DELAY_ITERATIONS);
+      uefi_call_wrapper(BS->Stall, 1, DWC_XDCI_MAX_DELAY_ITERATIONS);
     }
   } while (--MaxDelayIter);
 
@@ -2453,8 +2441,8 @@ DwcXdciCoreSetAddress (
 EFI_STATUS
 EFIAPI
 DwcXdciCoreSetConfig (
-  IN VOID      *CoreHandle,
-  IN UINT32    ConfigNum
+  VOID      *CoreHandle,
+  __attribute__((unused)) UINT32 ConfigNum
   )
 {
   XDCI_CORE_HANDLE              *LocalCoreHandle = (XDCI_CORE_HANDLE *)CoreHandle;
@@ -2923,7 +2911,7 @@ DwcXdciEpSetNrdy (
     if (!(UsbRegRead (BaseAddr, DWC_XDCI_DGCMD_REG) & DWC_XDCI_DGCMD_CMD_ACTIVE_MASK))
       break;
     else
-      gBS->Stall (DWC_XDCI_MAX_DELAY_ITERATIONS);
+      uefi_call_wrapper(BS->Stall, 1, DWC_XDCI_MAX_DELAY_ITERATIONS);
   } while (--MaxDelayIter);
 
   if (!MaxDelayIter) {
@@ -3492,7 +3480,7 @@ DwcXdciCoreFlushEpFifo (
     if (!(UsbRegRead(BaseAddr, DWC_XDCI_DGCMD_REG) & DWC_XDCI_DGCMD_CMD_ACTIVE_MASK))
       break;
     else
-      gBS->Stall (DWC_XDCI_MAX_DELAY_ITERATIONS);
+      uefi_call_wrapper(BS->Stall, 1, DWC_XDCI_MAX_DELAY_ITERATIONS);
   } while (--MaxDelayIter);
 
   if (!MaxDelayIter) {
@@ -3605,7 +3593,7 @@ UsbXdciCoreReinit (
     if (!(UsbRegRead (BaseAddr, DWC_XDCI_DCTL_REG) & DWC_XDCI_DCTL_CSFTRST_MASK)) {
       break;
     } else {
-      gBS->Stall (DWC_XDCI_MAX_DELAY_ITERATIONS);
+      uefi_call_wrapper(BS->Stall, 1, DWC_XDCI_MAX_DELAY_ITERATIONS);
     }
   } while (--MaxDelayIter);
 
@@ -3746,7 +3734,7 @@ UsbXdciCoreReinit (
   // force into High-Speed mode to aVOID anyone trying this
   // on Super Speed port
   //
-#ifdef SUPPORT_SUPER_SPEED
+#if 1
   UsbRegWrite (
     BaseAddr,
     DWC_XDCI_DCFG_REG,
