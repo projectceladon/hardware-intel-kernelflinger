@@ -91,6 +91,8 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 
 /* Various interesting partition labels */
 #define BOOT_LABEL		L"boot"
+#define ACPI_LABEL		L"acpi"
+#define ACPIO_LABEL		L"acpio"
 #define RECOVERY_LABEL		L"recovery"
 #define MISC_LABEL		L"misc"
 #define VENDOR_LABEL		L"vendor"

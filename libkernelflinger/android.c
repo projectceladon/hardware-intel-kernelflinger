@@ -58,6 +58,10 @@
 #ifdef RPMB_STORAGE
 #include "rpmb_storage.h"
 #endif
+#include "acpi.h"
+#ifdef USE_FIRSTSTAGE_MOUNT
+#include "firststage_mount.h"
+#endif
 
 #define OS_INITIATED L"os_initiated"
 
@@ -491,6 +495,9 @@ UINTN bootimage_size(struct boot_img_hdr *aosp_header)
                pagealign(aosp_header, aosp_header->second_size) +
                aosp_header->page_size;
 
+        if (aosp_header->header_version == 1)
+                size += pagealign(aosp_header, aosp_header->recovery_dtbo_size);
+
         return size;
 }
 
@@ -541,6 +548,29 @@ static EFI_STATUS setup_ramdisk(UINT8 *bootimage)
         }
         memcpy((VOID *)(UINTN)ramdisk_addr, bootimage + roffset, rsize);
         bp->hdr.ramdisk_start = (UINT32)(UINTN)ramdisk_addr;
+        return EFI_SUCCESS;
+}
+
+
+static EFI_STATUS setup_acpi_table(VOID *bootimage,
+                                   __attribute__((__unused__)) enum boot_target target)
+{
+        struct boot_img_hdr *aosp_header;
+
+        debug(L"Setup acpi table");
+        aosp_header = (struct boot_img_hdr *)bootimage;
+
+#ifdef USE_ACPIO
+        if (aosp_header->header_version == 1) {
+                VOID *acpio;
+                acpio = bootimage + aosp_header->recovery_dtbo_offset;
+                return install_acpi_table_from_recovery_acpio(acpio, target);
+        }
+#endif
+#ifdef USE_FIRSTSTAGE_MOUNT
+        return install_firststage_mount_ssdt(target);
+#endif
+        debug(L"Acpi table not setup");
         return EFI_SUCCESS;
 }
 
@@ -1072,6 +1102,11 @@ static EFI_STATUS setup_command_line(
         if (EFI_ERROR(ret))
                 goto out;
 
+        ret = prepend_command_line(&cmdline16, L"androidboot.acpio_idx=%a ",
+                                   acpi_selected_table_ids_to_string());
+        if (EFI_ERROR(ret))
+                goto out;
+
 #ifdef HAL_AUTODETECT
         ret = prepend_command_line(&cmdline16, L"androidboot.brand=%a "
                                    "androidboot.name=%a androidboot.device=%a "
@@ -1491,7 +1526,7 @@ EFI_STATUS get_avb_flow_result(
         if (!slot_data || !boot_state)
                 return EFI_INVALID_PARAMETER;
 
-        if (slot_data->num_loaded_partitions != 1) {
+        if (slot_data->num_loaded_partitions < 1) {
                 avb_error("No avb partition.\n");
                 return EFI_LOAD_ERROR;
         }
@@ -1549,7 +1584,7 @@ EFI_STATUS get_avb_result(
         if (!slot_data || !boot_state)
                 return EFI_INVALID_PARAMETER;
 
-        if (slot_data->num_loaded_partitions != 1) {
+        if (slot_data->num_loaded_partitions < 1) {
                 avb_error("No avb partition.\n");
                 return EFI_LOAD_ERROR;
         }
@@ -1839,6 +1874,11 @@ static EFI_STATUS setup_command_line_abl(
         if (EFI_ERROR(ret))
                 goto out;
 
+        ret = prepend_command_line(&cmdline16, L"androidboot.acpio_idx=%a ",
+                                   acpi_selected_table_ids_to_string());
+        if (EFI_ERROR(ret))
+                goto out;
+
 #ifdef HAL_AUTODETECT
         ret = prepend_command_line(&cmdline16, L"androidboot.brand=%a "
                                    "androidboot.name=%a androidboot.device=%a "
@@ -1956,6 +1996,12 @@ EFI_STATUS android_image_start_buffer(
         if (memcmp(aosp_header->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
                 error(L"buffer does not appear to contain an Android boot image");
                 return EFI_INVALID_PARAMETER;
+        }
+
+        ret = setup_acpi_table(bootimage, boot_target);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"setup_acpi_table");
+                return ret;
         }
 
         buf = (struct boot_params *)(bootimage + aosp_header->page_size);

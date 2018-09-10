@@ -85,6 +85,7 @@ LOCAL_SRC_FILES := \
 	android.c \
 	efilinux.c \
 	acpi.c \
+	acpi_image.c \
 	lib.c \
 	options.c \
 	security.c \
@@ -224,20 +225,17 @@ ifeq ($(KERNELFLINGER_USE_RPMB_SIMULATE),true)
 endif
 endif  # KERNELFLINGER_USE_RPMB
 
-ifneq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),true)
-ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE),true)
+ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE)|$(filter true, $(TARGET_USE_ACPI) $(TARGET_USE_ACPIO)),true|)
+    LOCAL_CFLAGS += -DUSE_FIRSTSTAGE_MOUNT
     LOCAL_SRC_FILES += firststage_mount.c
-    IASL := $(INTEL_PATH_BUILD)/acpi-tools/linux64/bin/iasl
     GEN := $(res_intermediates)/firststage_mount_cfg.h
-    FIRST_STAGE_MOUNT_CFG_FILE := $(LOCAL_PATH)/firststage_mount_cfg.asl
     IASL_CFLAGS := $(filter -D%,$(subst -D ,-D,$(strip $(LOCAL_CFLAGS))))
     LOCAL_GENERATED_SOURCES := $(GEN)
 
-$(GEN): $(FIRST_STAGE_MOUNT_CFG_FILE)
+$(GEN): $(FIRST_STAGE_MOUNT_CFG_FILE) $(IASL)
 	$(hide) $(IASL) -p $(@:.h=) $(IASL_CFLAGS) -tc $<
 	$(hide) mv $(@:.h=.hex) $@
-endif
-endif # KERNELFLINGER_SUPPORT_NON_EFI_BOOT
+endif # BOARD_FIRSTSTAGE_MOUNT_ENABLE not TARGET_USE_ACPI not TARGET_USE_ACPIO
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(LOCAL_PATH)/../ \
