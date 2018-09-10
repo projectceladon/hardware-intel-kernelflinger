@@ -72,9 +72,6 @@
 #ifdef USE_TPM
 #include "tpm2_security.h"
 #endif
-#ifdef USE_FIRSTSTAGE_MOUNT
-#include "firststage_mount.h"
-#endif
 
 /* Ensure this is embedded in the EFI binary somewhere */
 static const CHAR16 __attribute__((used)) magic[] = L"### kernelflinger ###";
@@ -1647,14 +1644,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         default:
                 break;
         }
-
-#ifdef USE_FIRSTSTAGE_MOUNT
-        ret = add_firststage_mount_ssdt();
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"ACPI: failed to add firststage mount config ssdt");
-                return ret;
-        }
-#endif
 
         ret = load_image(bootimage, boot_state, boot_target,
 #ifdef USE_AVB

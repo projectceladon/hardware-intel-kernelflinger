@@ -34,6 +34,7 @@
 #include <efi.h>
 #include <efiapi.h>
 #include <efilib.h>
+#include "targets.h"
 
 #pragma pack(1)
 
@@ -141,5 +142,20 @@ EFI_STATUS get_acpi_table(const CHAR8 *signature, VOID **table);
 UINT16 oem1_get_ia_apps_run(void);
 UINT8 oem1_get_ia_apps_cap(void);
 UINT8 oem1_get_ia_apps_to_use(void);
+
+#define ACPI_TABLE_MAGIC		0x41435049
+#define ACPI_TABLE_MAGIC_SIZE		4
+#define ACPI_TABLE_MAX_SELECTED_NUM	256
+
+EFI_STATUS install_acpi_table_from_partitions(VOID *image,
+					      const char *part_name,
+					      enum boot_target target);
+EFI_STATUS install_acpi_table_from_recovery_acpio(VOID *image,
+						  enum boot_target target);
+EFI_STATUS install_acpi_table(VOID *acpi_table, UINTN acpi_table_size,
+			      UINTN *tablekey);
+EFI_STATUS acpi_parse_selected_table_id(CHAR8 *selected_id_str,
+					UINT32 selected_id_str_len);
+CHAR8 *acpi_selected_table_ids_to_string(VOID);
 
 #endif /* __ACPI_H__ */

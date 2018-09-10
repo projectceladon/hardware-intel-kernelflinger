@@ -34,6 +34,6 @@
 #ifndef _FIRSTSTAGE_MOUNT_H_
 #define _FIRSTSTAGE_MOUNT_H_
 
-EFI_STATUS add_firststage_mount_ssdt(void);
+EFI_STATUS install_firststage_mount_ssdt(enum boot_target target);
 
 #endif /* ifndef _FIRSTSTAGE_MOUNT_H_ */

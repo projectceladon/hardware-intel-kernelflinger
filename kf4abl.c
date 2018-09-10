@@ -65,6 +65,7 @@
 #include "trusty_common.h"
 #endif
 #include "storage.h"
+#include "acpi.h"
 
 typedef union {
 	uint32_t raw;
@@ -784,7 +785,7 @@ static UINT8 validate_bootimage(
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
 	AvbOps *ops;
-	AvbPartitionData *boot;
+	AvbPartitionData *boot, *acpi;
 	AvbSlotVerifyData *slot_data = NULL;
 #ifndef USE_SLOT
 	const char *slot_suffix = "";
@@ -792,9 +793,16 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 #else
 	AvbABFlowResult flow_result;
 #endif
-	const char *requested_partitions[] = {"boot", NULL};
+	const char *requested_partitions[] = {"boot",
+#ifdef USE_ACPI
+		"acpi",
+#endif
+#ifdef USE_ACPIO
+		"acpio",
+#endif
+		NULL};
 	EFI_STATUS ret;
-	VOID *bootimage = NULL;
+	VOID *bootimage = NULL, *acpiimage = NULL;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
@@ -894,6 +902,19 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	boot = &slot_data->loaded_partitions[0];
 	bootimage = boot->data;
 
+	for (int i = 1; requested_partitions[i] != NULL; i++) {
+		acpi = &slot_data->loaded_partitions[i];
+		acpiimage = acpi->data;
+		ret = install_acpi_table_from_partitions(acpiimage,
+							 acpi->partition_name,
+							 boot_target);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to install acpi table from %a image",
+				   acpi->partition_name);
+			goto fail;
+		}
+	}
+
 	ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
 			slot_data->vbmeta_images[0].vbmeta_size,
 			&vbmeta_pub_key,
@@ -955,6 +976,24 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	BOOLEAN oneshot = FALSE;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	X509 *verifier_cert = NULL;
+	const char *acpi_part_names[] = {
+#ifdef USE_ACPI
+		"acpi",
+#endif
+#ifdef USE_ACPIO
+		"acpio",
+#endif
+		NULL};
+
+	for (int i = 0; acpi_part_names[i] != NULL; i++) {
+		ret = install_acpi_table_from_partitions(NULL, acpi_part_names[i],
+							 boot_target);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to install acpi table from %a image",
+				   acpi_part_names[i]);
+			return ret;
+		}
+	}
 
 	debug(L"Loading boot image");
 	ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
