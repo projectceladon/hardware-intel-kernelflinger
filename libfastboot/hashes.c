@@ -237,11 +237,13 @@ static EFI_STATUS get_esp_hash(void)
 	initpath();
 	do {
 		size = sizeof(buf);
-		ret = uefi_call_wrapper(dirs[subdir]->Read, 3, dirs[subdir], &size, fi);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Cannot read directory entry");
-			/* continue to walk the ESP partition */
-			size = 0;
+		if (subdir >= 0) {
+			ret = uefi_call_wrapper(dirs[subdir]->Read, 3, dirs[subdir], &size, fi);
+			if (EFI_ERROR(ret)) {
+				efi_perror(ret, L"Cannot read directory entry");
+				/* continue to walk the ESP partition */
+				size = 0;
+			}
 		}
 		if (!size && subdir >= 0) {
 			/* size is 0 means there are no more files/dir in current directory
