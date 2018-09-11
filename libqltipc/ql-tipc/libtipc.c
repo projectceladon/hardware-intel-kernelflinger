@@ -56,7 +56,7 @@ void trusty_ipc_shutdown(void)
 
 static int rpmb_read_keybox_magic_data(uint32_t *data)
 {
-#if defined(RPMB_STORAGE) && !defined(HYPERVISOR_ACRN)
+#if defined(RPMB_STORAGE)
     EFI_STATUS rc = 0;
 
     rc = read_rpmb_keybox_magic(KEYBOX_PROVISION_ADDR,  data);
@@ -75,7 +75,7 @@ static int rpmb_read_keybox_magic_data(uint32_t *data)
 
 static int rpmb_write_keybox_magic_data(uint32_t data)
 {
-#if defined(RPMB_STORAGE) && !defined(HYPERVISOR_ACRN)
+#if defined(RPMB_STORAGE)
     EFI_STATUS rc = 0;
 
     rc = write_rpmb_keybox_magic(KEYBOX_PROVISION_ADDR, &data);
@@ -140,7 +140,7 @@ int trusty_ipc_init(void)
         return rc;
     }
 
-#if defined(RPMB_STORAGE) && !defined(HYPERVISOR_ACRN)
+#if defined(RPMB_STORAGE)
     /* get storage rpmb */
     if (is_use_sim_rpmb()) {
         trusty_info("Simulation RPMB is in use.\n");

@@ -316,7 +316,7 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
         return TRUSTY_ERR_GENERIC;
     }
 
-#if defined(RPMB_STORAGE) && !defined(HYPERVISOR_ACRN)
+#if defined(RPMB_STORAGE)
     BOOLEAN enduser = false;
     EFI_STATUS ret = life_cycle_is_enduser(&enduser);
     if (EFI_ERROR(ret)) {
