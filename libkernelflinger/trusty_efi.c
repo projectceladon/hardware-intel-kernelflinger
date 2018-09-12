@@ -34,6 +34,7 @@
 
 #include "vars.h"
 #include "lib.h"
+#include "timer.h"
 #include "security.h"
 #include "android.h"
 #include "options.h"
@@ -353,11 +354,9 @@ EFI_STATUS start_trusty(VOID *tosimage)
             efi_perror(ret, L"Failed to launch tos image");
             return ret;
         }
-
+        set_boottime_stamp(TM_LAUNCH_TRUSTY_DONE);
         // set up ql-ipc connection
-        if (trusty_ipc_init() != 0) {
-                error(L"Unable to set up ql-ipc connection; continue to boot");
-        }
+        trusty_ipc_init();
         trusty_ipc_shutdown();
 
         return EFI_SUCCESS;

@@ -28,6 +28,7 @@
 #include <trusty/trusty_ipc.h>
 #include <trusty/util.h>
 #include "security.h"
+#include <life_cycle.h>
 #include <libqltipc/libtipc.h>
 
 #define LOCAL_LOG 0
@@ -316,8 +317,14 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
     }
 
 #if defined(RPMB_STORAGE) && !defined(HYPERVISOR_ACRN)
-    /* keybox not privisioned yet, then provision it */
-    if (!is_keybox_retrieved()) {
+    BOOLEAN enduser = false;
+    EFI_STATUS ret = life_cycle_is_enduser(&enduser);
+    if (EFI_ERROR(ret)) {
+        trusty_error("Failed to get eom var");
+    }
+
+    /* keybox not privisioned yet and is end user, then provision it */
+    if (!is_keybox_retrieved() && enduser) {
         /* set the attestation_key and append the attest cert:
         * if the input is NULL, it means  it will retrieve the keybox from trusty side
         * and parsed by tinyxml2 then save the prikey and certs into the securestorage.

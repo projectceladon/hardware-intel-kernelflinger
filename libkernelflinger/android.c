@@ -987,6 +987,8 @@ static EFI_STATUS setup_command_line(
         EFI_STATUS ret;
         struct boot_params *buf;
         struct boot_img_hdr *aosp_header;
+        CHAR8 time_str8[128] = {0};
+        CHAR16 *time_str16 = NULL;
 #ifdef USE_AVB
         EFI_GUID system_uuid;
 #endif
@@ -1135,6 +1137,16 @@ static EFI_STATUS setup_command_line(
         }
 #endif // USE_AVB
 
+        /* append stages boottime */
+        set_boottime_stamp(TM_JMP_KERNEL);
+        construct_stages_boottime(time_str8, sizeof(time_str8));
+        time_str16 = stra_to_str(time_str8);
+        if (time_str16) {
+                ret = prepend_command_line(&cmdline16, L"androidboot.boottime=%s", time_str16);
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+
         /* Documentation/x86/boot.txt: "The kernel command line can be located
          * anywhere between the end of the setup heap and 0xA0000" */
         cmdline_addr = 0xA0000;
@@ -1168,6 +1180,8 @@ out:
         FreePool(cmdline16);
         if (serialport)
                 FreePool(serialport);
+        if (time_str16)
+                FreePool(time_str16);
 
         return ret;
 }
@@ -1755,7 +1769,7 @@ static EFI_STATUS setup_command_line_abl(
         EFI_GUID system_uuid;
 #endif
         UINTN abl_cmd_len = 0;
-        CHAR8 time_str8[64] = {0};
+        CHAR8 time_str8[128] = {0};
 
         if (abl_cmd_line != NULL)
                abl_cmd_len = strlen(abl_cmd_line);
