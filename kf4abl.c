@@ -38,6 +38,7 @@
 #ifdef CRASHMODE_USE_ADB
 #include <adb.h>
 #endif
+#include <hecisupport.h>
 
 #include "options.h"
 #if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
@@ -250,6 +251,9 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 		efi_perror(ret, L"notify ioc ready failed");
 	}
 #endif
+
+	/* Handle corner case that EOP not send before ABL jump to fastboot, will force EOP send.*/
+	heci_end_of_post();
 
 	for (;;) {
 		*target = UNKNOWN_TARGET;
