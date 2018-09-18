@@ -46,7 +46,9 @@
 #include "gpt.h"
 #include "efilinux.h"
 #include "libelfloader.h"
+#ifdef RPMB_STORAGE
 #include "rpmb_storage.h"
+#endif
 
 #define TRUSTY_MEM_SIZE			0x1000000
 #define TRUSTY_MEM_ALIGNED_16K		0x4000
@@ -108,9 +110,11 @@ static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UIN
 	UINTN size, trusty_boot_param_t *boot_param)
 {
 	UINT64 entry_addr;
+#ifdef RPMB_STORAGE
 	EFI_STATUS ret = EFI_SUCCESS;
 	UINT8 *out_key = NULL;
 	UINT8 number_derived_key = 0;
+#endif
 
 	if (!param || !boot_param)
 		return EFI_INVALID_PARAMETER;
@@ -128,7 +132,7 @@ static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UIN
 	param->version = TRUSTY_BOOT_PARAM_VERSION;
 	param->runtime_size = TRUSTY_MEM_SIZE;
 	memset(param->rpmb_key, 0x0, sizeof(param->rpmb_key));
-
+#ifdef RPMB_STORAGE
 	ret = get_rpmb_derived_key(&out_key, &number_derived_key);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"get_rpmb_derived_key failed");
@@ -138,6 +142,7 @@ static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UIN
 	/* Currently valid size of RPMB is 32byte and pass one rpmb key to trusty */
 	if ((number_derived_key > 0) && out_key)
 		memcpy(param->rpmb_key, out_key, RPMB_KEY_SIZE);
+#endif
 
 	return EFI_SUCCESS;
 }
@@ -194,7 +199,9 @@ EFI_STATUS start_trusty(VOID *tosimage)
 	}
 
 	ret = launch_trusty_os(&trusty_startup_params);
+#ifdef RPMB_STORAGE
 	memset(trusty_startup_params.rpmb_key, 0, sizeof(trusty_startup_params.rpmb_key));
+#endif
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to launch trusty os");
 		return ret;
