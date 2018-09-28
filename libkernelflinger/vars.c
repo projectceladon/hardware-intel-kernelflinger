@@ -40,6 +40,7 @@
 #include "smbios.h"
 #include "version.h"
 #include "life_cycle.h"
+#include "storage.h"
 #ifdef RPMB_STORAGE
 #include "rpmb_storage.h"
 #endif
@@ -272,7 +273,7 @@ enum device_state get_current_state()
 		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK,
 				       &dsize, (void **)&stored_state, &flags);
 #endif
-		if (ret == EFI_NOT_FOUND) {
+		if ((ret == EFI_NOT_FOUND) && !is_boot_device_virtual()) {
 			set_provisioning_mode(FALSE);
 
 			ret = life_cycle_is_enduser(&enduser);
