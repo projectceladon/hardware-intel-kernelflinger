@@ -607,6 +607,137 @@ EFI_STATUS virtual_rpmb_program_key(void *rpmb_dev, const void *key, RPMB_RESPON
 	return ret;
 }
 
+EFI_STATUS virtual_rpmb_read_data_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,\
+	rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	UINT16 res_result;
+
+	if (!data_in_frame || !data_out_frame)
+		return EFI_INVALID_PARAMETER;
+
+	memset(data_out_frame, 0, sizeof(rpmb_data_frame) * out_cnt);
+
+	ret = virtual_rpmb_send_virtio_data(rpmb_dev, RPMB_REQUEST_AUTH_READ, (rpmb_data_frame *)data_in_frame, in_cnt, 
+		data_out_frame, out_cnt);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"virtual_rpmb_read_data: failed to send virtio data");
+		return ret;
+	}
+
+	if (BE16_TO_CPU_SWAP(data_out_frame[0].req_resp) != RPMB_RESPONSE_AUTH_READ) {
+		error(L"The response is not expected, expected resp = 0x%08x", data_out_frame[0].req_resp);
+		return EFI_ABORTED;
+	}
+
+	res_result = BE16_TO_CPU_SWAP(data_out_frame[0].result);
+	debug(L"virtual_rpmb_read_data: response result is 0x%08x", res_result);
+	if (res_result) {
+		debug(L"RPMB operation failed");
+		return EFI_ABORTED;
+	}
+
+	return ret;
+}
+
+EFI_STATUS virtual_rpmb_get_counter_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,\
+	rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	UINT16 res_result;
+
+	if (!data_in_frame || !data_out_frame)
+		return EFI_INVALID_PARAMETER;
+	memset(data_out_frame, 0, sizeof(rpmb_data_frame)*out_cnt);
+
+	ret = virtual_rpmb_send_virtio_data(rpmb_dev, RPMB_REQUEST_COUNTER_READ, (rpmb_data_frame *)data_in_frame, in_cnt, data_out_frame, out_cnt);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"virtual_rpmb_get_counter: failed to send virtio data");
+		return ret;
+	}
+
+	if (BE16_TO_CPU_SWAP(data_out_frame->req_resp) != RPMB_RESPONSE_COUNTER_READ) {
+		error(L"virtual_rpmb_get_counter: response is not expected, expected resp = 0x%08x", data_out_frame->req_resp);
+		return EFI_ABORTED;
+	}
+
+	res_result = BE16_TO_CPU_SWAP(data_out_frame->result);
+	debug(L"virtual_rpmb_get_counter: response result is 0x%08x", res_result);
+	if (res_result) {
+		debug(L"RPMB operation failed");
+		return EFI_ABORTED;
+	}
+
+	return ret;
+}
+
+EFI_STATUS virtual_rpmb_write_data_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,\
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	UINT16 res_result;
+
+	if (!data_in_frame || !data_out_frame)
+		return EFI_INVALID_PARAMETER;
+	memset(data_out_frame, 0, sizeof(rpmb_data_frame)*out_cnt);
+
+	ret = virtual_rpmb_send_virtio_data(rpmb_dev, RPMB_REQUEST_AUTH_WRITE, (rpmb_data_frame *)data_in_frame, in_cnt,
+		data_out_frame, out_cnt);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"virtual_rpmb_write_data: failed to send virtio data");
+		goto out;
+	}
+
+	if (BE16_TO_CPU_SWAP(data_out_frame->req_resp) != RPMB_RESPONSE_AUTH_WRITE) {
+		error(L"The response is not expected, expected resp = 0x%08x, received resp = 0x%08x",
+			RPMB_RESPONSE_AUTH_WRITE, BE16_TO_CPU_SWAP(data_out_frame->req_resp));
+		ret = EFI_ABORTED;
+		goto out;
+	}
+
+	res_result = BE16_TO_CPU_SWAP(data_out_frame->result);
+	debug(L"response result is 0x%08x", res_result);
+	if (res_result) {
+		debug(L"RPMB operation failed");
+		ret = EFI_ABORTED;
+	}
+out:
+	return ret;
+}
+
+EFI_STATUS virtual_rpmb_program_key_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,\
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	UINT16 res_result;
+
+	debug(L"program virtual rpmb key");
+
+	if (!data_in_frame || !data_out_frame)
+		return EFI_INVALID_PARAMETER;
+
+	ret = virtual_rpmb_send_virtio_data(rpmb_dev, RPMB_REQUEST_KEY_WRITE, (rpmb_data_frame *)data_in_frame, in_cnt, data_out_frame, out_cnt);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"virtual_rpmb_program_key: failed to send virtio data");
+		return ret;
+	}
+
+	if (BE16_TO_CPU_SWAP(data_out_frame->req_resp) != RPMB_RESPONSE_KEY_WRITE) {
+		error(L"The response is not expected, expected resp = 0x%08x, received resp = 0x%08x",
+			RPMB_RESPONSE_KEY_WRITE, BE16_TO_CPU_SWAP(data_out_frame->req_resp));
+		return EFI_ABORTED;
+	}
+
+	res_result = BE16_TO_CPU_SWAP(data_out_frame->result);
+	debug(L"response result is 0x%08x", res_result);
+	if (res_result) {
+		debug(L"RPMB operation failed");
+		return EFI_ABORTED;
+	}
+
+	return ret;
+}
+
 rpmb_ops_func_t virtual_rpmb_ops = {
 	.get_storage_protocol = get_virtual_rpmb_protocol,
 	.program_rpmb_key = virtual_rpmb_program_key,
@@ -616,7 +747,11 @@ rpmb_ops_func_t virtual_rpmb_ops = {
 	.read_rpmb_data = virtual_rpmb_read_data,
 	.write_rpmb_data = virtual_rpmb_write_data,
 	.rpmb_send_request = virtual_rpmb_send_request,
-	.rpmb_get_response = virtual_rpmb_get_response
+	.rpmb_get_response = virtual_rpmb_get_response,
+	.program_rpmb_key_frame = virtual_rpmb_program_key_frame,
+	.get_rpmb_counter_frame = virtual_rpmb_get_counter_frame,
+	.read_rpmb_data_frame = virtual_rpmb_read_data_frame,
+	.write_rpmb_data_frame = virtual_rpmb_write_data_frame
 };
 
 rpmb_ops_func_t *get_virtual_storage_rpmb_ops()
