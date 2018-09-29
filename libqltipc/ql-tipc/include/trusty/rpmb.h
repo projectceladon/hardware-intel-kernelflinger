@@ -29,6 +29,29 @@
 #include <trusty/trusty_ipc.h>
 
 #define MMC_BLOCK_SIZE 512
+#define RPMB_FRAME_SIZE 512
+
+enum rpmb_request {
+    RPMB_REQ_PROGRAM_KEY                = 0x0001,
+    RPMB_REQ_GET_COUNTER                = 0x0002,
+    RPMB_REQ_DATA_WRITE                 = 0x0003,
+    RPMB_REQ_DATA_READ                  = 0x0004,
+    RPMB_REQ_RESULT_READ                = 0x0005,
+};
+
+inline uint32_t swap32(uint32_t val)
+{
+        return ((val & (uint32_t)0x000000ffUL) << 24)
+                | ((val & (uint32_t)0x0000ff00UL) <<  8)
+                | ((val & (uint32_t)0x00ff0000UL) >>  8)
+                | ((val & (uint32_t)0xff000000UL) >> 24);
+}
+
+inline uint16_t swap16(uint16_t val)
+{
+        return ((val & (uint16_t)0x00ffU) << 8)
+                | ((val & (uint16_t)0xff00U) >> 8);
+}
 
 /*
  * Initialize RPMB storage proxy. Returns one of trusty_err.

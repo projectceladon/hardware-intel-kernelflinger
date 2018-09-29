@@ -25,6 +25,7 @@
 
 #include <openssl/hmac.h>
 
+#include <trusty/rpmb.h>
 #include <trusty/rpmb_sim.h>
 #include <trusty/util.h>
 #include <interface/storage/storage.h>
@@ -44,22 +45,12 @@ struct rpmb_packet {
     uint16_t             req_resp;
 };
 
-enum rpmb_request {
-    RPMB_REQ_PROGRAM_KEY                = 0x0001,
-    RPMB_REQ_GET_COUNTER                = 0x0002,
-    RPMB_REQ_DATA_WRITE                 = 0x0003,
-    RPMB_REQ_DATA_READ                  = 0x0004,
-    RPMB_REQ_RESULT_READ                = 0x0005,
-};
-
 enum rpmb_response {
     RPMB_RESP_PROGRAM_KEY               = 0x0100,
     RPMB_RESP_GET_COUNTER               = 0x0200,
     RPMB_RESP_DATA_WRITE                = 0x0300,
     RPMB_RESP_DATA_READ                 = 0x0400,
 };
-
-#define RPMB_FRAME_SIZE  512
 
 /*
  * 0~6 is magic
@@ -80,19 +71,6 @@ enum rpmb_response {
 #define TEEDATA_BLOCK_COUNT     (TEEDATA_SIZE/256)
 
 
-inline uint32_t swap32(uint32_t val)
-{
-        return ((val & (uint32_t)0x000000ffUL) << 24)
-                | ((val & (uint32_t)0x0000ff00UL) <<  8)
-                | ((val & (uint32_t)0x00ff0000UL) >>  8)
-                | ((val & (uint32_t)0xff000000UL) >> 24);
-}
-
-inline uint16_t swap16(uint16_t val)
-{
-        return ((val & (uint16_t)0x00ffU) << 8)
-                | ((val & (uint16_t)0xff00U) >> 8);
-}
 
 static int rpmb_sim_read(void *buffer, uint32_t size, uint32_t offset)
 {
