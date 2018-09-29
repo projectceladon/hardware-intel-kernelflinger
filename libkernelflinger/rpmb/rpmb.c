@@ -340,3 +340,27 @@ EFI_STATUS rpmb_get_response(void *rpmb_dev,
 {
 	return storage_rpmb_ops->rpmb_get_response(rpmb_dev, data_frame, count);
 }
+
+EFI_STATUS program_rpmb_key_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	return storage_rpmb_ops->program_rpmb_key_frame(rpmb_dev, data_in_frame, in_cnt, data_out_frame, out_cnt);
+}
+
+EFI_STATUS get_rpmb_counter_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	return storage_rpmb_ops->get_rpmb_counter_frame(rpmb_dev, data_in_frame, in_cnt, data_out_frame, out_cnt);
+}
+
+EFI_STATUS read_rpmb_data_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	return storage_rpmb_ops->read_rpmb_data_frame(rpmb_dev, data_in_frame, in_cnt, data_out_frame, out_cnt);
+}
+
+EFI_STATUS write_rpmb_data_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	return storage_rpmb_ops->write_rpmb_data_frame(rpmb_dev, data_in_frame, in_cnt, data_out_frame, out_cnt);
+}

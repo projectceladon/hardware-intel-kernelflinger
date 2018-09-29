@@ -466,6 +466,106 @@ EFI_STATUS ufs_program_key_passthru(void *rpmb_dev, const void *key, RPMB_RESPON
 	return ret;
 }
 
+EFI_STATUS ufs_program_key_frame_passthru(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	RPMB_RESPONSE_RESULT rpmb_result;
+	EFI_EXT_SCSI_PASS_THRU_PROTOCOL *passthru = (EFI_EXT_SCSI_PASS_THRU_PROTOCOL *)rpmb_dev;
+
+	debug(L"enter ufs_program_key");
+
+	if (passthru == NULL)
+		passthru = def_rpmb_ufs_scsi_passthru;
+
+	if (!data_in_frame || !data_out_frame || !passthru)
+		return EFI_INVALID_PARAMETER;
+
+	ret = ufs_rpmb_send_request_passthru(rpmb_dev, (rpmb_data_frame *)data_in_frame, in_cnt, TRUE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to request rpmb");
+		return ret;
+	}
+
+	memset(data_out_frame, 0, sizeof(rpmb_data_frame) * out_cnt);
+	data_out_frame->req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
+
+	ret = ufs_rpmb_request_response_passthru(rpmb_dev, data_out_frame, data_out_frame,
+		out_cnt, out_cnt, RPMB_RESPONSE_KEY_WRITE, &rpmb_result);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to request response rpmb");
+		return ret;
+	}
+
+	return ret;
+}
+
+EFI_STATUS ufs_get_counter_frame_passthru(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	RPMB_RESPONSE_RESULT rpmb_result;
+	EFI_EXT_SCSI_PASS_THRU_PROTOCOL *passthru = (EFI_EXT_SCSI_PASS_THRU_PROTOCOL *)rpmb_dev;
+
+	if (passthru == NULL)
+		passthru = def_rpmb_ufs_scsi_passthru;
+
+	if (!data_in_frame || !data_out_frame || !passthru)
+		return EFI_INVALID_PARAMETER;
+
+	debug(L"ufs_get_counter_passthru: ufs_rpmb_request_response_passthru");
+	ret = ufs_rpmb_request_response_passthru(rpmb_dev, (rpmb_data_frame *)data_in_frame, data_out_frame,
+		in_cnt, out_cnt, RPMB_RESPONSE_COUNTER_READ, &rpmb_result);
+
+	return ret;
+}
+
+EFI_STATUS ufs_read_rpmb_data_frame_passthru(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	RPMB_RESPONSE_RESULT rpmb_result;
+	EFI_EXT_SCSI_PASS_THRU_PROTOCOL *passthru = (EFI_EXT_SCSI_PASS_THRU_PROTOCOL *)rpmb_dev;
+
+	if (passthru == NULL)
+		passthru = def_rpmb_ufs_scsi_passthru;
+
+	if (!data_in_frame || !data_out_frame || !passthru)
+		return EFI_INVALID_PARAMETER;
+
+	ret = ufs_rpmb_request_response_passthru(rpmb_dev, (rpmb_data_frame *)data_in_frame, data_out_frame, in_cnt,
+			out_cnt, RPMB_RESPONSE_AUTH_READ, &rpmb_result);
+
+	return ret;
+}
+
+EFI_STATUS ufs_write_rpmb_data_frame_passthru(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	RPMB_RESPONSE_RESULT rpmb_result;
+	EFI_EXT_SCSI_PASS_THRU_PROTOCOL *passthru = (EFI_EXT_SCSI_PASS_THRU_PROTOCOL *)rpmb_dev;
+
+	if (passthru == NULL)
+		passthru = def_rpmb_ufs_scsi_passthru;
+
+	if (!data_in_frame || !data_out_frame || !passthru)
+		return EFI_INVALID_PARAMETER;
+
+	ret = ufs_rpmb_send_request_passthru(rpmb_dev, (rpmb_data_frame *)data_in_frame, in_cnt, TRUE);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to send request to rpmb");
+		return ret;
+	}
+
+	memset(data_out_frame, 0, sizeof(rpmb_data_frame) * out_cnt );
+	data_out_frame->req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
+	ret = ufs_rpmb_request_response_passthru(rpmb_dev, data_out_frame, data_out_frame, out_cnt, out_cnt,
+			RPMB_RESPONSE_AUTH_WRITE, &rpmb_result);
+
+	return ret;
+}
+
 rpmb_ops_func_t ufs_rpmb_ops_passthru = {
 	.get_storage_protocol = get_ufs_passthru,
 	.program_rpmb_key = ufs_program_key_passthru,
@@ -475,7 +575,11 @@ rpmb_ops_func_t ufs_rpmb_ops_passthru = {
 	.read_rpmb_data = ufs_read_rpmb_data_passthru,
 	.write_rpmb_data = ufs_write_rpmb_data_passthru,
 	.rpmb_send_request = ufs_rpmb_send_request_passthru,
-	.rpmb_get_response = ufs_rpmb_get_response_passthru
+	.rpmb_get_response = ufs_rpmb_get_response_passthru,
+	.program_rpmb_key_frame = ufs_program_key_frame_passthru,
+	.get_rpmb_counter_frame = ufs_get_counter_frame_passthru,
+	.read_rpmb_data_frame = ufs_read_rpmb_data_frame_passthru,
+	.write_rpmb_data_frame = ufs_write_rpmb_data_frame_passthru
 };
 
 rpmb_ops_func_t* get_ufs_storage_rpmb_ops()

@@ -51,6 +51,14 @@ EFI_STATUS rpmb_send_request(void *rpmb_dev,
 		rpmb_data_frame *data_frame, UINT8 count, BOOLEAN is_rel_write);
 EFI_STATUS rpmb_get_response(void *rpmb_dev,
 		rpmb_data_frame *data_frame, UINT8 count);
+EFI_STATUS program_rpmb_key_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt);
+EFI_STATUS get_rpmb_counter_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt);
+EFI_STATUS read_rpmb_data_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt);
+EFI_STATUS write_rpmb_data_frame(void *rpmb_dev, const rpmb_data_frame *data_in_frame, UINT32 in_cnt,
+        rpmb_data_frame *data_out_frame, UINT32 out_cnt);
 
 
 EFI_STATUS simulate_get_rpmb_counter(UINT32 *write_counter, const void *key,
