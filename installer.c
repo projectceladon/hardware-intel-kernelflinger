@@ -252,7 +252,141 @@ static EFI_STATUS installer_flash_big_chunk(EFI_FILE *file, UINTN *remaining_dat
 
 	return EFI_SUCCESS;
 }
+/*this function splits a huge sparse file and put together the two image*/
+static void installer_split_and_joint_flash(CHAR16 *filename, UINTN size, CHAR16 *filename2,
+							UINTN size2, UINTN argc, CHAR8 **argv)
+{
+	EFI_STATUS ret;
+	flash_buffer_t *fb;
+	bool read_flags = 0;
+	struct sparse_header sph;
+	struct chunk_header *ckh;
+	UINTN read_size, flash_size, already_read, remaining_data = size;
+	UINTN tmp_read = 0;
+	void *read_ptr;
+	void *tmp_read_ptr = NULL;
+	INTN nb_chunks;
+	EFI_FILE *file;
+	EFI_FILE *file2;
+	UINT32 blk_count;
 
+	const UINTN HEADER_SIZE = offsetof(flash_buffer_t, d);
+	const UINTN MAX_DATA_SIZE = dl->max_size - HEADER_SIZE;
+	ret = uefi_open_file(file_io_interface, filename, &file);
+	if (EFI_ERROR(ret)) {
+		inst_perror(ret, "Failed to open %s file", filename);
+		return;
+	}
+	ret = uefi_open_file(file_io_interface, filename2, &file2);
+	if (EFI_ERROR(ret)) {
+		inst_perror(ret, "Failed to open %s file", filename);
+		return;
+	}
+	ret = read_file(file, sizeof(sph), &sph);
+	if (EFI_ERROR(ret))
+		return;
+	remaining_data -= sizeof(sph);
+	if (!is_sparse_image((void *) &sph, sizeof(sph))) {
+		fastboot_fail("sparse file expected");
+		return;
+	}
+	fb = dl->data;
+	memcpy(&fb->sph, &sph, sizeof(sph));
+	/* Sparse skip chunk. */
+	fb->skip_ckh.chunk_type = CHUNK_TYPE_DONT_CARE;
+	fb->skip_ckh.total_sz = sizeof(fb->skip_ckh);
+	nb_chunks = sph.total_chunks;
+	read_size = MAX_DATA_SIZE;
+	read_ptr = fb->d.data;
+	blk_count = 0;
+	while (nb_chunks > 0 && remaining_data > 0) {
+		fb->sph.total_chunks = 1;
+		fb->sph.total_blks = fb->skip_ckh.chunk_sz = blk_count;
+		if (remaining_data < read_size)
+			read_size = remaining_data;
+		/* Read a new piece of the input sparse file. */
+		if (read_flags) {
+			ret = read_file(file2, read_size, read_ptr);
+			if (EFI_ERROR(ret))
+				goto exit;
+		} else {
+			ret = read_file(file, read_size, read_ptr);
+			if (EFI_ERROR(ret))
+				goto exit;
+		}
+		remaining_data -= read_size;
+		/* Process the loaded chunks to build the new header
+		   and the skip chunk. */
+		flash_size = HEADER_SIZE;
+		ckh = &fb->d.ckh;
+loop:
+		while ((void *)ckh + sizeof(*ckh) <= read_ptr + read_size &&
+		       (void *)ckh + ckh->total_sz <= read_ptr + read_size) {
+			if (nb_chunks == 0) {
+				fastboot_fail("Corrupted sparse file: too many chunks");
+				goto exit;
+			}
+			flash_size += ckh->total_sz;
+			fb->sph.total_blks += ckh->chunk_sz;
+			blk_count += ckh->chunk_sz;
+			fb->sph.total_chunks++;
+			nb_chunks--;
+			ckh = (void *)ckh + ckh->total_sz;
+		}
+		/* chunk is too big to fit in the download buffer. */
+		if (flash_size == HEADER_SIZE) {
+			if (ckh->chunk_type != CHUNK_TYPE_RAW ||
+			    remaining_data < ckh->total_sz - MAX_DATA_SIZE) {
+				tmp_read_ptr = read_ptr;
+				read_ptr = read_ptr + read_size;
+				read_size = tmp_read - read_size;
+				remaining_data = size2 - read_size;
+				ret = read_file(file2, read_size, read_ptr);
+				if (EFI_ERROR(ret))
+					goto exit;
+				read_flags = 1;
+				read_size = tmp_read;
+				read_ptr = tmp_read_ptr;
+				goto loop;
+			}
+			blk_count += ckh->chunk_sz;
+			nb_chunks--;
+			if (read_flags) {
+				ret = installer_flash_big_chunk(file2, &remaining_data,
+							fb, argc, argv);
+				if (EFI_ERROR(ret))
+					goto exit;
+
+			} else {
+				ret = installer_flash_big_chunk(file, &remaining_data,
+							fb, argc, argv);
+				if (EFI_ERROR(ret))
+					goto exit;
+			}
+			read_size = MAX_DATA_SIZE;
+			read_ptr = fb->d.data;
+			continue;
+		}
+		installer_flash_buffer(dl->data, flash_size, argc, argv);
+		if (!last_cmd_succeeded)
+			goto exit;
+		/* Move the incomplete chunk from the end to the
+		   beginning of the buffer. */
+		if (dl->data + flash_size < read_ptr + read_size) {
+			already_read = read_ptr + read_size - (void *)ckh;
+			memcpy(fb->d.data, ckh, already_read);
+			read_size = MAX_DATA_SIZE - already_read;
+			read_ptr = fb->d.data + already_read;
+			tmp_read = read_size;
+		} else {
+			read_size = MAX_DATA_SIZE;
+			read_ptr = fb->d.data;
+		}
+	}
+exit:
+	uefi_call_wrapper(file->Close, 1, file);
+	uefi_call_wrapper(file->Close, 1, file2);
+}
 /* This function splits a huge sparse file into smaller ones and flash
    them. */
 static void installer_split_and_flash(CHAR16 *filename, UINTN size,
@@ -377,68 +511,118 @@ static void installer_flash_cmd(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
 	CHAR16 *filename;
+	CHAR16 *filename2;
 	void *data;
-	UINTN size;
+	UINTN size, size2;
 
-	if (argc != 3) {
-		fastboot_fail("Flash command requires exactly 3 arguments");
+	if (argc < 3 || argc > 4) {
+		fastboot_fail("Flash command requires exactly 3 or 4 arguments");
 		return;
 	}
+	if (argc == 4) {
+		argc -= 2;
+		filename = stra_to_str(argv[2]);
+		if (!filename) {
+			fastboot_fail("Failed to convert CHAR8 filename to CHAR16");
+			return;
+		}
+		filename2 = stra_to_str(argv[3]);
+		if (!filename2) {
+			fastboot_fail("Failed to convert CHAR8 filename2 to CHAR16");
+			return;
+		}
+		if (get_current_state() == LOCKED) {
+			error(L"Installer: Flash %a is prohibited in %a state.", argv[1],
+				get_current_state_string());
+			fastboot_fail("Installer: Prohibited command in %a state.",
+				get_current_state_string());
+			return;
+		}
 
-	/* The fastboot flash command does not want the file parameter. */
-	argc--;
-
-	filename = stra_to_str(argv[2]);
-	if (!filename) {
-		fastboot_fail("Failed to convert CHAR8 filename to CHAR16");
-		return;
-	}
-
-	if (get_current_state() == LOCKED) {
-		error(L"Installer: Flash %a is prohibited in %a state.", argv[1],
-			  get_current_state_string());
-		fastboot_fail("Installer: Prohibited command in %a state.", get_current_state_string());
-		return;
-	}
-
-	ret = uefi_get_file_size(file_io_interface, filename, &size);
-	if (EFI_ERROR(ret)) {
-		inst_perror(ret, "Failed to get %s file size", filename);
-		goto exit;
-	}
-
-	argv[1] = get_target(argv[1]);
-	if (!argv[1])
-		goto exit;
-
-	ret = find_partition(argv[1]);
-	switch (ret) {
-	case EFI_SUCCESS:
-		do_erase(argc, argv);
-		if (!last_cmd_succeeded)
+		ret = uefi_get_file_size(file_io_interface, filename, &size);
+		if (EFI_ERROR(ret)) {
+			inst_perror(ret, "Failed to get %s file size", filename);
 			goto exit;
-		break;
-	case EFI_NOT_FOUND:
-		break;
-	default:
-		inst_perror(ret, "Failed to get partition information");
-		goto exit;
+		}
+		ret = uefi_get_file_size(file_io_interface, filename2, &size2);
+		if (EFI_ERROR(ret)) {
+			inst_perror(ret, "Failed to get %s file size", filename2);
+			goto exit;
+		}
+		argv[1] = get_target(argv[1]);
+		if (!argv[1])
+			goto exit;
+
+		ret = find_partition(argv[1]);
+		switch (ret) {
+		case EFI_SUCCESS:
+			do_erase(argc, argv);
+			if (!last_cmd_succeeded)
+				goto exit;
+			break;
+		case EFI_NOT_FOUND:
+			break;
+		default:
+			inst_perror(ret, "Failed to get partition information");
+			goto exit;
+		}
+		installer_split_and_joint_flash(filename, size, filename2, size2, argc, argv);
+		FreePool(filename);
+		FreePool(filename2);
+	} else {
+		/* The fastboot flash command does not want the file parameter. */
+		argc--;
+
+		filename = stra_to_str(argv[2]);
+		if (!filename) {
+			fastboot_fail("Failed to convert CHAR8 filename to CHAR16");
+			return;
+		}
+		if (get_current_state() == LOCKED) {
+			error(L"Installer: Flash %a is prohibited in %a state.", argv[1],
+				get_current_state_string());
+			fastboot_fail("Installer: Prohibited command in %a state.",
+				get_current_state_string());
+			return;
+		}
+		ret = uefi_get_file_size(file_io_interface, filename, &size);
+		if (EFI_ERROR(ret)) {
+			inst_perror(ret, "Failed to get %s file size", filename);
+			goto exit;
+		}
+
+		argv[1] = get_target(argv[1]);
+		if (!argv[1])
+			goto exit;
+
+		ret = find_partition(argv[1]);
+		switch (ret) {
+		case EFI_SUCCESS:
+			do_erase(argc, argv);
+			if (!last_cmd_succeeded)
+				goto exit;
+			break;
+		case EFI_NOT_FOUND:
+			break;
+		default:
+			inst_perror(ret, "Failed to get partition information");
+			goto exit;
+		}
+
+		if (size > dl->max_size) {
+			installer_split_and_flash(filename, size, argc, argv);
+			goto exit;
+		}
+
+		ret = uefi_read_file(file_io_interface, filename, &data, &size);
+		if (EFI_ERROR(ret)) {
+			inst_perror(ret, "Unable to read file %s", filename);
+			goto exit;
+		}
+
+		installer_flash_buffer(data, size, argc, argv);
+		FreePool(data);
 	}
-
-	if (size > dl->max_size) {
-		installer_split_and_flash(filename, size, argc, argv);
-		goto exit;
-	}
-
-	ret = uefi_read_file(file_io_interface, filename, &data, &size);
-	if (EFI_ERROR(ret)) {
-		inst_perror(ret, "Unable to read file %s", filename);
-		goto exit;
-	}
-
-	installer_flash_buffer(data, size, argc, argv);
-	FreePool(data);
-
 exit:
 	FreePool(filename);
 }
