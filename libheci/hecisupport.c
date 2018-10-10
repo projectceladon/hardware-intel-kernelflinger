@@ -98,7 +98,7 @@ EFI_STATUS heci_end_of_post(void)
 	}
 	debug(L"GetSeCMode successful");
 
-	memset(DataBuffer, sizeof(DataBuffer), 0);
+	memset(DataBuffer, 0, sizeof(DataBuffer));
 
 	SendEOP = (GEN_END_OF_POST*)DataBuffer;
 	SendEOP->MKHIHeader.Fields.GroupId = EOP_GROUP_ID;
