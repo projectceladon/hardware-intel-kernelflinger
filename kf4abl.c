@@ -331,7 +331,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		SERIALNO,
 		DEV_SEC_INFO,
 		IMAGE_BOOT_PARAMS_ADDR,
-		FIRMWARE_BOOTTIME
+		FIRMWARE_BOOTTIME,
+		BOOTREASON
 	};
 
 	struct Cmdline
@@ -371,6 +372,11 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			(CHAR8 *)"androidboot.bootloader=",
 			strlen((CHAR8 *)"androidboot.bootloader="),
 			BOOTVERSION
+		},
+		{
+			(CHAR8 *)"androidboot.bootreason=",
+			strlen((CHAR8 *)"androidboot.bootreason="),
+			BOOTREASON
 		},
 		{
 			(CHAR8 *)"androidboot.serialno=",
@@ -424,12 +430,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		}
 
 		if (cmd_len + arglen + 1 < max_cmd_size) {
-			if (cmd_buf[0] != 0) {
-				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)" ", 1);
-				cmd_len++;
-			}
 			for (j = 0; j < sizeof(CmdlineArray)/sizeof(CmdlineArray[0]); j++) {
-				if((arglen > CmdlineArray[j].length) && !strncmp(arg8, CmdlineArray[j].name, CmdlineArray[j].length))
+				if((arglen >= CmdlineArray[j].length) && !strncmp(arg8, CmdlineArray[j].name, CmdlineArray[j].length))
 					break;
 			}
 
@@ -502,10 +504,20 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 				case SERIALNO:
 					continue;
 
+				/* Parse "androidboot.bootreason=xxxxx " */
+				case BOOTREASON:
+					continue;
+
 				default:
 					continue;
 				}
 			}
+
+			if (cmd_buf[0] != 0) {
+				strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)" ", 1);
+				cmd_len++;
+			}
+
 			strncpy((CHAR8 *)(cmd_buf + cmd_len), (const CHAR8 *)arg8, arglen);
 			cmd_len += arglen;
 		}
