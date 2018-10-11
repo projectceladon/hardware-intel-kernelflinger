@@ -1557,7 +1557,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         /* Make sure it's abundantly clear! */
         error(L"INSECURE BOOTLOADER - SYSTEM SECURITY IN RED STATE");
         pause(1);
-        boot_state = BOOT_STATE_RED;
+        if(device_is_unlocked())
+        {
+                boot_state = BOOT_STATE_ORANGE;
+                debug(L"Device is unlocked");
+        }else{
+                boot_state = BOOT_STATE_RED;
+        }
 #endif
 
         /* EFI binaries are validated by the BIOS */
