@@ -982,8 +982,18 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	debug(L"Before Check BCB target is %d", target);
 	bcb_target = check_bcb(&target_path, &oneshot);
 	debug(L"BCB target is %d", bcb_target);
-	if (bcb_target == RECOVERY)
+	if (bcb_target == RECOVERY) {
+#ifdef USE_TRUSTY
+		if (target == NORMAL_BOOT) {
+			/* in this case, evmm has been launched, reboot so
+			 * bootloader will boot to recovery mode without launch evmm.
+			 */
+			error(L"need reboot to RECOVERY mode!");
+			reboot_to_target(RECOVERY, EfiResetCold);
+		}
+#endif
 		target = bcb_target;
+	}
 	debug(L"After Check BCB target is %d", target);
 #endif
 
