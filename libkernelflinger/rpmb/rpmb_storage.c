@@ -49,8 +49,8 @@
 #define RPMB_DEVICE_STATE_BLOCK_COUNT            1
 #define RPMB_DEVICE_STATE_BLOCK_ADDR_NATIVE      2
 #define RPMB_ROLLBACK_INDEX_BLOCK_ADDR_NATIVE    3
-#define RPMB_DEVICE_STATE_BLOCK_ADDR_VIRTUAL     100
-#define RPMB_ROLLBACK_INDEX_BLOCK_ADDR_VIRTUAL   101
+#define RPMB_DEVICE_STATE_BLOCK_ADDR_VIRTUAL     130
+#define RPMB_ROLLBACK_INDEX_BLOCK_ADDR_VIRTUAL   131
 #define RPMB_DEVICE_STATE_BLOCK_ADDR             get_device_state_block_addr()
 #define RPMB_ROLLBACK_INDEX_BLOCK_ADDR           get_rollback_index_block_addr()
 #define RPMB_BLOCK_SIZE                          256

@@ -49,7 +49,7 @@
 
 /* here 1024 means 1024 blocks, so 1024 blocks * 256 B = 256KB */
 #define RPMB_ADDR_BOUNDARY_NATIVE  1024
-#define RPMB_ADDR_BOUNDARY_VIRTUAL 200
+#define RPMB_ADDR_BOUNDARY_VIRTUAL 256
 #define RPMB_ADDR_BOUNDARY_SIZE get_rpmb_addr_boundary_size()
 
 static BOOLEAN g_initialized = FALSE;
