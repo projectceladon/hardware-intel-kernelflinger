@@ -107,12 +107,14 @@ static struct download_buffer dl;
 static const UINTN MIN_DLSIZE = 8 * 1024 * 1024;
 static const UINTN MAX_DLSIZE = 256 * 1024 * 1024;
 
+#ifndef FASTBOOT_FOR_NON_ANDROID
 static const char *flash_locked_whitelist[] = {
 #ifdef BOOTLOADER_POLICY
 	ACTION_AUTHORIZATION,
 #endif
 	NULL
 };
+#endif
 
 void printProgress(int x, int y) {
 
@@ -750,7 +752,7 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 		fastboot_fail("Invalid parameter");
 		return;
 	}
-
+#ifndef FASTBOOT_FOR_NON_ANDROID
 	if (get_current_state() == LOCKED &&
 	    !is_in_white_list(argv[1], flash_locked_whitelist)) {
 		error(L"Flash %a is prohibited in %a state.", argv[1],
@@ -758,7 +760,7 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 		fastboot_fail("Prohibited command in %a state.", get_current_state_string());
 		return;
 	}
-
+#endif
 	label = stra_to_str((CHAR8*)argv[1]);
 	if (!label) {
 		error(L"Failed to get label %a", argv[1]);
@@ -1169,6 +1171,7 @@ static EFI_STATUS init_download_buffer(void)
 	return EFI_OUT_OF_RESOURCES;
 }
 
+#ifndef FASTBOOT_FOR_NON_ANDROID
 static struct fastboot_cmd COMMANDS[] = {
 	{ "download",		LOCKED,		cmd_download },
 	{ "flash",		LOCKED,		cmd_flash },
@@ -1180,6 +1183,17 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "reboot-bootloader",	LOCKED,		cmd_reboot_bootloader },
 	{ "set_active",		UNLOCKED,	cmd_set_active }
 };
+#else
+static struct fastboot_cmd COMMANDS[] = {
+	{ "download",		UNKNOWN_STATE,		cmd_download },
+	{ "flash",		UNKNOWN_STATE,		cmd_flash },
+	{ "erase",		UNKNOWN_STATE,		cmd_erase },
+	{ "getvar",		UNKNOWN_STATE,		cmd_getvar },
+	{ "continue",		UNKNOWN_STATE,		cmd_continue },
+	{ "reboot",		UNKNOWN_STATE,		cmd_reboot },
+	{ "reboot-bootloader",	UNKNOWN_STATE,		cmd_reboot_bootloader },
+};
+#endif
 
 static EFI_STATUS fastboot_init()
 {
@@ -1285,16 +1299,18 @@ static EFI_STATUS fastboot_init()
 	if (EFI_ERROR(ret))
 		goto error;
 
+#ifndef FASTBOOT_FOR_NON_ANDROID
 	ret = publish_slots();
 	if (EFI_ERROR(ret))
 		goto error;
-
+#endif
 	/* Register commands */
 	for (i = 0; i < ARRAY_SIZE(COMMANDS); i++) {
 		ret = fastboot_register(&COMMANDS[i]);
 		if (EFI_ERROR(ret))
 			goto error;
 	}
+#ifndef FASTBOOT_FOR_NON_ANDROID
 	ret = fastboot_oem_init();
 	if (EFI_ERROR(ret))
 		goto error;
@@ -1307,6 +1323,7 @@ static EFI_STATUS fastboot_init()
 	ret = fastboot_ui_init();
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Fastboot UI initialization failed, continue anyway.");
+#endif
 #endif
 
 	fastboot_state = STATE_OFFLINE;
