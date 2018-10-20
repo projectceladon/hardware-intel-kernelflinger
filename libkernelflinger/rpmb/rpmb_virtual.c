@@ -491,7 +491,7 @@ EFI_STATUS virtual_rpmb_write_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_
 	EFI_STATUS ret = EFI_SUCCESS;
 	UINT32 write_counter;
 	rpmb_data_frame status_frame;
-	rpmb_data_frame *data_in_frame = NULL;
+	rpmb_data_frame data_in_frame[blk_count];
 	UINT32 i;
 	UINT16 res_result;
 	UINT8 mac[RPMB_DATA_MAC];
@@ -504,12 +504,6 @@ EFI_STATUS virtual_rpmb_write_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_
 	if (!buffer || !result || !passthru)
 		return EFI_INVALID_PARAMETER;
 
-	data_in_frame = AllocatePool(sizeof(rpmb_data_frame));
-	if (!data_in_frame) {
-		ret = EFI_OUT_OF_RESOURCES;
-		goto out;
-	}
-
 	ret = virtual_rpmb_get_counter(rpmb_dev, &write_counter, key, result);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get counter");
@@ -517,58 +511,56 @@ EFI_STATUS virtual_rpmb_write_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_
 	}
 
 	for (i = 0; i < blk_count; i++) {
-		memset(data_in_frame, 0, sizeof(rpmb_data_frame));
-		data_in_frame->address = CPU_TO_BE16_SWAP(blk_addr + i);
-		data_in_frame->block_count = CPU_TO_BE16_SWAP(1);
-		data_in_frame->req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_AUTH_WRITE);
-		data_in_frame->write_counter = CPU_TO_BE32_SWAP(write_counter);
-		memcpy(&data_in_frame->data, (UINT8 *)buffer + i * 256, 256);
-
-		if (rpmb_calc_hmac_sha256(data_in_frame, 1,
-				key, RPMB_KEY_SIZE,
-				mac, RPMB_MAC_SIZE) == 0) {
-			ret = EFI_INVALID_PARAMETER;
-			goto out;
-		}
-
-		memcpy(data_in_frame->key_mac, mac, RPMB_DATA_MAC);
-		memset(&status_frame, 0, sizeof(status_frame));
-		status_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
-		ret = virtual_rpmb_send_virtio_data(rpmb_dev, RPMB_REQUEST_AUTH_WRITE, data_in_frame, 1, &status_frame, 1);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"virtual_rpmb_write_data: failed to send virtio data");
-			goto out;
-		}
-
-		if (BE16_TO_CPU_SWAP(status_frame.req_resp) != RPMB_RESPONSE_AUTH_WRITE) {
-			error(L"The response is not expected, expected resp = 0x%08x, received resp = 0x%08x",
-				RPMB_RESPONSE_AUTH_WRITE, BE16_TO_CPU_SWAP(status_frame.req_resp));
-			ret = EFI_ABORTED;
-			goto out;
-		}
-
-		res_result = BE16_TO_CPU_SWAP(status_frame.result);
-		debug(L"response result is 0x%08x", res_result);
-		*result = (RPMB_RESPONSE_RESULT)res_result;
-		if (res_result) {
-			debug(L"RPMB operation failed");
-			ret = EFI_ABORTED;
-			goto out;
-		}
-
-		if (write_counter >= BE32_TO_CPU_SWAP(status_frame.write_counter)) {
-			efi_perror(ret, L"RPMB write counter not incremeted returned counter is 0x%08x",
-			status_frame.write_counter);
-			ret = EFI_ABORTED;
-			goto out;
-		}
-		write_counter++;
+		memset(&data_in_frame[i], 0, sizeof(data_in_frame[i]));
+		data_in_frame[i].address = CPU_TO_BE16_SWAP(blk_addr);
+		data_in_frame[i].block_count = CPU_TO_BE16_SWAP(blk_count);
+		data_in_frame[i].req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_AUTH_WRITE);
+		data_in_frame[i].write_counter = CPU_TO_BE32_SWAP(write_counter);
+		memcpy(&data_in_frame[i].data, (UINT8 *)buffer + i * 256, 256);
 	}
 
-out:
-	if (data_in_frame)
-		FreePool(data_in_frame);
+	if (rpmb_calc_hmac_sha256(data_in_frame, blk_count,
+			key, RPMB_KEY_SIZE,
+			mac, RPMB_MAC_SIZE) == 0) {
+		ret = EFI_INVALID_PARAMETER;
+		goto out;
+	}
+	memcpy(data_in_frame[blk_count - 1].key_mac, mac, RPMB_DATA_MAC);
 
+	memset(&status_frame, 0, sizeof(status_frame));
+	status_frame.req_resp = CPU_TO_BE16_SWAP(RPMB_REQUEST_STATUS);
+
+	ret = virtual_rpmb_send_virtio_data(rpmb_dev, RPMB_REQUEST_AUTH_WRITE, data_in_frame, blk_count, &status_frame, 1);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"virtual_rpmb_write_data: failed to send virtio data");
+		goto out;
+	}
+
+	if (BE16_TO_CPU_SWAP(status_frame.req_resp) != RPMB_RESPONSE_AUTH_WRITE) {
+		error(L"The response is not expected, expected resp = 0x%08x, received resp = 0x%08x",
+			RPMB_RESPONSE_AUTH_WRITE, BE16_TO_CPU_SWAP(status_frame.req_resp));
+		ret = EFI_ABORTED;
+		goto out;
+	}
+
+	res_result = BE16_TO_CPU_SWAP(status_frame.result);
+	debug(L"response result is 0x%08x", res_result);
+	*result = (RPMB_RESPONSE_RESULT)res_result;
+	if (res_result) {
+		debug(L"RPMB operation failed");
+		ret = EFI_ABORTED;
+		goto out;
+	}
+
+	if (write_counter >= BE32_TO_CPU_SWAP(status_frame.write_counter)) {
+		efi_perror(ret, L"RPMB write counter not incremeted returned counter is 0x%08x",
+		status_frame.write_counter);
+		ret = EFI_ABORTED;
+		goto out;
+	}
+	write_counter++;
+
+out:
 	return ret;
 }
 
