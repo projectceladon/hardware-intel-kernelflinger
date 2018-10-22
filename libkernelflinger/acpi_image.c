@@ -47,12 +47,12 @@
 #include "security.h"
 #include "targets.h"
 
-static struct ACPI_TABLE_SELECTED {
-	UINTN id[ACPI_TABLE_MAX_SELECTED_NUM];
+static struct ACPI_TABLE_LOADED {
+	UINTN index[ACPI_TABLE_MAX_LOAD_NUM];
 	UINT32 count;
-} selected_table;
+} loaded_table;
 
-static CHAR8 selected_ids_str[ACPI_TABLE_MAX_SELECTED_NUM*8];
+static CHAR8 loaded_idx_str[ACPI_TABLE_MAX_LOAD_NUM*4];
 
 static UINT8 acpi_csum(VOID *base, UINT32 n)
 {
@@ -146,91 +146,51 @@ EFI_STATUS install_acpi_table(VOID *acpi_table, UINTN acpi_table_size,
 	ret = uefi_call_wrapper(acpiprotocol->InstallAcpiTable, 4, acpiprotocol,
 				acpi_table, acpi_table_size, tablekey);
 	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"ACPI: Failed to install acpi table");
+		efi_perror(ret, L"Failed to install acpi table");
 		return ret;
 	}
 
 	return ret;
 }
 
-EFI_STATUS acpi_parse_selected_table_id(CHAR8 *id_str, UINT32 id_str_len)
+static VOID acpi_add_table_index(UINTN index)
 {
-	CHAR8 *str, *nptr, *endptr;
-	UINT32 i;
-
-	str = AllocateZeroPool(id_str_len + 1);
-	if (!str) {
-		error(L"Alloc memory for acpi selected table id failed");
-		return EFI_OUT_OF_RESOURCES;
+	if (loaded_table.count < ACPI_TABLE_MAX_LOAD_NUM) {
+		loaded_table.index[loaded_table.count] = index;
+		loaded_table.count++;
 	}
-	strncpy(str, id_str, id_str_len);
-
-	i = 0;
-	nptr = str;
-	while (i < ACPI_TABLE_MAX_SELECTED_NUM) {
-		selected_table.id[i++] = strtoul((char *)nptr, (char **)&endptr, 16);
-
-		if (*endptr == ',') {
-			nptr = endptr + 1;
-			continue;
-		}
-		if (*endptr == '\0')
-			break;
-
-		FreePool(str);
-		return EFI_INVALID_PARAMETER;
-	}
-	selected_table.count = i;
-
-	FreePool(str);
-	return EFI_SUCCESS;
 }
 
-static int acpi_is_selected_table_id(UINTN id)
+CHAR8 *acpi_loaded_table_idx_to_string(VOID)
 {
-	acpi_parse_selected_table_id("0x0,0x123", 9); // I'm hard code, remove me
+	if (loaded_table.count > 0)
+		efi_snprintf(loaded_idx_str, sizeof(loaded_idx_str),
+			     (CHAR8 *)"%d", loaded_table.index[0]);
 
-	for (UINT32 i = 0; i < selected_table.count; ++i) {
-		if (id == selected_table.id[i])
-			return 0;
-	}
-	return -1;
-}
-
-CHAR8 *acpi_selected_table_ids_to_string(VOID)
-{
-	if (selected_table.count > 0)
-		efi_snprintf(selected_ids_str, sizeof(selected_ids_str),
-			     (CHAR8 *)"0x%x", selected_table.id[0]);
-
-	for (UINT32 i = 1; i < selected_table.count; ++i) {
-		efi_snprintf(selected_ids_str, sizeof(selected_ids_str),
-			     (CHAR8 *)"%a,0x%x", selected_ids_str,
-			     selected_table.id[i]);
+	for (UINT32 i = 1; i < loaded_table.count; ++i) {
+		efi_snprintf(loaded_idx_str, sizeof(loaded_idx_str),
+			     (CHAR8 *)"%a,%d", loaded_idx_str,
+			     loaded_table.index[i]);
 	}
 
-	return selected_ids_str;
+	return loaded_idx_str;
 }
 
-static EFI_STATUS acpi_image_parse_table(VOID *acpiimage)
+static EFI_STATUS acpi_image_parse_table(VOID *acpiimage, int is_acpio)
 {
 	struct dt_table_header *header = (struct dt_table_header *)(acpiimage);
 	struct dt_table_entry *entry;
 	struct ACPI_DESC_HEADER *acpi_header;
 	VOID *acpi_table;
-	UINTN dt_size, dt_offset, id, tablekey;
+	UINTN dt_size, dt_offset, tablekey;
 
 	UINT32 entry_size = bswap_32(header->dt_entry_size);
 	UINT32 entry_offset = bswap_32(header->dt_entries_offset);
 	UINT32 entry_count = bswap_32(header->dt_entry_count);
 	EFI_STATUS ret;
 
-	for (UINT32 i = 0; i < entry_count; i++) {
+	for (UINT32 i = 0; i < entry_count; i++, entry_offset += entry_size) {
 		entry = (struct dt_table_entry *)(acpiimage + entry_offset);
-
-		id = bswap_32(entry->id);
-		if (acpi_is_selected_table_id(id) < 0)
-			continue;
 
 		dt_size = bswap_32(entry->dt_size);
 		dt_offset = bswap_32(entry->dt_offset);
@@ -246,20 +206,26 @@ static EFI_STATUS acpi_image_parse_table(VOID *acpiimage)
 
 		ret = install_acpi_table(acpi_table, dt_size, &tablekey);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to install acpi table");
-			return ret;
+			efi_perror(ret, L"Warning: acpi_table %d install failed.", i);
+			continue;
 		}
 
-		entry_offset += entry_size;
+		if (is_acpio)
+			acpi_add_table_index(i);
 	}
 
 	return EFI_SUCCESS;
 }
 
-static EFI_STATUS install_acpi_image_from_partition(CHAR16 *label)
+static EFI_STATUS install_acpi_image_from_partition(int is_acpio)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
-	const CHAR16 *acpi_label = slot_label(label);
+	const CHAR16 *acpi_label;
+
+	if (is_acpio)
+		acpi_label = slot_label(ACPIO_LABEL);
+	else
+		acpi_label = slot_label(ACPI_LABEL);
 
 	VOID *acpiimage = NULL;
 
@@ -269,10 +235,10 @@ static EFI_STATUS install_acpi_image_from_partition(CHAR16 *label)
 			   acpi_label);
 		return ret;
 	}
-	ret = acpi_image_parse_table(acpiimage);
+	ret = acpi_image_parse_table(acpiimage, is_acpio);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to install acpi table from %s image",
-				   acpi_label);
+			   acpi_label);
 		return ret;
 	}
 	FreePool(acpiimage);
@@ -280,7 +246,7 @@ static EFI_STATUS install_acpi_image_from_partition(CHAR16 *label)
 	return ret;
 }
 
-static EFI_STATUS check_install_acpi_image(VOID *image)
+static EFI_STATUS check_install_acpi_image(VOID *image, int is_acpio)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
 	struct dt_table_header *aosp_header;
@@ -291,7 +257,7 @@ static EFI_STATUS check_install_acpi_image(VOID *image)
 	if (magic != ACPI_TABLE_MAGIC)
 		return EFI_SUCCESS;
 
-	ret = acpi_image_parse_table(image);
+	ret = acpi_image_parse_table(image, is_acpio);
 	if (EFI_ERROR(ret))
 		return ret;
 
@@ -311,45 +277,31 @@ static EFI_STATUS check_install_acpi_image(VOID *image)
  * |  1   |   1   |   -    |   0    | recovery | inst(acpi) && inst(recovery_acpio) |
  * |  1   |   1   |   -    |   1    | recovery | inst(acpi)                         |
  */
-static EFI_STATUS install_table_from_acpi_partition(VOID *image)
-{
-	debug(L"Install acpi table from acpi-partition");
-	if (image == NULL)
-		return install_acpi_image_from_partition(ACPI_LABEL);
-	else
-		return check_install_acpi_image(image);
-
-	debug(L"Acpi table from acpi-partition not installed");
-	return EFI_SUCCESS;
-}
-
-static EFI_STATUS install_table_from_acpio_partition(VOID *image,
-						     enum boot_target target)
-{
-	if (target != RECOVERY) {
-		debug(L"Install acpi table from acpio-partition, target=%d", target);
-		if (image == NULL)
-			return install_acpi_image_from_partition(ACPIO_LABEL);
-		else
-			return check_install_acpi_image(image);
-	}
-
-	debug(L"Acpi table from acpio-partition not installed, target=%d", target);
-	return EFI_SUCCESS;
-}
-
 EFI_STATUS install_acpi_table_from_partitions(VOID *image,
 					      const char *part_name,
 					      enum boot_target target)
 {
+	int is_acpio;
+
 	if (!strcmp(part_name, "acpi")) {
-		return install_table_from_acpi_partition(image);
+		is_acpio = 0;
 	} else if (!strcmp(part_name, "acpio")) {
-		return install_table_from_acpio_partition(image, target);
+		is_acpio = 1;
+		if (target == RECOVERY)
+			return EFI_SUCCESS;
+	} else {
+		error(L"Acpi table from partition %a not installed", part_name);
+		return EFI_NOT_FOUND;
 	}
 
-	error(L"Acpi table from partition %s not installed", part_name);
-	return EFI_NOT_FOUND;
+	debug(L"Install acpi table from %a-partition", part_name);
+	if (image == NULL)
+		return install_acpi_image_from_partition(is_acpio);
+	else
+		return check_install_acpi_image(image, is_acpio);
+
+	debug(L"Acpi table from %a-partition not installed", part_name);
+	return EFI_SUCCESS;
 }
 
 EFI_STATUS install_acpi_table_from_recovery_acpio(VOID *image, enum boot_target target)
@@ -357,7 +309,7 @@ EFI_STATUS install_acpi_table_from_recovery_acpio(VOID *image, enum boot_target 
 	if (!use_slot()) {
 		if (target == RECOVERY) {
 			debug(L"Install acpi table from recovery_acpio");
-			return check_install_acpi_image(image);
+			return check_install_acpi_image(image, 1);
 		}
 	}
 

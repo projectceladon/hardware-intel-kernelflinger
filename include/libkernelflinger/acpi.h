@@ -145,7 +145,7 @@ UINT8 oem1_get_ia_apps_to_use(void);
 
 #define ACPI_TABLE_MAGIC		0x41435049
 #define ACPI_TABLE_MAGIC_SIZE		4
-#define ACPI_TABLE_MAX_SELECTED_NUM	256
+#define ACPI_TABLE_MAX_LOAD_NUM		256
 
 EFI_STATUS install_acpi_table_from_partitions(VOID *image,
 					      const char *part_name,
@@ -156,6 +156,6 @@ EFI_STATUS install_acpi_table(VOID *acpi_table, UINTN acpi_table_size,
 			      UINTN *tablekey);
 EFI_STATUS acpi_parse_selected_table_id(CHAR8 *selected_id_str,
 					UINT32 selected_id_str_len);
-CHAR8 *acpi_selected_table_ids_to_string(VOID);
+CHAR8 *acpi_loaded_table_idx_to_string(VOID);
 
 #endif /* __ACPI_H__ */
