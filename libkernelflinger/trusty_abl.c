@@ -171,6 +171,7 @@ static EFI_STATUS launch_trusty_os(trusty_startup_params_t *param)
 	return EFI_SUCCESS;
 }
 
+#ifdef RPMB_STORAGE
 EFI_STATUS generate_rpmb_key_from_seed(VOID)
 {
 	EFI_STATUS ret;
@@ -197,12 +198,17 @@ EFI_STATUS generate_rpmb_key_from_seed(VOID)
 
 	return ret;
 }
+#endif
 
 EFI_STATUS set_trusty_param(IN VOID *param_data)
 {
 	EFI_STATUS ret;
 	trusty_boot_params = (trusty_boot_params_t *)param_data;
+#ifdef RPMB_STORAGE
 	ret = generate_rpmb_key_from_seed();
+#else
+	ret = EFI_SUCCESS;
+#endif
 
 	return ret;
 }

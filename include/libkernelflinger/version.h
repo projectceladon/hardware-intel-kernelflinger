@@ -44,7 +44,11 @@
 #define BUILD_VARIANT           "-eng"
 #endif
 
+#ifdef FASTBOOT_FOR_NON_ANDROID
+#define KERNELFLINGER_VERSION_8	"fastboot-NonAndroid-1.0" BUILD_VARIANT
+#else
 #define KERNELFLINGER_VERSION_8	"kernelflinger-06.03" BUILD_VARIANT
+#endif
 #define KERNELFLINGER_VERSION   WIDE_STR(KERNELFLINGER_VERSION_8)
 
 #endif
