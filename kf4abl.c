@@ -1112,10 +1112,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	for (;;) {
 #ifdef CRASHMODE_USE_ADB
 		if (target == CRASHMODE) {
+			log(L"Enter crash mode ...\n");
 			enter_crashmode(&target);
 			continue;
 		}
 #endif
+		log(L"Enter fastboot mode ...\n");
 		enter_fastboot_mode(&target);
 	}
 #else
