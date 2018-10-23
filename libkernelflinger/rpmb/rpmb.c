@@ -48,19 +48,24 @@
 #define WRITE_COUNTER_SIZE		4
 
 /* here 1024 means 1024 blocks, so 1024 blocks * 256 B = 256KB */
-#define RPMB_ADDR_BOUNDARY_NATIVE  1024
-#define RPMB_ADDR_BOUNDARY_VIRTUAL 256
-#define RPMB_ADDR_BOUNDARY_SIZE get_rpmb_addr_boundary_size()
-
+#define RPMB_ADDR_BOUNDARY_NATIVE_H  1024
+#define RPMB_ADDR_BOUNDARY_NATIVE_L   0
+#define RPMB_ADDR_BOUNDARY_VIRTUAL_H  256
+#define RPMB_ADDR_BOUNDARY_VIRTUAL_L  128
 static BOOLEAN g_initialized = FALSE;
 static rpmb_ops_func_t *storage_rpmb_ops;
 
-static UINT32 get_rpmb_addr_boundary_size(VOID)
+static BOOLEAN check_bootloader_rpmb_address(UINT16 blk_addr)
 {
-	if (is_boot_device_virtual())
-		return RPMB_ADDR_BOUNDARY_VIRTUAL;
-	else
-		return RPMB_ADDR_BOUNDARY_NATIVE;
+	if (is_boot_device_virtual())  {
+		if (blk_addr >= RPMB_ADDR_BOUNDARY_VIRTUAL_H || blk_addr<RPMB_ADDR_BOUNDARY_VIRTUAL_L)
+			return FALSE;
+	}
+	else {
+		if (blk_addr >= RPMB_ADDR_BOUNDARY_NATIVE_H || blk_addr<RPMB_ADDR_BOUNDARY_NATIVE_L)
+			return FALSE;
+	}
+	return TRUE;
 }
 
 static EFI_STATUS rpmb_simulate_read_write_teedata_partition(
@@ -296,8 +301,8 @@ EFI_STATUS get_rpmb_counter(void *rpmb_dev, UINT32 *write_counter, const void *k
 EFI_STATUS read_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
 			const void *key, RPMB_RESPONSE_RESULT *result)
 {
-	if (blk_addr >= RPMB_ADDR_BOUNDARY_SIZE) {
-		error(L"Cannot access address greater than 256KB for physical read, addr is 0x%0x", blk_addr);
+	if (!check_bootloader_rpmb_address(blk_addr)) {
+		error(L"Cannot access address out of range  for physical read");
 		*result = RPMB_RES_ADDRESS_FAILURE;
 		return EFI_INVALID_PARAMETER;
 	}
@@ -308,8 +313,8 @@ EFI_STATUS read_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, voi
 EFI_STATUS write_rpmb_data(void *rpmb_dev, UINT16 blk_count, UINT16 blk_addr, void *buffer,
 			const void *key, RPMB_RESPONSE_RESULT *result)
 {
-	if (blk_addr >= RPMB_ADDR_BOUNDARY_SIZE) {
-		error(L"Cannot access address greater than 256KB for physical write, addr is 0x%0x", blk_addr);
+	if (!check_bootloader_rpmb_address(blk_addr)) {
+		error(L"Cannot access address out of range for physical write");
 		*result = RPMB_RES_ADDRESS_FAILURE;
 		return EFI_INVALID_PARAMETER;
 	}
@@ -325,9 +330,8 @@ EFI_STATUS rpmb_send_request(void *rpmb_dev,
 	if (BE16_TO_CPU_SWAP(data_frame->req_resp) == RPMB_REQUEST_AUTH_WRITE
 		|| BE16_TO_CPU_SWAP(data_frame->req_resp) == RPMB_REQUEST_AUTH_READ) {
 		trusty_addr = BE16_TO_CPU_SWAP(data_frame->address);
-		if (trusty_addr < RPMB_ADDR_BOUNDARY_SIZE) {
-			error(L"Cannot access address less than 256KB for trusty usage, addr is 0x%0x, cmd is 0x%0x",
-				trusty_addr, BE16_TO_CPU_SWAP(data_frame->req_resp));
+		if (check_bootloader_rpmb_address(trusty_addr)) {
+			error(L"Cannot access address out of range  for trusty usage");
 			return EFI_INVALID_PARAMETER;
 		}
 	}
