@@ -138,7 +138,7 @@ EFI_STATUS install_acpi_table(VOID *acpi_table, UINTN acpi_table_size,
 	EFI_GUID guid = EFI_ACPI_TABLE_PROTOCOL_GUID;
 
 	ret = LibLocateProtocol(&guid, (VOID **)&acpiprotocol);
-	if (EFI_ERROR(ret)) {
+	if (EFI_ERROR(ret) || !acpiprotocol) {
 		efi_perror(ret, L"LibLocateProtocol: Failed by guid of acpi");
 		return ret;
 	}
