@@ -45,6 +45,9 @@ static cmdlist_t cmdlist;
 
 EFI_STATUS fastboot_flashing_publish(void)
 {
+#ifdef FASTBOOT_FOR_NON_ANDROID
+	return EFI_SUCCESS;
+#endif
 	EFI_STATUS ret;
 
 	ret = fastboot_publish("secure", device_is_locked() ? "yes" : "no");
@@ -133,6 +136,11 @@ static BOOLEAN is_already_in_state(enum device_state state)
 static void cmd_lock(__attribute__((__unused__)) INTN argc,
 		     __attribute__((__unused__)) CHAR8 **argv)
 {
+#ifdef FASTBOOT_FOR_NON_ANDROID
+	fastboot_info("lock/Unlock is not supported");
+	fastboot_okay("");
+	return;
+#endif
 	if (!is_already_in_state(LOCKED))
 		change_device_state(LOCKED, TRUE);
 }
@@ -188,6 +196,11 @@ static void cmd_unlock(__attribute__((__unused__)) INTN argc,
 #ifdef USER
 	EFI_STATUS ret;
 #endif
+#ifdef FASTBOOT_FOR_NON_ANDROID
+	fastboot_info("lock/Unlock is not supported");
+	fastboot_okay("");
+	return;
+#endif
 
 	if (is_already_in_state(UNLOCKED))
 		return;
@@ -215,6 +228,11 @@ static void cmd_unlock(__attribute__((__unused__)) INTN argc,
 static void cmd_get_unlock_ability(__attribute__((__unused__)) INTN argc,
 				   __attribute__((__unused__)) CHAR8 **argv)
 {
+#ifdef FASTBOOT_FOR_NON_ANDROID
+	fastboot_info("lock/Unlock is not supported");
+	fastboot_okay("");
+	return;
+#endif
 	switch (get_unlock_ability()) {
 	case UNLOCK_ALLOWED:
 		fastboot_info("The device can be unlocked.");
@@ -242,9 +260,15 @@ static void cmd_flashing(INTN argc, CHAR8 **argv)
 }
 
 static struct fastboot_cmd COMMANDS[] = {
+#ifdef FASTBOOT_FOR_NON_ANDROID
+	{ "lock",		UNKNOWN_STATE,	cmd_lock },
+	{ "unlock",		UNKNOWN_STATE,	cmd_unlock },
+	{ "get_unlock_ability",	UNKNOWN_STATE,	cmd_get_unlock_ability }
+#else
 	{ "lock",		LOCKED,	cmd_lock },
 	{ "unlock",		LOCKED,	cmd_unlock },
 	{ "get_unlock_ability",	LOCKED,	cmd_get_unlock_ability }
+#endif
 };
 
 static struct fastboot_cmd flashing = { "flashing", LOCKED, cmd_flashing };
