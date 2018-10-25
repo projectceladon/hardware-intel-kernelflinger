@@ -1314,11 +1314,13 @@ static EFI_STATUS fastboot_init()
 	ret = fastboot_oem_init();
 	if (EFI_ERROR(ret))
 		goto error;
+#endif
 
 	ret = fastboot_flashing_init();
 	if (EFI_ERROR(ret))
 		goto error;
 
+#ifndef FASTBOOT_FOR_NON_ANDROID
 #ifdef USE_UI
 	ret = fastboot_ui_init();
 	if (EFI_ERROR(ret))
