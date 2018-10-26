@@ -44,11 +44,15 @@
 #define MAX_SECTOR_PER_RANGE		0xFFFF
 #define ATA_CMD_DSM_TRIM_FEATURE	0x1
 #define PORT_MULTIPLIER_POS		0x4
+#define READ_ZERO_AFTER_TRIM_SUPPORTED 0x0020
+#define DETERMINISTIC_READ_AFTER_TRIM_SUPPORTED 0x0400
 
 typedef struct lba_range_entry {
 	UINT16 lba[3];
 	UINT16 len;
 } __attribute__((packed)) lba_range_entry_t;
+
+static ATA_IDENTIFY_DATA identify_data;
 
 static SATA_DEVICE_PATH *get_sata_device_path(EFI_DEVICE_PATH *p)
 {
@@ -91,17 +95,8 @@ static EFI_STATUS sata_identify_data(EFI_ATA_PASS_THRU_PROTOCOL *ata,
 	return ret;
 }
 
-static BOOLEAN is_dsm_trim_supported(EFI_ATA_PASS_THRU_PROTOCOL *ata,
-				     SATA_DEVICE_PATH *sata_dp,
-				     UINT16 *max_dsm_block_nb)
+static BOOLEAN is_dsm_trim_supported( UINT16 *max_dsm_block_nb)
 {
-	ATA_IDENTIFY_DATA identify_data;
-	EFI_STATUS ret;
-
-	ret = sata_identify_data(ata, sata_dp, &identify_data);
-	if (EFI_ERROR(ret))
-		return FALSE;
-
 	if (!(identify_data.is_data_set_cmd_supported & TRIM_SUPPORTED_BIT)
 	    || identify_data.max_no_of_512byte_blocks_per_data_set_cmd == 0) {
 		debug(L"This SATA device does support DATA SET MANAGEMENT command");
@@ -110,6 +105,16 @@ static BOOLEAN is_dsm_trim_supported(EFI_ATA_PASS_THRU_PROTOCOL *ata,
 
 	*max_dsm_block_nb = identify_data.max_no_of_512byte_blocks_per_data_set_cmd;
 	return TRUE;
+}
+
+/* Deterministic Read Zero after TRIM */
+static BOOLEAN is_rzat_supported(void)
+{
+	if ((identify_data.additional_supported & DETERMINISTIC_READ_AFTER_TRIM_SUPPORTED)
+	    && (identify_data.additional_supported & READ_ZERO_AFTER_TRIM_SUPPORTED))
+		return TRUE;
+
+	return FALSE;
 }
 
 /* http://www.t13.org/documents/uploadeddocuments/docs2009/d2015r2-ataatapi_command_set_-_2_acs-2.pdf
@@ -182,6 +187,92 @@ out:
 	return ret;
 }
 
+#define ERASE_BLOCKS 0x10000
+static EFI_STATUS ata_fill_zero(EFI_ATA_PASS_THRU_PROTOCOL *ata,
+				SATA_DEVICE_PATH *sata_dp,
+				EFI_LBA start, EFI_LBA end)
+{
+	EFI_STATUS ret = EFI_INVALID_PARAMETER;
+	EFI_ATA_STATUS_BLOCK asb;
+	VOID *emptyblock;
+	VOID *aligned_emptyblock;
+	EFI_ATA_COMMAND_BLOCK acb;
+	UINT32 blocks = ERASE_BLOCKS;
+	UINT32 retry_count = 5;
+
+	ret = alloc_aligned(&emptyblock,
+			    &aligned_emptyblock,
+			    BLOCK_SIZE * blocks,
+			    ata->Mode->IoAlign);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ZeroMem(&acb, sizeof(EFI_ATA_COMMAND_BLOCK));
+	acb.AtaCommand = ATA_CMD_WRITE_SECTORS_EXT;
+	acb.AtaDeviceHead = (UINT8) (BIT7 | BIT6 | BIT5 |
+			    (sata_dp->PortMultiplierPortNumber << PORT_MULTIPLIER_POS));
+
+	EFI_ATA_PASS_THRU_COMMAND_PACKET ata_packet = {
+		.Asb = &asb,
+		.Acb = &acb,
+		.Timeout = ATA_TIMEOUT_NS,
+		.OutDataBuffer = aligned_emptyblock,
+		.Protocol = EFI_ATA_PASS_THRU_PROTOCOL_PIO_DATA_OUT,
+		.Length = EFI_ATA_PASS_THRU_LENGTH_SECTOR_COUNT
+	};
+
+	while (start < end) {
+		acb.AtaSectorNumber = start;
+		acb.AtaCylinderLow = (start >> 8);
+		acb.AtaCylinderHigh = (start >> 16);
+		acb.AtaSectorNumberExp = (UINT8)(start >> 24);
+		acb.AtaCylinderLowExp = (UINT8)(start >> 32);
+		acb.AtaCylinderHighExp = (UINT8)(start >> 40);
+
+		/*
+		 *   value of AtaSectorCount and AtaSectorCountExp
+		 *   might be 00h when accept a value casted from UINT32,
+		 *   for ATA, 00h indicates that 65536(0x10000) logical sectors
+		 *   are to be transferred. amount of data actually
+		 *   transmitted is determined by ata_packet.OutTransferLength
+		 */
+		if (start + blocks >= end) {
+			acb.AtaSectorCount = (UINT8)(end - start + 1);
+			acb.AtaSectorCountExp = (UINT8)((end - start + 1) >> 8);
+			ata_packet.OutTransferLength = (end - start + 1);
+		} else {
+			acb.AtaSectorCount = (UINT8)blocks;
+			acb.AtaSectorCountExp = (UINT8)(blocks >> 8);
+			ata_packet.OutTransferLength = blocks;
+		}
+
+		ret = uefi_call_wrapper(ata->PassThru, 5, ata,
+					sata_dp->HBAPortNumber,
+					sata_dp->PortMultiplierPortNumber,
+					&ata_packet, NULL);
+		if (EFI_ERROR(ret)) {
+			if (ret == EFI_BAD_BUFFER_SIZE) {
+				if (retry_count == 0) {
+					efi_perror(ret, L"ATA controller can't give a reasonable transfer length");
+					break;
+				}
+				blocks = (ata_packet.InTransferLength >> 9);
+				ata_packet.InTransferLength = 0;
+				retry_count--;
+				continue;
+			}
+			efi_perror(ret, L"Write Sectors Command Failed");
+			break;
+		}
+
+		retry_count = 5;
+		start += blocks;
+	}
+
+	FreePool(emptyblock);
+	return ret;
+}
+
 static EFI_STATUS sata_erase_blocks(EFI_HANDLE handle,
 				    __attribute__((unused)) EFI_BLOCK_IO *bio,
 				    EFI_LBA start, EFI_LBA end)
@@ -221,8 +312,35 @@ static EFI_STATUS sata_erase_blocks(EFI_HANDLE handle,
 		return ret;
 	}
 
-	if (is_dsm_trim_supported(ata, sata_dp, &max_dsm_block_nb))
-		return ata_dsm_trim(ata, sata_dp, start, end, max_dsm_block_nb);
+	ret = sata_identify_data(ata, sata_dp, &identify_data);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	if (is_dsm_trim_supported(&max_dsm_block_nb))
+		ret = ata_dsm_trim(ata, sata_dp, start, end, max_dsm_block_nb);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	if (is_rzat_supported()){
+		return EFI_SUCCESS;
+	} else {
+		debug(L"Deterministic Read Zero after TRIM unsupported");
+		debug(L"Fill zero manually");
+
+		/* flashing unlock (lock) will erase userdata partion, which is more
+		 * than 200G large, time consumption is unacceptable. since the
+		 * largest image is less than 8G,
+		 * partitions larger than 8G should not be cleaned at this time
+		 */
+
+		if ((end - start) < 0x1000000) {
+			ret = ata_fill_zero(ata, sata_dp, start, end);
+			if (!EFI_ERROR(ret))
+				return EFI_SUCCESS;
+		} else {
+			return EFI_SUCCESS;
+		}
+	}
 
 	return EFI_UNSUPPORTED;
 }
