@@ -368,7 +368,7 @@ EFI_STATUS usb_start(UINT8 subclass, UINT8 protocol,
 
 	ret = LibLocateProtocol(&gEfiUsbDeviceModeProtocolGuid, (void **)&usb_device);
 
-#ifndef __SUPPORT_ABL_BOOT
+#ifdef USE_SELF_USB_DEVICE_MODE_PROTOCOL
 	if (EFI_ERROR(ret) || !usb_device) {
 		debug(L"No usb device protocol installed, install...");
 		ret = install_usb_device_mode_protocol();
@@ -380,7 +380,7 @@ EFI_STATUS usb_start(UINT8 subclass, UINT8 protocol,
 		ret = LibLocateProtocol(&gEfiUsbDeviceModeProtocolGuid,
 					(void **)&usb_device);
 	}
-#endif
+#endif // USE_SELF_USB_DEVICE_MODE_PROTOCOL
 
 	if (EFI_ERROR(ret) || !usb_device) {
 		efi_perror(ret, L"Can't locate device mode protocol");
