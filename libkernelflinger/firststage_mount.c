@@ -64,7 +64,7 @@ EFI_STATUS install_firststage_mount_ssdt(enum boot_target target)
 	UINTN ssdt_len;
 	UINTN TableKey;
 
-	if ((target == NORMAL_BOOT) || (target == CHARGER)
+	if ((target == NORMAL_BOOT) || (target == RECOVERY) || (target == CHARGER)
 		|| (target == ESP_BOOTIMAGE) || (target == MEMORY)) {
 		debug(L"Install firststage_mount_ssdt, target=%d", target);
 		ssdt_len = sizeof(AmlCode);
