@@ -139,7 +139,7 @@ static EFI_STATUS find_usb_device_controller (EFI_HANDLE Controller)
 
 EFI_GUID gEfiEventExitBootServicesGuid  =  EventExitBootServices;
 
-static EFI_STATUS usb_device_mode_start (EFI_HANDLE Controller)
+static EFI_STATUS usb_device_mode_start (EFI_HANDLE Controller, EFI_USB_DEVICE_MODE_PROTOCOL **usb_device)
 {
   EFI_STATUS Status;
   USB_XDCI_DEV_CONTEXT *UsbXdciDevContext = NULL;
@@ -214,17 +214,7 @@ static EFI_STATUS usb_device_mode_start (EFI_HANDLE Controller)
   if (EFI_ERROR (Status))
     goto ErrorExit;
 
-  Status = uefi_call_wrapper(BS->InstallMultipleProtocolInterfaces,
-           4,
-           &UsbXdciDevContext->XdciHandle,
-           &gEfiUsbDeviceModeProtocolGuid,
-           &UsbXdciDevContext->UsbDevModeProtocol,
-           NULL);
-
-  if (EFI_ERROR (Status)) {
-    efi_perror(Status, L"Failed to install upper protocol");
-    goto ErrorExit;
-  }
+  *usb_device = &(UsbXdciDevContext->UsbDevModeProtocol);
 
   return Status;
 
@@ -278,12 +268,12 @@ static BOOLEAN usb_xdci_enabled(void)
   return FALSE;
 }
 
-EFI_STATUS install_usb_device_mode_protocol(void)
+EFI_STATUS init_usb_device_mode_protocol(EFI_USB_DEVICE_MODE_PROTOCOL **usb_device)
 {
   EFI_STATUS ret = EFI_UNSUPPORTED;
 
   if (usb_xdci_enabled()) {
-    ret = usb_device_mode_start(xdci);
+    ret = usb_device_mode_start(xdci, usb_device);
   } else {
     efi_perror(ret, L"XDCI is disabled, please enable it in BIOS");
   }
