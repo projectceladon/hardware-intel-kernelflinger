@@ -101,5 +101,5 @@ struct _EFI_USB_DEVICE_MODE_PROTOCOL {
 };
 
 extern EFI_GUID gEfiUsbDeviceModeProtocolGuid;
-EFI_STATUS install_usb_device_mode_protocol(void);
+EFI_STATUS init_usb_device_mode_protocol(EFI_USB_DEVICE_MODE_PROTOCOL **usb_device);
 #endif
