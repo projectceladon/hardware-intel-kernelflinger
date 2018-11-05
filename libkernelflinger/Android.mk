@@ -238,6 +238,10 @@ $(GEN): $(FIRST_STAGE_MOUNT_CFG_FILE)
 	$(hide) mv $(@:.h=.hex) $@
 endif # BOARD_FIRSTSTAGE_MOUNT_ENABLE not TARGET_USE_ACPI not TARGET_USE_ACPIO
 
+ifeq ($(BOARD_DISK_BUS),ff.ff)
+    LOCAL_CFLAGS += -DAUTO_DISKBUS
+endif
+
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(LOCAL_PATH)/../ \
 		$(LOCAL_PATH)/../avb \
