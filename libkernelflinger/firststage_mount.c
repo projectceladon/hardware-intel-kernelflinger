@@ -41,6 +41,7 @@
 #include "protocol/AcpiTableProtocol.h"
 #include "storage.h"
 
+#ifdef AUTO_DISKBUS
 static CHAR8 csum(void *base, UINTN n)
 {
 	CHAR8 *p;
@@ -58,6 +59,53 @@ static CHAR8 csum(void *base, UINTN n)
 	return sum;
 }
 
+static EFI_STATUS revise_diskbus_from_ssdt(CHAR8 *ssdt, UINTN ssdt_len)
+{
+	const CHAR8 *pattern = (CHAR8 *)"/0000:00:ff.ff/";
+	const UINTN diskbus_sufix_len = 6; /* Sample: "ff.ff/" or "ff.f//" */
+	UINTN pattern_len;
+	struct ACPI_DESC_HEADER *header;
+	UINTN header_len;
+	CHAR8 *p, *max_end;
+	PCI_DEVICE_PATH *boot_device;
+
+	header_len = sizeof(struct ACPI_DESC_HEADER);
+	if (ssdt_len < header_len) {
+		error(L"ACPI: invalid parameter for revise diskbus.");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	/* Initialize the variables. */
+	pattern_len = strlen(pattern);
+	boot_device = get_boot_device();
+	p = ssdt + header_len;
+	max_end = ssdt + ssdt_len - pattern_len;
+
+	/* Find and revise the diskbus. */
+	while (p < max_end) {
+		/* Find the diskbus. */
+		if (*p != pattern[0] || memcmp(p, pattern, pattern_len)) {
+			p++;
+			continue;
+		}
+
+		/* Revise the diskbus. */
+		p += pattern_len - diskbus_sufix_len;
+		efi_snprintf(p, diskbus_sufix_len, (CHAR8 *)"%02x.%x",
+			     boot_device->Device, boot_device->Function);
+		p += strlen(p);
+		*p++ = '/';
+	}
+
+	/* Update the header information. */
+	header = (struct ACPI_DESC_HEADER *)ssdt;
+	header->checksum = 0;
+	header->checksum = ~csum((void *)ssdt, ssdt_len) + 1;
+
+	return EFI_SUCCESS;
+}
+#endif
+
 EFI_STATUS install_firststage_mount_ssdt(enum boot_target target)
 {
 	EFI_STATUS ret;
@@ -68,6 +116,13 @@ EFI_STATUS install_firststage_mount_ssdt(enum boot_target target)
 		|| (target == ESP_BOOTIMAGE) || (target == MEMORY)) {
 		debug(L"Install firststage_mount_ssdt, target=%d", target);
 		ssdt_len = sizeof(AmlCode);
+#ifdef AUTO_DISKBUS
+		ret = revise_diskbus_from_ssdt((CHAR8 *)AmlCode, ssdt_len);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"ACPI: fail to revise diskbus");
+			return ret;
+		}
+#endif
 
 		ret = install_acpi_table(AmlCode, ssdt_len, &TableKey);
 		if (EFI_ERROR(ret)) {
