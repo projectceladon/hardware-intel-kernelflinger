@@ -1016,8 +1016,10 @@ UINT64 efi_time_to_ctime(EFI_TIME *time)
         for (i = 0; i + 1 < time->Month; i++)
                 days += DAY_OF_MONTH[i];
 
-        return (days * 24 * 3600) + (time->Hour * 3600)
-                + (time->Minute * 60) + time->Second;
+        return ((UINT64)days * 24 * 3600) +
+                ((UINT64)time->Hour * 3600) +
+                ((UINT64)time->Minute * 60) +
+                (UINT64)time->Second;
 }
 
 VOID cpuid(UINT32 op, UINT32 reg[4])
