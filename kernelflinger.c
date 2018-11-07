@@ -1252,16 +1252,16 @@ static VOID boot_error(enum ux_error_code error_code, UINT8 boot_state,
 
 #ifdef BOOTLOADER_POLICY_EFI_VAR
 /* Flash the OEMVARS that include the bootloader policy.  */
-static void flash_bootloader_policy(void)
+static void flash_bootloader_policy(__attribute__((__unused__)) UINT8 boot_state)
 {
         VOID *bootimage = NULL;
         EFI_STATUS ret;
 
 #ifdef USE_AVB
-        UINT8 boot_state = BOOT_STATE_GREEN;
+        UINT8 new_boot_state = boot_state;
         AvbSlotVerifyData *slot_data;
         debug(L"Loading bootloader policy using AVB");
-        ret = avb_load_verify_boot_image(NORMAL_BOOT, NULL, &bootimage, FALSE, &boot_state, &slot_data);
+        ret = avb_load_verify_boot_image(NORMAL_BOOT, NULL, &bootimage, FALSE, &new_boot_state, &slot_data);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Failed to load the boot image using AVB to get bootloader policy");
                 goto out;
@@ -1579,7 +1579,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #ifdef BOOTLOADER_POLICY_EFI_VAR
         /* Ensure that the bootloader policy is set. */
         if (!device_is_provisioning() && !blpolicy_is_flashed())
-                flash_bootloader_policy();
+                flash_bootloader_policy(boot_state);
 #endif
 
         if (boot_target == FASTBOOT) {
