@@ -367,30 +367,33 @@ EFI_STATUS usb_start(UINT8 subclass, UINT8 protocol,
 	tx_callback = tx_cb;
 
 	ret = LibLocateProtocol(&gEfiUsbDeviceModeProtocolGuid, (void **)&usb_device);
-
-#ifndef __SUPPORT_ABL_BOOT
 	if (EFI_ERROR(ret) || !usb_device) {
-		debug(L"No usb device protocol installed, install...");
-		ret = install_usb_device_mode_protocol();
+		efi_perror(ret, L"Can't locate USB device mode protocol in BIOS");
+	} else {
+		ret = uefi_call_wrapper(usb_device->InitXdci, 1, usb_device);
+		if (EFI_ERROR(ret))
+			efi_perror(ret, L"Init USB xDCI failed");
+	}
+
+	if (EFI_ERROR(ret)) {
+#ifdef USE_SELF_USB_DEVICE_MODE_PROTOCOL
+		debug(L"Trying self implemented USB device mode protocol");
+		ret = init_usb_device_mode_protocol(&usb_device);
 		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Can't install device mode protocol");
+			efi_perror(ret, L"Can't run self implemented USB device mode protocol");
+			error(L"Make sure xDCI is enabled in BIOS");
 			return EFI_UNSUPPORTED;
 		}
 
-		ret = LibLocateProtocol(&gEfiUsbDeviceModeProtocolGuid,
-					(void **)&usb_device);
-	}
-#endif
-
-	if (EFI_ERROR(ret) || !usb_device) {
-		efi_perror(ret, L"Can't locate device mode protocol");
-		return EFI_UNSUPPORTED;
-	}
-
-	ret = uefi_call_wrapper(usb_device->InitXdci, 1, usb_device);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Init XDCI failed");
+		ret = uefi_call_wrapper(usb_device->InitXdci, 1, usb_device);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Can't init xDCI by self implemented interface");
+			return ret;
+		}
+		error(L"Self implemented USB device mode protocol running");
+#else
 		return ret;
+#endif // USE_SELF_USB_DEVICE_MODE_PROTOCOL
 	}
 
 	init_driver_objs(subclass, protocol, str_configuration, str_interface);
