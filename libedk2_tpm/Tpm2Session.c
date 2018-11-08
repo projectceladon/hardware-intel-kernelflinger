@@ -12,12 +12,10 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 **/
 
-#include <IndustryStandard/UefiTcgPlatform.h>
-#include <Library/Tpm2CommandLib.h>
-#include <Library/Tpm2DeviceLib.h>
-#include <Library/BaseMemoryLib.h>
-#include <Library/BaseLib.h>
-#include <Library/DebugLib.h>
+#include <UefiTcgPlatform.h>
+#include <Tpm2CommandLib.h>
+#include <Tpm2DeviceLib.h>
+#include <Tpm2Help.h>
 
 #pragma pack(1)
 
