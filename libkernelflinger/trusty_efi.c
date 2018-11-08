@@ -230,7 +230,7 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
         /* Allocate SIPI region */
         sipi_ap_addr = SIPI_AP_HIGH_ADDR;
         ret = allocate_pages(AllocateMaxAddress,
-                             EfiLoaderData,
+                             EfiRuntimeServicesData,
                              EFI_SIZE_TO_PAGES(SIPI_AP_MEMORY_LENGTH),
                              &sipi_ap_addr);
         if (EFI_ERROR(ret)) {
@@ -333,8 +333,6 @@ cleanup:
                 free_pages(startup_info_phy_addr, EFI_SIZE_TO_PAGES(sizeof(struct tos_startup_info)));
         if (memory_map)
                 FreePool(memory_map);
-        if (sipi_ap_addr)
-                free_pages(sipi_ap_addr, EFI_SIZE_TO_PAGES(SIPI_AP_MEMORY_LENGTH));
         return ret;
 }
 
