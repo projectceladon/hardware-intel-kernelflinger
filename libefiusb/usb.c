@@ -65,7 +65,7 @@ static USB_DEVICE_INTERFACE_OBJ gInterfaceObjs[INTERFACE_COUNT];
 static USB_DEVICE_ENDPOINT_OBJ	gEndpointObjs[ENDPOINT_COUNT];
 
 EFI_GUID gEfiUsbDeviceModeProtocolGuid = EFI_USB_DEVICE_MODE_PROTOCOL_GUID;
-static EFI_USB_DEVICE_MODE_PROTOCOL *usb_device;
+static EFI_USB_DEVICE_MODE_PROTOCOL *usb_device = NULL;
 
 /* String descriptor table indexes */
 typedef enum {
@@ -397,6 +397,11 @@ EFI_STATUS usb_start(UINT8 subclass, UINT8 protocol,
 	}
 
 	init_driver_objs(subclass, protocol, str_configuration, str_interface);
+
+	if (!usb_device) {
+		efi_perror(ret, L"Can't locate device mode protocol");
+		return EFI_UNSUPPORTED;
+	}
 
 	/* Bind this layer to the USB device driver layer */
 	ret = uefi_call_wrapper(usb_device->Bind, 2, usb_device, &gDevObj);
