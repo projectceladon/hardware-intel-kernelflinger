@@ -29,6 +29,7 @@
 #include <trusty/trusty_ipc.h>
 #include <trusty/util.h>
 #include <trusty/keymaster.h>
+#include "storage.h"
 #include "../include/libkernelflinger/rpmb_storage.h"
 
 #define LOCAL_LOG 0
@@ -52,7 +53,7 @@ void trusty_ipc_shutdown(void)
 }
 
 #define KEYBOX_PROVISION_MAGIC_DATA  (0xe62f30d4)
-#define KEYBOX_PROVISION_ADDR 1
+#define KEYBOX_PROVISION_ADDR  (is_boot_device_virtual()?129:1)
 
 static int rpmb_read_keybox_magic_data(uint32_t *data)
 {
