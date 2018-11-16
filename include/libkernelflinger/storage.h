@@ -45,6 +45,7 @@ enum storage_type {
 #ifdef USB_STORAGE
 	STORAGE_USB,
 #endif
+	STORAGE_GENERAL_BLOCK,
 	STORAGE_ALL,
 };
 
