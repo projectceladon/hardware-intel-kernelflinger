@@ -115,7 +115,8 @@ LOCAL_SRC_FILES := \
 	rpmb/rpmb_storage_common.c \
 	timer.c \
 	nvme.c \
-	virtual_media.c
+	virtual_media.c \
+	general_block.c
 
 ifeq ($(KERNELFLINGER_SUPPORT_USB_STORAGE),true)
 	LOCAL_SRC_FILES += usb_storage.c \

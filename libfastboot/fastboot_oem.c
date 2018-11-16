@@ -293,8 +293,10 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 	if (argc < 2) {
 #ifdef USB_STORAGE
 		fastboot_info("Supported type: ufs emmc sata nvme sdcard usb");
+		fastboot_info("                general");
 #else
 		fastboot_info("Supported type: ufs emmc sata nvme sdcard");
+		fastboot_info("                general");
 #endif
 		fastboot_info("Example: fastboot oem set-storage ufs emmc");
 		fastboot_fail("Should add one or more type");
@@ -328,6 +330,10 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 #else
 			fastboot_info("USB storage is unsupported");
 #endif
+			continue;
+		}
+		if (!strcmp(argv[i], (CHAR8 *)"general")) {
+			types[total_types++] = STORAGE_GENERAL_BLOCK;
 			continue;
 		}
 		fastboot_fail("Unsupported storage");
