@@ -564,6 +564,12 @@ static void dump_data(
 		SPrint(buf + i * 2, sizeof(buf) - i * 2, L"%02x", data[i]);
 	debug(L"Data: %s", buf);
 #endif
+	UINT16 i;
+
+	Print(L"Trusty seed:\n");
+	for(i=0; i < data_size; i++)
+		Print(L"0x%x ", data[i]);
+	Print(L"\n");
 }
 
 EFI_STATUS tpm2_fuse_trusty_seed(void)
@@ -634,6 +640,9 @@ EFI_STATUS tpm2_read_trusty_seed(UINT8 seed[TRUSTY_SEED_SIZE])
 		ret = EFI_COMPROMISED_DATA;
 		goto out;
 	}
+	Print(L">>>> Success to read trusty seed from TPM<<<<\n");
+	debug(L"trusty seed:");
+
 	dump_data(seed, TRUSTY_SEED_SIZE);
 	return EFI_SUCCESS;
 
