@@ -206,11 +206,6 @@ static EFI_STATUS gpt_prepare_disk(EFI_HANDLE handle, struct gpt_disk *disk)
 			disk->bio->Media->ReadOnly)
 		return EFI_INVALID_PARAMETER;
 
-#ifndef USB_STORAGE
-	if (disk->bio->Media->RemovableMedia)
-		return EFI_INVALID_PARAMETER;
-#endif
-
 	ret = uefi_call_wrapper(BS->HandleProtocol, 3, handle, &DiskIoProtocol, (VOID *)&disk->dio);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to get disk io protocol");

@@ -68,6 +68,7 @@ extern struct storage STORAGE(STORAGE_VIRTUAL);
 #ifdef USB_STORAGE
 extern struct storage STORAGE(STORAGE_USB);
 #endif
+extern struct storage STORAGE(STORAGE_GENERAL_BLOCK);
 
 
 static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
@@ -86,6 +87,7 @@ static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 #ifdef USB_STORAGE
 		, &STORAGE(STORAGE_USB)
 #endif
+		, &STORAGE(STORAGE_GENERAL_BLOCK)
 	};
 
 	for (st = STORAGE_EMMC; st < STORAGE_ALL; st++) {
@@ -147,7 +149,7 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 			continue;
 		}
 
-		if (boot_device_type == type) {
+		if (boot_device_type == type && type != STORAGE_GENERAL_BLOCK) {
 			error(L"Multiple identifcal storage found! Can't make a decision");
 			cur_storage = NULL;
 			boot_device.Header.Type = 0;
