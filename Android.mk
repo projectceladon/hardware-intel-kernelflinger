@@ -288,6 +288,8 @@ ifeq ($(BOARD_AVB_ENABLE),true)
 LOCAL_STATIC_LIBRARIES += libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
 endif
 
+LOCAL_C_INCLUDES += \
+	$(addprefix $(LOCAL_PATH)/,libkernelflinger)
 include $(BUILD_EFI_EXECUTABLE)  # For kernelflinger-$(TARGET_BUILD_VARIANT)
 
 
