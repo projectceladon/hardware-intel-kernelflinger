@@ -132,6 +132,14 @@ struct BERT_TABLE {
 	UINT64 region;			/* Physical address of BERT region */
 };
 
+
+struct ACPI_INFO {
+	UINT32 MediaId;
+	UINT32 img_size;		/* ACPI or ACPIO image size */
+	UINT64 partition_start;
+	UINT64 partition_size;
+};
+
 #pragma pack()
 
 /* Some ACPI table signatures, SSDT for instance, might appear several
@@ -156,6 +164,7 @@ EFI_STATUS install_acpi_table(VOID *acpi_table, UINTN acpi_table_size,
 			      UINTN *tablekey);
 EFI_STATUS acpi_parse_selected_table_id(CHAR8 *selected_id_str,
 					UINT32 selected_id_str_len);
+EFI_STATUS acpi_image_get_length(const CHAR16 *label, struct ACPI_INFO **acpi_info);
 CHAR8 *acpi_loaded_table_idx_to_string(VOID);
 
 #endif /* __ACPI_H__ */

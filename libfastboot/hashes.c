@@ -44,6 +44,9 @@
 #include "android.h"
 #include "signature.h"
 #include "security.h"
+#if defined(USE_ACPIO) && defined(USE_ACPI)
+#include "acpi.h"
+#endif
 
 static struct algorithm {
 	const CHAR8 *name;
@@ -906,3 +909,34 @@ EFI_STATUS get_fs_hash(const CHAR16 *label)
 		return ret;
 	return report_hash(L"/", gparti.part.name, hash);
 }
+
+#if defined(USE_ACPIO) && defined(USE_ACPI)
+EFI_STATUS get_acpi_hash(const CHAR16 *label)
+{
+	EFI_STATUS ret;
+	struct gpt_partition_interface gpart;
+	CHAR8 hash[EVP_MAX_MD_SIZE];
+	struct ACPI_INFO *acpi_info;
+
+	ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Partition %s not found", label);
+		return ret;
+	}
+
+	ret = acpi_image_get_length(label, &acpi_info);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Partition %s can't get size", label);
+		return ret;
+	}
+
+	ret = hash_partition(&gpart, (*acpi_info).img_size, hash);
+	if (EFI_ERROR(ret)) {
+		FreePool(acpi_info);
+		return ret;
+	}
+
+	FreePool(acpi_info);
+	return report_hash(L"/", label, hash);
+}
+#endif

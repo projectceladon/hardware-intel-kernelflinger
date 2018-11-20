@@ -70,17 +70,16 @@ static UINT8 acpi_csum(VOID *base, UINT32 n)
 	return sum;
 }
 
-static EFI_STATUS acpi_image_load_partition(const CHAR16 *label, VOID **image)
+EFI_STATUS acpi_image_get_length(const CHAR16 *label, struct ACPI_INFO **acpi_info)
 {
 	UINT32 MediaId;
-	UINT32 img_size;
 	EFI_STATUS ret;
-	struct gpt_partition_interface gpart;
-	UINTN partition_start;
-	UINTN partition_size;
-	VOID *acpiimage;
 	struct dt_table_header aosp_header;
 	UINT32 magic, total_size;
+	UINT64 partition_size;
+	UINT64 partition_start;
+	struct ACPI_INFO *current_acpi;
+	struct gpt_partition_interface gpart;
 
 	ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret)) {
@@ -101,32 +100,87 @@ static EFI_STATUS acpi_image_load_partition(const CHAR16 *label, VOID **image)
 
 	magic = bswap_32(aosp_header.magic);
 	total_size = bswap_32(aosp_header.total_size);
-
 	if (magic != ACPI_TABLE_MAGIC) {
 		error(L"This partition has no ACPI image, the magic is: 0x%x", magic);
 		return EFI_INVALID_PARAMETER;
 	}
 
-	img_size = total_size + BOOT_SIGNATURE_MAX_SIZE;
-	if (img_size > partition_size) {
-		error(L"%s image is larger than partition size", label);
-		return EFI_INVALID_PARAMETER;
-	}
-	acpiimage = AllocatePool(img_size);
-	if (!acpiimage) {
-		error(L"Alloc memory for %s image failed", label);
+	current_acpi = AllocatePool(sizeof(struct ACPI_INFO));
+	if (!current_acpi) {
+		error(L"Alloc memory for %s ACPI_INFO failed", label);
 		return EFI_OUT_OF_RESOURCES;
 	}
 
-	debug(L"Reading %s image: %d bytes", label, img_size);
-	ret = uefi_call_wrapper(gpart.dio->ReadDisk, 5, gpart.dio, MediaId,
-				partition_start, img_size, acpiimage);
+#if defined(USE_AVB) && defined(USE_ACPIO) && defined(USE_ACPI)
+	/*
+	  If AVB case, get the image length from mixins' definition.
+	 */
+	if (!StrnCmp(label, L"acpio_", 6))
+		(*current_acpi).img_size = BOARD_ACPIOIMAGE_PARTITION_SIZE;
+	else if (!StrnCmp(label, L"acpi_", 5))
+		(*current_acpi).img_size = BOARD_ACPIIMAGE_PARTITION_SIZE;
+	else {
+		error(L"%s is not acpio or acpi", label);
+		FreePool(current_acpi);
+		return EFI_INVALID_PARAMETER;
+	}
+
+	if ((*current_acpi).img_size > partition_size) {
+		error(L"%s image is larger than partition size", label);
+		FreePool(current_acpi);
+		return EFI_INVALID_PARAMETER;
+	}
+#else
+	(*current_acpi).img_size = total_size;
+	if (((*current_acpi).img_size + BOOT_SIGNATURE_MAX_SIZE) > partition_size) {
+		error(L"%s image is larger than partition size", label);
+		FreePool(current_acpi);
+		return EFI_INVALID_PARAMETER;
+	}
+#endif
+
+	(*current_acpi).MediaId = MediaId;
+	(*current_acpi).partition_start = partition_start;
+	(*current_acpi).partition_size = partition_size;
+	*acpi_info = current_acpi;
+	return EFI_SUCCESS;
+}
+
+static EFI_STATUS acpi_image_load_partition(const CHAR16 *label, VOID **image)
+{
+	EFI_STATUS ret;
+	struct gpt_partition_interface gpart;
+	VOID *acpiimage;
+	struct ACPI_INFO *acpi_info;
+
+	ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Partition %s not found", label);
+		return ret;
+	}
+	ret = acpi_image_get_length(label, &acpi_info);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Partition %s can't get size", label);
+		return ret;
+	}
+
+	acpiimage = AllocatePool((*acpi_info).img_size);
+	if (!acpiimage) {
+		error(L"Alloc memory for %s image failed", label);
+		FreePool(acpi_info);
+		return EFI_OUT_OF_RESOURCES;
+	}
+	debug(L"Reading %s image: %d bytes", label, (*acpi_info).img_size);
+	ret = uefi_call_wrapper(gpart.dio->ReadDisk, 5, gpart.dio, (*acpi_info).MediaId,
+				(*acpi_info).partition_start, (*acpi_info).img_size, acpiimage);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"ReadDisk Error for %s image read", label);
+		FreePool(acpi_info);
 		FreePool(acpiimage);
 		return ret;
 	}
 	*image = acpiimage;
+	FreePool(acpi_info);
 	return EFI_SUCCESS;
 }
 
@@ -299,9 +353,6 @@ EFI_STATUS install_acpi_table_from_partitions(VOID *image,
 		return install_acpi_image_from_partition(is_acpio);
 	else
 		return check_install_acpi_image(image, is_acpio);
-
-	debug(L"Acpi table from %a-partition not installed", part_name);
-	return EFI_SUCCESS;
 }
 
 EFI_STATUS install_acpi_table_from_recovery_acpio(VOID *image, enum boot_target target)
