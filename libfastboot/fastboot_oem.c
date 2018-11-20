@@ -241,6 +241,12 @@ static struct oem_hash {
 	EFI_STATUS (*hash)(const CHAR16 *name);
 	BOOLEAN fail_if_missing;
 } OEM_HASH[] = {
+#ifdef USE_ACPI
+	{ ACPI_LABEL,		get_acpi_hash,		TRUE },
+#endif
+#ifdef USE_ACPIO
+	{ ACPIO_LABEL,		get_acpi_hash,		TRUE },
+#endif
 	{ BOOT_LABEL,		get_boot_image_hash,	TRUE },
 	{ RECOVERY_LABEL,	get_boot_image_hash,	FALSE },
 #ifdef USE_TRUSTY
