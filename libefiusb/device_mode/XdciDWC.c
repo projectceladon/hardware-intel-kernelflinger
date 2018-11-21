@@ -1208,6 +1208,10 @@ DwcXdciProcessEpXferDone (
   USB_XFER_REQUEST     *XferReq;
   UINT32               remainingLen;
 
+  if (EpNum > DWC_XDCI_MAX_ENDPOINTS) {
+    EpNum = DWC_XDCI_MAX_ENDPOINTS;
+  }
+
   if (CoreHandle == NULL) {
     DEBUG ((DEBUG_INFO, "ERROR: DwcXdciProcessEpXferDone: INVALID handle\n"));
     return EFI_DEVICE_ERROR;
