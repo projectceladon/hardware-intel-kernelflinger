@@ -224,6 +224,15 @@ EFI_STATUS slot_init(void)
 	UINTN i;
 	UINTN nb_slot;
 
+	ab_ops.read_ab_metadata = avb_ab_data_read;
+	ab_ops.write_ab_metadata = avb_ab_data_write;
+
+	ops = uefi_avb_ops_new();
+	if (ops == NULL)
+		error(L"Error allocating AvbOps when slot_init.");
+
+	ab_ops.ops = ops;
+
 	for (i = 0; i < MAX_NB_SLOT; i++) {
 		suffixes[i] = _suffixes + i * sizeof(SUFFIX_FMT);
 		efi_snprintf((CHAR8 *)suffixes[i], sizeof(suffixes[i]),
@@ -238,14 +247,6 @@ EFI_STATUS slot_init(void)
 		return EFI_SUCCESS;
 	}
 
-	ops = uefi_avb_ops_new();
-
-	if (ops == NULL)
-		error(L"Error allocating AvbOps when slot_init.");
-
-	ab_ops.ops = ops;
-	ab_ops.read_ab_metadata = avb_ab_data_read;
-	ab_ops.write_ab_metadata = avb_ab_data_write;
 	cur_suffix = NULL;
 	avb_ab_data_init(&boot_ctrl);
 
@@ -454,6 +455,19 @@ EFI_STATUS slot_reset(void)
 	EFI_STATUS ret;
 	cur_suffix = NULL;
 
+	ab_ops.read_ab_metadata = avb_ab_data_read;
+	ab_ops.write_ab_metadata = avb_ab_data_write;
+
+	/*
+	 * Init avb for fastboot mode, and update misc with default value.
+	 */
+	if (ops == NULL) {
+		ops = uefi_avb_ops_new();
+		if (ops == NULL)
+			error(L"Error allocating AvbOps when slot_reset.");
+	}
+	ab_ops.ops = ops;
+
 	nb_slot = get_part_nb_slot(BOOT_LABEL);
 	if (!nb_slot) {
 		/*
@@ -478,17 +492,6 @@ EFI_STATUS slot_reset(void)
 
 	is_used = TRUE;
 
-	/*
-	 * Init avb for fastboot mode, and update misc with default value.
-	 */
-	if (ops == NULL) {
-		ops = uefi_avb_ops_new();
-		if (ops == NULL)
-			error(L"Error allocating AvbOps when slot_reset.");
-	}
-	ab_ops.ops = ops;
-	ab_ops.read_ab_metadata = avb_ab_data_read;
-	ab_ops.write_ab_metadata = avb_ab_data_write;
 	avb_ab_data_init(&boot_ctrl);
 	return write_boot_ctrl();
 }
