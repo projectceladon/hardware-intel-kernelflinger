@@ -953,6 +953,13 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
                 efi_perror(ret, L"Failed to set os secure boot");
 #endif
 
+        /* install acpi tables before starting trusty */
+        ret = setup_acpi_table(bootimage, boot_target);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"setup_acpi_table");
+                return ret;
+        }
+
 #ifdef USE_TRUSTY
         if (is_bootimg_target(boot_target) || boot_target == MEMORY) {
 
