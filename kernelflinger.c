@@ -1505,7 +1505,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                         reboot_to_target(boot_target, EfiResetCold);
 #else
                 debug(L"NO_UI,only support fastboot");
-                reboot_to_target(FASTBOOT);
+                reboot_to_target(FASTBOOT, EfiResetCold);
 #endif
         }
 
