@@ -952,6 +952,14 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 
 	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
+
+        /* install acpi tables before starting trusty */
+        ret = setup_acpi_table(bootimage, boot_target);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"setup_acpi_table");
+                return ret;
+        }
+
 #ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {
 		VOID *tosimage = NULL;
@@ -1032,6 +1040,13 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 		goto exit;
 	}
 	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
+
+        /* install acpi tables before starting trusty */
+        ret = setup_acpi_table(bootimage, boot_target);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"setup_acpi_table");
+                return ret;
+        }
 
 #ifdef USE_TRUSTY
 	if (boot_target == NORMAL_BOOT) {

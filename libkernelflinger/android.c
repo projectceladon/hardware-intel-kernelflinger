@@ -552,8 +552,8 @@ static EFI_STATUS setup_ramdisk(UINT8 *bootimage)
 }
 
 
-static EFI_STATUS setup_acpi_table(VOID *bootimage,
-                                   __attribute__((__unused__)) enum boot_target target)
+EFI_STATUS setup_acpi_table(VOID *bootimage,
+                            __attribute__((__unused__)) enum boot_target target)
 {
         struct boot_img_hdr *aosp_header;
 
@@ -1996,12 +1996,6 @@ EFI_STATUS android_image_start_buffer(
         if (memcmp(aosp_header->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
                 error(L"buffer does not appear to contain an Android boot image");
                 return EFI_INVALID_PARAMETER;
-        }
-
-        ret = setup_acpi_table(bootimage, boot_target);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"setup_acpi_table");
-                return ret;
         }
 
         buf = (struct boot_params *)(bootimage + aosp_header->page_size);
