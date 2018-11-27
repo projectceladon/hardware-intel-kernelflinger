@@ -465,11 +465,11 @@ static EFI_STATUS write_rpmb_keybox_magic_real(UINT16 offset, void *buffer)
 		return ret;
 	}
 
-	if (!memcmp(buffer, rpmb_buffer, sizeof(UINT64))) {
+	if (!memcmp(buffer, rpmb_buffer, sizeof(uint32_t))) {
 		return EFI_SUCCESS;
 	}
 
-	memcpy(rpmb_buffer, buffer, sizeof(UINT64));
+	memcpy(rpmb_buffer, buffer, sizeof(uint32_t));
 	ret = write_rpmb_data(NULL, 1, offset, rpmb_buffer, rpmb_key, &rpmb_result);
 	debug(L"ret=%d, rpmb_result=%d", ret, rpmb_result);
 	if (EFI_ERROR(ret)) {
@@ -492,7 +492,7 @@ static EFI_STATUS read_rpmb_keybox_magic_real(UINT16 offset, void *buffer)
 		return ret;
 	}
 
-	memcpy(buffer, rpmb_buffer, sizeof(UINT64));
+	memcpy(buffer, rpmb_buffer, sizeof(uint32_t));
 
 	return EFI_SUCCESS;
 }
@@ -649,7 +649,7 @@ static EFI_STATUS write_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
 	UINT32 byte_offset;
 
 	byte_offset = offset * RPMB_BLOCK_SIZE;
-	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(uint32_t));
 	debug(L"ret=%d", ret);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to read keybox magic data");
@@ -661,12 +661,12 @@ static EFI_STATUS write_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
 		return EFI_SUCCESS;
 	}
 
-	if (!memcmp(buffer, rpmb_buffer, sizeof(UINT64))) {
+	if (!memcmp(buffer, rpmb_buffer, sizeof(uint32_t))) {
 		return EFI_SUCCESS;
 	}
 
-	memcpy(rpmb_buffer, buffer, sizeof(UINT64));
-	ret = simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+	memcpy(rpmb_buffer, buffer, sizeof(uint32_t));
+	ret = simulate_write_rpmb_data(byte_offset, rpmb_buffer, sizeof(uint32_t));
 	debug(L"ret=%d", ret);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Failed to write keybox magic data");
@@ -682,11 +682,11 @@ static EFI_STATUS read_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
 	UINT32 byte_offset;
 
 	byte_offset = offset * RPMB_BLOCK_SIZE;
-	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(UINT64));
+	ret = simulate_read_rpmb_data(byte_offset, rpmb_buffer, sizeof(uint32_t));
 	debug(L"ret=%d", ret);
 	/*gpt not updated, force success*/
 	if (ret == EFI_NOT_FOUND) {
-		memset(buffer, 0, sizeof(UINT64));
+		memset(buffer, 0, sizeof(uint32_t));
 		return EFI_SUCCESS;
 	}
 
@@ -695,7 +695,7 @@ static EFI_STATUS read_rpmb_keybox_magic_simulate(UINT16 offset, void *buffer)
 		return ret;
 	}
 
-	memcpy(buffer, rpmb_buffer, sizeof(UINT64));
+	memcpy(buffer, rpmb_buffer, sizeof(uint32_t));
 
 	return EFI_SUCCESS;
 }
