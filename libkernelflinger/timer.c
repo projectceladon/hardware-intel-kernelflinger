@@ -91,6 +91,8 @@ static uint32_t get_cpu_freq(void)
 
 uint32_t boottime_in_msec(void)
 {
+	return 0;
+#if 0
 	uint64_t tick;
 	uint32_t bt_us, bt_ms;
 	uint32_t cpu_freq;
@@ -102,6 +104,7 @@ uint32_t boottime_in_msec(void)
 	bt_ms = bt_us / 1000;
 
 	return bt_ms;
+#endif
 }
 
 void set_boottime_stamp(int num)
