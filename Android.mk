@@ -99,8 +99,10 @@ endif
 #Enable android verifed boot support(libavb)
 ifeq ($(BOARD_AVB_ENABLE),true)
     KERNELFLINGER_CFLAGS += -DUSE_AVB
-    ifeq ($(TARGET_BUILD_VARIANT),userdebug)
-        KERNELFLINGER_CFLAGS += -DAVB_ENABLE_DEBUG
+    ifneq ($(KERNELFLINGER_DISABLE_DEBUG_PRINT),true)
+        ifeq ($(TARGET_BUILD_VARIANT),userdebug)
+            KERNELFLINGER_CFLAGS += -DAVB_ENABLE_DEBUG
+        endif
     endif
     ifeq ($(KERNELFLINGER_AVB_CMDLINE),true)
         KERNELFLINGER_CFLAGS += -DAVB_CMDLINE
