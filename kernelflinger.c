@@ -728,7 +728,6 @@ static UINT8 validate_bootimage(
 
 	switch (boot_target) {
 	case NORMAL_BOOT:
-	case MEMORY:
 		expected = L"/boot";
 		/* in case of multistage ota */
 		expected2 = L"/recovery";
@@ -970,7 +969,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 	}
 
 #ifdef USE_TRUSTY
-	if (is_bootimg_target(boot_target) || boot_target == MEMORY) {
+	if (is_bootimg_target(boot_target)) {
 
 		if (boot_state == BOOT_STATE_RED) {
 #ifndef USERDEBUG
@@ -1096,7 +1095,8 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
 			 */
 			if (device_is_unlocked()) {
 				set_image_oemvars_nocheck(bootimage, NULL);
-				load_image(bootimage, BOOT_STATE_ORANGE, MEMORY, NULL);
+				load_image(bootimage, BOOT_STATE_ORANGE,
+					   NORMAL_BOOT, NULL);
 			}
 			FreePool(bootimage);
 			bootimage = NULL;
