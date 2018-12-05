@@ -176,6 +176,7 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	EFI_STATUS ret;
 	void* param = NULL;
 	UINT8 boot_state = BOOT_STATE_GREEN;
+	enum boot_target target = NORMAL_BOOT;
 
 	if (!bootimage)
 		return EFI_SUCCESS;
@@ -299,6 +300,10 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 #endif //USE_TRUSTY
 fail:
 #endif //USE_AVB
+#else
+	//Fastboot stored in the SPI gets the capability to load an image
+	//(fastboot boot) using the RAMDISK and nothing from the eMMC
+	target = MEMORY;
 #endif //__FORCE_FASTBOOT
 	/* 'fastboot boot' case, only allowed on unlocked devices.*/
 	if (device_is_unlocked()) {
@@ -311,7 +316,7 @@ fail:
 		}
 
 		ret = android_image_start_buffer(NULL, bootimage,
-							NORMAL_BOOT, boot_state, NULL,
+							target, boot_state, NULL,
 							param, (const CHAR8 *)cmd_buf);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Couldn't load Boot image");

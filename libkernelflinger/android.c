@@ -978,7 +978,7 @@ static EFI_STATUS avb_prepend_command_line_rootfs(
 {
         EFI_STATUS ret = EFI_SUCCESS;
 
-        if (boot_target == RECOVERY)
+        if (boot_target == RECOVERY || boot_target == MEMORY)
                 return ret;
 
         if (use_slot()) {
@@ -1122,7 +1122,7 @@ static EFI_STATUS setup_command_line(
 #endif
 
 #ifndef USE_AVB
-        if ((boot_target == NORMAL_BOOT || boot_target == CHARGER || boot_target == MEMORY) &&
+        if ((boot_target == NORMAL_BOOT || boot_target == CHARGER) &&
             recovery_in_boot_partition()) {
                 ret = prepend_command_line_rootfs(&cmdline16, verity_cert);
                 if (verity_cert)
@@ -1140,7 +1140,8 @@ static EFI_STATUS setup_command_line(
         avb_prepend_command_line_rootfs(&cmdline16, boot_target);
 
 #ifdef AVB_CMDLINE
-        if (slot_data && slot_data->cmdline && boot_target != RECOVERY) {
+        if (slot_data && slot_data->cmdline && boot_target != RECOVERY &&
+            boot_target != MEMORY) {
                 avb_cmdlen = strlen((const CHAR8*)slot_data->cmdline);
         }
 #endif // AVB_CMDLINE
@@ -1895,7 +1896,7 @@ static EFI_STATUS setup_command_line_abl(
 #ifdef USE_AVB
         avb_prepend_command_line_rootfs(&cmdline16, boot_target);
 
-        if (use_slot()) {
+        if (use_slot() && boot_target != MEMORY) {
                 if (slot_get_active()) {
                         ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
                                                    slot_get_active());
@@ -2051,8 +2052,8 @@ EFI_STATUS android_image_start_buffer(
                 return ret;
         }
 
-        if (!recovery_in_boot_partition() || boot_target == RECOVERY) {
-                debug(L"Loading the ramdisk");
+        if (!recovery_in_boot_partition() || boot_target == RECOVERY ||
+            boot_target == MEMORY) {
                 ret = setup_ramdisk(bootimage);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"setup_ramdisk");
