@@ -1078,6 +1078,8 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 
+        prepend_command_line(&cmdline16, L"androidboot.selinux=permissive");
+
 #ifndef USER
         if (get_disable_watchdog()) {
                 ret = prepend_command_line(&cmdline16, CONVERT_TO_WIDE(TCO_OPT_DISABLED));
