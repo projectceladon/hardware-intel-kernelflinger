@@ -344,12 +344,49 @@ static void ui_internal_print(CHAR16 *fmt, va_list args, EFI_GRAPHICS_OUTPUT_BLT
 	ui_textarea_draw(default_textarea, default_textarea_x, default_textarea_y);
 }
 
+static BOOLEAN no_newline = FALSE;
+static void ui_internal_print_n(CHAR16 *fmt, va_list args, EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color)
+{
+	char *str;
+
+	if (!ui_is_ready()) {
+		VPrint(fmt, args);
+		return;
+	}
+
+	if (no_newline == FALSE) {
+		no_newline = TRUE;
+		ui_internal_print(fmt, args, color);
+		return;
+	}
+
+	if (fmt[0] == 0x000a) {
+		no_newline = FALSE;
+	}
+
+	str = build_str(fmt, args);
+	if (!str)
+		return;
+
+	ui_textarea_n(default_textarea, str, color, FALSE);
+	ui_textarea_draw(default_textarea, default_textarea_x, default_textarea_y);
+}
+
 void ui_print(CHAR16 *fmt, ...)
 {
 	va_list args;
 
 	va_start(args, fmt);
 	ui_internal_print(fmt, args, NULL);
+	va_end(args);
+}
+
+void ui_warning(CHAR16 *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	ui_internal_print_n(fmt, args, NULL);
 	va_end(args);
 }
 
