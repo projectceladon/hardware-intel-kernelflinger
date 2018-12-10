@@ -57,11 +57,42 @@ void vlog(const CHAR16 *fmt, va_list args);
     log(fmt "\n", ##__VA_ARGS__); \
 } while(0)
 
+#ifdef USE_UI
+#define warning(fmt, ...) do { \
+  log(fmt "\n", ##__VA_ARGS__); \
+  if (ui_is_ready()) { \
+    ui_print(fmt, ##__VA_ARGS__); \
+  } else \
+    Print(fmt "\n", ##__VA_ARGS__); \
+  log_flush_to_var(TRUE); \
+} while(0)
+
+#define warning_n(fmt, ...) do { \
+  log(fmt "", ##__VA_ARGS__); \
+  if (ui_is_ready()) { \
+    ui_warning(fmt, ##__VA_ARGS__); \
+  } else \
+    Print(fmt, ##__VA_ARGS__); \
+  log_flush_to_var(TRUE); \
+} while(0)
+#else /* USE_UI */
+#define warning(fmt, ...) do { \
+  log(fmt "\n", ##__VA_ARGS__); \
+  log_flush_to_var(TRUE); \
+} while(0)
+
+#define warning_n(fmt, ...) do { \
+  log(fmt "", ##__VA_ARGS__); \
+  log_flush_to_var(TRUE); \
+} while(0)
+#endif /* USE_UI */
 #define debug_pause(x) pause(x)
-#else
+#else /* DEBUG_MESSAGE */
+#define warning(fmt, ...) (void)0
+#define warning_n(fmt, ...) (void)0
 #define debug(fmt, ...) (void)0
 #define debug_pause(x) (void)(x)
-#endif
+#endif /* DEBUG_MESSAGE */
 
 #ifdef USE_UI
 #define error(x, ...) do { \
