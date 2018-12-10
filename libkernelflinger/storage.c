@@ -289,23 +289,28 @@ EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 	if (end <= start)
 		return EFI_INVALID_PARAMETER;
 
-	for (lba = start; lba <= end; lba += pattern_blocks, prev = progress,
-				      progress = percent5(lba - start, end - start)) {
+	info_n(L"Erasing ");
+	for (lba = start; lba <= end; lba += pattern_blocks) {
 		if (lba + pattern_blocks > end + 1)
 			size = end - lba + 1;
 		else
 			size = pattern_blocks;
 
-		if (progress != prev)
-			debug(L"%d%% completed", progress);
-
 		ret = uefi_call_wrapper(bio->WriteBlocks, 5, bio, bio->Media->MediaId, lba,
-					bio->Media->BlockSize * size, pattern);
+				bio->Media->BlockSize * size, pattern);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to erase block %ld", lba);
 			return ret;
 		}
+		progress = (lba + size - start) * 50 / (end - start + 1);
+		for (; prev <= progress; prev++) {
+			if (prev % 5 == 0)
+				info_n(L"%d", prev * 2);
+			else
+				info_n(L".");
+		}
 	}
+	info_n(L"\n");
 
 	return EFI_SUCCESS;
 }
