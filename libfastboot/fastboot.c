@@ -807,7 +807,7 @@ static void cmd_erase(INTN argc, CHAR8 **argv)
 		fastboot_fail("Allocation error");
 		return;
 	}
-	ui_print(L"Erasing %s ...", label);
+	info(L"Erasing %s ...", label);
 	ret = erase_by_label(label);
 	if (EFI_ERROR(ret)) {
 		FreePool(label);
@@ -825,7 +825,7 @@ static void cmd_erase(INTN argc, CHAR8 **argv)
 	}
 
 	FreePool(label);
-	ui_print(L"Erase done.");
+	info(L"Erase done.");
 	fastboot_okay("");
 }
 
