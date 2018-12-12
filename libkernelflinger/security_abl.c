@@ -30,6 +30,7 @@
 #include <efi.h>
 #include <efiapi.h>
 #include <efilib.h>
+#include <lib.h>
 #include "security_interface.h"
 #include "rpmb_storage.h"
 #include "life_cycle.h"
@@ -64,6 +65,7 @@
 	device_sec_info_t *dev_sec;
 	UINT8 rpmb_key[SECURITY_ABL_SEED_MAX_ENTRIES * RPMB_KEY_SIZE];
 	UINT8 i;
+	uint32_t seed_cnt;
 
 	if (!security_data)
 		return EFI_INVALID_PARAMETER;
@@ -72,7 +74,8 @@
 	if (dev_sec->size_of_this_struct != sizeof(device_sec_info_t))
 		return EFI_INVALID_PARAMETER;
 
-	for (i = 0; i < SECURITY_ABL_SEED_MAX_ENTRIES; i++)
+	seed_cnt = min(dev_sec->num_seeds, SECURITY_ABL_SEED_MAX_ENTRIES);
+	for (i = 0; i < seed_cnt; i++)
 	{
 		if (EFI_SUCCESS != derive_rpmb_key_with_seed(dev_sec->seed_list[i].seed, rpmb_key + i * RPMB_KEY_SIZE))
 		{
