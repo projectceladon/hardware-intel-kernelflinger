@@ -171,46 +171,10 @@ static EFI_STATUS launch_trusty_os(trusty_startup_params_t *param)
 	return EFI_SUCCESS;
 }
 
-#ifdef RPMB_STORAGE
-EFI_STATUS generate_rpmb_key_from_seed(VOID)
-{
-	EFI_STATUS ret;
-	UINT8 i;
-	UINT8 rpmb_key[RPMB_MAX_PARTITION_NUMBER * RPMB_KEY_SIZE] = { 0 };
-
-	for (i = 0; i < BOOTLOADER_SEED_MAX_ENTRIES; i++)
-	{
-		if (EFI_SUCCESS != derive_rpmb_key_with_seed(trusty_boot_params->seed_list[i].seed, rpmb_key + i * RPMB_KEY_SIZE))
-		{
-			memset(rpmb_key + i * RPMB_KEY_SIZE, 0, RPMB_KEY_SIZE);
-			break;
-		}
-	}
-
-	if (i > 0)
-		ret = set_rpmb_derived_key(rpmb_key, sizeof(rpmb_key), i);
-	else
-		ret = EFI_NOT_FOUND;
-
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to generate the rpmb key from seed");
-	}
-
-	return ret;
-}
-#endif
-
 EFI_STATUS set_trusty_param(IN VOID *param_data)
 {
-	EFI_STATUS ret;
 	trusty_boot_params = (trusty_boot_params_t *)param_data;
-#ifdef RPMB_STORAGE
-	ret = generate_rpmb_key_from_seed();
-#else
-	ret = EFI_SUCCESS;
-#endif
-
-	return ret;
+	return EFI_SUCCESS;
 }
 
 EFI_STATUS start_trusty(VOID *tosimage)
