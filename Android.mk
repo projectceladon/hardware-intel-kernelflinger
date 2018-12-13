@@ -385,6 +385,10 @@ endif
 LOCAL_SRC_FILES := \
 	kf4abl.c
 
+ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
+    LOCAL_SRC_FILES += \
+        ux.c
+endif
 ifeq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY),true)
 keys4abl_intermediates := $(call intermediates-dir-for,ABL,keys)
 
@@ -494,6 +498,10 @@ endif
 LOCAL_SRC_FILES := \
 	kf4abl.c
 
+ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
+    LOCAL_SRC_FILES += \
+        ux.c
+endif
 ifeq ($(BOARD_AVB_ENABLE),true)
 LOCAL_SRC_FILES += \
 	avb_init.c
