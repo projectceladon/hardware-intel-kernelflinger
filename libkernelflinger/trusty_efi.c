@@ -51,20 +51,21 @@
 /* Trusty OS (TOS) definitions */
 #define TOS_HEADER_MAGIC         0x6d6d76656967616d
 #define TOS_HIGH_ADDR            0x3fffffff   /* Less than 1 GB */
-#define TOS_STARTUP_VERSION      0x02
+#define TOS_STARTUP_VERSION_V2   0x02
+#define TOS_STARTUP_VERSION_V3   0x03
 #define SIPI_AP_HIGH_ADDR        0x100000  /* Less than 1MB */
 #define SIPI_AP_MEMORY_LENGTH    0x1000  /* 4KB in length */
 #define VMM_MEM_BASE             0x34C00000
 #define VMM_MEM_SIZE             0x01000000
 #define TRUSTY_MEM_BASE          0x32C00000
 #define TRUSTY_MEM_SIZE          0x01000000
-
+#define TRUSTY_KEYBOX_KEY_SIZE   32
  /*
  * this is the startup structure containes the informations for ikgt and trusty
  * boot requirement(memory base/size, num_seed, seedlist, serials etc.)
  * and shared between ikgt and bootloader.
  */
-struct tos_startup_info {
+struct tos_startup_info_v2 {
         /* version of TOS startup info structure, currently set it as 1 */
         UINT32 version;
         /* Size of this structure for mismatching check */
@@ -95,6 +96,39 @@ struct tos_startup_info {
         UINT8 serial[MMC_PROD_NAME_WITH_PSN_LEN];
 } __attribute__((packed)) ;
 
+
+struct tos_startup_info_v3 {
+        /* version of TOS startup info structure, currently set it as 1 */
+        UINT32 version;
+        /* Size of this structure for mismatching check */
+        UINT32 size;
+        /* UEFI memory map address */
+        UINT64 efi_memmap;
+        /* UEFI memory map size */
+        UINT32 efi_memmap_size;
+        /* Reserved for AP's wake-up */
+        UINT32 sipi_ap_wkup_addr;
+        UINT64 trusty_mem_base;
+        UINT64 vmm_mem_base;
+        UINT32 trusty_mem_size;
+        UINT32 vmm_mem_size;
+        /*
+        rpmb keys, Currently HMAC-SHA256 is used in RPMB spec and 256-bit (32byte) is enough.
+        Hence only lower 32 bytes will be used for now for each entry. But keep higher 32 bytes
+        for future extension. Note that, RPMB keys are already tied to storage device serial number.
+        If there are multiple RPMB partitions, then we will get multiple available RPMB keys.
+        And if rpmb_key[n][64] == 0, then the n-th RPMB key is unavailable (Either because of no such
+        RPMB partition, or because OSloader doesn't want to share the n-th RPMB key with Trusty)
+        */
+        UINT8 rpmb_key[RPMB_MAX_PARTITION_NUMBER][RPMB_MAX_KEY_SIZE];
+        /* Seed */
+        UINT32 num_seeds;
+        seed_info_t seed_list[BOOTLOADER_SEED_MAX_ENTRIES];
+        /* Concatenation of mmc product name with a string representation of PSN */
+        UINT8 serial[MMC_PROD_NAME_WITH_PSN_LEN];
+        UINT8 attkb_key[TRUSTY_KEYBOX_KEY_SIZE];
+        UINT64 efi_system_table;
+} __attribute__((packed)) ;
 /*
 * this is the private image headrer of TOS image, which is packed at the begining of the
 * image and shared between bootloader and ikgt, every boottime the bootloader
@@ -116,8 +150,9 @@ struct tos_image_header {
         *  this allocated space
         */
         UINT32 tos_ldr_size;
-        UINT32 reserved;
-} ;
+        UINT8 startup_struct_version;
+        UINT8 reserved[3];
+} __attribute__((packed)) ;
 
 /* Get the TOS image header from the bootimage
  * Parameters:
@@ -199,9 +234,10 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
         EFI_PHYSICAL_ADDRESS load_base = 0;
         EFI_PHYSICAL_ADDRESS startup_info_phy_addr = 0;
         EFI_PHYSICAL_ADDRESS sipi_ap_addr = 0;
-        struct tos_startup_info  *startup_info = NULL;
+        struct tos_startup_info_v2 *startup_info_v2 = NULL;
+        struct tos_startup_info_v3 *startup_info_v3 = NULL;
         UINT8 *memory_map = NULL;
-        UINT32 (*call_entry)(struct tos_startup_info*);
+        UINT32 (*call_entry)(struct tos_startup_info_v2*);
         struct tos_image_header *tos_header;
         struct boot_img_hdr *boot_image_header;
         UINT64 temp_trusty_base_address, temp_vmm_base_address;
@@ -252,14 +288,16 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
         startup_info_phy_addr = TOS_HIGH_ADDR;
         ret = allocate_pages(AllocateMaxAddress,
                              EfiLoaderData,
-                             EFI_SIZE_TO_PAGES(sizeof(struct tos_startup_info)),
+                             (tos_header->startup_struct_version == TOS_STARTUP_VERSION_V3) ?
+                             EFI_SIZE_TO_PAGES(sizeof(struct tos_startup_info_v3)):
+                             EFI_SIZE_TO_PAGES(sizeof(struct tos_startup_info_v2)),
                              &startup_info_phy_addr);
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Alloc memory for TOS startup structure failed");
                 goto cleanup;
         }
-        startup_info = (struct tos_startup_info *)(UINTN)startup_info_phy_addr;
-        memset(startup_info, 0, sizeof(*startup_info));
+        startup_info_v2 = (struct tos_startup_info_v2 *)(UINTN)startup_info_phy_addr;
+        memset(startup_info_v2, 0, sizeof(*startup_info_v2));
 
         debug(L"TOS Loadtime memory address = 0x%x", load_base);
 
@@ -274,20 +312,26 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
         }
 
         /* Initialize startup struct */
-        startup_info->version = TOS_STARTUP_VERSION;
-        startup_info->size = sizeof(struct tos_startup_info);
-        startup_info->efi_memmap = (UINT64)(UINTN)memory_map;
-        startup_info->efi_memmap_size = desc_size * nr_entries;
-        startup_info->sipi_ap_wkup_addr = (UINT32)sipi_ap_addr;
+        if (tos_header->startup_struct_version == TOS_STARTUP_VERSION_V3) {
+               startup_info_v2->version = TOS_STARTUP_VERSION_V3;
+               startup_info_v2->size = sizeof(struct tos_startup_info_v3);
+        } else {
+               startup_info_v2->version = TOS_STARTUP_VERSION_V2;
+               startup_info_v2->size = sizeof(struct tos_startup_info_v2);
+        }
 
-        ret = get_seeds(&startup_info->num_seeds, (VOID*)startup_info->seed_list);
+        startup_info_v2->efi_memmap = (UINT64)(UINTN)memory_map;
+        startup_info_v2->efi_memmap_size = desc_size * nr_entries;
+        startup_info_v2->sipi_ap_wkup_addr = (UINT32)sipi_ap_addr;
+
+        ret = get_seeds(&startup_info_v2->num_seeds, (VOID*)startup_info_v2->seed_list);
         if (EFI_ERROR(ret)){
                 efi_perror(ret, L"Get trusty seed failed");
                 goto cleanup;
         }
 
 #ifdef RPMB_STORAGE
-        ret = get_rpmb_keys(RPMB_MAX_PARTITION_NUMBER, startup_info->rpmb_key);
+        ret = get_rpmb_keys(RPMB_MAX_PARTITION_NUMBER, startup_info_v2->rpmb_key);
         if (EFI_ERROR(ret)){
                 efi_perror(ret, L"Get rpmb key list failed");
                 goto cleanup;
@@ -299,21 +343,26 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
                 efi_perror(ret, L"Get VMM address failed");
                 goto cleanup;
         }
-        startup_info->vmm_mem_base = temp_vmm_base_address;
-        startup_info->vmm_mem_size = temp_vmm_address_size;
+        startup_info_v2->vmm_mem_base = temp_vmm_base_address;
+        startup_info_v2->vmm_mem_size = temp_vmm_address_size;
         ret = get_address_size_trusty(&temp_trusty_base_address, &temp_trusty_address_size);
         if (EFI_ERROR(ret)){
                 efi_perror(ret, L"Get Trusty address failed");
                 goto cleanup;
         }
-        startup_info->trusty_mem_base = temp_trusty_base_address;
-        startup_info->trusty_mem_size = temp_trusty_address_size;
+        startup_info_v2->trusty_mem_base = temp_trusty_base_address;
+        startup_info_v2->trusty_mem_size = temp_trusty_address_size;
 
+        if (tos_header->startup_struct_version  == TOS_STARTUP_VERSION_V3) {
+                startup_info_v3 = (struct tos_startup_info_v3 *)(UINTN)startup_info_phy_addr;
+                startup_info_v3->efi_system_table = (UINT64)ST;
+                startup_info_v3->attkb_key = {0};
+        }
         /* Call TOS entry point */
-        call_entry = (UINT32(*)(struct tos_startup_info*))(
+        call_entry = (UINT32(*)(struct tos_startup_info_v2*))(
                         (UINTN)load_base + tos_header->entry_offset);
         debug(L"Call TOS loader entry_addr = 0x%x", call_entry);
-        tos_ret = call_entry(startup_info);
+        tos_ret = call_entry(startup_info_v2);
 
         if (tos_ret) {
                 error(L"Load and start Trusty OS failed: 0x%x", tos_ret);
@@ -330,7 +379,10 @@ cleanup:
         if (load_base)
                 free_pages(load_base, EFI_SIZE_TO_PAGES(load_size));
         if (startup_info_phy_addr)
-                free_pages(startup_info_phy_addr, EFI_SIZE_TO_PAGES(sizeof(struct tos_startup_info)));
+                free_pages(startup_info_phy_addr,
+                (tos_header->startup_struct_version == TOS_STARTUP_VERSION_V3) ?
+                EFI_SIZE_TO_PAGES(sizeof(struct tos_startup_info_v3)):
+                EFI_SIZE_TO_PAGES(sizeof(struct tos_startup_info_v2)));
         if (memory_map)
                 FreePool(memory_map);
         return ret;
