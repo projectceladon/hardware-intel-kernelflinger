@@ -36,18 +36,32 @@
 #include <efilib.h>
 #include <lib.h>
 #include <ui.h>
+#include <upng.h>
 
 #include "res/img_res.h"
 
 ui_image_t *ui_image_get(const char *name)
 {
 	unsigned int i;
+	EFI_STATUS ret;
+	ui_image_t *img = NULL;
 
 	for (i = 0 ; i < ARRAY_SIZE(ui_images) ; i++)
 		if (!strcmp((CHAR8 *)ui_images[i].name, (CHAR8 *)name))
-			return &ui_images[i];
+			break;
+	if (i == ARRAY_SIZE(ui_images))
+		return NULL;
 
-	return NULL;
+	img = &ui_images[i];
+	if (!img->blt) {
+		ret = upng_load(img->data, img->size,
+				&img->blt, &img->width, &img->height);
+		if (EFI_ERROR(ret))
+			efi_perror(ret, L"Failed to load image %s",
+				   name);
+	}
+
+	return img->blt ? img : NULL;
 }
 
 EFI_STATUS ui_image_draw(ui_image_t *image, UINTN x, UINTN y)
