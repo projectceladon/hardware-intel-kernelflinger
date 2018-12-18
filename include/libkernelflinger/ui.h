@@ -51,6 +51,8 @@ extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_ORANGE;
 /* Image */
 typedef struct image {
 	const char *name;
+	const UINT8 *data;
+	const UINTN size;
 	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt;
 	UINTN width;
 	UINTN height;

@@ -5,7 +5,6 @@ LOCAL_PATH := $(LIBKERNELFLINGER_LOCAL_PATH)
 include $(CLEAR_VARS)
 
 PNG2C := $(HOST_OUT_EXECUTABLES)/png2c$(HOST_EXECUTABLE_SUFFIX)
-GEN_IMAGES := $(LOCAL_PATH)/tools/gen_images.sh
 GEN_FONTS := $(LOCAL_PATH)/tools/gen_fonts.sh
 
 res_intermediates := $(call intermediates-dir-for,STATIC_LIBRARIES,libkernelflinger)
@@ -17,22 +16,49 @@ $(LOCAL_PATH)/ui_font.c: $(font_res)
 $(LOCAL_PATH)/ui_image.c: $(img_res)
 
 ifndef TARGET_KERNELFLINGER_IMAGES_DIR
-TARGET_KERNELFLINGER_IMAGES_DIR := $(LOCAL_PATH)/res/images/
+TARGET_KERNELFLINGER_IMAGES_DIR := $(LOCAL_PATH)/res/images
 endif
 ifndef TARGET_KERNELFLINGER_FONT_DIR
-TARGET_KERNELFLINGER_FONT_DIR := $(LOCAL_PATH)/res/fonts/
+TARGET_KERNELFLINGER_FONT_DIR := $(LOCAL_PATH)/res/fonts
 endif
 
 KERNELFLINGER_IMAGES := $(wildcard $(TARGET_KERNELFLINGER_IMAGES_DIR)/*.png)
 KERNELFLINGER_FONTS := $(wildcard $(TARGET_KERNELFLINGER_FONT_DIR)/*.png)
 
-$(img_res): $(KERNELFLINGER_IMAGES) $(PNG2C) $(GEN_IMAGES)
+$(img_res): $(KERNELFLINGER_IMAGES)
 	$(hide) mkdir -p $(dir $@)
-	$(hide) export PATH=$(HOST_OUT_EXECUTABLES):$$PATH; $(GEN_IMAGES) $(TARGET_KERNELFLINGER_IMAGES_DIR) $@
+	$(hide) echo "/* Do not modify this auto-generated file. */" > $@
+	$(hide) $(foreach file,$(KERNELFLINGER_IMAGES),\
+         echo "extern uint8_t _binary_"$(subst .,_,$(notdir $(file)))"_start;" >> $@;)
+	$(hide) $(foreach file,$(KERNELFLINGER_IMAGES),\
+         echo "extern uint32_t _binary_"$(subst .,_,$(notdir $(file)))"_size;" >> $@;)
+	$(hide) echo "ui_image_t ui_images[] = {" >> $@
+	$(hide) $(foreach file,$(KERNELFLINGER_IMAGES),\
+         echo "{ .name = \""$(subst .png,,$(notdir $(file)))"\", "\
+		".data = (UINT8 *)&_binary_"$(subst .,_,$(notdir $(file)))"_start, "\
+		".size = (UINTN)&_binary_"$(subst .,_,$(notdir $(file)))"_size}," >> $@;)
+	$(hide) echo "};" >> $@
 
 $(font_res): $(KERNELFLINGER_FONTS) $(PNG2C) $(GEN_FONTS)
 	$(hide) mkdir -p $(dir $@)
 	$(hide) export PATH=$(HOST_OUT_EXECUTABLES):$$PATH; $(GEN_FONTS) $(TARGET_KERNELFLINGER_FONT_DIR) $@
+
+ifeq ($(TARGET_UEFI_ARCH),x86_64)
+    ELF_OUTPUT := elf64-x86-64
+else
+    ELF_OUTPUT := elf32-i386
+endif
+
+$(res_intermediates)/%.o: $(TARGET_KERNELFLINGER_IMAGES_DIR)/%.png
+	$(hide) $(EFI_OBJCOPY) --input binary --output $(ELF_OUTPUT) \
+		--binary-architecture i386 $< $@
+	$(eval $@_old := $(subst .,_,$(subst /,_,$<)))
+	$(eval $@_new := $(subst .,_,$(notdir $<)))
+	$(hide) $(EFI_OBJCOPY) \
+		--redefine-sym _binary_$($@_old)_start=_binary_$($@_new)_start \
+		--redefine-sym _binary_$($@_old)_end=_binary_$($@_new)_end \
+		--redefine-sym _binary_$($@_old)_size=_binary_$($@_new)_size \
+	        $@ $@
 
 LOCAL_MODULE := libkernelflinger-$(TARGET_BUILD_VARIANT)
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/../include/libkernelflinger
@@ -168,8 +194,12 @@ ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
 	ui_font.c \
 	ui_textarea.c \
 	ui_image.c \
+	upng.c \
 	ui_boot_menu.c \
 	ui_confirm.c
+    LOCAL_GENERATED_SOURCES := \
+        $(foreach file,$(KERNELFLINGER_IMAGES),\
+	    $(res_intermediates)/$(notdir $(file:png=o)))
 else
     LOCAL_SRC_FILES += \
 	no_ui.c \
