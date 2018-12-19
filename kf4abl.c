@@ -182,6 +182,7 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 
 #ifdef USE_AVB
 	AvbOps *ops;
+	AvbPartitionData *acpi;
 	AvbSlotVerifyData *slot_data = NULL;
 #ifndef USE_SLOT
 	const char *slot_suffix = "";
@@ -190,7 +191,15 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	AvbABFlowResult flow_result;
 #endif
 
-	const char *requested_partitions[] = {"boot", NULL};
+	const char *requested_partitions[] = {"boot",
+#ifdef USE_ACPI
+		"acpi",
+#endif
+#ifdef USE_ACPIO
+		"acpio",
+#endif
+		NULL};
+	VOID *acpiimage = NULL;
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
 	const uint8_t *vbmeta_pub_key;
@@ -240,6 +249,18 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	}
 #endif
 	param = slot_data;
+	for (int i = 1; requested_partitions[i] != NULL; i++) {
+		acpi = &slot_data->loaded_partitions[i];
+		acpiimage = acpi->data;
+		ret = install_acpi_table_from_partitions(acpiimage,
+							 acpi->partition_name,
+							 NORMAL_BOOT);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to install acpi table from %a image",
+				   acpi->partition_name);
+			goto fail;
+		}
+	}
 
 	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
 	ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
