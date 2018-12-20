@@ -56,7 +56,9 @@ int km_boot_params_serialize(const struct km_boot_params *params, uint8_t** out,
                  sizeof(params->device_locked) +
                  sizeof(params->verified_boot_state) +
                  sizeof(params->verified_boot_key_hash_size) +
-                 params->verified_boot_key_hash_size);
+                 sizeof(params->verified_boot_hash_size) +
+                 params->verified_boot_key_hash_size +
+                 params->verified_boot_hash_size);
     *out = trusty_calloc(*out_size, 1);
     if (!*out) {
         return TRUSTY_ERR_NO_MEMORY;
@@ -68,6 +70,8 @@ int km_boot_params_serialize(const struct km_boot_params *params, uint8_t** out,
     tmp = append_uint32_to_buf(tmp, params->verified_boot_state);
     tmp = append_sized_buf_to_buf(tmp, params->verified_boot_key_hash,
                                   params->verified_boot_key_hash_size);
+    tmp = append_sized_buf_to_buf(tmp, params->verified_boot_hash,
+                                  params->verified_boot_hash_size);
 
     return TRUSTY_ERR_NONE;
 }
