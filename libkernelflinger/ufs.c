@@ -120,18 +120,19 @@ static EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EF
 	return ret;
 }
 
-/* This mapping of LUNs is hardcoded for now.  If a new board comes
+/* This factory LUN is hardcoded for now.  If a new board comes
  * with a different mapping, we will have to find a clean way to
  * identify it
  */
 #define LUN_FACTORY 3
-#define LUN_USER 0
 #define LUN_UNKNOWN ((UINT64)-1)
+static UINT64 lun_user;
+
 static UINT64 log_unit_to_ufs_lun(logical_unit_t log_unit)
 {
 	switch(log_unit) {
 	case LOGICAL_UNIT_USER:
-		return LUN_USER;
+		return lun_user;
 	case LOGICAL_UNIT_FACTORY:
 		return LUN_FACTORY;
 	default:
@@ -192,10 +193,57 @@ static BOOLEAN is_ufs(EFI_DEVICE_PATH *p)
 {
 	return get_ufs_device_path(p) != NULL;
 }
+static EFI_STATUS ufs_set_boot_device_path(EFI_DEVICE_PATH *p)
+{
+	EFI_GUID ScsiPassThruProtocolGuid = EFI_EXT_SCSI_PASS_THRU_PROTOCOL_GUID;
+	EFI_EXT_SCSI_PASS_THRU_PROTOCOL *scsi;
+	EFI_STATUS ret;
+	UINT8 target_bytes[TARGET_MAX_BYTES];
+	UINT8 *target = target_bytes;
+	UINT64 boot_lun;
+
+	EFI_HANDLE scsi_handle;
+
+	ret = uefi_call_wrapper(BS->LocateDevicePath, 3, &ScsiPassThruProtocolGuid,
+				&p, &scsi_handle);
+	if (EFI_ERROR(ret)) {
+		error(L"Failed to locate SCSI root device");
+		return ret;
+	}
+
+	ret = uefi_call_wrapper(BS->HandleProtocol, 3, scsi_handle,
+				&ScsiPassThruProtocolGuid, (void *)&scsi);
+	if (EFI_ERROR(ret)) {
+		error(L"failed to get scsi protocol");
+		return ret;
+	}
+
+	p = get_ufs_device_path(p);
+	if (!p)
+		return EFI_NOT_FOUND;
+
+	ret = uefi_call_wrapper(scsi->GetTargetLun, 4, scsi, p, (UINT8 **)&target,
+				&boot_lun);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to get LUN for device");
+
+	/* First byte is used to identify well known logical units like Boot or RPMB.
+	 * Here we only want normal logical units so first byte must be 0
+	 * Second byte contains the LUN number.
+	 */
+	if ((boot_lun & 0xFF) != 0)
+		return EFI_NOT_FOUND;
+	lun_user = (boot_lun >> 8) & 0xFF;
+
+	return EFI_SUCCESS;
+
+
+}
 
 struct storage STORAGE(STORAGE_UFS) = {
 	.erase_blocks = ufs_erase_blocks,
 	.check_logical_unit = ufs_check_logical_unit,
+	.set_boot_device_path = ufs_set_boot_device_path,
 	.probe = is_ufs,
 	.name = L"UFS"
 };
