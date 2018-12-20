@@ -52,12 +52,17 @@ void km_tipc_shutdown(struct trusty_ipc_dev *dev);
  * @device_locked: nonzero if device is locked
  * @verified_boot_key_hash: hash of key used to verify Android image
  * @verified_boot_key_hash_size: size of verified_boot_key_hash
+ * @verified_boot_hash: cumulative hash of all images verified thus far.
+ *                      May be NULL if not computed.
+ * @verified_boot_hash_size: size of verified_boot_hash
  */
 int trusty_set_boot_params(uint32_t os_version, uint32_t os_patchlevel,
                            keymaster_verified_boot_t verified_boot_state,
                            bool device_locked,
                            const uint8_t *verified_boot_key_hash,
-                           uint32_t verified_boot_key_hash_size);
+                           uint32_t verified_boot_key_hash_size,
+                           const uint8_t* verified_boot_hash,
+                           uint32_t verified_boot_hash_size);
 
 /*
  * Set Keymaster attestation key. Returns one of trusty_err.

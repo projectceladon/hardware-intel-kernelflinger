@@ -54,9 +54,9 @@ enum keymaster_command {
 	KM_GET_KEY_CHARACTERISTICS      = (15 << KEYMASTER_REQ_SHIFT),
 
 	KM_SET_BOOT_PARAMS               = (0x1000 << KEYMASTER_REQ_SHIFT),
+	KM_PROVISION_KEYBOX              = (0x1001 << KEYMASTER_REQ_SHIFT),
 	KM_SET_ATTESTATION_KEY           = (0x2000 << KEYMASTER_REQ_SHIFT),
-	KM_APPEND_ATTESTATION_CERT_CHAIN = (0x3000 << KEYMASTER_REQ_SHIFT),
-	KM_PROVISION_KEYBOX              = (0x8000 << KEYMASTER_REQ_SHIFT),
+	KM_APPEND_ATTESTATION_CERT_CHAIN = (0x3000 << KEYMASTER_REQ_SHIFT)
 };
 
 typedef enum {
@@ -205,6 +205,8 @@ struct km_get_version_resp {
  * @verified_boot_state: one of keymaster_verified_boot_t
  * @verified_boot_key_hash_size: size of verified_boot_key_hash
  * @verified_boot_key_hash: hash of key used to verify Android image
+ * @verified_boot_hash_size: size of verified_boot_hash
+ * @verified_boot_hash: cumulative hash of all images verified thus far
  */
 struct km_boot_params {
     uint32_t os_version;
@@ -212,7 +214,9 @@ struct km_boot_params {
     uint32_t device_locked;
     uint32_t verified_boot_state;
     uint32_t verified_boot_key_hash_size;
-    uint8_t *verified_boot_key_hash;
+    const uint8_t *verified_boot_key_hash;
+    uint32_t verified_boot_hash_size;
+    const uint8_t* verified_boot_hash;
 } TRUSTY_ATTR_PACKED;
 
 /**

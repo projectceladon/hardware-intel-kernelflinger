@@ -309,7 +309,9 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
                 g_rot_data.verifiedBootState,
                 g_rot_data.deviceLocked,
                 g_rot_data.keyHash256,
-                g_rot_data.keySize);
+                g_rot_data.keySize,
+                NULL,
+                0);
 
     if (rc != KM_ERROR_OK && rc != KM_ERROR_ROOT_OF_TRUST_ALREADY_SET) {
         trusty_error("set boot_params has failed( %d )\n", rc);
@@ -362,7 +364,9 @@ int trusty_set_boot_params(uint32_t os_version, uint32_t os_patchlevel,
                            keymaster_verified_boot_t verified_boot_state,
                            bool device_locked,
                            const uint8_t *verified_boot_key_hash,
-                           uint32_t verified_boot_key_hash_size)
+                           uint32_t verified_boot_key_hash_size,
+                           const uint8_t* verified_boot_hash,
+                           uint32_t verified_boot_hash_size)
 {
     struct km_boot_params params = {
         .os_version = os_version,
@@ -371,6 +375,8 @@ int trusty_set_boot_params(uint32_t os_version, uint32_t os_patchlevel,
         .verified_boot_state = (uint32_t)verified_boot_state,
         .verified_boot_key_hash_size = verified_boot_key_hash_size,
         .verified_boot_key_hash = (uint8_t *)verified_boot_key_hash,
+        .verified_boot_hash_size = verified_boot_hash_size,
+        .verified_boot_hash = verified_boot_hash
     };
     uint8_t *req = NULL;
     uint32_t req_size = 0;
