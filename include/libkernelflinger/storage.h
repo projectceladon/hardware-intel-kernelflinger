@@ -62,6 +62,7 @@ struct storage {
 	EFI_STATUS (*erase_blocks)(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end);
 	EFI_STATUS (*check_logical_unit)(EFI_DEVICE_PATH *p, logical_unit_t log_unit);
 	EFI_STATUS (*get_erase_block_size)(EFI_HANDLE handle, UINTN *erase_blk_size);
+	EFI_STATUS (*set_boot_device_path)(EFI_DEVICE_PATH *p);
 	BOOLEAN (*probe)(EFI_DEVICE_PATH *p);
 	const CHAR16 *name;
 };

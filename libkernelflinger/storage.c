@@ -377,7 +377,10 @@ EFI_STATUS storage_set_boot_device(EFI_HANDLE device)
 	dps = DevicePathToStr((EFI_DEVICE_PATH *)pci);
 	debug(L"Setting PCI boot device to: %s", dps);
 	FreePool(dps);
-
+	if (is_cur_storage_ufs()) {
+		//UFS: to set LUN number of Boot device to user LUN
+		cur_storage->set_boot_device_path(device_path);
+	}
 	initialized = TRUE;
 	memcpy(&boot_device, pci, sizeof(boot_device));
 	boot_device_handle = device;
