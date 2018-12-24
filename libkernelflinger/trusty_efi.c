@@ -356,7 +356,7 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
         if (tos_header->startup_struct_version  == TOS_STARTUP_VERSION_V3) {
                 startup_info_v3 = (struct tos_startup_info_v3 *)(UINTN)startup_info_phy_addr;
                 startup_info_v3->efi_system_table = (UINT64)ST;
-                startup_info_v3->attkb_key = {0};
+                memset(startup_info_v3->attkb_key, 0, sizeof(startup_info_v3->attkb_key));
         }
         /* Call TOS entry point */
         call_entry = (UINT32(*)(struct tos_startup_info_v2*))(
