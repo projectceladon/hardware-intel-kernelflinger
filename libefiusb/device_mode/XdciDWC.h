@@ -526,7 +526,7 @@ typedef struct {
   DWC_XDCI_EVENT_BUFFER    *CurrentEventBuffer;                                 // Current event Buffer address
   DWC_XDCI_TRB             UnalignedTrbs [(DWC_XDCI_MAX_ENDPOINTS + 1) * DWC_XDCI_TRB_NUM];    // TRBs.
   DWC_XDCI_TRB             *Trbs;                                               // 16-bytes aligned TRBs.
-  DWC_XDCI_ENDPOINT        EpHandles [DWC_XDCI_MAX_ENDPOINTS];                  // EPs
+  DWC_XDCI_ENDPOINT        EpHandles [DWC_XDCI_MAX_ENDPOINTS * 2];              // EPs, diretion in and out for each EP
   UINT8                    DefaultSetupBuffer [DWC_XDCI_SETUP_BUFF_SIZE * 2];   // Unaligned setup Buffer
   UINT8                    *AlignedSetupBuffer;                                 // Aligned setup Buffer. Aligned to 8-byte boundary
   UINT8                    MiscBuffer [528];                                    // Unaligned misc Buffer
