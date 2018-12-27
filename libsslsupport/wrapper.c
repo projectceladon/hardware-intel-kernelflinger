@@ -152,13 +152,23 @@ void * __memset_chk(void* dest, int c, size_t n, size_t dest_len)
 	__attribute__((weak));
 void * __memset_chk(void* dest, int c, size_t n, size_t dest_len)
 {
-	error(L"Error: STUBBED %a", __func__);
-	return NULL;
+	if (dest_len < n)
+		panic(L"%a Error: dest_len(%d) is less than n(%d)", __func__, dest_len, n);
+
+	return memset(dest, c, n);
 }
 
 char *fgets(char * dest, int size, FILE* stream)
 	__attribute__((weak));
 char *fgets(char * dest, int size, FILE* stream)
+{
+	error(L"Error: STUBBED %a", __func__);
+	return NULL;
+}
+
+char *__fgets_chk(char * dest, int size, int strsize, FILE* stream)
+	__attribute__((weak));
+char *__fgets_chk(char * dest, int size, int strsize, FILE* stream)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return NULL;
@@ -285,6 +295,17 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 	return ret;
 }
 
+int __vsnprintf_chk(char *str, size_t size, int flags, size_t slen,
+			const char *format, va_list ap)
+			__attribute__((weak));
+int __vsnprintf_chk(char *str, size_t size, int flags, size_t slen,
+			const char *format, va_list ap)
+{
+	if (slen < size)
+		panic(L"%a Error: slen(%d) is less than size(%d)", __func__, slen, size);
+
+	return vsnprintf(str, size, format, ap);
+}
 void abort(void)
 {
 	error(L"Error: STUBBED %a", __func__);
@@ -299,10 +320,17 @@ char *strerror(int errnum)
 }
 
 void * __memcpy_chk(void* dest, const void* src,
-		    size_t copy_amount, size_t dest_len)
+			size_t copy_amount, size_t dest_len)
+			__attribute__((weak));
+void * __memcpy_chk(void* dest, const void* src,
+			size_t copy_amount, size_t dest_len)
 {
-	error(L"Error: STUBBED %a", __func__);
-	return NULL;
+	if (dest_len < copy_amount) {
+		panic(L"%a Error: dest_len(%d) is less than copy_amount(%d)",
+			__func__, dest_len, copy_amount);
+	}
+
+	return memcpy(dest, src, copy_amount);
 }
 
 #define SECSPERMIN	60
@@ -553,6 +581,14 @@ int open(const char * pathname, int flags, ...)
 	return 0;
 }
 
+int __open_2(const char *file, int oflag)
+	__attribute__((weak));
+int __open_2(const char *file, int oflag)
+{
+	error(L"Error: STUBBED %a", __func__);
+	return 0;
+}
+
 int poll(void)
 	__attribute__((weak));
 int poll(void)
@@ -564,6 +600,14 @@ int poll(void)
 ssize_t read(int f, void *b, size_t c)
 	__attribute__((weak));
 ssize_t read(int f, void *b, size_t c)
+{
+	error(L"Error: STUBBED %a", __func__);
+	return 0;
+}
+
+ssize_t __read_chk(int f, void *b, size_t c, size_t buflen)
+	__attribute__((weak));
+ssize_t __read_chk(int f, void *b, size_t c, size_t buflen)
 {
 	error(L"Error: STUBBED %a", __func__);
 	return 0;
