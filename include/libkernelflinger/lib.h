@@ -62,6 +62,12 @@ typedef INTN ssize_t;
 #define ULONG_MAX ((unsigned long)-1)
 #define ULLONG_MAX ((unsigned long long)-1)
 
+#define panic(x, ...) do { \
+    error(x, ##__VA_ARGS__); \
+    pause(30); \
+    halt_system(); \
+} while(0)
+
 /* Current EFI image handle.  To be use as parent image with the
    LoadImage boot service */
 extern EFI_HANDLE g_parent_image;
