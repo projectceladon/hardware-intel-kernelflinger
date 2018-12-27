@@ -135,14 +135,16 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 			continue;
 
 		if (boot_device.Function == pci->Function &&
-		    boot_device.Device == pci->Device)
+		    boot_device.Device == pci->Device &&
+		    boot_device.Header.Type == pci->Header.Type &&
+		    boot_device.Header.SubType == pci->Header.SubType)
 			continue;
 
 		ret = identify_storage(device_path, filter, &storage, &type);
 		if (EFI_ERROR(ret))
 			continue;
 
-		if (!boot_device.Header.Type || boot_device_type > type) {
+		if (!boot_device.Header.Type || boot_device_type >= type) {
 			memcpy(&boot_device, pci, sizeof(boot_device));
 			boot_device_type = type;
 			cur_storage = storage;
@@ -150,7 +152,9 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 			continue;
 		}
 
-		if (boot_device_type == type && type != STORAGE_GENERAL_BLOCK) {
+		if (boot_device_type == type &&
+		    type != STORAGE_GENERAL_BLOCK &&
+		    filter > type) {
 			error(L"Multiple identifcal storage found! Can't make a decision");
 			cur_storage = NULL;
 			boot_device.Header.Type = 0;
@@ -377,10 +381,7 @@ EFI_STATUS storage_set_boot_device(EFI_HANDLE device)
 	dps = DevicePathToStr((EFI_DEVICE_PATH *)pci);
 	debug(L"Setting PCI boot device to: %s", dps);
 	FreePool(dps);
-	if (is_cur_storage_ufs()) {
-		//UFS: to set LUN number of Boot device to user LUN
-		cur_storage->set_boot_device_path(device_path);
-	}
+
 	initialized = TRUE;
 	memcpy(&boot_device, pci, sizeof(boot_device));
 	boot_device_handle = device;
@@ -455,6 +456,13 @@ BOOLEAN is_cur_storage_ufs(void)
 		return TRUE;
 	else
 		return FALSE;
+}
+
+EFI_STATUS set_logical_unit(UINT64 user_lun, UINT64 factory_lun)
+{
+	if (cur_storage && cur_storage->set_logical_unit)
+		return cur_storage->set_logical_unit(user_lun, factory_lun);
+	return EFI_UNSUPPORTED;
 }
 
 EFI_STATUS get_logical_block_size(UINTN *logical_blk_size)

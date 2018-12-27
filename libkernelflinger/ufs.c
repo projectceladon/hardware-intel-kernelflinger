@@ -120,13 +120,10 @@ static EFI_STATUS ufs_erase_blocks(EFI_HANDLE handle, __attribute__((unused)) EF
 	return ret;
 }
 
-/* This factory LUN is hardcoded for now.  If a new board comes
- * with a different mapping, we will have to find a clean way to
- * identify it
- */
-#define LUN_FACTORY 3
+
+static UINT64 lun_factory = UFS_DEFAULT_FACTORY_LUN;
+static UINT64 lun_user = UFS_DEFAULT_USER_LUN;
 #define LUN_UNKNOWN ((UINT64)-1)
-static UINT64 lun_user;
 
 static UINT64 log_unit_to_ufs_lun(logical_unit_t log_unit)
 {
@@ -134,7 +131,7 @@ static UINT64 log_unit_to_ufs_lun(logical_unit_t log_unit)
 	case LOGICAL_UNIT_USER:
 		return lun_user;
 	case LOGICAL_UNIT_FACTORY:
-		return LUN_FACTORY;
+		return lun_factory;
 	default:
 		error(L"Unknown logical partition %d", log_unit);
 		return LUN_UNKNOWN;
@@ -189,11 +186,7 @@ static EFI_STATUS ufs_check_logical_unit(EFI_DEVICE_PATH *p, logical_unit_t log_
 	return target_lun == lun ? EFI_SUCCESS : EFI_NOT_FOUND;
 }
 
-static BOOLEAN is_ufs(EFI_DEVICE_PATH *p)
-{
-	return get_ufs_device_path(p) != NULL;
-}
-static EFI_STATUS ufs_set_boot_device_path(EFI_DEVICE_PATH *p)
+static EFI_STATUS ufs_detect_user_unit(EFI_DEVICE_PATH *p)
 {
 	EFI_GUID ScsiPassThruProtocolGuid = EFI_EXT_SCSI_PASS_THRU_PROTOCOL_GUID;
 	EFI_EXT_SCSI_PASS_THRU_PROTOCOL *scsi;
@@ -240,10 +233,32 @@ static EFI_STATUS ufs_set_boot_device_path(EFI_DEVICE_PATH *p)
 
 }
 
+static BOOLEAN is_ufs(EFI_DEVICE_PATH *p)
+{
+	BOOLEAN ret = FALSE;
+	if (get_ufs_device_path(p) != NULL) {
+		ufs_detect_user_unit(p);
+		ret = TRUE;
+	}
+	return ret;
+}
+
+/*for Installer.efi, can't get LUN of user from boot image, must input from outside
+ *if UFS layout is not default
+ */
+static EFI_STATUS ufs_set_log_unit_lun(UINT64 new_lun_user, UINT64 new_lun_factory)
+{
+	if ((new_lun_user > UFS_MAX_LUN) || (new_lun_factory > UFS_MAX_LUN))
+		return EFI_INVALID_PARAMETER;
+	lun_user = new_lun_user;
+	lun_factory = new_lun_factory;
+	return EFI_SUCCESS;
+}
+
 struct storage STORAGE(STORAGE_UFS) = {
 	.erase_blocks = ufs_erase_blocks,
 	.check_logical_unit = ufs_check_logical_unit,
-	.set_boot_device_path = ufs_set_boot_device_path,
+	.set_logical_unit = ufs_set_log_unit_lun,
 	.probe = is_ufs,
 	.name = L"UFS"
 };

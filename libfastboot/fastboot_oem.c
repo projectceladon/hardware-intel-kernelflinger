@@ -296,16 +296,20 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 	enum storage_type types[STORAGE_ALL + 1];
 	INTN i, total_types = 0;
 	enum storage_type boot_device_type;
+	CHAR8 * lun_str = NULL;
+	UINTN user_lun = UFS_DEFAULT_USER_LUN;
+	UINTN factory_lun = UFS_DEFAULT_FACTORY_LUN;
+	BOOLEAN is_ufs_set = FALSE;
 
 	if (argc < 2) {
+		fastboot_info("Supported type: ufs[@lun<user>:<factory>] emmc sata nvme");
 #ifdef USB_STORAGE
-		fastboot_info("Supported type: ufs emmc sata nvme sdcard usb");
-		fastboot_info("                general");
+		fastboot_info("                sdcard usb general");
 #else
-		fastboot_info("Supported type: ufs emmc sata nvme sdcard");
-		fastboot_info("                general");
+		fastboot_info("                sdcard general");
 #endif
-		fastboot_info("Example: fastboot oem set-storage ufs emmc");
+		fastboot_info("Example1: fastboot oem set-storage ufs emmc");
+		fastboot_info("Example2: fastboot oem set-storage ufs@lun1:3");
 		fastboot_fail("Should add one or more type");
 		return;
 	}
@@ -315,8 +319,16 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 			types[total_types++] = STORAGE_EMMC;
 			continue;
 		}
-		if (!strcmp(argv[i], (CHAR8 *)"ufs")) {
+		if (!strncmp(argv[i], (CHAR8 *)"ufs",3)) {
+			is_ufs_set = TRUE;
 			types[total_types++] = STORAGE_UFS;
+			lun_str = (CHAR8 *)strcasestr((char *)argv[i], (char *)"@lun");
+			if ((strlen(lun_str) > 4) && (lun_str[4] >= '0') &&
+			    (lun_str[4] <= ('0'+ UFS_MAX_LUN)))
+				user_lun = lun_str[4] - '0';
+			if ((strlen(lun_str) > 6) && (lun_str[5] == ':') &&
+			    (lun_str[6] <= ('0'+ UFS_MAX_LUN)))
+				factory_lun = lun_str[6] - '0';
 			continue;
 		}
 		if (!strcmp(argv[i], (CHAR8 *)"sata")) {
@@ -351,7 +363,15 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 		fastboot_fail("All input types are skipped");
 		return;
 	}
-
+	if (is_ufs_set == TRUE) {
+		if (user_lun > UFS_MAX_LUN || factory_lun > UFS_MAX_LUN ||
+		    factory_lun == user_lun) {
+			fastboot_fail("UFS LUN number should be from 0 to 7 and exclusive");
+			return;
+		}
+		//must set LUN layout before reading current UFS storage
+		set_logical_unit((UINT64) user_lun, (UINT64) factory_lun);
+	}
 	ret = get_boot_device_type(&boot_device_type);
 	if (EFI_ERROR(ret)) {
 		fastboot_fail("Failed to get current boot device type");
@@ -359,7 +379,8 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 	}
 
 	for (i = 0; i < total_types; i++) {
-		if (boot_device_type == types[i]) {
+		if ((boot_device_type == types[i]) && (user_lun == UFS_DEFAULT_USER_LUN) &&
+		    (factory_lun == UFS_DEFAULT_FACTORY_LUN)) {
 			fastboot_info("Already use such type device");
 			fastboot_okay("");
 			return;
@@ -372,6 +393,11 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 	if (i == total_types) {
 		fastboot_fail("Failed to find valid storage");
 		return;
+	}
+
+	if (is_ufs_set == TRUE) {
+		//must set LUN layout after storage changed to UFS
+		set_logical_unit((UINT64) user_lun, (UINT64) factory_lun);
 	}
 
 	set_device_security_info(NULL);
