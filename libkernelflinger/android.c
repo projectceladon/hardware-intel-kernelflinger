@@ -1338,7 +1338,7 @@ EFI_STATUS android_image_load_partition(
         EFI_STATUS ret;
         struct boot_img_hdr aosp_header;
         struct gpt_partition_interface gpart;
-        UINTN partition_start;
+        UINT64 partition_start;
 
         *bootimage_p = NULL;
         ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
@@ -2091,7 +2091,7 @@ EFI_STATUS read_bcb(
 {
         EFI_STATUS ret;
         struct gpt_partition_interface gpart;
-        UINTN partition_start;
+        UINT64 partition_start;
 
         debug(L"Locating BCB");
         ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
@@ -2122,7 +2122,7 @@ EFI_STATUS write_bcb(
 {
         EFI_STATUS ret;
         struct gpt_partition_interface gpart;
-        UINTN partition_start;
+        UINT64 partition_start;
 
         debug(L"Locating BCB");
         ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
