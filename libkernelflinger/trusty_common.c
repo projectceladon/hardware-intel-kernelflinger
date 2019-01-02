@@ -61,8 +61,8 @@ static EFI_STATUS tos_image_load_partition(IN const CHAR16 *label, OUT VOID **im
         UINT32 img_size;
         EFI_STATUS ret;
         struct gpt_partition_interface gpart;
-        UINTN partition_start;
-        UINTN partition_size;
+        UINT64 partition_start;
+        UINT64 partition_size;
         VOID *bootimg;
         struct boot_img_hdr aosp_header;
 
