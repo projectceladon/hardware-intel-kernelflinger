@@ -178,8 +178,9 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	UINT8 boot_state = BOOT_STATE_GREEN;
 
 	if (!bootimage)
-		 return EFI_SUCCESS;
+		return EFI_SUCCESS;
 
+#ifndef __FORCE_FASTBOOT
 #ifdef USE_AVB
 	AvbOps *ops;
 	AvbPartitionData *acpi;
@@ -202,8 +203,12 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	VOID *acpiimage = NULL;
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
+
+#ifdef USE_TRUSTY
 	const uint8_t *vbmeta_pub_key;
 	UINTN vbmeta_pub_key_len;
+	VOID *tosimage = NULL;
+#endif
 	debug(L"Processing boot image");
 
 	ops = avb_init();
@@ -279,7 +284,6 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	}
 
 #ifdef USE_TRUSTY
-	VOID *tosimage = NULL;
 	ret = load_tos_image(&tosimage);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Load tos image failed");
@@ -292,9 +296,10 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 		goto fail;
 	}
 	set_boottime_stamp(TM_PROCRSS_TRUSTY_DONE);
-#endif
+#endif //USE_TRUSTY
 fail:
-#endif
+#endif //USE_AVB
+#endif //__FORCE_FASTBOOT
 	/* 'fastboot boot' case, only allowed on unlocked devices.*/
 	if (device_is_unlocked()) {
 		UINT32 crc;
