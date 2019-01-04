@@ -40,6 +40,7 @@
 #include "rpmb_ufs.h"
 #include "rpmb_emmc.h"
 #include "rpmb_virtual.h"
+#include "rpmb_nvme.h"
 #include "storage.h"
 
 #define MAGIC_KEY_OFFSET		0
@@ -259,6 +260,18 @@ EFI_STATUS rpmb_init(EFI_HANDLE disk_handle)
 			return EFI_SUCCESS;
 		}
 		error(L"init virtual media rpmb using pass through failed");
+		break;
+	case STORAGE_NVME:
+		storage_rpmb_ops = get_nvme_storage_rpmb_ops();
+		if (!storage_rpmb_ops) {
+			error(L"failed to get nvme rpmb operation instance");
+			return EFI_NOT_FOUND;
+		}
+		if ((storage_rpmb_ops->get_storage_protocol)((void **)(&rpmb_dev), disk_handle) == EFI_SUCCESS) {
+			debug(L"init nvme rpmb success");
+			return EFI_SUCCESS;
+		}
+		error(L"init nvme rpmb failed");
 		break;
 	default:
 		error(L"boot device not supported");
