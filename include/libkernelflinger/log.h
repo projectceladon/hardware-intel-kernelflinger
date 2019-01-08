@@ -53,8 +53,12 @@ void vlog(const CHAR16 *fmt, va_list args);
 #endif
 
 #if DEBUG_MESSAGES
-#define debug(fmt, ...) do { \
-    log(fmt "\n", ##__VA_ARGS__); \
+#define debug(x, ...) do { \
+  log(x "\n", ##__VA_ARGS__); \
+  if (ui_is_ready()) { \
+    ui_print(x, ##__VA_ARGS__); \
+  } else \
+    Print(x "\n", ##__VA_ARGS__); \
 } while(0)
 
 #define debug_pause(x) pause(x)
