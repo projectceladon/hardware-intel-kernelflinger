@@ -1138,6 +1138,29 @@ exit:
 }
 #endif
 
+#ifdef FASTBOOT_FOR_NON_ANDROID
+EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
+{
+	enum boot_target target;
+	void *efiimage, *bootimage;
+	UINTN imagesize;
+
+	InitializeLib(image, sys_table);
+
+	if (!get_boot_device()) {
+		// Get boot device failed
+		error(L"Failed to find boot device");
+		return EFI_NO_MEDIA;
+        }
+
+	for (;;) {
+		log(L"Enter fastboot mode ...\n");
+		fastboot_start(&bootimage, &efiimage, &imagesize, &target);
+	}
+	return EFI_SUCCESS;
+}
+#else //FASTBOOT_FOR_NON_ANDROID
+
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
 	enum boot_target target;
@@ -1261,3 +1284,4 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #endif
 	return EFI_SUCCESS;
 }
+#endif //FASTBOOT_FOR_NON_ANDROID

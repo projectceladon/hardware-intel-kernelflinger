@@ -1,0 +1,27 @@
+Files in this directory is used to build fastboot elf without Android
+build environment.
+
+The build out "fastboot" is positioned as basic flash tool only. Thus,
+limited fastboot commands are supported:
+
+fastboot flash <partition> <filename>  //flash gpt or flash some data to
+a disk partition or some special data.
+fastboot erase <partition>  //erase a partition.
+fastboot gatvar <var_name>|all  //get a var value or all vars value.
+fastboot reboot  //Reboot the device.
+fastboot reboot-bootloader  //Reboot the device to fastboot mode.
+
+Tested on ubuntu 16.04, cmake3.5 and clang6.0 or above are needed.
+for ubuntu 14.04, cmake3 and clang3.9 should be installed by apt-get.
+
+To compile fastboot.elf standalone, in your workdir
+	cmake path-to-kernelflinger/build
+dependent sources will be cloned by git automatically, then
+	cmake --build .
+
+The default target platform is broxton, optional target platform is
+broxton, icelake, tigerlake, kabylake, to set target platform, set variable
+TARGET_BOARD_PLATFORM in config.cmake
+
+The generated fastboot.sym.elf in workdir is an elf executable with system symbols,
+no ui, and doesn't support x86_64 for the time being.
