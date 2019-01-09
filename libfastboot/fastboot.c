@@ -1501,7 +1501,9 @@ void fastboot_free()
 
 	fastboot_unpublish_all();
 	fastboot_cmdlist_unregister(&cmdlist);
+#ifndef FASTBOOT_FOR_NON_ANDROID
 	fastboot_oem_free();
+#endif
 	fastboot_flashing_free();
 #ifdef USE_UI
 	fastboot_ui_destroy();
