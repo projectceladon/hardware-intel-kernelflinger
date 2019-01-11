@@ -58,6 +58,24 @@ void vlog(const CHAR16 *fmt, va_list args);
 } while(0)
 
 #ifdef USE_UI
+#define info(fmt, ...) do { \
+  log(fmt "\n", ##__VA_ARGS__); \
+  if (ui_is_ready()) { \
+    ui_info(fmt, ##__VA_ARGS__); \
+  } else \
+    Print(fmt "\n", ##__VA_ARGS__); \
+  log_flush_to_var(TRUE); \
+} while(0)
+
+#define info_n(fmt, ...) do { \
+  log(fmt "", ##__VA_ARGS__); \
+  if (ui_is_ready()) { \
+    ui_info_n(fmt, ##__VA_ARGS__); \
+  } else \
+    Print(fmt, ##__VA_ARGS__); \
+  log_flush_to_var(TRUE); \
+} while(0)
+
 #define warning(fmt, ...) do { \
   log(fmt "\n", ##__VA_ARGS__); \
   if (ui_is_ready()) { \
@@ -85,9 +103,21 @@ void vlog(const CHAR16 *fmt, va_list args);
   log(fmt "", ##__VA_ARGS__); \
   log_flush_to_var(TRUE); \
 } while(0)
+
+#define info(fmt, ...) do { \
+  log(fmt "\n", ##__VA_ARGS__); \
+  log_flush_to_var(TRUE); \
+} while(0)
+
+#define info_n(fmt, ...) do { \
+  log(fmt "", ##__VA_ARGS__); \
+  log_flush_to_var(TRUE); \
+} while(0)
 #endif /* USE_UI */
 #define debug_pause(x) pause(x)
 #else /* DEBUG_MESSAGE */
+#define info(fmt, ...) (void)0
+#define info_n(fmt, ...) (void)0
 #define warning(fmt, ...) (void)0
 #define warning_n(fmt, ...) (void)0
 #define debug(fmt, ...) (void)0

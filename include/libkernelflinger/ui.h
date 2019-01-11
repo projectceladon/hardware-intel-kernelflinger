@@ -178,6 +178,8 @@ EFI_STATUS ui_display_texts(const ui_textline_t **texts, UINTN x, UINTN y,
 EFI_STATUS ui_draw_blt(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt, UINTN x, UINTN y,
 		       UINTN width, UINTN height);
 void ui_print(CHAR16 *fmt, ...);
+void ui_info(CHAR16 *fmt, ...);
+void ui_info_n(CHAR16 *fmt, ...);
 void ui_warning(CHAR16 *fmt, ...);
 void ui_error(CHAR16 *fmt, ...);
 void ui_print_clear(void);
