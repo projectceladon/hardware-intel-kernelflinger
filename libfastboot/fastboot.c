@@ -116,24 +116,34 @@ static const char *flash_locked_whitelist[] = {
 };
 #endif
 
-void printProgress(int x, int y) {
+void printProgress(int done, int total) {
 
-        int percentage = (x * 100) / y;
+	static BOOLEAN print_start = FALSE;
+	static int dot = 0;
+        int percentage;
 
-        if (percentage < 10)
-                log(L"10%% [========                                                                        ]\r");
-        else if (percentage <= 25)
-                log(L"25%% [================                                                                ]\r");
-        else if (percentage <= 50)
-                log(L"50%% [========================================                                        ]\r");
-        else if (percentage <= 75)
-                log(L"75%% [========================================================                        ]\r");
-        else if (percentage <= 95)
-                log(L"95%% [==================================================================              ]\r");
-        else if (percentage < 100)
-                log(L"100%%[================================================================================]\r");
-        else
-                log(L"Download Complete[================================================================================]\n");
+	if (total == 0)
+		return;
+
+	if (print_start == FALSE) {
+		info_n(L"Receiving ");
+		print_start = TRUE;
+	}
+
+	if (done < total) {
+		percentage = (done * 50) / total;
+		for (; dot <= percentage; dot++) {
+			if (dot % 5 == 0)
+				info_n(L"%d", dot * 2);
+			else
+				info_n(L".");
+		}
+	} else {
+		info_n(L"%d", 100);
+		info_n(L"\n");
+		print_start = FALSE;
+		dot = 0;
+	}
 }
 
 struct download_buffer *fastboot_download_buffer(void)
@@ -767,7 +777,7 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 		fastboot_fail("Allocation error");
 		return;
 	}
-	ui_print(L"Flashing %s ...", label);
+	info(L"Flashing %s ...", label);
 
 	ret = flash(dl.data, dl.size, label);
 	FreePool(label);
@@ -787,7 +797,7 @@ static void cmd_flash(INTN argc, CHAR8 **argv)
 		}
 	}
 
-	ui_print(L"Flash done.");
+	info(L"Flash done.");
 	fastboot_okay("");
 }
 
@@ -1119,11 +1129,7 @@ static void fastboot_process_rx(void *buf, unsigned len)
 	switch (fastboot_state) {
 	case STATE_DOWNLOAD:
 		received_len += len;
-		if (received_len / DATA_PROGRESS_THRESHOLD >
-		    last_received_len / DATA_PROGRESS_THRESHOLD) {
-			printProgress((received_len / MiB), (dl.size / MiB));
-		}
-		last_received_len = received_len;
+		printProgress((received_len / MiB), (dl.size / MiB));
 		if (received_len < dl.size) {
 			s = buf;
 			transport_read(&s[len], dl.size - received_len);
