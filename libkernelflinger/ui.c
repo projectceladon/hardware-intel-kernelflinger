@@ -381,6 +381,24 @@ void ui_print(CHAR16 *fmt, ...)
 	va_end(args);
 }
 
+void ui_info(CHAR16 *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	ui_internal_print(fmt, args, &COLOR_GREEN);
+	va_end(args);
+}
+
+void ui_info_n(CHAR16 *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	ui_internal_print_n(fmt, args, &COLOR_GREEN);
+	va_end(args);
+}
+
 void ui_warning(CHAR16 *fmt, ...)
 {
 	va_list args;
