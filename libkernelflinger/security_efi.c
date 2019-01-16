@@ -204,7 +204,6 @@ EFI_STATUS get_seeds(IN UINT32 *num_seeds, OUT VOID *seed_list)
 		debug(L"call GetSeedInfoList success");
 		*num_seeds = blist.NumOfSeeds;
 		memcpy(seed_list, blist.SeedList, sizeof(blist.SeedList));
-		ret = stop_bls_proto();
 		return ret;
 	}
 
@@ -223,5 +222,21 @@ EFI_STATUS get_seeds(IN UINT32 *num_seeds, OUT VOID *seed_list)
 	}
 #endif
 
+	return ret;
+}
+
+EFI_STATUS get_attkb_key(OUT VOID * key)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	BOOTLOADER_SEED_PROTOCOL *bls;
+
+	bls = get_bls_proto();
+	if (bls) {
+		ret = uefi_call_wrapper(bls->GetAttKBEncKey, 1, key);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Get attkb key failed");
+			return ret;
+		}
+	}
 	return ret;
 }

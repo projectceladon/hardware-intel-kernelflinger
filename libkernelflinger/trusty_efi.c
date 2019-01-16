@@ -357,6 +357,7 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
                 startup_info_v3 = (struct tos_startup_info_v3 *)(UINTN)startup_info_phy_addr;
                 startup_info_v3->efi_system_table = (UINT64)ST;
                 memset(startup_info_v3->attkb_key, 0, sizeof(startup_info_v3->attkb_key));
+                get_attkb_key(startup_info_v3->attkb_key);
         }
         /* Call TOS entry point */
         call_entry = (UINT32(*)(struct tos_startup_info_v2*))(
@@ -372,6 +373,7 @@ static EFI_STATUS start_tos_image(IN VOID *bootimage)
         debug(L"TOS launch succeeded!");
 
 cleanup:
+        stop_bls_proto();
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Error has occurred!");
         }
