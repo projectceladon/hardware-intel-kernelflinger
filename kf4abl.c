@@ -472,8 +472,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			IMAGE_BOOT_PARAMS_ADDR
 		},
 		{
-			(CHAR8 *)"fw_boottime=",
-			strlen("fw_boottime="),
+			(CHAR8 *)"fw_boottsc=",
+			strlen("fw_boottsc="),
 			FIRMWARE_BOOTTIME
 		}
 	};
@@ -565,12 +565,15 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 						efi_perror(ret, L"Failed to set secure boot");
 					break;
 				}
-				/* Parse "fw_boottime=xxxxx" */
+				/* Parse "fw_boottsc=xxxxx" */
 				case FIRMWARE_BOOTTIME: {
-					UINT32 VALUE;
+					UINT64 VALUE;
+					UINT32 cpu_khz;
 					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
-					VALUE = (UINT32)strtoul((char *)nptr, 0, 10);
-					EFI_ENTER_POINT = VALUE;
+					VALUE = (UINT64)strtoull((char *)nptr, 0, 10);
+					cpu_khz = get_cpu_freq() * 1000;
+					//EFI_ENTER_POINT boot time is recorded in ms
+					EFI_ENTER_POINT = VALUE / cpu_khz;
 					continue;
 				}
 
