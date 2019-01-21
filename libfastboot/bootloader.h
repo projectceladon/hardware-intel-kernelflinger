@@ -35,6 +35,10 @@
 
 EFI_STATUS flash_bootloader(VOID *data, UINTN size);
 
+EFI_STATUS flash_bootloader_a(VOID *data, UINTN size);
+
+EFI_STATUS flash_bootloader_b(VOID *data, UINTN size);
+
 EFI_STATUS flash_esp(VOID *data, UINTN size);
 
 #endif	/* _BOOTLOADER_H_ */

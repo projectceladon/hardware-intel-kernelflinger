@@ -455,6 +455,8 @@ static struct label_exception {
 	{ L"ramdisk", flash_ramdisk },
 	{ ESP_LABEL, flash_esp },
 	{ BOOTLOADER_LABEL, flash_bootloader },
+	{ BOOTLOADER_A_LABEL, flash_bootloader_a },
+	{ BOOTLOADER_B_LABEL, flash_bootloader_b },
 #if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 	{ L"ioc", flash_ioc },
 #endif
