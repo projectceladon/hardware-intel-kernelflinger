@@ -47,6 +47,7 @@ enum TM_POINT {
 
 unsigned int EFI_ENTER_POINT;
 
+uint32_t get_cpu_freq(void);
 uint32_t boottime_in_msec(void);
 void set_boottime_stamp(int num);
 void construct_stages_boottime(CHAR8 *time_str, size_t buf_len);

@@ -76,7 +76,7 @@ __RDTSC (void)
 	return (uint64_t) hi << 32 | lo;
 }
 
-static uint32_t get_cpu_freq(void)
+uint32_t get_cpu_freq(void)
 {
 	uint32_t cpu_freq;
 	uint32_t max_nb_ratio;
