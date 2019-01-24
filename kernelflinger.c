@@ -989,16 +989,19 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 		const UINT8 *vbmeta_pub_key;
 		UINTN vbmeta_pub_key_len;
 
-		ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
-			slot_data->vbmeta_images[0].vbmeta_size,
-			&vbmeta_pub_key,
-			&vbmeta_pub_key_len);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to get the vbmeta_pub_key");
-			die();
-		}
+                if (slot_data != NULL) {
+                        ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
+                                slot_data->vbmeta_images[0].vbmeta_size,
+                                &vbmeta_pub_key,
+                                &vbmeta_pub_key_len);
+                        if (EFI_ERROR(ret)) {
+                                efi_perror(ret, L"Failed to get the vbmeta_pub_key");
+                                die();
+                        }
 
-		ret = get_rot_data(bootimage, boot_state, vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
+                        ret = get_rot_data(bootimage, boot_state,
+                                        vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
+                }
 #else
 		ret = get_rot_data(bootimage, boot_state, verifier_cert, &g_rot_data);
 #endif
@@ -1075,6 +1078,8 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
 	void *efiimage = NULL;
 	UINTN imagesize;
 	VOID *bootimage;
+        VOID *bootimage_p;
+        AvbSlotVerifyData *slot_data;
 
 	set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
 			&boot_state, FALSE, TRUE);
@@ -1093,10 +1098,18 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
 			/* 'fastboot boot' case, only allowed on unlocked devices.
 			 * check just to make sure
 			 */
+                        /* in 'fastboot boot' case, pass 'NULL' as the last parameter
+                         * of load_image will lost vbmeta options which should be
+                         * passed to kernel as kernel parameters. Fill a temporay
+                         * slot data here.
+                         */
 			if (device_is_unlocked()) {
+                                ret = android_image_load_partition_avb_ab(NULL,
+                                                &bootimage_p, &boot_state, &slot_data);
+                                if (EFI_ERROR(ret))
+                                        efi_perror(ret, L"Fastboot mode fail to load slot data");
 				set_image_oemvars_nocheck(bootimage, NULL);
-				load_image(bootimage, BOOT_STATE_ORANGE,
-					   NORMAL_BOOT, NULL);
+				load_image(bootimage, BOOT_STATE_ORANGE, MEMORY, slot_data);
 			}
 			FreePool(bootimage);
 			bootimage = NULL;
