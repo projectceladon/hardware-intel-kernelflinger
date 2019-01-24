@@ -806,8 +806,8 @@ static struct fastboot_cmd COMMANDS_FUSE[] = {
 #endif
 	{ "vbmeta-key-hash",		UNLOCKED,	cmd_fuse_vbmeta_key_hash },
 	{ "bootloader-policy",		UNLOCKED,	cmd_fuse_bootloader_policy },
-	{ "lock-tpm2-owner",		LOCKED,	cmd_fuse_tpm2_lock_owner },
-	{ "provision-trusty-seed",		LOCKED,	cmd_fuse_tpm2_provision_trusty_seed }
+	{ "lock-tpm2-owner",		UNLOCKED,	cmd_fuse_tpm2_lock_owner },
+	{ "provision-trusty-seed",	UNLOCKED,	cmd_fuse_tpm2_provision_trusty_seed }
 };
 #endif
 
