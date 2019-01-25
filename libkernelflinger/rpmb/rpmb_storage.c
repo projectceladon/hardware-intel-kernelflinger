@@ -33,10 +33,6 @@
 #include <openssl/engine.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
-#ifdef __SUPPORT_ABL_BOOT
-#include <openssl/hkdf.h>
-#include <openssl/mem.h>
-#endif
 #include <openssl/sha.h>
 #include "protocol/Mmc.h"
 #include "protocol/SdHostIo.h"
@@ -144,49 +140,6 @@ EFI_STATUS get_rpmb_derived_key(OUT UINT8 **d_key, OUT UINT8 *number_d_key)
 
 	return ret;
 }
-
-#ifdef __SUPPORT_ABL_BOOT
-EFI_STATUS derive_rpmb_key_with_seed(IN VOID *seed, OUT VOID *rpmb_key)
-{
-	EFI_STATUS ret;
-	UINT8 serial[MMC_PROD_NAME_WITH_PSN_LEN] = {0};
-	char *serialno;
-	/* HWCRYPTO Server App UUID */
-	const EFI_GUID  crypo_uuid = { 0x23fe5938, 0xccd5, 0x4a78,
-		{ 0x8b, 0xaf, 0x0f, 0x3d, 0x05, 0xff, 0xc2, 0xdf } };
-
-	if (!seed || !rpmb_key)
-		return EFI_INVALID_PARAMETER;
-
-	serialno = get_serial_number();
-
-	if (!serialno)
-		return EFI_NOT_FOUND;
-
-	/* Clear Byte 2 and 0 for CID[6] PRV and CID[0] CRC for eMMC Field Firmware Updates
-	 * serial[0] = cid[0];	-- CRC
-	 * serial[2] = cid[6];	-- PRV
-	 */
-	memcpy(serial, serialno, sizeof(serial));
-	serial[0] ^= serial[0];
-	serial[2] ^= serial[2];
-
-	if (!HKDF(rpmb_key, RPMB_KEY_SIZE, EVP_sha256(),
-		  (const uint8_t *)seed, RPMB_SEED_SIZE,
-		  (const uint8_t *)&crypo_uuid, sizeof(EFI_GUID),
-		  (const uint8_t *)serial, sizeof(serial))) {
-		error(L"HDKF failed \n");
-		memset(rpmb_key, 0, RPMB_KEY_SIZE);
-		ret = EFI_INVALID_PARAMETER;
-		goto out;
-	}
-
-	ret = EFI_SUCCESS;
-
-out:
-	return ret;
-}
-#endif  // __SUPPORT_ABL_BOOT
 
 void clear_rpmb_key(void)
 {

@@ -104,9 +104,8 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define VBMETA_LABEL		L"vbmeta"
 #define PRODUCT_LABEL		L"product"
 
-#ifdef __SUPPORT_ABL_BOOT
+/*labels to trigger IFWI self update. Only for ABL*/
 #define IFWI_CAPSULE_UPDATE	L"IfwiCapsuleUpdate"
-#endif
 
 BOOLEAN device_is_unlocked(void);
 BOOLEAN device_is_locked(void);

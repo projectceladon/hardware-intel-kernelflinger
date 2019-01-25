@@ -46,6 +46,7 @@
 
 //Array for recording boot time of every stage
 static unsigned bt_stamp[TM_POINT_LAST];
+static unsigned int efi_enter_point = 0;
 
 typedef union
 {
@@ -112,6 +113,11 @@ void set_boottime_stamp(int num)
 	bt_stamp[num] = boottime_in_msec();
 }
 
+void set_efi_enter_point(unsigned int value)
+{
+	efi_enter_point = value;
+}
+
 void construct_stages_boottime(CHAR8 *time_str, size_t buf_len)
 {
 	CHAR8 interval_str[16] = {0};
@@ -121,17 +127,18 @@ void construct_stages_boottime(CHAR8 *time_str, size_t buf_len)
 
 	strlcat(time_str, (CHAR8 *)BOOT_STAGE_FIRMWARE, buf_len);
 	strlcat(time_str, (CHAR8 *)":", buf_len);
-#ifdef __SUPPORT_ABL_BOOT
-	itoa(EFI_ENTER_POINT, interval_str, 10);
-#else
-	itoa(bt_stamp[TM_EFI_MAIN], interval_str, 10);
-#endif
+
+	if (efi_enter_point == 0)
+		itoa(bt_stamp[TM_EFI_MAIN], interval_str, 10);
+	else
+		itoa(efi_enter_point, interval_str, 10);
+
 	strlcat(time_str, interval_str, buf_len);
 	strlcat(time_str, (CHAR8 *)",", buf_len);
 
 	strlcat(time_str, (CHAR8 *)BOOT_STAGE_OSLOADER_INIT, buf_len);
 	strlcat(time_str, (CHAR8 *)":", buf_len);
-	itoa(bt_stamp[TM_AVB_START] - EFI_ENTER_POINT, interval_str, 10);
+	itoa(bt_stamp[TM_AVB_START] - efi_enter_point, interval_str, 10);
 	strlcat(time_str, interval_str, buf_len);
 	strlcat(time_str, (CHAR8 *)",", buf_len);
 

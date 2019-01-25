@@ -31,6 +31,8 @@
 #include <efiapi.h>
 #include <efilib.h>
 #include <lib.h>
+#include <openssl/hkdf.h>
+#include <openssl/mem.h>
 #include "security_interface.h"
 #include "rpmb_storage.h"
 #include "life_cycle.h"
@@ -58,6 +60,46 @@
 	uint32_t			num_seeds;
 	seed_info_t 		seed_list[SECURITY_ABL_SEED_MAX_ENTRIES];
  } __attribute__((packed)) device_sec_info_t;
+
+EFI_STATUS derive_rpmb_key_with_seed(IN VOID *seed, OUT VOID *rpmb_key)
+{
+        EFI_STATUS ret;
+        UINT8 serial[MMC_PROD_NAME_WITH_PSN_LEN] = {0};
+        char *serialno;
+        /* HWCRYPTO Server App UUID */
+        const EFI_GUID  crypo_uuid = { 0x23fe5938, 0xccd5, 0x4a78,
+                { 0x8b, 0xaf, 0x0f, 0x3d, 0x05, 0xff, 0xc2, 0xdf } };
+
+        if (!seed || !rpmb_key)
+                return EFI_INVALID_PARAMETER;
+
+        serialno = get_serial_number();
+
+        if (!serialno)
+                return EFI_NOT_FOUND;
+
+        /* Clear Byte 2 and 0 for CID[6] PRV and CID[0] CRC for eMMC Field Firmware Updates
+        * serial[0] = cid[0];    -- CRC
+        * serial[2] = cid[6];    -- PRV
+        */
+        memcpy(serial, serialno, sizeof(serial));
+        serial[0] ^= serial[0];
+        serial[2] ^= serial[2];
+
+        if (!HKDF(rpmb_key, RPMB_KEY_SIZE, EVP_sha256(),
+                (const uint8_t *)seed, RPMB_SEED_SIZE,
+                (const uint8_t *)&crypo_uuid, sizeof(EFI_GUID),
+                (const uint8_t *)serial, sizeof(serial))) {
+                error(L"HDKF failed \n");
+                ret = EFI_INVALID_PARAMETER;
+                goto out;
+        }
+
+        ret = EFI_SUCCESS;
+
+out:
+        return ret;
+}
 
  EFI_STATUS set_device_security_info(IN VOID *security_data)
  {

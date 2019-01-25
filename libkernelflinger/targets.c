@@ -99,12 +99,10 @@ EFI_STATUS reboot_to_target(enum boot_target bt, EFI_RESET_TYPE type)
 {
         const CHAR16 *name;
 
-#ifndef __SUPPORT_ABL_BOOT
         if (bt == POWER_OFF) {
                 halt_system();
                 return EFI_DEVICE_ERROR;
         }
-#endif
 
         name = boot_target_name(bt);
         if (!name)
