@@ -243,10 +243,12 @@ typedef void(*kernel_func)(void *, struct boot_params *);
 #define SEGMENT_GRANULARITY_4KB       1
 #define DESCRIPTOR_TYPE_CODE_OR_DATA  1
 
-#ifndef __SUPPORT_ABL_BOOT
 static EFI_STATUS setup_gdt(void)
 {
         EFI_STATUS ret;
+
+        if (!is_UEFI())
+                return EFI_SUCCESS;
 
         ret = emalloc(sizeof(gdt), 8, (EFI_PHYSICAL_ADDRESS *)&gdt, TRUE);
         if (EFI_ERROR(ret))
@@ -298,7 +300,6 @@ static EFI_STATUS setup_gdt(void)
 
         return EFI_SUCCESS;
 }
-#endif  /* __SUPPORT_ABL_BOOT */
 
 /* WARNING: Do not make any call that might change the memory mapping
  * (allocation, print, ...) in this function.  */
@@ -423,13 +424,11 @@ static inline EFI_STATUS handover_jump(EFI_HANDLE image,
 #endif
         log(L"handover jump ...\n");
 
-#ifndef __SUPPORT_ABL_BOOT
         ret = setup_gdt();
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"Failed to setup GDT");
                 return ret;
         }
-#endif  /* __SUPPORT_ABL_BOOT */
 
         /* According to UEFI specification 2.4 Chapter 6.4
          * EFI_BOOT_SERVICES.ExitBootServices(), Firmware
@@ -632,7 +631,6 @@ error:
 }
 
 
-#ifndef __SUPPORT_ABL_BOOT
 static CHAR16 *get_wake_reason(void)
 {
         enum wake_sources wake_source;
@@ -736,7 +734,6 @@ done:
         del_reboot_reason();
         return bootreason;
 }
-#endif
 
 static EFI_STATUS prepend_command_line(CHAR16 **cmdline, CHAR16 *fmt, ...)
 {
@@ -931,7 +928,6 @@ static EFI_STATUS add_bootvars(VOID *bootimage, CHAR16 **cmdline16)
 #define ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init root="
 
 #ifndef USE_AVB
-#ifndef __SUPPORT_ABL_BOOT
 static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_cert)
 {
         EFI_GUID system_uuid;
@@ -967,7 +963,6 @@ static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_c
 
         return ret;
 }
-#endif  /* __SUPPORT_ABL_BOOT */
 
 #else
 #define AVB_ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init"
@@ -992,11 +987,14 @@ static EFI_STATUS avb_prepend_command_line_rootfs(
 }
 #endif  // defined USE_AVB
 
-#ifndef __SUPPORT_ABL_BOOT
+
+/* when we call setup_command_line in EFI, parameter is EFI_GUID *swap_guid.
+ * when we call setup_command_line in NON EFI, parameter is const CHAR8 *abl_cmd_line.
+ * */
 static EFI_STATUS setup_command_line(
                 IN UINT8 *bootimage,
                 IN enum boot_target boot_target,
-                IN EFI_GUID *swap_guid,
+                IN void *parameter,
                 IN UINT8 boot_state,
 #ifdef USE_AVB
                 IN AvbSlotVerifyData *slot_data
@@ -1013,15 +1011,30 @@ static EFI_STATUS setup_command_line(
         EFI_PHYSICAL_ADDRESS cmdline_addr;
         CHAR8 *cmdline;
         UINTN cmdlen;
+        UINTN cmdsize;
         UINTN avb_cmdlen = 0;
         EFI_STATUS ret;
         struct boot_params *buf;
         struct boot_img_hdr *aosp_header;
         CHAR8 time_str8[128] = {0};
         CHAR16 *time_str16 = NULL;
+        EFI_GUID *swap_guid = NULL;
+        CHAR8 *abl_cmd_line = NULL;
+        BOOLEAN is_uefi = TRUE;
 #ifdef USE_AVB
         EFI_GUID system_uuid;
 #endif
+
+        UINTN abl_cmd_len = 0;
+        is_uefi = is_UEFI();
+
+        if (is_uefi)
+                swap_guid = (EFI_GUID *)parameter;
+        else {
+                abl_cmd_line = (CHAR8 *)parameter;
+                if (abl_cmd_line != NULL)
+                    abl_cmd_len = strlen(abl_cmd_line);
+        }
 
         aosp_header = (struct boot_img_hdr *)bootimage;
         buf = (struct boot_params *)(bootimage + aosp_header->page_size);
@@ -1049,7 +1062,11 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 
-        bootreason = get_boot_reason();
+        if (is_uefi)
+                bootreason = get_boot_reason();
+        else
+                bootreason = get_reboot_reason();
+
         if (!bootreason) {
                 ret = EFI_OUT_OF_RESOURCES;
                 goto out;
@@ -1123,7 +1140,7 @@ static EFI_STATUS setup_command_line(
 
 #ifndef USE_AVB
         if ((boot_target == NORMAL_BOOT || boot_target == CHARGER) &&
-            recovery_in_boot_partition()) {
+            recovery_in_boot_partition() && verity_cert) {
                 ret = prepend_command_line_rootfs(&cmdline16, verity_cert);
                 if (verity_cert)
                         X509_free(verity_cert);
@@ -1139,12 +1156,9 @@ static EFI_STATUS setup_command_line(
 #else // defined USE_AVB
         avb_prepend_command_line_rootfs(&cmdline16, boot_target);
 
-#ifdef AVB_CMDLINE
-        if (slot_data && slot_data->cmdline && boot_target != RECOVERY &&
-            boot_target != MEMORY) {
+        if (slot_data && slot_data->cmdline && boot_target != MEMORY) {
                 avb_cmdlen = strlen((const CHAR8*)slot_data->cmdline);
         }
-#endif // AVB_CMDLINE
 
         if (use_slot()) {
                 if (slot_get_active()) {
@@ -1154,9 +1168,7 @@ static EFI_STATUS setup_command_line(
                                 goto out;
                 }
 
-#ifdef AVB_CMDLINE
                 if (slot_data && slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root=")))
-#endif // AVB_CMDLINE
                 {
                         ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
                                                                 &system_uuid, LOGICAL_UNIT_USER);
@@ -1183,21 +1195,35 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 
-        /* Documentation/x86/boot.txt: "The kernel command line can be located
-         * anywhere between the end of the setup heap and 0xA0000" */
-        cmdline_addr = 0xA0000;
-        cmdlen = StrLen(cmdline16);
-        ret = allocate_pages(AllocateMaxAddress, EfiLoaderData,
-                             EFI_SIZE_TO_PAGES(cmdlen + 1 + avb_cmdlen + 1),
-                             &cmdline_addr);
-        if (EFI_ERROR(ret))
-                goto out;
+        if (is_uefi) {
+            /* Documentation/x86/boot.txt: "The kernel command line can be located
+             * anywhere between the end of the setup heap and 0xA0000" */
+            cmdline_addr = 0xA0000;
+
+            cmdlen = StrLen(cmdline16);
+            cmdsize = cmdlen + 1 + avb_cmdlen + 1;
+            ret = allocate_pages(AllocateMaxAddress, EfiLoaderData,
+                                 EFI_SIZE_TO_PAGES(cmdsize),
+                                 &cmdline_addr);
+            if (EFI_ERROR(ret))
+                    goto out;
+        } else {
+        /*TBD- unify cmdline buffer allocation in ABL with UEFI */
+            cmdlen = StrLen(cmdline16);
+            /* +256: for extra cmd line*/
+            cmdsize = cmdlen + avb_cmdlen + abl_cmd_len + 256;
+            cmdline_addr = (EFI_PHYSICAL_ADDRESS)((UINTN)AllocatePool(cmdsize));
+            if (cmdline_addr == 0) {
+                    ret = EFI_OUT_OF_RESOURCES;
+                    goto out;
+            }
+        }
 
         cmdline = (CHAR8 *)(UINTN)cmdline_addr;
         ret = str_to_stra(cmdline, cmdline16, cmdlen + 1);
         if (EFI_ERROR(ret)) {
                 error(L"Non-ascii characters in command line");
-                free_pages(cmdline_addr, EFI_SIZE_TO_PAGES(cmdlen + 1 + avb_cmdlen + 1));
+                free_pages(cmdline_addr, EFI_SIZE_TO_PAGES(cmdsize));
                 goto out;
         }
 
@@ -1210,6 +1236,15 @@ static EFI_STATUS setup_command_line(
         }
 #endif
 
+        /* append command line from ABL */
+        if (abl_cmd_len > 0)
+        {
+                cmdline[cmdlen] = ' ';
+                memcpy(cmdline + cmdlen + 1, abl_cmd_line, abl_cmd_len + 1);
+                cmdlen += abl_cmd_len + 1;
+                cmdline[cmdlen] = 0;
+        }
+
         buf->hdr.cmd_line_ptr = (UINT32)(UINTN)cmdline;
         ret = EFI_SUCCESS;
 out:
@@ -1221,7 +1256,6 @@ out:
 
         return ret;
 }
-#endif
 
 extern EFI_GUID GraphicsOutputProtocol;
 #define VIDEO_TYPE_EFI 0x70
@@ -1738,241 +1772,6 @@ fail:
 }
 #endif // USE_AVB
 
-#ifdef __SUPPORT_ABL_BOOT
-static UINTN cmd_line_add_str (CHAR8 *cmd_buf, UINTN max_cmd_size, UINTN pos, CHAR8 prefix, const CHAR8 *str)
-{
-        UINTN len;
-
-        if (str == NULL)
-                return pos;
-
-        len = strlen (str);
-        if (pos + len + 1 >= max_cmd_size - 1)
-                return pos;
-
-        if (pos > 0)
-                cmd_buf[pos++] = prefix;
-        memcpy (&cmd_buf[pos], str, len);
-
-        return pos + len;
-}
-
-/*
- *  Add entry "item=value" to the command line.
- *  If value is null, just add item, without the equal
- */
-void cmdline_add_item (CHAR8 *cmd_buf, UINTN max_cmd_size, const CHAR8 *item, const CHAR8 *value)
-{
-        UINTN pos = strlen(cmd_buf);
-
-        pos = cmd_line_add_str (cmd_buf, max_cmd_size, pos, ' ', item);
-        if (value)
-                pos = cmd_line_add_str (cmd_buf, max_cmd_size, pos, '=', value);
-
-        cmd_buf[pos] = 0;
-}
-
-#ifdef USE_AVB
-static EFI_STATUS setup_command_line_abl(
-                IN UINT8 *bootimage,
-                IN enum boot_target boot_target,
-                const CHAR8 *abl_cmd_line,
-                AvbSlotVerifyData *slot_data,
-                UINT8 boot_state)
-#else
-static EFI_STATUS setup_command_line_abl(
-                IN UINT8 *bootimage,
-                IN enum boot_target boot_target,
-                const CHAR8 *abl_cmd_line,
-                UINT8 boot_state)
-#endif
-{
-        CHAR16 *cmdline16 = NULL;
-        EFI_PHYSICAL_ADDRESS cmdline_addr;
-        CHAR8 *cmdline;
-        UINTN cmdsize;
-        UINTN cmdlen;
-        EFI_STATUS ret = EFI_SUCCESS;
-        struct boot_params *buf;
-        struct boot_img_hdr *aosp_header;
-#ifdef USE_AVB
-        UINTN avb_cmd_len = 0;
-#endif
-        char   *serialno = NULL;
-        CHAR16 *serialport = NULL;
-        CHAR16 *bootreason = NULL;
-#ifdef USE_AVB
-        EFI_GUID system_uuid;
-#endif
-        UINTN abl_cmd_len = 0;
-        CHAR8 time_str8[128] = {0};
-
-        if (abl_cmd_line != NULL)
-               abl_cmd_len = strlen(abl_cmd_line);
-
-        aosp_header = (struct boot_img_hdr *)bootimage;
-        buf = (struct boot_params *)(bootimage + aosp_header->page_size);
-
-        cmdline16 = get_command_line(aosp_header, boot_target);
-        if (!cmdline16) {
-                ret = EFI_OUT_OF_RESOURCES;
-                goto out;
-        }
-
-        /* Append serial number from DMI */
-        serialno = get_serial_number();
-        if (serialno) {
-                ret = prepend_command_line(&cmdline16,
-                                L"androidboot.serialno=%a g_ffs.iSerialNumber=%a",
-                                serialno, serialno);
-                if (EFI_ERROR(ret))
-                        goto out;
-        }
-
-        bootreason = get_reboot_reason();
-        if (!bootreason) {
-                ret = EFI_OUT_OF_RESOURCES;
-                goto out;
-        }
-
-        ret = prepend_command_line(&cmdline16, L"androidboot.bootreason=%s", bootreason);
-        if (EFI_ERROR(ret))
-                goto out;
-
-        ret = prepend_command_line(&cmdline16, L"androidboot.verifiedbootstate=%s",
-                                   boot_state_to_string(boot_state));
-        if (EFI_ERROR(ret))
-                goto out;
-
-        serialport = get_serial_port();
-        if (serialport) {
-                ret = prepend_command_line(&cmdline16, L"console=%s", serialport);
-                if (EFI_ERROR(ret))
-                        goto out;
-        }
-
-#ifndef USER
-        if (get_disable_watchdog()) {
-                ret = prepend_command_line(&cmdline16, CONVERT_TO_WIDE(TCO_OPT_DISABLED));
-                if (EFI_ERROR(ret))
-                        goto out;
-        }
-#endif
-
-        PCI_DEVICE_PATH *boot_device = get_boot_device();
-        if (boot_device) {
-                ret = prepend_command_line(&cmdline16,
-                                           L"androidboot.diskbus=%02x.%x",
-                                           boot_device->Device,
-                                           boot_device->Function);
-                if (EFI_ERROR(ret))
-                        goto out;
-        } else
-                error(L"Boot device not found, diskbus parameter not set in the commandline!");
-
-        ret = prepend_command_line(&cmdline16, L"androidboot.bootloader=%a",
-                                   get_property_bootloader());
-        if (EFI_ERROR(ret))
-                goto out;
-
-        ret = prepend_command_line(&cmdline16, L"androidboot.acpio_idx=%a ",
-                                   acpi_loaded_table_idx_to_string());
-        if (EFI_ERROR(ret))
-                goto out;
-
-#ifdef HAL_AUTODETECT
-        ret = prepend_command_line(&cmdline16, L"androidboot.brand=%a "
-                                   "androidboot.name=%a androidboot.device=%a "
-                                   "androidboot.model=%a", get_property_brand(),
-                                   get_property_name(), get_property_device(),
-                                   get_property_model());
-        if (EFI_ERROR(ret))
-                goto out;
-
-        ret = add_bootvars(bootimage, &cmdline16);
-        if (EFI_ERROR(ret))
-                goto out;
-#endif
-#ifdef USE_AVB
-        avb_prepend_command_line_rootfs(&cmdline16, boot_target);
-
-        if (use_slot() && boot_target != MEMORY) {
-                if (slot_get_active()) {
-                        ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
-                                                   slot_get_active());
-                        if (EFI_ERROR(ret))
-                                goto out;
-                }
-
-                if (slot_data && slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root="))) {
-                        ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
-                                                                &system_uuid, LOGICAL_UNIT_USER);
-                        if (EFI_ERROR(ret)) {
-                                efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
-                                goto out;
-                        }
-
-                        ret = prepend_command_line(&cmdline16, DISABLE_AVB_ROOTFS_PREFIX "PARTUUID=%g",
-                                                   &system_uuid);
-                        if (EFI_ERROR(ret))
-                                goto out;
-                }
-        }
-#endif
-
-        cmdlen = StrLen(cmdline16);
-#ifdef USE_AVB
-        if (!slot_data || !slot_data->cmdline)
-                goto out;
-        avb_cmd_len = strlen((const CHAR8 *)slot_data->cmdline);
-        /* +256: for extra cmd line */
-        cmdsize = cmdlen + avb_cmd_len + abl_cmd_len + 256;
-#else
-        /* +256: for extra cmd line */
-        cmdsize = cmdlen + abl_cmd_len + 256;
-#endif
-        cmdline_addr = (EFI_PHYSICAL_ADDRESS)((UINTN)AllocatePool(cmdsize));
-        if (cmdline_addr == 0) {
-                ret = EFI_OUT_OF_RESOURCES;
-                goto out;
-        }
-
-        cmdline = (CHAR8 *)(UINTN)cmdline_addr;
-        ret = str_to_stra(cmdline, cmdline16, cmdlen + 1);
-        if (EFI_ERROR(ret)) {
-                error(L"Non-ascii characters in command line");
-                free_pages(cmdline_addr, EFI_SIZE_TO_PAGES(cmdlen + 1));
-                goto out;
-        }
-#ifdef USE_AVB
-        if (avb_cmd_len > 0)
-        {
-            cmdline[cmdlen] = ' ';
-            memcpy(cmdline + cmdlen + 1, slot_data->cmdline, avb_cmd_len);
-            cmdlen += avb_cmd_len + 1;
-        }
-#endif
-
-        /* append command line from ABL */
-        if (abl_cmd_len > 0)
-        {
-                cmdline[cmdlen] = ' ';
-                memcpy(cmdline + cmdlen + 1, abl_cmd_line, abl_cmd_len + 1);
-        }
-
-        /* append stages boottime */
-        set_boottime_stamp(TM_JMP_KERNEL);
-        construct_stages_boottime(time_str8, sizeof(time_str8));
-        cmdline_add_item(cmdline, cmdsize, (const CHAR8 *)"androidboot.boottime", time_str8);
-
-        buf->hdr.cmd_line_ptr = (UINT32)(UINTN)cmdline;
-        ret = EFI_SUCCESS;
-out:
-        FreePool(cmdline16);
-        return ret;
-}
-#endif
-
 EFI_STATUS android_image_start_buffer(
                 IN EFI_HANDLE parent_image,
                 IN VOID *bootimage,
@@ -1988,6 +1787,7 @@ EFI_STATUS android_image_start_buffer(
 {
         struct boot_img_hdr *aosp_header;
         struct boot_params *buf;
+        void *parameter = NULL;
         EFI_STATUS ret;
 
         if (!bootimage)
@@ -2024,29 +1824,22 @@ EFI_STATUS android_image_start_buffer(
         }
 
         debug(L"Creating command line");
+        if (is_UEFI())
+            parameter = (void *)swap_guid;
+        else
+            parameter = (void *)abl_cmd_line;
 
-#ifdef __SUPPORT_ABL_BOOT
-#ifdef USE_AVB
-        ret = setup_command_line_abl(bootimage, boot_target,
-                                     abl_cmd_line,
-                                     slot_data,
-                                     boot_state);
-#else
-        ret = setup_command_line_abl(bootimage, boot_target,
-                                     abl_cmd_line,
-                                     boot_state);
-#endif
-#else
         ret = setup_command_line(bootimage, boot_target,
-                                 swap_guid,
-                                 boot_state,
+                     parameter,
+                     boot_state,
 #ifdef USE_AVB
-                                 slot_data
+                     slot_data
 #else
-                                 verity_cert
+                     verity_cert
 #endif
-                                 );
-#endif
+                     );
+
+
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, L"setup_command_line");
                 return ret;

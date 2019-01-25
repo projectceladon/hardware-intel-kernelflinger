@@ -584,7 +584,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 					VALUE = (UINT64)strtoull((char *)nptr, 0, 10);
 					cpu_khz = get_cpu_freq() * 1000;
 					//EFI_ENTER_POINT boot time is recorded in ms
-					EFI_ENTER_POINT = VALUE / cpu_khz;
+					set_efi_enter_point(VALUE /cpu_khz);
 					continue;
 				}
 
@@ -878,7 +878,6 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 	slot_set_active_cached(slot_data->ab_suffix);
 
-#ifdef  __SUPPORT_ABL_BOOT
 	if (slot_data->ab_suffix) {
 		CHAR8 *capsule_buf;
 		UINTN capsule_buf_len = 0;
@@ -916,7 +915,6 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			reboot_to_target(NORMAL_BOOT, EfiResetCold);
 		}
 	}
-#endif
 #else
 	verify_result = avb_slot_verify(ops,
 					requested_partitions,

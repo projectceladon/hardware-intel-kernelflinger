@@ -193,7 +193,6 @@ static void cmd_oem_reboot(INTN argc, CHAR8 **argv)
 	fastboot_reboot(bt, L"Rebooting to requested target ...");
 }
 
-#ifdef __SUPPORT_ABL_BOOT
 static void cmd_oem_fw_update(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
@@ -223,7 +222,6 @@ static void cmd_oem_fw_update(INTN argc, CHAR8 **argv)
 
 	fastboot_okay("");
 }
-#endif
 
 static void cmd_oem_garbage_disk(__attribute__((__unused__)) INTN argc,
 				 __attribute__((__unused__)) CHAR8 **argv)
@@ -771,9 +769,7 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "setvar",			UNLOCKED,	cmd_oem_setvar  },
 	{ "garbage-disk",		UNLOCKED,	cmd_oem_garbage_disk  },
 	{ "reboot",			LOCKED,		cmd_oem_reboot  },
-#ifdef __SUPPORT_ABL_BOOT
 	{ "fw-update",			UNLOCKED,	cmd_oem_fw_update  },
-#endif
 	{ "set-storage",		LOCKED,		cmd_oem_set_storage  },
 #ifndef USER
 	{ "reprovision",		LOCKED,		cmd_oem_reprovision  },
