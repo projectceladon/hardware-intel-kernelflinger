@@ -56,6 +56,7 @@
 #if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 #include "ioc_can.h"
 #endif
+#include "timer.h"
 
 /* size of "INFO" "OKAY" or "FAIL" */
 #define CODE_LENGTH 4
@@ -116,34 +117,56 @@ static const char *flash_locked_whitelist[] = {
 };
 #endif
 
+#define PRINT_INTERVAL (3)
 void printProgress(int done, int total) {
 
 	static BOOLEAN print_start = FALSE;
 	static int dot = 0;
-        int percentage;
+	static uint32_t sec;
+	CHAR8 buf[128];
+	CHAR8 *pos;
+	CHAR16 *temp;
+	int percentage;
 
-	if (total == 0)
+
+	if (total <= 0)
 		return;
 
 	if (print_start == FALSE) {
+		if (done >= total)
+			return;
 		info_n(L"Receiving ");
 		print_start = TRUE;
 	}
 
-	if (done < total) {
+	if (boottime_in_msec() / 1000 - sec < PRINT_INTERVAL && done < total)
+		return;
+
+	pos = buf;
+	if (done < total)
 		percentage = (done * 50) / total;
-		for (; dot <= percentage; dot++) {
-			if (dot % 5 == 0)
-				info_n(L"%d", dot * 2);
-			else
-				info_n(L".");
-		}
-	} else {
-		info_n(L"%d", 100);
+	else
+		percentage = 50;
+
+	for (; dot <= percentage; dot++) {
+		if (dot % 5 == 0)
+			pos += strlen(itoa(dot * 2, pos, 10));
+		else
+			*pos++ = '.';
+	}
+	*pos = '\0';
+	temp = stra_to_str(buf);
+	if (temp) {
+		info_n(L"%s",temp);
+		FreePool(temp);
+	}
+
+	if (done >= total) {
 		info_n(L"\n");
 		print_start = FALSE;
 		dot = 0;
 	}
+	sec = boottime_in_msec() / 1000;
 }
 
 struct download_buffer *fastboot_download_buffer(void)

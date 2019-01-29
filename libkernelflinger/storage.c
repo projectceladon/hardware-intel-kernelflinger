@@ -36,6 +36,7 @@
 #include "gpt.h"
 #include "pci.h"
 #include "protocol/EraseBlock.h"
+#include "timer.h"
 
 static struct storage *cur_storage;
 static PCI_DEVICE_PATH boot_device = { .Function = -1, .Device = -1 };
@@ -275,14 +276,17 @@ EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA st
 	return cur_storage->erase_blocks(handle, bio, start, end);
 }
 
-#define percent5(x, max) ((x) * 20 / (max) * 5)
-
+#define PRINT_INTERVAL (3)
 EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 			    VOID *pattern, UINTN pattern_blocks)
 {
 	EFI_LBA lba;
 	UINT64 size;
 	UINT64 prev = 0, progress = 0;
+	uint32_t sec;
+	CHAR8 buf[128];
+	CHAR8 *pos = buf;
+	CHAR16 *temp;
 	EFI_STATUS ret;
 
 	debug(L"Fill lba %d -> %d", start, end);
@@ -290,6 +294,7 @@ EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 		return EFI_INVALID_PARAMETER;
 
 	info_n(L"Erasing ");
+	sec = boottime_in_msec() / 1000;
 	for (lba = start; lba <= end; lba += pattern_blocks) {
 		if (lba + pattern_blocks > end + 1)
 			size = end - lba + 1;
@@ -302,12 +307,23 @@ EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 			efi_perror(ret, L"Failed to erase block %ld", lba);
 			return ret;
 		}
+
 		progress = (lba + size - start) * 50 / (end - start + 1);
-		for (; prev <= progress; prev++) {
-			if (prev % 5 == 0)
-				info_n(L"%d", prev * 2);
-			else
-				info_n(L".");
+		if (boottime_in_msec() / 1000 - sec > PRINT_INTERVAL || progress == 50) {
+			for (; prev <= progress; prev++) {
+				if (prev % 5 == 0)
+					pos += strlen(itoa(prev * 2, pos, 10));
+				else
+					*pos++ = '.';
+			}
+			*pos = '\0';
+			temp = stra_to_str(buf);
+			if (temp) {
+				info_n(L"%s", temp);
+				FreePool(temp);
+			}
+			pos = buf;
+			sec = boottime_in_msec() / 1000;
 		}
 	}
 	info_n(L"\n");
