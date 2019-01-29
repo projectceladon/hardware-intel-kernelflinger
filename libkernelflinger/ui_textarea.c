@@ -238,20 +238,30 @@ void ui_textarea_set_line(ui_textarea_t *textarea, UINTN line_nb, char *str,
 void ui_textarea_set_line_n(ui_textarea_t *textarea, UINTN line_nb, char *str,
 			  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold)
 {
-	char buf[500] = {0};
-	char *p = str;
-	UINTN i = 0;
+	char *newbuf = NULL;
+	UINTN len;
 
-	while (*textarea->text[line_nb].str != '\0') buf[i++] = *textarea->text[line_nb].str++;
-	while (*str != '\0') buf[i++] = *str++;
-	i = 0;
-	while(buf[i] != '\0') {
-		p[i] = buf[i];
-		i++;
+	if (str == NULL)
+		return;
+
+	if (textarea->text[line_nb].str == NULL)
+		newbuf = str;
+	else {
+		len = strlen(str) + strlen(textarea->text[line_nb].str) + 1;
+		newbuf = AllocatePool(len);
+		if (newbuf == NULL) {
+			FreePool(str);
+			return;
+		}
+
+		strcpy(newbuf, textarea->text[line_nb].str);
+		strlcat(newbuf, str, len);
+
+		FreePool(textarea->text[line_nb].str);
+		FreePool(str);
 	}
-	p[i] = '\0';
 
-	textarea->text[line_nb].str = p;
+	textarea->text[line_nb].str = newbuf;
 	textarea->text[line_nb].color = color;
 	textarea->text[line_nb].bold = bold;
 }
@@ -271,10 +281,6 @@ void ui_textarea_n(ui_textarea_t *textarea, char *str,
 			  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold)
 {
 	textarea->current = (textarea->current + 0) % textarea->line_nb;
-
-	if (textarea->text[textarea->current].str)
-		FreePool(textarea->text[textarea->current].str);
-
 	ui_textarea_set_line_n(textarea, textarea->current, str, color, bold);
 }
 
