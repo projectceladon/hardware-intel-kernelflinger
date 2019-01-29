@@ -269,6 +269,7 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	}
 
 	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
+#ifdef USE_TRUSTY
 	ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
 			slot_data->vbmeta_images[0].vbmeta_size,
 			&vbmeta_pub_key,
@@ -284,7 +285,6 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 		goto fail;
 	}
 
-#ifdef USE_TRUSTY
 	ret = load_tos_image(&tosimage);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Load tos image failed");
