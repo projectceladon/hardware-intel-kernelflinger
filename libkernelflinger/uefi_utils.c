@@ -409,3 +409,92 @@ EFI_STATUS verify_image(EFI_HANDLE handle, CHAR16 *path)
 
 	return EFI_ERROR(ret) ? ret : unload_ret;
 }
+
+EFI_STATUS uefi_bios_update_capsule(EFI_HANDLE root_dir, CHAR16 *name)
+{
+	UINTN len = 0;
+	UINT64 max = 0;
+	EFI_CAPSULE_HEADER *capHeader = NULL;
+	EFI_CAPSULE_HEADER **capHeaderArray = NULL;
+	EFI_CAPSULE_BLOCK_DESCRIPTOR *scatterList = NULL;
+	CHAR8 *content = NULL;
+	EFI_RESET_TYPE resetType;
+	EFI_STATUS ret;
+
+	ret = file_read(root_dir, name, &content, &len);
+	if (EFI_ERROR(ret)) {
+		if (ret == EFI_NOT_FOUND)
+			return EFI_SUCCESS;
+		efi_perror(ret, L"Failed to read file %s", name);
+		return ret;
+	}
+	debug(L"Trying to load capsule: %s", name);
+
+	if (len <= 0) {
+		error(L"Couldn't load capsule data from disk");
+		ret = EFI_LOAD_ERROR;
+		goto out;
+	}
+	/* Some capsules might invoke reset during UpdateCapsule
+	 * so delete the file now
+	 */
+	ret = file_delete(root_dir, name);
+	if (ret != EFI_SUCCESS) {
+		efi_perror(ret, L"Couldn't delete %s", name);
+		goto out;
+	}
+
+	capHeader = (EFI_CAPSULE_HEADER *) content;
+	capHeaderArray = AllocatePool(2 * sizeof(EFI_CAPSULE_HEADER *));
+	if (!capHeaderArray) {
+		error(L"Can allocate pool for capsule header");
+		ret = EFI_OUT_OF_RESOURCES;
+		goto out;
+	}
+	capHeaderArray[0] = capHeader;
+	capHeaderArray[1] = NULL;
+	debug(L"Querying capsule capabilities");
+	ret = uefi_call_wrapper(RT->QueryCapsuleCapabilities, 4,
+		capHeaderArray, 1,  &max, &resetType);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"QueryCapsuleCapabilities failed");
+		goto out;
+	}
+	if (len > max) {
+		error(L"Bad buffer size of QueryCapsuleCapabilities");
+		ret = EFI_BAD_BUFFER_SIZE;
+		goto out;
+	}
+	scatterList = AllocatePool(2*sizeof(EFI_CAPSULE_BLOCK_DESCRIPTOR));
+	if (!scatterList) {
+		error(L"Can allocate pool for capsule block");
+		ret = EFI_OUT_OF_RESOURCES;
+		goto out;
+	}
+	memset((CHAR8 *)scatterList, 0x0,
+			2 * sizeof(EFI_CAPSULE_BLOCK_DESCRIPTOR));
+	scatterList->Length = len;
+	scatterList->Union.DataBlock = (EFI_PHYSICAL_ADDRESS) (UINTN) capHeader;
+
+	debug(L"Calling RT->UpdateCapsule");
+	ret = uefi_call_wrapper(RT->UpdateCapsule, 3, capHeaderArray, 1,
+		(EFI_PHYSICAL_ADDRESS) (UINTN) scatterList);
+	if (ret != EFI_SUCCESS) {
+		efi_perror(ret, L"UpdateCapsule failed");
+		goto out;
+	}
+
+	debug(L"I am about to reset the system after BIOS capsules");
+
+	uefi_call_wrapper(RT->ResetSystem, 4, resetType, EFI_SUCCESS, 0, NULL);
+
+out:
+	if (content != NULL)
+		FreePool(content);
+	if (capHeaderArray != NULL)
+		FreePool(capHeaderArray);
+	if (scatterList != NULL)
+		FreePool(scatterList);
+
+	return ret;
+}

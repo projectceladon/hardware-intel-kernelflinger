@@ -1154,82 +1154,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
 
 	die();
 }
-
-static EFI_STATUS push_capsule(EFI_FILE *root_dir,
-		CHAR16 *name,
-		EFI_RESET_TYPE *resetType)
-{
-	UINTN len = 0;
-	UINT64 max = 0;
-	EFI_CAPSULE_HEADER *capHeader = NULL;
-	EFI_CAPSULE_HEADER **capHeaderArray;
-	EFI_CAPSULE_BLOCK_DESCRIPTOR *scatterList;
-	CHAR8 *content = NULL;
-	EFI_STATUS ret;
-
-	debug(L"Trying to load capsule: %s", name);
-	ret = file_read(root_dir, name, &content, &len);
-	if (ret == EFI_SUCCESS) {
-		if (len <= 0) {
-			debug(L"Couldn't load capsule data from disk");
-			FreePool(content);
-			return EFI_LOAD_ERROR;
-		}
-		/* Some capsules might invoke reset during UpdateCapsule
-		 * so delete the file now
-		 */
-		ret = file_delete(g_disk_device, name);
-		if (ret != EFI_SUCCESS) {
-			efi_perror(ret, L"Couldn't delete %s", name);
-			FreePool(content);
-			return ret;
-		}
-	} else {
-		debug(L"Error in reading file");
-		return ret;
-	}
-
-	capHeader = (EFI_CAPSULE_HEADER *) content;
-	capHeaderArray = AllocatePool(2*sizeof(EFI_CAPSULE_HEADER *));
-	if (!capHeaderArray) {
-		FreePool(content);
-		return EFI_OUT_OF_RESOURCES;
-	}
-	capHeaderArray[0] = capHeader;
-	capHeaderArray[1] = NULL;
-	debug(L"Querying capsule capabilities");
-	ret = uefi_call_wrapper(RT->QueryCapsuleCapabilities, 4,
-		capHeaderArray, 1,  &max, resetType);
-	if (ret == EFI_SUCCESS) {
-		if (len > max) {
-			FreePool(content);
-			FreePool(capHeaderArray);
-			return EFI_BAD_BUFFER_SIZE;
-		}
-		scatterList = AllocatePool(2*sizeof(EFI_CAPSULE_BLOCK_DESCRIPTOR));
-		if (!scatterList) {
-			FreePool(content);
-			FreePool(capHeaderArray);
-			return EFI_OUT_OF_RESOURCES;
-		}
-		memset((CHAR8 *)scatterList, 0x0,
-			2*sizeof(EFI_CAPSULE_BLOCK_DESCRIPTOR));
-		scatterList->Length = len;
-		scatterList->Union.DataBlock = (EFI_PHYSICAL_ADDRESS) (UINTN) capHeader;
-
-		debug(L"Calling RT->UpdateCapsule");
-		ret = uefi_call_wrapper(RT->UpdateCapsule, 3, capHeaderArray, 1,
-			(EFI_PHYSICAL_ADDRESS) (UINTN) scatterList);
-		if (ret != EFI_SUCCESS) {
-			FreePool(content);
-			FreePool(capHeaderArray);
-			FreePool(scatterList);
-			return ret;
-		}
-	}
-	return ret;
-}
-
 static void bootloader_recover_mode(UINT8 boot_state)
 {
 	enum boot_target target;
@@ -1444,8 +1368,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #else
 	AvbSlotVerifyData *slot_data = NULL;
 #endif
-	CHAR16 *name = NULL;
-	EFI_RESET_TYPE resetType;
 
 	set_boottime_stamp(TM_EFI_MAIN);
 	/* gnu-efi initialization */
@@ -1484,15 +1406,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		}
 	}
 
-	if (file_exists(g_disk_device, FWUPDATE_FILE)) {
-		name = FWUPDATE_FILE;
-		push_capsule(g_disk_device, name, &resetType);
-
-		debug(L"I am about to reset the system");
-
-		uefi_call_wrapper(RT->ResetSystem, 4, resetType, EFI_SUCCESS, 0,
-				NULL);
-	}
+	uefi_bios_update_capsule(g_disk_device, FWUPDATE_FILE);
 
 	check_kf_upgrade();
 
