@@ -1633,5 +1633,5 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	return EFI_INVALID_PARAMETER;
 }
 
-/* vim: softtabstop=8:shiftwidth=8:expandtab
+/* vim: tabstop=8:shiftwidth=8
  */
