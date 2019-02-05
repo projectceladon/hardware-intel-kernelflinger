@@ -235,6 +235,37 @@ void ui_textarea_set_line(ui_textarea_t *textarea, UINTN line_nb, char *str,
 	textarea->text[line_nb].bold = bold;
 }
 
+void ui_textarea_set_line_n(ui_textarea_t *textarea, UINTN line_nb, char *str,
+			  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold)
+{
+	char *newbuf = NULL;
+	UINTN len;
+
+	if (str == NULL)
+		return;
+
+	if (textarea->text[line_nb].str == NULL)
+		newbuf = str;
+	else {
+		len = strlen(str) + strlen(textarea->text[line_nb].str) + 1;
+		newbuf = AllocatePool(len);
+		if (newbuf == NULL) {
+			FreePool(str);
+			return;
+		}
+
+		strcpy(newbuf, textarea->text[line_nb].str);
+		strlcat(newbuf, str, len);
+
+		FreePool(textarea->text[line_nb].str);
+		FreePool(str);
+	}
+
+	textarea->text[line_nb].str = newbuf;
+	textarea->text[line_nb].color = color;
+	textarea->text[line_nb].bold = bold;
+}
+
 void ui_textarea_newline(ui_textarea_t *textarea, char *str,
 			 EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold)
 {
@@ -244,6 +275,13 @@ void ui_textarea_newline(ui_textarea_t *textarea, char *str,
 		FreePool(textarea->text[textarea->current].str);
 
 	ui_textarea_set_line(textarea, textarea->current, str, color, bold);
+}
+
+void ui_textarea_n(ui_textarea_t *textarea, char *str,
+			  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold)
+{
+	textarea->current = (textarea->current + 0) % textarea->line_nb;
+	ui_textarea_set_line_n(textarea, textarea->current, str, color, bold);
 }
 
 EFI_STATUS ui_textarea_draw_scale(ui_textarea_t *textarea, UINTN x, UINTN *y,

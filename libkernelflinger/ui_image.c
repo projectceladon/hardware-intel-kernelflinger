@@ -36,18 +36,32 @@
 #include <efilib.h>
 #include <lib.h>
 #include <ui.h>
+#include <upng.h>
 
 #include "res/img_res.h"
 
 ui_image_t *ui_image_get(const char *name)
 {
 	unsigned int i;
+	EFI_STATUS ret;
+	ui_image_t *img = NULL;
 
 	for (i = 0 ; i < ARRAY_SIZE(ui_images) ; i++)
 		if (!strcmp((CHAR8 *)ui_images[i].name, (CHAR8 *)name))
-			return &ui_images[i];
+			break;
+	if (i == ARRAY_SIZE(ui_images))
+		return NULL;
 
-	return NULL;
+	img = &ui_images[i];
+	if (!img->blt) {
+		ret = upng_load(img->data, img->size,
+				&img->blt, &img->width, &img->height);
+		if (EFI_ERROR(ret))
+			efi_perror(ret, L"Failed to load image %s",
+				   name);
+	}
+
+	return img->blt ? img : NULL;
 }
 
 EFI_STATUS ui_image_draw(ui_image_t *image, UINTN x, UINTN y)
@@ -67,11 +81,13 @@ EFI_STATUS ui_image_draw_scale(ui_image_t *image, UINTN x, UINTN y, UINTN width,
 	ui_image_t to_draw;
 	UINTN new_width, new_height;
 
-	memcpy(&to_draw, image, sizeof(to_draw));
-
-	ui_get_scaled_dimension(to_draw.width, to_draw.height,
+	ui_get_scaled_dimension(image->width, image->height,
 				width, height, &new_width, &new_height);
 
+	if (new_width == image->width && new_height == image->height)
+		return ui_image_draw(image, x, y);
+
+	memcpy(&to_draw, image, sizeof(to_draw));
 	to_draw.blt = AllocatePool(ui_get_blt_size(new_width, new_height));
 	if (!to_draw.blt) {
 		ret = EFI_OUT_OF_RESOURCES;

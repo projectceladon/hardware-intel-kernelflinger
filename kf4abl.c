@@ -66,6 +66,7 @@
 #endif
 #include "storage.h"
 #include "acpi.h"
+#include "ux.h"
 
 typedef union {
 	uint32_t raw;
@@ -176,10 +177,12 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	EFI_STATUS ret;
 	void* param = NULL;
 	UINT8 boot_state = BOOT_STATE_GREEN;
+	enum boot_target target = NORMAL_BOOT;
 
 	if (!bootimage)
-		 return EFI_SUCCESS;
+		return EFI_SUCCESS;
 
+#ifndef __FORCE_FASTBOOT
 #ifdef USE_AVB
 	AvbOps *ops;
 	AvbPartitionData *acpi;
@@ -202,8 +205,12 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	VOID *acpiimage = NULL;
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
+
+#ifdef USE_TRUSTY
 	const uint8_t *vbmeta_pub_key;
 	UINTN vbmeta_pub_key_len;
+	VOID *tosimage = NULL;
+#endif
 	debug(L"Processing boot image");
 
 	ops = avb_init();
@@ -263,6 +270,7 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	}
 
 	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
+#ifdef USE_TRUSTY
 	ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
 			slot_data->vbmeta_images[0].vbmeta_size,
 			&vbmeta_pub_key,
@@ -278,8 +286,6 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 		goto fail;
 	}
 
-#ifdef USE_TRUSTY
-	VOID *tosimage = NULL;
 	ret = load_tos_image(&tosimage);
 	if (EFI_ERROR(ret)) {
 		efi_perror(ret, L"Load tos image failed");
@@ -292,9 +298,14 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 		goto fail;
 	}
 	set_boottime_stamp(TM_PROCRSS_TRUSTY_DONE);
-#endif
+#endif //USE_TRUSTY
 fail:
-#endif
+#endif //USE_AVB
+#else
+	//Fastboot stored in the SPI gets the capability to load an image
+	//(fastboot boot) using the RAMDISK and nothing from the eMMC
+	target = MEMORY;
+#endif //__FORCE_FASTBOOT
 	/* 'fastboot boot' case, only allowed on unlocked devices.*/
 	if (device_is_unlocked()) {
 		UINT32 crc;
@@ -306,7 +317,7 @@ fail:
 		}
 
 		ret = android_image_start_buffer(NULL, bootimage,
-							NORMAL_BOOT, boot_state, NULL,
+							target, boot_state, NULL,
 							param, (const CHAR8 *)cmd_buf);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Couldn't load Boot image");
@@ -472,8 +483,8 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			IMAGE_BOOT_PARAMS_ADDR
 		},
 		{
-			(CHAR8 *)"fw_boottime=",
-			strlen("fw_boottime="),
+			(CHAR8 *)"fw_boottsc=",
+			strlen("fw_boottsc="),
 			FIRMWARE_BOOTTIME
 		}
 	};
@@ -565,12 +576,15 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 						efi_perror(ret, L"Failed to set secure boot");
 					break;
 				}
-				/* Parse "fw_boottime=xxxxx" */
+				/* Parse "fw_boottsc=xxxxx" */
 				case FIRMWARE_BOOTTIME: {
-					UINT32 VALUE;
+					UINT64 VALUE;
+					UINT32 cpu_khz;
 					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
-					VALUE = (UINT32)strtoul((char *)nptr, 0, 10);
-					EFI_ENTER_POINT = VALUE;
+					VALUE = (UINT64)strtoull((char *)nptr, 0, 10);
+					cpu_khz = get_cpu_freq() * 1000;
+					//EFI_ENTER_POINT boot time is recorded in ms
+					EFI_ENTER_POINT = VALUE / cpu_khz;
 					continue;
 				}
 
@@ -1091,8 +1105,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 	set_boottime_stamp(TM_EFI_MAIN);
 	InitializeLib(image, sys_table);
-	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
 
+#ifdef USE_UI
+	ux_display_vendor_splash();
+#endif
+
+	target = check_command_line(image, cmd_buf, sizeof(cmd_buf) - 1);
 	if (!get_boot_device()) {
 		// Get boot device failed
 		error(L"Failed to find boot device");

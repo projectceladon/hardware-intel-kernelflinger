@@ -60,6 +60,33 @@ void ui_print(CHAR16 *fmt, ...)
 	va_end(args);
 }
 
+void ui_info(CHAR16 *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	ui_log(fmt, args);
+	va_end(args);
+}
+
+void ui_info_n(CHAR16 *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	vlog(fmt, args);
+	va_end(args);
+}
+
+void ui_warning(CHAR16 *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	ui_log(fmt, args);
+	va_end(args);
+}
+
 void ui_error(CHAR16 *fmt, ...)
 {
 	va_list args;

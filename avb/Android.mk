@@ -114,6 +114,11 @@ LOCAL_SRC_FILES := \
     libavb/avb_vbmeta_image.c \
     libavb_ab/avb_ab_flow.c
 
+ifeq ($(BUILD_ANDROID_THINGS),true)
+LOCAL_SRC_FILES += \
+    libavb_atx/avb_atx_validate.c
+endif
+
 ifeq ($(KERNELFLINGER_USE_IPP_SHA256),true)
 LOCAL_SRC_FILES += \
     libavb/avb_sha256_ipps.c

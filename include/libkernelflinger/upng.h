@@ -1,6 +1,8 @@
 /*
- * Copyright (c) 2017, Intel Corporation
+ * Copyright (c) 2018, Intel Corporation
  * All rights reserved.
+ *
+ * Author:  Jeremy Compostella <jeremy.compostella@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,29 +29,14 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef _TIMER_H_
-#define _TIMER_H_
+
+#ifndef _UPNG_H_
+#define _UPNG_H_
 
 #include <efi.h>
-#include <efiapi.h>
-#include "lib.h"
 
-enum TM_POINT {
-	TM_EFI_MAIN = 0,
-	TM_AVB_START,
-	TM_VERIFY_BOOT_DONE,
-	TM_LOAD_TOS_DONE,
-	TM_LAUNCH_TRUSTY_DONE,
-	TM_PROCRSS_TRUSTY_DONE,
-	TM_JMP_KERNEL,
-	TM_POINT_LAST
-};
+EFI_STATUS upng_load(const char *data, UINTN size,
+		     EFI_GRAPHICS_OUTPUT_BLT_PIXEL **blt,
+		     UINTN *width, UINTN *height);
 
-unsigned int EFI_ENTER_POINT;
-
-uint32_t get_cpu_freq(void);
-uint32_t boottime_in_msec(void);
-void set_boottime_stamp(int num);
-void construct_stages_boottime(CHAR8 *time_str, size_t buf_len);
-
-#endif
+#endif	/* _UPNG_H_ */

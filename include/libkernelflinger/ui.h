@@ -51,6 +51,8 @@ extern EFI_GRAPHICS_OUTPUT_BLT_PIXEL	COLOR_ORANGE;
 /* Image */
 typedef struct image {
 	const char *name;
+	const UINT8 *data;
+	const UINTN size;
 	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt;
 	UINTN width;
 	UINTN height;
@@ -107,8 +109,12 @@ void ui_textarea_free(ui_textarea_t *textarea);
 void ui_textarea_clear(ui_textarea_t *textarea);
 void ui_textarea_set_line(ui_textarea_t *textarea, UINTN line_nb, char *str,
 			  EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold);
+void ui_textarea_set_line_n(ui_textarea_t *textarea, UINTN line_nb, char *str,
+		EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold);
 void ui_textarea_newline(ui_textarea_t *textarea, char *str,
 			 EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold);
+void ui_textarea_n(ui_textarea_t *textarea, char *str,
+		EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color, BOOLEAN bold);
 EFI_STATUS ui_textarea_draw_scale(ui_textarea_t *textarea, UINTN x, UINTN *y,
 				  UINTN width, UINTN height);
 EFI_STATUS ui_textarea_draw(ui_textarea_t *textarea, UINTN x, UINTN y);
@@ -174,6 +180,9 @@ EFI_STATUS ui_display_texts(const ui_textline_t **texts, UINTN x, UINTN y,
 EFI_STATUS ui_draw_blt(EFI_GRAPHICS_OUTPUT_BLT_PIXEL *blt, UINTN x, UINTN y,
 		       UINTN width, UINTN height);
 void ui_print(CHAR16 *fmt, ...);
+void ui_info(CHAR16 *fmt, ...);
+void ui_info_n(CHAR16 *fmt, ...);
+void ui_warning(CHAR16 *fmt, ...);
 void ui_error(CHAR16 *fmt, ...);
 void ui_print_clear(void);
 void ui_get_scaled_dimension(UINTN orig_width, UINTN orig_heigth,

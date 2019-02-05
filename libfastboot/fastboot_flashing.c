@@ -81,7 +81,7 @@ EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
 		}
 #endif
 #endif
-	ui_print(L"Erasing userdata...");
+	info(L"Erasing userdata...");
 	ret = erase_by_label(L"data");
 	if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
 		if (interactive)
@@ -92,7 +92,7 @@ EFI_STATUS change_device_state(enum device_state new_state, BOOLEAN interactive)
 	if (ret == EFI_NOT_FOUND)
 		ui_print(L"No userdata partition to erase.");
 	else
-		ui_print(L"Erase done.");
+		info(L"Erase done.");
 	}
 #endif
 

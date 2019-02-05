@@ -132,7 +132,7 @@ BOOLEAN ui_confirm(const ui_textline_t *text, UINTN width, UINTN height,
 		}
 	}
 #else
-	const ui_textline_t *texts[] = {text, yes_no_text};
+	const ui_textline_t *texts[] = {text, yes_no_text, NULL};
 	ui_display_texts(texts, x, y, width, height);
 	event = ui_wait_for_input(TIMEOUT_SECS);
 	return event == EV_UP ? TRUE : FALSE;

@@ -161,6 +161,17 @@ CHAR8 *strcpy(CHAR8 *dest, const CHAR8 *src)
         return dest;
 }
 
+CHAR8 *__strcpy_chk(CHAR8 *dest, const CHAR8 *src, size_t destlen)
+    __attribute__((weak));
+CHAR8 *__strcpy_chk(CHAR8 *dest, const CHAR8 *src, size_t destlen)
+{
+        size_t len = strlen(src);
+        if (destlen < len)
+                panic(L"%a Error: destlen(%d) is less than len(%d)", __func__, destlen, len);
+
+        return strcpy(dest, src);
+}
+
 CHAR8 *strncpy(CHAR8 *dest, const CHAR8 *src, size_t n)
 {
         unsigned int i;
@@ -171,6 +182,27 @@ CHAR8 *strncpy(CHAR8 *dest, const CHAR8 *src, size_t n)
                 dest[i] = '\0';
 
         return dest;
+}
+
+CHAR8 *__strncpy_chk(CHAR8 *dest, const CHAR8 *src, size_t n, size_t destlen)
+    __attribute__((weak));
+CHAR8 *__strncpy_chk(CHAR8 *dest, const CHAR8 *src, size_t n, size_t destlen)
+{
+        if (destlen < n)
+                panic(L"%a Error: destlen(%d) is less than n(%d)", __func__, destlen, n);
+
+        return strncpy(dest, src, n);
+}
+
+CHAR8 *__strncpy_chk2(CHAR8 *dest, const CHAR8 *src, size_t n, size_t destlen, size_t srclen)
+    __attribute__((weak));
+CHAR8 *__strncpy_chk2(CHAR8 *dest, const CHAR8 *src, size_t n, size_t destlen, size_t srclen)
+{
+        size_t len = strlen(src);
+        if (srclen < len)
+                panic(L"%a Error: srclen(%d) is less than len(%d)", __func__, srclen, len);
+
+        return __strncpy_chk(dest, src, n, destlen);
 }
 
 size_t strlcat(CHAR8 *dst, const CHAR8 *src, size_t siz)
@@ -975,6 +1007,16 @@ void *memmove(void *dst, const void *src, size_t n)
         return dst;
 }
 
+void * __memmove_chk(void * dst, const void * src, size_t len, size_t destlen)
+    __attribute__((weak));
+void * __memmove_chk(void * dst, const void * src, size_t len, size_t destlen)
+{
+        if (destlen < len)
+                panic(L"%a Error: destlen(%d) is less than len(%d)", __func__, destlen, len);
+
+        return memmove(dst, src, len);
+}
+
 static int compare_memory_descriptor(const void *a, const void *b)
 {
         const EFI_MEMORY_DESCRIPTOR *m1 = a, *m2 = b;
@@ -1088,6 +1130,17 @@ UINT8 min_boot_state()
 #endif
 	return BOOT_STATE_RED;
 #endif
+}
+
+/*
+ * Called when gcc's -fstack-protector-strong feature is used, and
+ * gcc detects corruption of the on-stack canary value
+ */
+VOID __stack_chk_fail()
+    __attribute__((weak));
+VOID __stack_chk_fail()
+{
+        panic(L"stack-protector: kernelflinger stack is corrupted");
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab
