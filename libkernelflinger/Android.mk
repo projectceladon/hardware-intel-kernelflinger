@@ -265,7 +265,7 @@ ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE)|$(filter true, $(TARGET_USE_ACPI) $(TARGE
     IASL := $(INTEL_PATH_BUILD)/acpi-tools/linux64/bin/iasl
     GEN := $(res_intermediates)/firststage_mount_cfg.h
     IASL_CFLAGS := $(filter -D%,$(subst -D ,-D,$(strip $(LOCAL_CFLAGS))))
-    LOCAL_GENERATED_SOURCES := $(GEN)
+    LOCAL_GENERATED_SOURCES += $(GEN)
 
 $(GEN): $(FIRST_STAGE_MOUNT_CFG_FILE)
 	$(hide) $(IASL) -p $(@:.h=) $(IASL_CFLAGS) -tc $<
