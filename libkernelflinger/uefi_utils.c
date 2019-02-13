@@ -38,6 +38,7 @@
 #include <gpt.h>
 #include "protocol.h"
 #include "uefi_utils.h"
+#include "options.h"
 
 /* GUID for ESP partition on gmin */
 const EFI_GUID esp_ptn_guid = { 0x2568845d, 0x2332, 0x4675,
@@ -496,5 +497,183 @@ out:
 	if (scatterList != NULL)
 		FreePool(scatterList);
 
+	return ret;
+}
+
+/* Chainload another EFI application on the ESP with the specified path,
+ * optionally deleting the file before entering
+ */
+EFI_STATUS uefi_enter_binary(EFI_HANDLE part_handle, CHAR16 *path,
+		BOOLEAN delete, UINT32 load_options_size, VOID *load_options)
+{
+	EFI_DEVICE_PATH *edp;
+	EFI_STATUS ret;
+	EFI_HANDLE image;
+	EFI_LOADED_IMAGE *loaded_image;
+
+	edp = FileDevicePath(part_handle, path);
+	if (!edp) {
+		error(L"Couldn't generate a path");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
+			edp, NULL, 0, &image);
+	FreePool(edp);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"BS->LoadImage '%s'", path);
+		return ret;
+	}
+	if (delete) {
+		ret = file_delete(part_handle, path);
+		if (EFI_ERROR(ret))
+			efi_perror(ret, L"Couldn't delete %s", path);
+	}
+	if (load_options_size > 0) {
+		// Set the command line option
+		ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
+				&LoadedImageProtocol, (VOID **)&loaded_image,
+				image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"OpenProtocol: LoadedImageProtocol");
+			goto out;
+		}
+		if (loaded_image == NULL) {
+			error(L"LoadedImageProtocol, but return image is NULL");
+			ret = EFI_INVALID_PARAMETER;
+			goto out;
+		}
+		loaded_image->LoadOptionsSize = load_options_size;
+		loaded_image->LoadOptions = load_options;
+	}
+	ret = uefi_call_wrapper(BS->StartImage, 3, image, NULL, NULL);
+
+out:
+	uefi_call_wrapper(BS->UnloadImage, 1, image);
+
+	return ret;
+}
+
+EFI_STATUS uefi_check_upgrade(EFI_LOADED_IMAGE *loaded_image,
+		CHAR16 *partition, CHAR16 *upgrade_file,
+		CHAR16 *self_path1, CHAR16 *bak_path1, CHAR16 *self_path2, CHAR16 *bak_path2)
+{
+	EFI_STATUS ret;
+	EFI_FILE_IO_INTERFACE *io = NULL;
+	EFI_GUID SimpleFileSystemProtocol = SIMPLE_FILE_SYSTEM_PROTOCOL;
+	EFI_HANDLE part_handle = NULL;
+	CHAR16 *self_path = NULL;
+	UINTN self_path_len;
+	CHAR16 efi_full_path[512];
+	CHAR16 *bak_path = NULL;
+	UINTN argc;
+	CHAR16 **argv;
+
+	if (loaded_image == NULL
+			|| loaded_image->FilePath == NULL
+			|| loaded_image->FilePath->Type != MEDIA_DEVICE_PATH
+			|| loaded_image->FilePath->SubType != MEDIA_FILEPATH_DP) {
+		// maybe loaded by the "fastboot boot" command, or the BIOS not support
+		debug(L"Loaded image or FilePath is NULL");
+		return EFI_INVALID_PARAMETER;
+	}
+
+	self_path = ((FILEPATH_DEVICE_PATH *)(loaded_image->FilePath))->PathName;
+	ret = get_argv(loaded_image, &argc, &argv);
+	if (EFI_ERROR(ret))
+		goto out;
+	if (argc > 0 && argv[0][0] != L'-') {
+		// If load from EFI shell, then the loaded_image->FilePath is the working directory of shell,
+		// and argv[0] is the efi application path.
+		// If load from BIOS boot manager, or other EFI application, then the loaded_image->FilePath
+		// is the full path of efi application path.
+		self_path_len = StrLen(self_path);
+		if (self_path_len > 0) {
+			// Build the full path of efi application path.
+			if (self_path[self_path_len - 1] == L'\\') {
+				// Loaded from EFI shell root directory, ended with '\'.
+				SPrint(efi_full_path, sizeof(efi_full_path), L"%s%s", self_path, argv[0]);
+				self_path = efi_full_path;
+			} else if (self_path_len <= 4 || StrcaseCmp(self_path + self_path_len - 4, L".EFI")) {
+				// Loaded from EFI shell and not root directory, need add '\'.
+				SPrint(efi_full_path, sizeof(efi_full_path), L"%s\\%s", self_path, argv[0]);
+				self_path = efi_full_path;
+			}
+		} else
+			self_path = argv[0];
+	}
+	FreePool(argv);
+	debug(L"EFI path: %s", self_path);
+
+	if (!StrcaseCmp(self_path, self_path1))
+		bak_path = bak_path1;
+	else if (!StrcaseCmp(self_path, self_path2))
+		bak_path = bak_path2;
+	else {
+		debug(L"Unsupported running path for check upgrade");
+		goto out;
+	}
+
+	ret = gpt_get_partition_handle(partition, LOGICAL_UNIT_USER, &part_handle);
+	if (EFI_ERROR(ret)) {
+		if (ret != EFI_NOT_FOUND)
+			efi_perror(ret, L"Failed to find partition %s", partition);
+		goto out;
+	}
+
+	ret = handle_protocol(part_handle, &SimpleFileSystemProtocol, (void **)&io);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"HandleProtocol for FAT in partition %s failed", partition);
+		goto out;
+	}
+
+	if (!uefi_exist_file_root(io, upgrade_file)) {
+		debug(L"Upgrade file %s is not exist", upgrade_file);
+		goto out;
+	}
+	debug(L"Upgrade file %s is exist", upgrade_file);
+
+	ret = verify_image(part_handle, upgrade_file);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Verify upgrade image failed");
+		uefi_delete_file(io, upgrade_file);
+		goto out;
+	}
+	debug(L"Success to verify the upgrade image");
+
+	// Verify it again
+	if (!uefi_exist_file_root(io, self_path)) {
+		error(L"Can't find file %s", self_path);
+		ret = EFI_NOT_FOUND;
+		goto out;
+	}
+
+	if (uefi_exist_file_root(io, bak_path)) {
+		ret = uefi_delete_file(io, bak_path);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to delete %s", bak_path);
+			goto out;
+		}
+		debug(L"Success to delete old %s", bak_path);
+	}
+	ret = uefi_rename_file(io, self_path, bak_path);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to rename the %s to %s", self_path, bak_path);
+		goto out;
+	}
+	debug(L"Success rename file %s to %s", self_path, bak_path);
+	ret = uefi_rename_file(io, upgrade_file, self_path);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to rename the upgrade file %s to %s", upgrade_file, self_path);
+		goto out;
+	}
+	debug(L"Success rename the upgrade file %s to %s", upgrade_file, self_path);
+
+	error(L"I am about to load the new boot loader after upgrade it");
+	if (loaded_image != NULL)
+		uefi_enter_binary(part_handle, self_path, FALSE, loaded_image->LoadOptionsSize, loaded_image->LoadOptions);
+	reboot(NULL, EfiResetCold);
+
+out:
 	return ret;
 }
