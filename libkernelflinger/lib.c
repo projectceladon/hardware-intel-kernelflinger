@@ -1143,6 +1143,34 @@ VOID __stack_chk_fail()
         panic(L"stack-protector: kernelflinger stack is corrupted");
 }
 
+INTN StrcaseCmp(CHAR16 *s1, CHAR16 *s2)
+{
+        CHAR16 *p1 = s1;
+        CHAR16 *p2 = s2;
+        CHAR16 c1, c2;
+
+        if (s1 == NULL)
+                return (s2 == NULL) ? 0 : -1;
+        if (s2 == NULL)
+                return 1;
+
+        while (*p1 != 0) {
+                c1 = *p1;
+                if (c1 >= L'A' && c1 <= L'Z')
+                        c1 += L'a' - L'A';
+                c2 = *p2;
+                if (c2 >= L'A' && c2 <= L'Z')
+                        c2 += L'a' - L'A';
+                if (c1 > c2)
+                        return 1;
+                if (c1 < c2)
+                        return -1;
+                p1++;
+                p2++;
+        }
+
+        return (*p2 == 0) ? 0 : -1;
+}
+
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
-

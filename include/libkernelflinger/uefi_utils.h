@@ -57,5 +57,10 @@ EFI_STATUS uefi_create_directory_root(EFI_FILE_IO_INTERFACE *io, CHAR16 *dirname
 EFI_STATUS uefi_rename_file(EFI_FILE_IO_INTERFACE *io, CHAR16 *oldname, CHAR16 *newname);
 EFI_STATUS verify_image(EFI_HANDLE handle, CHAR16 *path);
 EFI_STATUS uefi_bios_update_capsule(EFI_HANDLE root_dir, CHAR16 *name);
+EFI_STATUS uefi_enter_binary(EFI_HANDLE part_handle, CHAR16 *path,
+		BOOLEAN delete, UINT32 load_options_size, VOID *load_options);
+EFI_STATUS uefi_check_upgrade(EFI_LOADED_IMAGE *loaded_image,
+		CHAR16 *partition, CHAR16 *upgrade_file,
+		CHAR16 *self_path1, CHAR16 *bak_path1, CHAR16 *self_path2, CHAR16 *bak_path2);
 
 #endif /* __UEFI_UTILS_H__ */
