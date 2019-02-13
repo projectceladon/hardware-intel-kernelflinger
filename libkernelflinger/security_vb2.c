@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2017, Intel Corporation
+ * Copyright (c) 2019, Intel Corporation
  * All rights reserved.
  *
- * Author: genshen <genshen.li@intel.com>
+ * Author: Genshen Li <genshen.li@intel.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,12 +29,32 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef _AVB_INIT_H_
-#define _AVB_INIT_H_
-#include "libavb/libavb.h"
-#include "libavb/uefi_avb_ops.h"
+#include "security.h"
+#include "security_vb2.h"
 
-AvbOps *avb_init(void);
+EFI_STATUS rot_pub_key_sha256(IN VBDATA *vb_data,
+                        OUT UINT8 **hash_p)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	const uint8_t *vbmeta_pub_key;
+	UINTN vbmeta_pub_key_len;
 
-bool avb_update_stored_rollback_indexes_for_slot(AvbOps* ops, AvbSlotVerifyData* slot_data);
-#endif
+	if (vb_data && hash_p) {
+		ret = avb_vbmeta_image_verify(vb_data->vbmeta_images[0].vbmeta_data,
+			vb_data->vbmeta_images[0].vbmeta_size,
+			&vbmeta_pub_key,
+			&vbmeta_pub_key_len);
+
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to get the vbmeta_pub_key");
+			return ret;
+		}
+
+		ret = raw_pub_key_sha256(vbmeta_pub_key, vbmeta_pub_key_len, hash_p);
+		if (EFI_ERROR(ret))
+			efi_perror(ret, L"Failed to compute key hash");
+	} else
+		ret = EFI_INVALID_PARAMETER;
+
+	return ret;
+}

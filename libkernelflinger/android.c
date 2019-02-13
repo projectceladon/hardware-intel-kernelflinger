@@ -52,9 +52,7 @@
 #include "slot.h"
 #include "pae.h"
 #include "timer.h"
-#ifdef USE_AVB
-#include "avb_init.h"
-#endif
+#include "android_vb.h"
 #ifdef RPMB_STORAGE
 #include "rpmb_storage.h"
 #endif
@@ -744,7 +742,7 @@ done:
         return bootreason;
 }
 
-static EFI_STATUS prepend_command_line(CHAR16 **cmdline, CHAR16 *fmt, ...)
+EFI_STATUS prepend_command_line(CHAR16 **cmdline, CHAR16 *fmt, ...)
 {
         CHAR16 *old;
         va_list args;
@@ -934,68 +932,6 @@ static EFI_STATUS add_bootvars(VOID *bootimage, CHAR16 **cmdline16)
 }
 #endif
 
-#define ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init root="
-
-#ifndef USE_AVB
-static EFI_STATUS prepend_command_line_rootfs(CHAR16 **cmdline16, X509 *verity_cert)
-{
-        EFI_GUID system_uuid;
-        EFI_STATUS ret;
-        char *key_id = NULL;
-
-        ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
-                                     &system_uuid, LOGICAL_UNIT_USER);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
-                return ret;
-        }
-
-        if (!verity_cert) {
-#if defined(USERDEBUG)
-                error(L"Cannot boot without a verity certificate");
-                return EFI_INVALID_PARAMETER;
-#else
-                ret = prepend_command_line(cmdline16, ROOTFS_PREFIX "PARTUUID=%g",
-                                           &system_uuid);
-                return ret;
-#endif
-        }
-
-        ret = get_android_verity_key_id(verity_cert, &key_id);
-        if (EFI_ERROR(ret))
-                return ret;
-
-        ret = prepend_command_line(cmdline16, ROOTFS_PREFIX "/dev/dm-0 dm=\"system "
-                                   "none ro,0 1 android-verity %a PARTUUID=%g\"",
-                                   key_id, &system_uuid);
-        FreePool(key_id);
-
-        return ret;
-}
-
-#else
-#define AVB_ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init"
-#define DISABLE_AVB_ROOTFS_PREFIX L" root="
-static EFI_STATUS avb_prepend_command_line_rootfs(
-                __attribute__((__unused__)) OUT CHAR16 **cmdline16,
-                IN enum boot_target boot_target)
-{
-        EFI_STATUS ret = EFI_SUCCESS;
-
-        if (boot_target == RECOVERY || boot_target == MEMORY)
-                return ret;
-
-        if (use_slot()) {
-                ret = prepend_command_line(cmdline16, AVB_ROOTFS_PREFIX);
-                if (EFI_ERROR(ret)) {
-                        efi_perror(ret, L"Failed to add AVB rootfs prefix");
-                        return ret;
-                }
-        }
-        return ret;
-}
-#endif  // defined USE_AVB
-
 
 /* when we call setup_command_line in EFI, parameter is EFI_GUID *swap_guid.
  * when we call setup_command_line in NON EFI, parameter is const CHAR8 *abl_cmd_line.
@@ -1005,11 +941,7 @@ static EFI_STATUS setup_command_line(
                 IN enum boot_target boot_target,
                 IN void *parameter,
                 IN UINT8 boot_state,
-#ifdef USE_AVB
-                IN AvbSlotVerifyData *slot_data
-#else
-                IN X509 *verity_cert
-#endif
+                IN VBDATA *vb_data
                 )
 {
         CHAR16 *cmdline16 = NULL;
@@ -1021,7 +953,7 @@ static EFI_STATUS setup_command_line(
         CHAR8 *cmdline;
         UINTN cmdlen;
         UINTN cmdsize;
-        UINTN avb_cmdlen = 0;
+        UINTN vb_cmdlen = 0;
         EFI_STATUS ret;
         struct boot_params *buf;
         struct boot_img_hdr *aosp_header;
@@ -1030,11 +962,8 @@ static EFI_STATUS setup_command_line(
         EFI_GUID *swap_guid = NULL;
         CHAR8 *abl_cmd_line = NULL;
         BOOLEAN is_uefi = TRUE;
-#ifdef USE_AVB
-        EFI_GUID system_uuid;
-#endif
-
         UINTN abl_cmd_len = 0;
+
         is_uefi = is_UEFI();
 
         if (is_uefi)
@@ -1147,53 +1076,9 @@ static EFI_STATUS setup_command_line(
                 goto out;
 #endif
 
-#ifndef USE_AVB
-        if ((boot_target == NORMAL_BOOT || boot_target == CHARGER) &&
-            recovery_in_boot_partition() && verity_cert) {
-                ret = prepend_command_line_rootfs(&cmdline16, verity_cert);
-                if (verity_cert)
-                        X509_free(verity_cert);
-                if (EFI_ERROR(ret))
-                        goto out;
-
-                if (slot_get_verity_corrupted()) {
-                        ret = prepend_command_line(&cmdline16, L"androidboot.veritymode=eio");
-                        if (EFI_ERROR(ret))
-                                goto out;
-                }
-        }
-#else // defined USE_AVB
-        avb_prepend_command_line_rootfs(&cmdline16, boot_target);
-
-        if (slot_data && slot_data->cmdline && boot_target != MEMORY) {
-                avb_cmdlen = strlen((const CHAR8*)slot_data->cmdline);
-        }
-
-        if (use_slot()) {
-                if (slot_get_active()) {
-                        ret = prepend_command_line(&cmdline16, L"androidboot.slot_suffix=%a",
-                                                   slot_get_active());
-                        if (EFI_ERROR(ret))
-                                goto out;
-                }
-
-                if (slot_data && slot_data->cmdline && (!avb_strstr(slot_data->cmdline,"root=")))
-                {
-                        ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
-                                                                &system_uuid, LOGICAL_UNIT_USER);
-                        if (EFI_ERROR(ret)) {
-                                efi_perror(ret, L"Failed to get %s partition UUID", SYSTEM_LABEL);
-                                goto out;
-                        }
-
-                        ret = prepend_command_line(&cmdline16, DISABLE_AVB_ROOTFS_PREFIX "PARTUUID=%g",
-                                                   &system_uuid);
-                        if (EFI_ERROR(ret))
-                                goto out;
-                }
-        }
-#endif // USE_AVB
-
+        ret = prepend_slot_command_line(&cmdline16, boot_target, vb_data);
+        if (EFI_ERROR(ret))
+                goto out;
         /* append stages boottime */
         set_boottime_stamp(TM_JMP_KERNEL);
         construct_stages_boottime(time_str8, sizeof(time_str8));
@@ -1204,13 +1089,16 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 
+        if(boot_target != MEMORY)
+                vb_cmdlen = get_vb_cmdlen(vb_data);
+
         if (is_uefi) {
             /* Documentation/x86/boot.txt: "The kernel command line can be located
              * anywhere between the end of the setup heap and 0xA0000" */
             cmdline_addr = 0xA0000;
 
             cmdlen = StrLen(cmdline16);
-            cmdsize = cmdlen + 1 + avb_cmdlen + 1;
+            cmdsize = cmdlen + 1 + vb_cmdlen + 1;
             ret = allocate_pages(AllocateMaxAddress, EfiLoaderData,
                                  EFI_SIZE_TO_PAGES(cmdsize),
                                  &cmdline_addr);
@@ -1220,7 +1108,7 @@ static EFI_STATUS setup_command_line(
         /*TBD- unify cmdline buffer allocation in ABL with UEFI */
             cmdlen = StrLen(cmdline16);
             /* +256: for extra cmd line*/
-            cmdsize = cmdlen + avb_cmdlen + abl_cmd_len + 256;
+            cmdsize = cmdlen + vb_cmdlen + abl_cmd_len + 256;
             cmdline_addr = (EFI_PHYSICAL_ADDRESS)((UINTN)AllocatePool(cmdsize));
             if (cmdline_addr == 0) {
                     ret = EFI_OUT_OF_RESOURCES;
@@ -1236,14 +1124,14 @@ static EFI_STATUS setup_command_line(
                 goto out;
         }
 
-#ifdef USE_AVB
-        if (avb_cmdlen > 0) {
+        if (vb_cmdlen > 0) {
+                char *vb_cmdline;
+                vb_cmdline = get_vb_cmdline(vb_data);
                 cmdline[cmdlen] = ' ';
-                memcpy(cmdline + cmdlen + 1, slot_data->cmdline, avb_cmdlen);
-                cmdlen += avb_cmdlen + 1;
+                memcpy(cmdline + cmdlen + 1, vb_cmdline, vb_cmdlen);
+                cmdlen += vb_cmdlen + 1;
                 cmdline[cmdlen] = 0;
         }
-#endif
 
         /* append command line from ABL */
         if (abl_cmd_len > 0)
@@ -1557,229 +1445,6 @@ out_free:
         return ret;
 }
 
-#ifdef USE_AVB
-EFI_STATUS get_avb_flow_result(
-                IN AvbSlotVerifyData *slot_data,
-                IN bool allow_verification_error,
-                IN AvbABFlowResult flow_result,
-                IN OUT UINT8 *boot_state)
-{
-        AvbPartitionData *boot;
-        const struct boot_img_hdr *header;
-
-        if (!slot_data || !boot_state)
-                return EFI_INVALID_PARAMETER;
-
-        if (slot_data->num_loaded_partitions < 1) {
-                avb_error("No avb partition.\n");
-                return EFI_LOAD_ERROR;
-        }
-
-        boot = &slot_data->loaded_partitions[0];
-        header = (const struct boot_img_hdr *)boot->data;
-        /* Check boot image header magic field. */
-        if (avb_memcmp(BOOT_MAGIC, header->magic, BOOT_MAGIC_SIZE)) {
-                avb_error("Wrong image header magic.\n");
-                return EFI_NOT_FOUND;
-        }
-        avb_debug("Image read success\n");
-
-        switch (flow_result) {
-        case AVB_AB_FLOW_RESULT_OK:
-                if (allow_verification_error && *boot_state < BOOT_STATE_ORANGE)
-                        *boot_state = BOOT_STATE_ORANGE;
-                break;
-
-        case AVB_AB_FLOW_RESULT_OK_WITH_VERIFICATION_ERROR:
-        case AVB_AB_FLOW_RESULT_ERROR_OOM:
-        case AVB_AB_FLOW_RESULT_ERROR_IO:
-        case AVB_AB_FLOW_RESULT_ERROR_NO_BOOTABLE_SLOTS:
-        case AVB_AB_FLOW_RESULT_ERROR_INVALID_ARGUMENT:
-                if (allow_verification_error && *boot_state <= BOOT_STATE_ORANGE) {
-                /* Do nothing since we allow this. */
-                        avb_debugv("Allow avb ab flow with result ",
-                        avb_ab_flow_result_to_string(flow_result),
-                        " because |allow_verification_error| is true.\n",
-                        NULL);
-                        *boot_state = BOOT_STATE_ORANGE;
-                } else
-                        *boot_state = BOOT_STATE_RED;
-                break;
-        default:
-                if (allow_verification_error && *boot_state <= BOOT_STATE_ORANGE)
-                        *boot_state = BOOT_STATE_ORANGE;
-                else
-                        *boot_state = BOOT_STATE_RED;
-                break;
-        }
-
-        return EFI_SUCCESS;
-}
-
-EFI_STATUS get_avb_result(
-                IN AvbSlotVerifyData *slot_data,
-                IN bool allow_verification_error,
-                IN AvbSlotVerifyResult verify_result,
-                IN OUT UINT8 *boot_state)
-{
-        AvbPartitionData *boot;
-        const struct boot_img_hdr *header;
-
-        if (!slot_data || !boot_state)
-                return EFI_INVALID_PARAMETER;
-
-        if (slot_data->num_loaded_partitions < 1) {
-                avb_error("No avb partition.\n");
-                return EFI_LOAD_ERROR;
-        }
-
-        boot = &slot_data->loaded_partitions[0];
-        header = (const struct boot_img_hdr *)boot->data;
-        /* Check boot image header magic field. */
-        if (avb_memcmp(BOOT_MAGIC, header->magic, BOOT_MAGIC_SIZE)) {
-                avb_error("Wrong image header magic.\n");
-                return EFI_NOT_FOUND;
-        }
-        avb_debug("Image read success\n");
-
-        switch (verify_result) {
-        case AVB_SLOT_VERIFY_RESULT_OK:
-                if (allow_verification_error && *boot_state < BOOT_STATE_ORANGE)
-                        *boot_state = BOOT_STATE_ORANGE;
-                break;
-
-        case AVB_SLOT_VERIFY_RESULT_ERROR_VERIFICATION:
-        case AVB_SLOT_VERIFY_RESULT_ERROR_ROLLBACK_INDEX:
-        case AVB_SLOT_VERIFY_RESULT_ERROR_PUBLIC_KEY_REJECTED:
-                if (allow_verification_error && *boot_state <= BOOT_STATE_ORANGE) {
-                /* Do nothing since we allow this. */
-                        avb_debugv("Allow avb verified with result ",
-                        avb_slot_verify_result_to_string(verify_result),
-                        " because |allow_verification_error| is true.\n",
-                        NULL);
-                        *boot_state = BOOT_STATE_ORANGE;
-                } else
-                        *boot_state = BOOT_STATE_RED;
-                break;
-        default:
-                if (allow_verification_error && *boot_state <= BOOT_STATE_ORANGE)
-                        *boot_state = BOOT_STATE_ORANGE;
-                else
-                        *boot_state = BOOT_STATE_RED;
-                break;
-        }
-
-        return EFI_SUCCESS;
-}
-
-
-EFI_STATUS android_image_load_partition_avb(
-                IN const char *label,
-                OUT VOID **bootimage_p,
-                IN OUT UINT8* boot_state,
-                AvbSlotVerifyData **slot_data)
-{
-        EFI_STATUS ret = EFI_SUCCESS;
-        AvbOps *ops;
-        const char *slot_suffix = "";
-        AvbPartitionData *boot;
-        AvbSlotVerifyResult verify_result = 0;
-        AvbSlotVerifyFlags flags;
-        const char *requested_partitions[] = {label, NULL};
-        VOID *bootimage = NULL;
-        bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
-        *bootimage_p = NULL;
-
-        ops = avb_init();
-        if (! ops) {
-                ret = EFI_OUT_OF_RESOURCES;
-                goto fail;
-        }
-
-        if (use_slot()) {
-                slot_suffix = slot_get_active();
-                if (!slot_suffix) {
-                        error(L"suffix is null");
-                        slot_suffix = "";
-                }
-        }
-
-        flags = AVB_SLOT_VERIFY_FLAGS_NONE;
-        if (allow_verification_error)
-                flags |= AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR;
-
-        verify_result = avb_slot_verify(ops,
-                        requested_partitions,
-                        slot_suffix,
-                        flags,
-                        AVB_HASHTREE_ERROR_MODE_RESTART,
-                        slot_data);
-
-        debug(L"avb_slot_verify ret %d\n", verify_result);
-
-        ret = get_avb_result(*slot_data,
-                        allow_verification_error,
-                        verify_result,
-                        boot_state);
-
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Failed to get avb result for boot");
-                goto fail;
-        }
-
-        boot = &(*slot_data)->loaded_partitions[0];
-        bootimage = boot->data;
-        *bootimage_p = bootimage;
-        return ret;
-fail:
-        *boot_state = BOOT_STATE_RED;
-        return ret;
-}
-
-
-EFI_STATUS android_image_load_partition_avb_ab(
-                IN const char *label,
-                OUT VOID **bootimage_p,
-                IN OUT UINT8* boot_state,
-                AvbSlotVerifyData **slot_data)
-{
-#ifndef USE_SLOT
-        return android_image_load_partition_avb(label, bootimage_p, boot_state, slot_data);
-#else
-        EFI_STATUS ret = EFI_SUCCESS;
-        AvbABFlowResult flow_result;
-        AvbPartitionData *boot;
-        AvbSlotVerifyFlags flags;
-        const char *requested_partitions[] = {label, NULL};
-        VOID *bootimage = NULL;
-        bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
-        *bootimage_p = NULL;
-
-        flags = AVB_SLOT_VERIFY_FLAGS_NONE;
-        if (allow_verification_error)
-                flags |= AVB_SLOT_VERIFY_FLAGS_ALLOW_VERIFICATION_ERROR;
-
-        flow_result = avb_ab_flow(&ab_ops, requested_partitions, flags, AVB_HASHTREE_ERROR_MODE_RESTART, slot_data);
-        ret = get_avb_flow_result(*slot_data,
-                allow_verification_error,
-                flow_result,
-                boot_state);
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"Failed to get avb slot a/b flow result for boot");
-                goto fail;
-        }
-        slot_set_active_cached((*slot_data)->ab_suffix);
-
-        boot = &(*slot_data)->loaded_partitions[0];
-        bootimage = boot->data;
-        *bootimage_p = bootimage;
-        return ret;
-fail:
-        *boot_state = BOOT_STATE_RED;
-        return ret;
-#endif // USE_SLOT
-}
-#endif // USE_AVB
 
 EFI_STATUS android_image_start_buffer(
                 IN EFI_HANDLE parent_image,
@@ -1787,11 +1452,7 @@ EFI_STATUS android_image_start_buffer(
                 IN enum boot_target boot_target,
                 IN UINT8 boot_state,
                 IN __attribute__((unused)) EFI_GUID *swap_guid,
-#ifdef USE_AVB
-                IN AvbSlotVerifyData *slot_data,
-#else
-                IN __attribute__((unused)) X509 *verity_cert,
-#endif
+                IN VBDATA *vb_data,
                 IN __attribute__((unused)) const CHAR8 *abl_cmd_line)
 {
         struct boot_img_hdr *aosp_header;
@@ -1841,11 +1502,7 @@ EFI_STATUS android_image_start_buffer(
         ret = setup_command_line(bootimage, boot_target,
                      parameter,
                      boot_state,
-#ifdef USE_AVB
-                     slot_data
-#else
-                     verity_cert
-#endif
+                     vb_data
                      );
 
 
