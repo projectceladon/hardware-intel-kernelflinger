@@ -200,6 +200,8 @@ void qsort(void *base, size_t num, size_t width,
            int (*compare)(const void *, const void *))
     __attribute__((weak));
 
+INTN StrcaseCmp(CHAR16 *s1, CHAR16 *s2);
+
 /*
  * misc
  */
