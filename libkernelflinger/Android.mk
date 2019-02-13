@@ -152,7 +152,13 @@ endif
 
 ifneq ($(BOARD_AVB_ENABLE),true)
 	LOCAL_SRC_FILES += \
-	signature.c
+	signature.c \
+	android_vb1.c \
+	security_vb1.c
+else
+	LOCAL_SRC_FILES += \
+	android_vb2.c \
+	security_vb2.c
 endif
 
 ifeq ($(BOARD_GPIO_ENABLE),true)

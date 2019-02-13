@@ -24,10 +24,7 @@
 #include "blobstore.h"
 #endif
 #include "targets.h"
-#ifdef USE_AVB
-#include "libavb/libavb.h"
-#include "libavb_ab/libavb_ab.h"
-#endif
+#include "android_vb.h"
 
 #define BOOT_MAGIC "ANDROID!"
 #define BOOT_MAGIC_SIZE 8
@@ -254,11 +251,7 @@ EFI_STATUS android_image_start_buffer(
                 IN enum boot_target boot_target,
                 IN UINT8 boot_state,
                 IN EFI_GUID *swap,
-#ifdef USE_AVB
-                IN AvbSlotVerifyData *slot_data,
-#else
-                IN X509 *verity_cert,
-#endif
+                IN VBDATA *vb_data,
                 IN const CHAR8 *abl_cmd_line);
 
 EFI_STATUS setup_acpi_table(VOID *bootimage, enum boot_target target);
@@ -272,31 +265,6 @@ EFI_STATUS android_image_load_file(
                 IN CHAR16 *loader,
                 IN BOOLEAN delete,
                 OUT VOID **bootimage_p);
-#ifdef USE_AVB
-EFI_STATUS android_image_load_partition_avb(
-                IN const char *label,
-                OUT VOID **bootimage_p,
-                UINT8* boot_state,
-                AvbSlotVerifyData **slot_data);
-
-EFI_STATUS android_image_load_partition_avb_ab(
-                IN const char *label,
-                OUT VOID **bootimage_p,
-                UINT8* boot_state,
-                AvbSlotVerifyData **slot_data);
-
-EFI_STATUS get_avb_result(
-                IN AvbSlotVerifyData *slot_data,
-                IN bool allow_verification_error,
-                IN AvbSlotVerifyResult verify_result,
-                IN OUT UINT8 *boot_state);
-
-EFI_STATUS get_avb_flow_result(
-                IN AvbSlotVerifyData *slot_data,
-                IN bool allow_verification_error,
-                IN AvbABFlowResult flow_result,
-                IN OUT UINT8 *boot_state);
-#endif
 
 EFI_STATUS read_bcb(
                 IN const CHAR16 *label,
@@ -347,6 +315,15 @@ EFI_STATUS get_bootimage_blob(VOID *bootimage, enum blobtype btype, VOID **blob,
 /* Get a pointer and size to the 2ndstage area of a boot image */
 EFI_STATUS get_bootimage_2nd(VOID *bootimage, VOID **second, UINT32 *size);
 
+EFI_STATUS prepend_command_line(CHAR16 **cmdline, CHAR16 *fmt, ...);
+
+EFI_STATUS prepend_slot_command_line(CHAR16 **cmdline16,
+                                     enum boot_target boot_target,
+                                     VBDATA *vb_data);
+
+UINTN get_vb_cmdlen(VBDATA *vb_data);
+
+char *get_vb_cmdline(VBDATA *vb_data);
 #endif
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab

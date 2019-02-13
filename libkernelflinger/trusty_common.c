@@ -44,7 +44,49 @@
 #include "gpt.h"
 #include "efilinux.h"
 
-#ifndef USE_AVB
+#ifdef USE_AVB
+EFI_STATUS load_tos_image(OUT VOID **bootimage)
+{
+        EFI_STATUS ret;
+        UINT8 verify_state = BOOT_STATE_GREEN;
+        UINT8 verify_state_new;
+        AvbSlotVerifyData *slot_data;
+        BOOLEAN b_secureboot = is_platform_secure_boot_enabled();
+
+        if (!b_secureboot)
+                verify_state = BOOT_STATE_ORANGE;
+#ifndef USER
+        if (device_is_unlocked())
+                verify_state = BOOT_STATE_ORANGE;
+#endif
+
+        verify_state_new = verify_state;
+
+        ret = android_image_load_partition_avb("tos", bootimage, &verify_state_new, &slot_data);  // Do not try to switch slot if failed
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"TOS image loading failed");
+                return ret;
+        }
+
+        if (verify_state != verify_state_new) {
+#ifndef USERDEBUG
+                error(L"Invalid TOS image. Boot anyway on ENG build");
+                ret = EFI_SUCCESS;
+#else
+                if (b_secureboot) {
+                        error(L"TOS image doesn't verify, stop since secure boot enabled");
+                        ret = EFI_SECURITY_VIOLATION;
+                } else {
+                        error(L"TOS image doesn't verify, continue since secure boot disabled");
+                        ret = EFI_SUCCESS;
+                }
+#endif
+        }
+
+        return ret;
+}
+
+#else // USE_AVB == false
 /* Open the tos partition and load the tos image into memory
  * Parameters:
  * label    - Label for the partition in the GPT
@@ -105,51 +147,7 @@ static EFI_STATUS tos_image_load_partition(IN const CHAR16 *label, OUT VOID **im
         *image = bootimg;
         return EFI_SUCCESS;
 }
-#endif // USE_AVB
 
-#ifdef USE_AVB
-EFI_STATUS load_tos_image(OUT VOID **bootimage)
-{
-        EFI_STATUS ret;
-        UINT8 verify_state = BOOT_STATE_GREEN;
-        UINT8 verify_state_new;
-        AvbSlotVerifyData *slot_data;
-        BOOLEAN b_secureboot = is_platform_secure_boot_enabled();
-
-        if (!b_secureboot)
-                verify_state = BOOT_STATE_ORANGE;
-#ifndef USER
-        if (device_is_unlocked())
-                verify_state = BOOT_STATE_ORANGE;
-#endif
-
-        verify_state_new = verify_state;
-
-        ret = android_image_load_partition_avb("tos", bootimage, &verify_state_new, &slot_data);  // Do not try to switch slot if failed
-        if (EFI_ERROR(ret)) {
-                efi_perror(ret, L"TOS image loading failed");
-                return ret;
-        }
-
-        if (verify_state != verify_state_new) {
-#ifndef USERDEBUG
-                error(L"Invalid TOS image. Boot anyway on ENG build");
-                ret = EFI_SUCCESS;
-#else
-                if (b_secureboot) {
-                        error(L"TOS image doesn't verify, stop since secure boot enabled");
-                        ret = EFI_SECURITY_VIOLATION;
-                } else {
-                        error(L"TOS image doesn't verify, continue since secure boot disabled");
-                        ret = EFI_SUCCESS;
-                }
-#endif
-        }
-
-        return ret;
-}
-
-#else // USE_AVB == false
 EFI_STATUS load_tos_image(OUT VOID **bootimage)
 {
         CHAR16 target[BOOT_TARGET_SIZE];

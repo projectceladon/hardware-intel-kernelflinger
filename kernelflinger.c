@@ -682,13 +682,6 @@ static EFI_STATUS avb_load_verify_boot_image(
 			ret = avb_load_verify_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot, boot_state, slot_data);
 			break;
 		}
-#if !defined(USE_AVB)
-		/* Tries count is handled by avb_ab_flow when AVB is enabled. */
-		if (use_slot() && !slot_recovery_tries_remaining()) {
-			ret = EFI_NOT_FOUND;
-			break;
-		}
-#endif
 		ret = android_image_load_partition_avb("recovery", bootimage, boot_state, slot_data);
 		break;
 	case ESP_BOOTIMAGE:
@@ -894,11 +887,7 @@ static EFI_STATUS set_image_oemvars(VOID *bootimage)
 
 static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 				enum boot_target boot_target,
-#ifdef USE_AVB
-				AvbSlotVerifyData *slot_data
-#else
-				X509 *verifier_cert
-#endif
+				VBDATA *vb_data
 				)
 {
 	EFI_STATUS ret;
@@ -949,26 +938,8 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 			efi_perror(ret, L"Load tos image failed");
 			die();
 		}
-#ifdef USE_AVB
-		const UINT8 *vbmeta_pub_key;
-		UINTN vbmeta_pub_key_len;
 
-                if (slot_data != NULL) {
-                        ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
-                                slot_data->vbmeta_images[0].vbmeta_size,
-                                &vbmeta_pub_key,
-                                &vbmeta_pub_key_len);
-                        if (EFI_ERROR(ret)) {
-                                efi_perror(ret, L"Failed to get the vbmeta_pub_key");
-                                die();
-                        }
-
-                        ret = get_rot_data(bootimage, boot_state,
-                                        vbmeta_pub_key, vbmeta_pub_key_len, &g_rot_data);
-                }
-#else
-		ret = get_rot_data(bootimage, boot_state, verifier_cert, &g_rot_data);
-#endif
+		ret = get_rot_data(bootimage, boot_state, vb_data, &g_rot_data);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Unable to get the root of trust data for trusty");
 			die();
@@ -1006,11 +977,7 @@ static EFI_STATUS load_image(VOID *bootimage, UINT8 boot_state,
 			boot_state_to_string(boot_state));
 	ret = android_image_start_buffer(g_parent_image, bootimage,
 					boot_target, boot_state, NULL,
-#ifdef USE_AVB
-					slot_data,
-#else
-					verifier_cert,
-#endif
+					vb_data,
 					NULL);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Couldn't load Boot image");
@@ -1236,10 +1203,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	UINT8 boot_state = BOOT_STATE_GREEN;
 #ifndef USE_AVB
 	UINT8 *hash = NULL;
-	X509 *verifier_cert = NULL;
-#else
-	AvbSlotVerifyData *slot_data = NULL;
 #endif
+	VBDATA *vb_data = NULL;
 
 	set_boottime_stamp(TM_EFI_MAIN);
 	/* gnu-efi initialization */
@@ -1422,7 +1387,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 	set_boottime_stamp(TM_AVB_START);
 #ifdef USE_AVB
-	ret = avb_load_verify_boot_image(boot_target, target_path, &bootimage, oneshot, &boot_state, &slot_data);
+	ret = avb_load_verify_boot_image(boot_target, target_path, &bootimage, oneshot, &boot_state, &vb_data);
 #else
 	ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
 	FreePool(target_path);
@@ -1432,11 +1397,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	} else if (boot_state != BOOT_STATE_ORANGE) {
 		debug(L"Validating boot image");
 		boot_state = validate_bootimage(boot_target, bootimage,
-						&verifier_cert);
+						&vb_data);
 	}
 
 	if (boot_state == BOOT_STATE_YELLOW) {
-		ret = pub_key_sha256(verifier_cert, &hash);
+		ret = pub_key_sha256(vb_data, &hash);
 		if (EFI_ERROR(ret))
 			efi_perror(ret, L"Failed to compute pub key hash");
 		boot_error(BOOTIMAGE_UNTRUSTED_CODE, boot_state, hash,
@@ -1472,11 +1437,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	}
 
 	ret = load_image(bootimage, boot_state, boot_target,
-#ifdef USE_AVB
-			slot_data
-#else
-			verifier_cert
-#endif
+			vb_data
 			);
 	if (EFI_ERROR(ret))
 		efi_perror(ret, L"Failed to start boot image");

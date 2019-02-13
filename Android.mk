@@ -282,7 +282,6 @@ LOCAL_STATIC_LIBRARIES += $(SHARED_STATIC_LIBRARIES)
 LOCAL_MODULE_STEM := kernelflinger
 
 ifeq ($(BOARD_AVB_ENABLE),true)
-LOCAL_SRC_FILES += avb_init.c
 LOCAL_STATIC_LIBRARIES += libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
 endif
 
@@ -337,7 +336,6 @@ $(KFINS_AVB_PK_OBJ): $(KFINS_PADDED_AVB_PK)
                        --rename-section .data=.oemkeys $@ $@
 
 LOCAL_GENERATED_SOURCES += $(KFINS_AVB_PK_OBJ)
-LOCAL_SRC_FILES += avb_init.c
 LOCAL_C_INCLUDES += $(addprefix $(LOCAL_PATH)/,avb)
 LOCAL_STATIC_LIBRARIES += libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
 endif  # BOARD_AVB_ENABLE
@@ -480,8 +478,6 @@ LOCAL_GENERATED_SOURCES += $(ABL_AVB_PK_OBJ)
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,avb)
 
-LOCAL_SRC_FILES += avb_init.c
-
 endif
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,libkernelflinger)
@@ -523,10 +519,6 @@ LOCAL_SRC_FILES := \
 ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
     LOCAL_SRC_FILES += \
         ux.c
-endif
-ifeq ($(BOARD_AVB_ENABLE),true)
-LOCAL_SRC_FILES += \
-	avb_init.c
 endif
 
 ifeq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY),true)
