@@ -65,10 +65,19 @@
 
 #define OS_INITIATED L"os_initiated"
 
+/* On x86_32, stack protector save canary value(4 bytes) to GS:0x14.
+ * On x86_64, stack canary is saved to GS:0x28.
+ * GS is set to the same selector as DS, base address of the
+ * selector is 0,  limit is 4G.
+ */
+
+
 #if __LP64__
 #define EFI_LOADER_SIGNATURE "EL64"
+#define STACK_CANARY_LOCATION (0x28)
 #else
 #define EFI_LOADER_SIGNATURE "EL32"
+#define STACK_CANARY_LOCATION (0x14)
 #endif
 
 struct setup_header {
@@ -1948,6 +1957,8 @@ EFI_STATUS android_clear_memory()
         CHAR8 *mem_map;
         EFI_TPL OldTpl;
 
+        UINTN stack_canary = *(UINTN *)STACK_CANARY_LOCATION;
+
         OldTpl = uefi_call_wrapper(BS->RaiseTPL, 1, TPL_NOTIFY);
         mem_entries = (CHAR8 *)LibMemoryMap(&nr_entries, &key, &entry_sz, &entry_ver);
         if (!mem_entries) {
@@ -1997,6 +2008,8 @@ err:
 #endif
         uefi_call_wrapper(BS->RestoreTPL, 1, OldTpl);
         FreePool((void *)mem_map);
+        *(UINTN *)STACK_CANARY_LOCATION = stack_canary;
+
         return ret;
 }
 
