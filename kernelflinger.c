@@ -805,12 +805,12 @@ static EFI_STATUS load_boot_image(
 			ret = load_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot);
 			break;
 		}
-#if !defined(USE_AVB)
+
 		if (use_slot() && !slot_recovery_tries_remaining()) {
 			ret = EFI_NOT_FOUND;
 			break;
 		}
-#endif
+
 		ret = android_image_load_partition(RECOVERY_LABEL, bootimage);
 		break;
 	case ESP_BOOTIMAGE:
