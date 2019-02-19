@@ -252,14 +252,24 @@ static EFI_STATUS ata_fill_zero(EFI_ATA_PASS_THRU_PROTOCOL *ata,
 					&ata_packet, NULL);
 		if (EFI_ERROR(ret)) {
 			if (ret == EFI_BAD_BUFFER_SIZE) {
-				if (retry_count == 0) {
-					efi_perror(ret, L"ATA controller can't give a reasonable transfer length");
-					break;
+				/* when EFI_BAD_BUFFER_SIZE is returned
+				 * but InTransferLength is not updated,
+				 * try to probe a reasonable transfer size
+				 */
+				if (ata_packet.InTransferLength == 0) {
+					blocks = blocks >> 2;
+					if (blocks)
+						continue;
+				} else {
+					if (retry_count == 0) {
+						efi_perror(ret, L"ATA controller can't give a reasonable transfer length");
+						break;
+					}
+					blocks = (ata_packet.InTransferLength >> 9);
+					ata_packet.InTransferLength = 0;
+					retry_count--;
+					continue;
 				}
-				blocks = (ata_packet.InTransferLength >> 9);
-				ata_packet.InTransferLength = 0;
-				retry_count--;
-				continue;
 			}
 			efi_perror(ret, L"Write Sectors Command Failed");
 			break;
