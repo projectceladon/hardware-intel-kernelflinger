@@ -630,6 +630,41 @@ out:
 }
 
 #ifdef USE_AVB
+/* Verify if kernelflinger use same slot as kfld and trigger reboot if not.
+ *
+ * slot_data    - The slot data chosen by Avb flow.
+ * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
+ *                and ESP_BOOTIMAGE (for 'fastboot boot')
+ */
+static void reboot_if_slot_is_different(IN AvbSlotVerifyData *slot_data,
+		IN enum boot_target boot_target)
+{
+	UINT8 slot;
+	EFI_STATUS ret;
+	const char *suffix;
+
+	if (slot_data == NULL || slot_data->ab_suffix == NULL)
+		return;
+
+	ret = get_efi_loaded_slot(&slot);
+	if (EFI_ERROR(ret)) {
+		if (ret != EFI_NOT_FOUND)
+			efi_perror(ret, L"Failed to get loaded slot from efi variable");
+		return;
+	}
+	if (slot > 1) {
+		error(L"invalid slot %d", (int)slot);
+		return;
+	}
+	suffix = (slot == 0) ? "_a" : "_b";
+	if (strcmp((CHAR8 *)slot_data->ab_suffix, suffix)) {
+		error(L"Avb flow suffix %a doesn't equal to the suffix "
+			L"in efi variable %a, reboot to target %d",
+			slot_data->ab_suffix, suffix, boot_target);
+		reboot_to_target(boot_target, EfiResetCold);
+	}
+}
+
 /* Use AVB load and verify a boot image into RAM.
  *
  * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
@@ -661,10 +696,14 @@ static EFI_STATUS avb_load_verify_boot_image(
 	case NORMAL_BOOT:
 	case CHARGER:
 		ret = android_image_load_partition_avb_ab("boot", bootimage, boot_state, slot_data);
+		if (ret == EFI_SUCCESS && slot_data)
+			reboot_if_slot_is_different(*slot_data, boot_target);
 		break;
 	case RECOVERY:
 		if (recovery_in_boot_partition()) {
 			ret = avb_load_verify_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot, boot_state, slot_data);
+			if (ret == EFI_SUCCESS && slot_data)
+				reboot_if_slot_is_different(*slot_data, boot_target);
 			break;
 		}
 #if !defined(USE_AVB)
