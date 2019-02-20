@@ -645,6 +645,99 @@ out:
 }
 
 #ifdef USE_AVB
+/* Disable the slot if kfld failed to load it.
+  */
+static void disable_slot_if_efi_loaded_slot_failed()
+{
+	UINT8 loaded_slot;
+	UINT8 slot;
+	EFI_STATUS ret;
+	EFI_STATUS err;
+	UINTN nb_slots;
+	char **suffixes;
+
+	ret = get_efi_loaded_slot(&loaded_slot);
+	if (EFI_ERROR(ret)) {
+		/* Just assume loaded slot is active slot if cannot get information
+		 * of loaded slot (whether EFI_NOT_FOUND or 'real' EFI error),
+		 * don't need additional action but print message for 'real' error.
+		 */
+		if (ret != EFI_NOT_FOUND)
+			efi_perror(ret, L"Failed to get loaded slot from efi variable");
+		return;
+	}
+
+	nb_slots = slot_get_suffixes(&suffixes);
+	if (loaded_slot >= nb_slots) {
+		error(L"Invalid slot: %d, nb_slots: %d", (int)loaded_slot, nb_slots);
+		return;
+	}
+
+	for (slot = 0; slot < nb_slots; ++slot) {
+		if (slot == loaded_slot)
+			continue;
+		ret = get_efi_loaded_slot_failed(slot, &err);
+		if (EFI_ERROR(ret)) {
+			/* 1. kfld did not try this slot if EFI_NOT_FOUND.
+			 * 2. Assume kfld did not try this slot if 'real' error happens.
+			 * don't disable slot in both cases but print message for 'real' error.
+			 */
+			if (ret != EFI_NOT_FOUND)
+				efi_perror(ret, L"Failed to call get_efi_loaded_slot_failed");
+			continue;
+		}
+		if (EFI_ERROR(err)) {
+			/* Disable it if kfld tried this slot but failed. */
+			debug(L"Disable slot %d because kfld failed to load it",
+					slot, err);
+			disable_slot_by_index(slot);
+		}
+	}
+}
+
+/* Verify if kernelflinger use same slot as kfld and trigger reboot if not.
+ *
+ * slot_data    - The slot data chosen by Avb flow.
+ * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
+ *                and ESP_BOOTIMAGE (for 'fastboot boot')
+ */
+static void reboot_if_slot_is_different(IN AvbSlotVerifyData *slot_data,
+		IN enum boot_target boot_target)
+{
+	EFI_STATUS ret;
+	UINT8 slot;
+	char *suffix;
+	UINTN nb_slots;
+	char **suffixes;
+
+	if (slot_data == NULL || slot_data->ab_suffix == NULL)
+		return;
+
+	ret = get_efi_loaded_slot(&slot);
+	if (EFI_ERROR(ret)) {
+		/* Just assume loaded slot is active slot if cannot get information
+		 * of loaded slot (whether EFI_NOT_FOUND or 'real' EFI error),
+		 * don't need additional action but print message for 'real' error.
+		 */
+		if (ret != EFI_NOT_FOUND)
+			efi_perror(ret, L"Failed to get loaded slot from efi variable");
+		return;
+	}
+
+	nb_slots = slot_get_suffixes(&suffixes);
+	if (slot >= nb_slots) {
+		error(L"Invalid slot: %d, nb_slots: %d", (int)slot, nb_slots);
+		return;
+	}
+	suffix = suffixes[slot];
+	if (strcmp((CHAR8 *)slot_data->ab_suffix, suffix)) {
+		error(L"Avb flow suffix %a doesn't equal to the suffix "
+			L"in efi variable %a, reboot to target %d",
+			slot_data->ab_suffix, suffix, boot_target);
+		reboot_to_target(boot_target, EfiResetCold);
+	}
+}
+
 /* Use AVB load and verify a boot image into RAM.
  *
  * boot_target  - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
@@ -676,10 +769,14 @@ static EFI_STATUS avb_load_verify_boot_image(
 	case NORMAL_BOOT:
 	case CHARGER:
 		ret = android_image_load_partition_avb_ab("boot", bootimage, boot_state, slot_data);
+		if (ret == EFI_SUCCESS && slot_data)
+			reboot_if_slot_is_different(*slot_data, boot_target);
 		break;
 	case RECOVERY:
 		if (recovery_in_boot_partition()) {
 			ret = avb_load_verify_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot, boot_state, slot_data);
+			if (ret == EFI_SUCCESS && slot_data)
+				reboot_if_slot_is_different(*slot_data, boot_target);
 			break;
 		}
 		ret = android_image_load_partition_avb("recovery", bootimage, boot_state, slot_data);
@@ -1387,6 +1484,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 	set_boottime_stamp(TM_AVB_START);
 #ifdef USE_AVB
+	disable_slot_if_efi_loaded_slot_failed();
 	ret = avb_load_verify_boot_image(boot_target, target_path, &bootimage, oneshot, &boot_state, &vb_data);
 #else
 	ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);

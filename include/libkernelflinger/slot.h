@@ -120,6 +120,9 @@ EFI_STATUS slot_boot_failed(enum boot_target target);
  * mode. */
 UINT8 slot_recovery_tries_remaining();
 
+/* Disable the slot specified by index */
+EFI_STATUS disable_slot_by_index(UINT8 slot_index);
+
 #ifdef USE_SLOT
 extern struct AvbABOps ab_ops;
 #endif

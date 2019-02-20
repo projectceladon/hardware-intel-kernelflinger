@@ -609,3 +609,12 @@ EFI_STATUS slot_init_use_misc(void)
 	/* Slot_init() has initialize the current suffix. */
 	return EFI_SUCCESS;
 }
+
+EFI_STATUS disable_slot_by_index(UINT8 slot_index)
+{
+	if (slot_index >= MAX_NB_SLOT) {
+		error(L"Invalid slot id %d", (int)slot_index);
+		return EFI_INVALID_PARAMETER;
+	}
+	return disable_slot(&slots[slot_index], TRUE);
+}
