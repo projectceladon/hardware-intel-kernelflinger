@@ -46,7 +46,7 @@ static SERIAL_IO_INTERFACE *serial;
 #define SERIAL_DATA_BITS	8
 #define SERIAL_STOP_BITS	1
 
-#define BUFFER_SIZE 128
+#define BUFFER_SIZE 512
 static CHAR16 buf16[BUFFER_SIZE];
 static CHAR8 buf8[BUFFER_SIZE];
 
