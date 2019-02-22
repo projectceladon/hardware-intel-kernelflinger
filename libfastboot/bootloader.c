@@ -40,6 +40,7 @@
 #include "uefi_utils.h"
 #include "slot.h"
 
+#define ESP_TMP_PART		ESP_LABEL L"2"
 #define BOOTLOADER_TMP_PART	BOOTLOADER_LABEL L"2"
 #define MANIFEST_PATH		L"\\manifest.txt"
 
@@ -48,6 +49,7 @@
 #else
 #define DEFAULT_UEFI_LOAD_PATH	L"\\EFI\\BOOT\\bootia32.efi"
 #endif
+#define KFLD_UEFI_LOAD_PATH 	L"\\EFI\\INTEL\\KF4UEFI.EFI"
 
 static const load_option_t DEFAULT_LOAD_OPTIONS[] = {
 	{ L"Android-IA", DEFAULT_UEFI_LOAD_PATH, NULL }
@@ -181,23 +183,135 @@ static EFI_STATUS read_load_options(EFI_HANDLE handle)
 	return EFI_SUCCESS;
 }
 
-/* If the bootloader partition is the EFI System partition, we perform
- * a "safe flash procedure":
+/* we perform a "safe flash procedure" for EFI System partition:
  * 1. write data to the BOOTLOADER_TMP_PART partition
  * 2. perform sanity check on BOOTLOADER_TMP_PART partition files
  * 3. swap BOOTLOADER_PART and BOOTLOADER_TMP_PART partition
  * 4. erase BOOTLOADER_TMP_PART partition
  * 5. install the load options into the Boot Manager
  */
-EFI_STATUS flash_bootloader(VOID *data, UINTN size)
+static EFI_STATUS flash_efi_partition(CHAR16 *label, CHAR16 *tmp_part,
+		CHAR16 *uefi_load_path, BOOLEAN is_load_options, VOID *data, UINTN size)
 {
 	EFI_STATUS ret, erase_ret;
 	EFI_HANDLE handle;
-	EFI_GUID type;
 	UINTN i;
+
+	ret = flash_partition(data, size, tmp_part);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = gpt_refresh();
+	if (EFI_ERROR(ret))
+		return ret;
+
+	ret = gpt_get_partition_handle(tmp_part,
+				       LOGICAL_UNIT_USER, &handle);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to get handle for '%s' partition",
+			   tmp_part);
+		ret = EFI_NOT_FOUND;
+		goto exit;
+	}
+
+	ret = verify_image(handle, uefi_load_path);
+	if (EFI_ERROR(ret))
+		goto exit;
+
+	if (is_load_options) {
+		ret = read_load_options(handle);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Failed to get load options");
+			goto exit;
+		}
+
+		for (i = 0; i < load_option_nb; i++) {
+			ret = verify_image(handle, load_options->path);
+			if (EFI_ERROR(ret))
+				goto exit;
+		}
+	}
+
+	ret = gpt_swap_partition(tmp_part, label, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret))
+		efi_perror(ret, L"Failed to swap partitions");
+
+	if (is_load_options) {
+		ret = bootmgr_register_entries(label, load_options, load_option_nb);
+		if (EFI_ERROR(ret))
+			efi_perror(ret, L"Failed to install the load options");
+	}
+exit:
+	/* Microsoft allows to use the FAT32 filesystem for the ESP
+	   partition only and in the context of a UEFI device.  We
+	   have to get rid of this potential second FAT32
+	   partition.  */
+	erase_ret = erase_by_label(tmp_part);
+	if (EFI_ERROR(erase_ret))
+		efi_perror(erase_ret, L"Failed to erase '%s' partition", tmp_part);
+
+	free_load_options();
+
+	return EFI_ERROR(ret) ? ret : erase_ret;
+}
+
+/* For non UEFI platform, perform "default flash procedure".
+ * For UEFI platform, perform a "safe flash procedure"
+ * if bootloader2 partition exists;  otherwise, return EFI_UNSUPPORTED.
+ */
+static EFI_STATUS flash_bootloader_verify(CHAR16 *label, VOID *data, UINTN size)
+{
+	EFI_GUID type;
+	EFI_STATUS ret;
+
+	if (!is_UEFI())
+		return flash_partition(data, size, label);
+
+	ret = gpt_get_partition_type(BOOTLOADER_TMP_PART, &type, LOGICAL_UNIT_USER);
+	/* bootlader2 partition does not exist. */
+	if (EFI_ERROR(ret))
+		return EFI_UNSUPPORTED;
+
+	return flash_efi_partition(label, BOOTLOADER_TMP_PART,
+				KFLD_UEFI_LOAD_PATH, FALSE, data, size);
+}
+
+/* we perform a "safe flash procedure" for esp partition.
+ */
+EFI_STATUS flash_esp(VOID *data, UINTN size)
+{
+	return flash_efi_partition(ESP_LABEL, ESP_TMP_PART,
+				DEFAULT_UEFI_LOAD_PATH, TRUE, data, size);
+}
+
+EFI_STATUS flash_bootloader_a(VOID *data, UINTN size)
+{
+	return flash_bootloader_verify(BOOTLOADER_A_LABEL, data, size);
+}
+
+EFI_STATUS flash_bootloader_b(VOID *data, UINTN size)
+{
+	return flash_bootloader_verify(BOOTLOADER_B_LABEL, data, size);
+}
+
+/* when flashing efi bootloader or bootloader_a/bootloader_b,
+ * it need safe flashing.
+ * If the bootloader partition is the EFI System partition, we perform
+ * a "safe flash procedure".
+ */
+EFI_STATUS flash_bootloader(VOID *data, UINTN size)
+{
+	EFI_STATUS ret;
+	EFI_GUID type;
 	CHAR16 *label;
 
 	label = (CHAR16 *)slot_label(BOOTLOADER_LABEL);
+
+	if (StrCmp(label, BOOTLOADER_LABEL)) {
+		debug(L"bootloader slot ab is enable.");
+		return flash_bootloader_verify(label, data, size);
+	}
+
 	ret = gpt_get_partition_type(label, &type, LOGICAL_UNIT_USER);
 	if (EFI_ERROR(ret))
 		return ret;
@@ -206,59 +320,6 @@ EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 	if (memcmp(&type, &EfiPartTypeSystemPartitionGuid, sizeof(type)))
 		return flash_partition(data, size, label);
 
-	if (StrCmp(label, BOOTLOADER_LABEL)) {
-		error(L"bootloader slot partition is not supported.");
-		return EFI_UNSUPPORTED;
-	}
-
-	ret = flash_partition(data, size, BOOTLOADER_TMP_PART);
-	if (EFI_ERROR(ret))
-		return ret;
-
-	ret = gpt_refresh();
-	if (EFI_ERROR(ret))
-		return ret;
-
-	ret = gpt_get_partition_handle(BOOTLOADER_TMP_PART,
-				       LOGICAL_UNIT_USER, &handle);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get handle for '%s' partition",
-			   BOOTLOADER_TMP_PART);
-		ret = EFI_NOT_FOUND;
-		goto exit;
-	}
-
-	ret = read_load_options(handle);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get load options");
-		goto exit;
-	}
-
-	verify_image(handle, DEFAULT_UEFI_LOAD_PATH);
-	for (i = 0; i < load_option_nb; i++) {
-		ret = verify_image(handle, load_options->path);
-		if (EFI_ERROR(ret))
-			goto exit;
-	}
-
-	ret = gpt_swap_partition(BOOTLOADER_TMP_PART, BOOTLOADER_LABEL, LOGICAL_UNIT_USER);
-	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Failed to swap partitions");
-
-	ret = bootmgr_register_entries(BOOTLOADER_LABEL, load_options, load_option_nb);
-	if (EFI_ERROR(ret))
-		efi_perror(ret, L"Failed to install the load options");
-
-exit:
-	/* Microsoft allows to use the FAT32 filesystem for the ESP
-	   partition only and in the context of a UEFI device.  We
-	   have to get rid of this potential second FAT32
-	   partition.  */
-	erase_ret = erase_by_label(BOOTLOADER_TMP_PART);
-	if (EFI_ERROR(erase_ret))
-		efi_perror(erase_ret, L"Failed to erase '%s' partition", BOOTLOADER_TMP_PART);
-
-	free_load_options();
-
-	return EFI_ERROR(ret) ? ret : erase_ret;
+	return flash_efi_partition(BOOTLOADER_LABEL, BOOTLOADER_TMP_PART,
+				DEFAULT_UEFI_LOAD_PATH, TRUE, data, size);
 }
