@@ -307,6 +307,11 @@ EFI_STATUS flash_bootloader(VOID *data, UINTN size)
 
 	label = (CHAR16 *)slot_label(BOOTLOADER_LABEL);
 
+	if (!label) {
+		error(L"invalid bootloader label");
+		return EFI_INVALID_PARAMETER;
+	}
+
 	if (StrCmp(label, BOOTLOADER_LABEL)) {
 		debug(L"bootloader slot ab is enable.");
 		return flash_bootloader_verify(label, data, size);
