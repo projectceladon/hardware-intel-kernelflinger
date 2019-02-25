@@ -421,6 +421,9 @@ EFI_STATUS uefi_bios_update_capsule(EFI_HANDLE root_dir, CHAR16 *name)
 	EFI_RESET_TYPE resetType;
 	EFI_STATUS ret;
 
+	if (!root_dir)
+		return EFI_INVALID_PARAMETER;
+
 	ret = file_read(root_dir, name, &content, &len);
 	if (EFI_ERROR(ret)) {
 		if (ret == EFI_NOT_FOUND)
