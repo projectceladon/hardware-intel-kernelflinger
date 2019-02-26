@@ -215,8 +215,8 @@ else
 BOOTLOADER_AVB_KEY_PATH := $(BOARD_AVB_KEY_PATH)
 endif
 
-$(AVB_PK): $(BOOTLOADER_AVB_KEY_PATH) avbtool
-	avbtool extract_public_key --key $< --output $@
+$(AVB_PK): $(BOOTLOADER_AVB_KEY_PATH)
+	external/avb/avbtool extract_public_key --key $< --output $@
 
 $(PADDED_AVB_PK): $(AVB_PK)
 	$(call pad-binary, 4096)
@@ -313,8 +313,8 @@ else
 BOOTLOADER_AVB_KEY_PATH := $(BOARD_AVB_KEY_PATH)
 endif
 
-$(KFINS_AVB_PK): $(BOOTLOADER_AVB_KEY_PATH) avbtool
-	avbtool extract_public_key --key $< --output $@
+$(KFINS_AVB_PK): $(BOOTLOADER_AVB_KEY_PATH)
+	external/avb/avbtool extract_public_key --key $< --output $@
 
 $(KFINS_PADDED_AVB_PK): $(KFINS_AVB_PK)
 	$(call pad-binary, 4096)
@@ -427,8 +427,8 @@ else
 BOOTLOADER_AVB_KEY_PATH := $(BOARD_AVB_KEY_PATH)
 endif
 
-$(ABL_AVB_PK): $(BOOTLOADER_AVB_KEY_PATH) avbtool
-	avbtool extract_public_key --key $< --output $@
+$(ABL_AVB_PK): $(BOOTLOADER_AVB_KEY_PATH)
+	external/avb/avbtool extract_public_key --key $< --output $@
 
 $(ABL_PADDED_AVB_PK): $(ABL_AVB_PK)
 	$(call pad-binary, 4096)
