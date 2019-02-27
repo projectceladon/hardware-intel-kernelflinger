@@ -1058,7 +1058,7 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
                                 if (EFI_ERROR(ret))
                                         efi_perror(ret, L"Fastboot mode fail to load slot data");
 				set_image_oemvars_nocheck(bootimage, NULL);
-				load_image(bootimage, BOOT_STATE_ORANGE, MEMORY, slot_data);
+				load_image(bootimage, BOOT_STATE_ORANGE, NORMAL_BOOT, slot_data);
 			}
 			FreePool(bootimage);
 			bootimage = NULL;
