@@ -78,6 +78,11 @@ static EFI_STATUS revise_diskbus_from_ssdt(CHAR8 *ssdt, UINTN ssdt_len)
 	/* Initialize the variables. */
 	pattern_len = strlen(pattern);
 	boot_device = get_boot_device();
+	if (!boot_device) {
+		error(L"Boot device not found!");
+		return EFI_DEVICE_ERROR;
+	}
+
 	p = ssdt + header_len;
 	max_end = ssdt + ssdt_len - pattern_len;
 
