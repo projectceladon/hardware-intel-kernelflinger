@@ -98,10 +98,23 @@ static UINT32 get_rollback_index_block_addr(VOID)
 		return RPMB_ROLLBACK_INDEX_BLOCK_ADDR_NATIVE;
 }
 
-EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key)
+EFI_STATUS set_rpmb_derived_key_ex(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key, IN int is_firmware_key)
 {
+	static int firmware_key_set = 0;
 	EFI_STATUS ret = EFI_SUCCESS;
 	UINT8 i;
+
+	/* RPMB provision could happen in Firmware or AOS loader phase.
+	 * For example: early ABL does not support RPMB provision, so AOS Loader take this role.
+	 * From ABL 1908, ABL provide capability to do RPMB provision and it will
+	 * pass down RPMB key accordingly.
+	 *
+	 * If RPMB key from firmware has been set, we should skip AOS loader deriving RPMB Key.
+	 * The reason is: if firmware passdown RPMB key, it means RPMB has been provisioned
+	 * this key in firmware phase already. AOS Loader should use this key for RPMB access.
+	 */
+	if (firmware_key_set && is_firmware_key == 0)
+		return EFI_SUCCESS;
 
 	if ((num_key > RPMB_NUMBER_KEY) || !kbuf || ((num_key * RPMB_KEY_SIZE) > kbuf_len))
 		return EFI_INVALID_PARAMETER;
@@ -122,8 +135,17 @@ EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num
 	}
 	number_derived_key = num_key;
 
+	if (is_firmware_key)
+		firmware_key_set = 1;
+
 	return ret;
 }
+
+EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key)
+{
+	return set_rpmb_derived_key_ex(kbuf, kbuf_len, num_key, 0);
+}
+
 
 EFI_STATUS get_rpmb_derived_key(OUT UINT8 **d_key, OUT UINT8 *number_d_key)
 {

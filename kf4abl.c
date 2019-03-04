@@ -421,7 +421,9 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		DEV_SEC_INFO,
 		IMAGE_BOOT_PARAMS_ADDR,
 		FIRMWARE_BOOTTIME,
-		BOOTREASON
+		BOOTREASON,
+		RPMB,
+		STATUS,
 	};
 
 	struct Cmdline
@@ -478,6 +480,11 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			DEV_SEC_INFO
 		},
 		{
+			(CHAR8 *)"ABL.svnseed=",
+			strlen((CHAR8 *)"ABL.svnseed="),
+			DEV_SEC_INFO
+		},
+		{
 			(CHAR8 *)"ImageBootParamsAddr=",
 			strlen((CHAR8 *)"ImageBootParamsAddr="),
 			IMAGE_BOOT_PARAMS_ADDR
@@ -486,7 +493,17 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 			(CHAR8 *)"fw_boottsc=",
 			strlen("fw_boottsc="),
 			FIRMWARE_BOOTTIME
-		}
+		},
+		{
+			(CHAR8 *)"ABL.rpmb=",
+			strlen("ABL.rpmb="),
+			RPMB
+		},
+		{
+			(CHAR8 *)"ABL.status=",
+			strlen((CHAR8 *)"ABL.status="),
+			STATUS
+		},
 	};
 
 	CHAR8 *nptr = NULL;
@@ -565,6 +582,14 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 					debug(L"Parsed device security information addr is 0x%x", num);
 					set_device_security_info((VOID *)num);
 					continue;
+
+				case RPMB:
+					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
+					num = strtoul((char *)nptr, 0, 16);
+					debug(L"abl_rpmb_key addr is 0x%x", num);
+					set_rpmb_derived_key_ex((VOID *)num, RPMB_KEY_SIZE, 1, 1);
+					memset((VOID *)num, 0, RPMB_KEY_SIZE);
+					continue;
 #endif //RPMB_STORAGE
 				/* Parse "ABL.secureboot=x" */
 				case SECUREBOOT: {
@@ -576,6 +601,29 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 						efi_perror(ret, L"Failed to set secure boot");
 					break;
 				}
+
+				/* Parse "ABL.status=x" */
+				case STATUS: {
+					union
+					{
+						struct
+						{
+							UINT32 secure_boot:1;
+							UINT32 measured_boot:1;
+							UINT32 dci_debug_npk:1;
+							UINT32 eom:1;
+						}bit;
+						UINT32 val;
+					} abl_status;
+
+					nptr = (CHAR8 *)(arg8 + CmdlineArray[j].length);
+					abl_status.val = (UINT32)strtoul((char *)nptr, 0, 16);
+					ret = set_platform_secure_boot(abl_status.bit.secure_boot);
+					if (EFI_ERROR(ret))
+						efi_perror(ret, L"Failed to set secure boot");
+					break;
+				}
+
 				/* Parse "fw_boottsc=xxxxx" */
 				case FIRMWARE_BOOTTIME: {
 					UINT64 VALUE;

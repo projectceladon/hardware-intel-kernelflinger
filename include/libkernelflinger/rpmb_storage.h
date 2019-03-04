@@ -59,6 +59,7 @@ typedef struct rpmb_sim_real_storage_interface {
 EFI_STATUS rpmb_storage_init(void);
 EFI_STATUS get_rpmb_derived_key(OUT UINT8 **d_key, OUT UINT8 *number_d_key);
 EFI_STATUS set_rpmb_derived_key(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key);
+EFI_STATUS set_rpmb_derived_key_ex(IN VOID *kbuf, IN size_t kbuf_len, IN size_t num_key, IN int is_firmware_key);
 void clear_rpmb_key(void);
 void set_rpmb_key(UINT8 *key);
 EFI_STATUS rpmb_key_init(void);
