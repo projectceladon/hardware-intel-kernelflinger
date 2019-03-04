@@ -63,6 +63,8 @@
 #define BOOTLOADER_POLICY_MASK		L"BPM"
 #endif
 #define ROLLBACK_INDEX_FMT		L"RollbackIndex_%04x"
+#define LOADED_SLOT		L"LoadedSlot"
+#define LOADED_SLOT_FAILED	L"LoadedSlotFailed_%04x"
 
 #ifdef BOOTLOADER_POLICY
 typedef union {
@@ -1049,4 +1051,48 @@ EFI_STATUS write_efi_rollback_index(UINTN rollback_index_slot, uint64_t rollback
 
 	return ret;
 }
+
+EFI_STATUS set_efi_loaded_slot(UINT8 slot)
+{
+	return set_efi_variable(&fastboot_guid, LOADED_SLOT,
+				sizeof(slot), &slot, FALSE, FALSE);
+}
+
+EFI_STATUS get_efi_loaded_slot(UINT8 *slot)
+{
+	return get_efi_variable_byte(&fastboot_guid, LOADED_SLOT,
+				slot);
+}
+
+EFI_STATUS set_efi_loaded_slot_failed(UINT8 slot, EFI_STATUS error)
+{
+	CHAR16 name[32];
+
+	SPrint(name, sizeof(name), LOADED_SLOT_FAILED, slot);
+	return set_efi_variable(&fastboot_guid, name,
+				sizeof(error), &error, FALSE, FALSE);
+}
+
+EFI_STATUS get_efi_loaded_slot_failed(UINT8 slot, EFI_STATUS *error)
+{
+	EFI_STATUS ret;
+	CHAR16 name[32];
+	UINTN size;
+	VOID *data;
+	UINT32 flag;
+
+	SPrint(name, sizeof(name), LOADED_SLOT_FAILED, slot);
+	ret = get_efi_variable(&fastboot_guid, name, &size, &data, &flag);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	if (size != sizeof(error)) {
+		debug(L"The sizeof %s is not %d", name, size);
+		return EFI_COMPROMISED_DATA;
+	}
+	*error = *((EFI_STATUS *)data);
+	FreePool(data);
+	return EFI_SUCCESS;
+}
+
 #endif // defined(SECURE_STORAGE_EFIVAR) && defined(USE_AVB)

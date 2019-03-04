@@ -342,6 +342,32 @@ endif  # BOARD_AVB_ENABLE
 
 include $(BUILD_EFI_EXECUTABLE) # For installer-$(TARGET_BUILD_VARIANT)
 
+ifeq ($(BOOTLOADER_SLOT), true)
+ifeq ($(BOARD_SLOT_AB_ENABLE),true)
+ifeq ($(BOARD_AVB_ENABLE),true)
+include $(CLEAR_VARS)
+LOCAL_MODULE := kfld-$(TARGET_BUILD_VARIANT)
+LOCAL_STATIC_LIBRARIES := \
+	$(SHARED_STATIC_LIBRARIES)
+LOCAL_CFLAGS := $(SHARED_CFLAGS)
+LOCAL_SRC_FILES := kfld.c
+LOCAL_MODULE_STEM := kfld
+LOCAL_C_INCLUDES += $(addprefix $(LOCAL_PATH)/,avb)
+LOCAL_C_INCLUDES += $(addprefix $(LOCAL_PATH)/,avb/libavb)
+LOCAL_C_INCLUDES += $(addprefix $(LOCAL_PATH)/,avb/libavb_ab)
+
+ifeq ($(TARGET_UEFI_ARCH),x86_64)
+    ELF_OUTPUT := elf64-x86-64
+else
+    ELF_OUTPUT := elf32-i386
+endif
+
+include $(BUILD_EFI_EXECUTABLE) # For installer-$(TARGET_BUILD_VARIANT)
+endif # BOARD_AVB_ENABLE
+endif # BOARD_SLOT_AB_ENABLE
+endif # BOOTLOADER_SLOT
+
+
 
 ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),true)
 
