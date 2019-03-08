@@ -323,7 +323,7 @@ static void installer_split_and_joint_flash(CHAR16 **filename,
 	UINTN  read_flags = 0;
 	struct sparse_header sph;
 	struct chunk_header *ckh;
-	UINTN read_size, flash_size, already_read, remaining_data = 0;
+	UINTN read_size, flash_size, already_read = 0, remaining_data = 0;
 	void *read_ptr;
 	INTN nb_chunks;
 	EFI_FILE *file[num];
