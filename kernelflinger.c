@@ -830,57 +830,6 @@ static EFI_STATUS load_boot_image(
 }
 #endif
 
-/* Chainload another EFI application on the ESP with the specified path,
- * optionally deleting the file before entering
- */
-static EFI_STATUS enter_efi_binary(CHAR16 *path, BOOLEAN delete, UINT32 load_options_size, VOID *load_options)
-{
-	EFI_DEVICE_PATH *edp;
-	EFI_STATUS ret;
-	EFI_HANDLE image;
-	EFI_LOADED_IMAGE *loaded_image;
-
-
-	edp = FileDevicePath(g_disk_device, path);
-	if (!edp) {
-		error(L"Couldn't generate a path");
-		return EFI_INVALID_PARAMETER;
-	}
-
-	ret = uefi_call_wrapper(BS->LoadImage, 6, FALSE, g_parent_image,
-			edp, NULL, 0, &image);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"BS->LoadImage '%s'", path);
-	} else {
-		if (delete) {
-			ret = file_delete(g_disk_device, path);
-			if (EFI_ERROR(ret))
-				efi_perror(ret, L"Couldn't delete %s", path);
-		}
-		if (load_options_size > 0) {
-			// Set the command line option
-			ret = uefi_call_wrapper(BS->OpenProtocol, 6, image,
-					&LoadedImageProtocol, (VOID **)&loaded_image,
-					image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
-			if (EFI_ERROR(ret)) {
-				efi_perror(ret, L"OpenProtocol: LoadedImageProtocol");
-				return ret;
-			}
-			if (loaded_image == NULL) {
-				error(L"LoadedImageProtocol, but return image is NULL");
-				return EFI_INVALID_PARAMETER;
-			}
-			loaded_image->LoadOptionsSize = load_options_size;
-			loaded_image->LoadOptions = load_options;
-		}
-		ret = uefi_call_wrapper(BS->StartImage, 3, image, NULL, NULL);
-		uefi_call_wrapper(BS->UnloadImage, 1, image);
-	}
-	FreePool(edp);
-	return ret;
-}
-
-
 #define OEMVARS_MAGIC           "#OEMVARS\n"
 #define OEMVARS_MAGIC_SZ        9
 
@@ -1260,99 +1209,6 @@ out:
 }
 #endif
 
-EFI_STATUS check_kf_upgrade(void)
-{
-	EFI_STATUS ret;
-	EFI_FILE_IO_INTERFACE *io = NULL;
-	EFI_GUID SimpleFileSystemProtocol = SIMPLE_FILE_SYSTEM_PROTOCOL;
-	EFI_HANDLE esp_handle = NULL;
-	CHAR16 *self_path = BOOTLOADER_FILE;
-	CHAR16 *bak_path = BOOTLOADER_FILE_BAK;
-
-	ret = gpt_get_partition_handle(BOOTLOADER_LABEL, LOGICAL_UNIT_USER,
-			&esp_handle);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to get ESP partition");
-		goto out;
-	}
-
-	ret = handle_protocol(esp_handle, &SimpleFileSystemProtocol,
-		(void **)&io);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"HandleProtocol for ESP partition failed");
-		goto out;
-	}
-
-	if (!uefi_exist_file_root(io, KFUPDATE_FILE)) {
-		debug(L"Kernelflinger upgrade file is not exist");
-		goto out;
-	}
-	debug(L"Kernelflinger upgrade file is exist");
-
-	ret = verify_image(esp_handle, KFUPDATE_FILE);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Verify upgrade image failed");
-		uefi_delete_file(io, KFUPDATE_FILE);
-		goto out;
-	}
-	debug(L"Success to verify the upgrade image");
-
-	if (g_loaded_image != NULL
-			&& g_loaded_image->FilePath != NULL
-			&& g_loaded_image->FilePath->Type == MEDIA_DEVICE_PATH
-			&& g_loaded_image->FilePath->SubType == MEDIA_FILEPATH_DP) {
-		debug(L"Self path name: %s", ((FILEPATH_DEVICE_PATH *)(g_loaded_image->FilePath))->PathName);
-		self_path = ((FILEPATH_DEVICE_PATH *)(g_loaded_image->FilePath))->PathName;
-		if (StriCmp(self_path, BOOTLOADER_FILE)) {
-			if (StriCmp(self_path, KFSELF_FILE)) {
-				error(L"Skip check the upgrade file");
-				goto out;
-			}
-			bak_path = KFBACKUP_FILE;
-		}
-	} else {
-		// maybe loaded by the "fastboot boot" command, or the BIOS not support
-		// Use the default value
-		error(L"Loaded image or FilePath is NULL");
-	}
-
-	// Verify it again
-	if (!uefi_exist_file_root(io, self_path)) {
-		error(L"Can't find file %s", self_path);
-		ret = EFI_NOT_FOUND;
-		goto out;
-	}
-
-	if (uefi_exist_file_root(io, bak_path)) {
-		ret = uefi_delete_file(io, bak_path);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to delete %s", bak_path);
-			goto out;
-		}
-		debug(L"Success to delete old %s", bak_path);
-	}
-	ret = uefi_rename_file(io, self_path, bak_path);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to rename the %s to %s", self_path, bak_path);
-		goto out;
-	}
-	debug(L"Success rename file %s to %s", self_path, bak_path);
-	ret = uefi_rename_file(io, KFUPDATE_FILE, self_path);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, L"Failed to rename the upgrade file %s to %s", KFUPDATE_FILE, self_path);
-		goto out;
-	}
-	debug(L"Success rename the upgrade file %s to %s", KFUPDATE_FILE, self_path);
-
-	error(L"I am about to load the new boot loader after upgrade it");
-	if (g_loaded_image != NULL)
-		enter_efi_binary(self_path, FALSE, g_loaded_image->LoadOptionsSize, g_loaded_image->LoadOptions);
-	reboot(NULL, EfiResetCold);
-
-out:
-	return ret;
-}
-
 EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 {
 	EFI_STATUS ret;
@@ -1408,7 +1264,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 
 	uefi_bios_update_capsule(g_disk_device, FWUPDATE_FILE);
 
-	check_kf_upgrade();
+	uefi_check_upgrade(g_loaded_image, BOOTLOADER_LABEL, KFUPDATE_FILE,
+			BOOTLOADER_FILE, BOOTLOADER_FILE_BAK, KFSELF_FILE, KFBACKUP_FILE);
 
 #ifdef USE_TPM
 	if (!is_boot_device_removable()) {
@@ -1518,7 +1375,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		debug(L"entering EFI binary");
 		if (!target_path)
 			return EFI_INVALID_PARAMETER;
-		ret = enter_efi_binary(target_path, oneshot, 0, NULL);
+		ret = uefi_enter_binary(g_disk_device, target_path, oneshot, 0, NULL);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"EFI Application exited abnormally");
 			pause(3);
