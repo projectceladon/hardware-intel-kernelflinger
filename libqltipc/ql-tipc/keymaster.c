@@ -30,6 +30,7 @@
 #include "security.h"
 #include <life_cycle.h>
 #include <libqltipc/libtipc.h>
+#include "storage.h"
 
 #define LOCAL_LOG 0
 #define UNUSED(x) (void)(x)
@@ -323,6 +324,9 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
     EFI_STATUS ret = life_cycle_is_enduser(&enduser);
     if (EFI_ERROR(ret)) {
         trusty_error("Failed to get eom var");
+        /* For AaaG, set enduser to TRUE for AttKB retrieval*/
+        if (is_boot_device_virtual())
+            enduser = true;
     }
 
     /* keybox not privisioned yet and is end user, then provision it */
