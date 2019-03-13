@@ -600,8 +600,13 @@ static enum boot_target choose_boot_target(CHAR16 **target_path, BOOLEAN *onesho
 
 	debug(L"Bootlogic: Check BCB...");
 	ret = check_bcb(target_path, oneshot);
-	if (ret != NORMAL_BOOT)
+	if (ret != NORMAL_BOOT) {
+		/* clear LOADER_ENTRY_ONESHOT after detecting oneshot from bcb,
+		* in case of unexpected boot target in next boot. */
+		if(*oneshot == TRUE)
+			del_efi_variable(&loader_guid, LOADER_ENTRY_ONESHOT);
 		goto out;
+	}
 
 	debug(L"Bootlogic: Check reboot target...");
 	ret = check_loader_entry_one_shot();
