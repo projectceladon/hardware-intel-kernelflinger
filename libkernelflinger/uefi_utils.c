@@ -571,6 +571,7 @@ EFI_STATUS uefi_check_upgrade(EFI_LOADED_IMAGE *loaded_image,
 	CHAR16 *bak_path = NULL;
 	UINTN argc;
 	CHAR16 **argv;
+	CHAR16 *options;
 
 	if (loaded_image == NULL
 			|| loaded_image->FilePath == NULL
@@ -582,7 +583,7 @@ EFI_STATUS uefi_check_upgrade(EFI_LOADED_IMAGE *loaded_image,
 	}
 
 	self_path = ((FILEPATH_DEVICE_PATH *)(loaded_image->FilePath))->PathName;
-	ret = get_argv(loaded_image, &argc, &argv);
+	ret = get_argv(loaded_image, &argc, &argv, &options);
 	if (EFI_ERROR(ret))
 		goto out;
 	if (argc > 0 && argv[0][0] != L'-') {
@@ -606,6 +607,7 @@ EFI_STATUS uefi_check_upgrade(EFI_LOADED_IMAGE *loaded_image,
 			self_path = argv[0];
 	}
 	FreePool(argv);
+	FreePool(options);
 	debug(L"EFI path: %s", self_path);
 
 	if (!StrcaseCmp(self_path, self_path1))

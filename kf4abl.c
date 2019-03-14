@@ -402,6 +402,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 	static EFI_LOADED_IMAGE *limg;
 	UINTN argc, i, j;
 	CHAR16 **argv;
+	CHAR16 *options;
 	UINTN cmd_len = 0;
 	CHAR8 arg8[256] = "";
 	UINTN arglen;
@@ -515,7 +516,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 		return FASTBOOT;
 	}
 
-	ret = get_argv(limg, &argc, &argv);
+	ret = get_argv(limg, &argc, &argv, &options);
 	if (EFI_ERROR(ret))
 		return FASTBOOT;
 
@@ -666,6 +667,7 @@ static enum boot_target check_command_line(EFI_HANDLE image, CHAR8 *cmd_buf, UIN
 out:
 	debug(L"boot target: %d", target);
 	FreePool(argv);
+	FreePool(options);
 	return target;
 }
 
