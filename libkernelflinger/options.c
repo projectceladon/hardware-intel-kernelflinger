@@ -36,7 +36,7 @@
 
 #include "lib.h"
 
-static CHAR16 *tokenize(CHAR16 *str)
+static CHAR16 *tokenize(CHAR16 *str, BOOLEAN set_zero)
 {
         static CHAR16 *saveptr;
         CHAR16 *ret;
@@ -61,7 +61,8 @@ static CHAR16 *tokenize(CHAR16 *str)
                 saveptr++;
 
         if (*saveptr != L'\0') {
-                *saveptr = L'\0';
+                if (set_zero)
+                        *saveptr = L'\0';
                 saveptr++;
         }
 
@@ -70,7 +71,7 @@ static CHAR16 *tokenize(CHAR16 *str)
 
 
 EFI_STATUS
-get_argv(EFI_LOADED_IMAGE *loaded_image, UINTN *argc_p, CHAR16 ***argv_p)
+get_argv(EFI_LOADED_IMAGE *loaded_image, UINTN *argc_p, CHAR16 ***argv_p, CHAR16 **options)
 {
         CHAR16* token, *str, *cur, *cmdline;
         UINTN argc, i;
@@ -86,19 +87,18 @@ get_argv(EFI_LOADED_IMAGE *loaded_image, UINTN *argc_p, CHAR16 ***argv_p)
                 return EFI_OUT_OF_RESOURCES;
 
         for (argc = 0, cur = str; ; cur = NULL) {
-                token = tokenize(cur);
+                token = tokenize(cur, FALSE);
                 if (token == NULL)
                         break;
                 argc++;
         }
-        FreePool(str);
 
         argv = AllocatePool((argc + 1) * sizeof(CHAR16 *));
         if (!argv)
                 return EFI_OUT_OF_RESOURCES;
 
-        for (i = 0, cur = cmdline; ; cur = NULL, i++) {
-                token = tokenize(cur);
+        for (i = 0, cur = str; ; cur = NULL, i++) {
+                token = tokenize(cur, TRUE);
                 if (token == NULL) {
                         argv[i] = NULL;
                         break;
@@ -108,9 +108,9 @@ get_argv(EFI_LOADED_IMAGE *loaded_image, UINTN *argc_p, CHAR16 ***argv_p)
 
         *argc_p = argc;
         *argv_p = argv;
+        *options = str;
         return EFI_SUCCESS;
 }
 
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
-

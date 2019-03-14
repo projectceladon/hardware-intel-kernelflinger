@@ -38,6 +38,6 @@
 #include <efi.h>
 #include <efilib.h>
 
-EFI_STATUS get_argv(EFI_LOADED_IMAGE *image, UINTN *argc_p, CHAR16 ***argv_p);
+EFI_STATUS get_argv(EFI_LOADED_IMAGE *image, UINTN *argc_p, CHAR16 ***argv_p, CHAR16 **options);
 
 #endif

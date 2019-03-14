@@ -438,11 +438,12 @@ static enum boot_target check_command_line(VOID)
 {
 	UINTN argc, pos;
 	CHAR16 **argv;
+	CHAR16 *options;
 	enum boot_target bt;
 
 	bt = NORMAL_BOOT;
 
-	if (EFI_ERROR(get_argv(g_loaded_image, &argc, &argv)))
+	if (EFI_ERROR(get_argv(g_loaded_image, &argc, &argv, &options)))
 		return NORMAL_BOOT;
 
 	for (pos = 0; pos < argc; pos++) {
@@ -488,6 +489,7 @@ static enum boot_target check_command_line(VOID)
 
 out:
 	FreePool(argv);
+	FreePool(options);
 	return bt;
 }
 
