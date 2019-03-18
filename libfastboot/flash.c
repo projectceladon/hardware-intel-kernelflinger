@@ -52,6 +52,8 @@
 #if defined(IOC_USE_SLCAN) || defined(IOC_USE_CBC)
 #include "ioc_uart_protocol.h"
 #endif
+#include "aes_gcm.h"
+#include "keybox_provision.h"
 static struct gpt_partition_interface gparti;
 static UINT64 cur_offset;
 
@@ -461,7 +463,10 @@ static struct label_exception {
 	{ L"ioc", flash_ioc },
 #endif
 #ifdef BOOTLOADER_POLICY
-	{ CONVERT_TO_WIDE(ACTION_AUTHORIZATION), authenticated_action }
+	{ CONVERT_TO_WIDE(ACTION_AUTHORIZATION), authenticated_action },
+#endif
+#ifdef KEYBOX_PROVISION
+	{ L"keybox", flash_keybox }
 #endif
 };
 
