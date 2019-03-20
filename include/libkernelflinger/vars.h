@@ -179,5 +179,9 @@ extern char _binary_oemcert_end;
 #define oem_cert (&_binary_oemcert_start)
 #define oem_cert_size (&_binary_oemcert_end - &_binary_oemcert_start)
 #endif
+
+EFI_STATUS set_efi_loaded_slot(UINT8 slot);
+EFI_STATUS get_efi_loaded_slot(UINT8 *slot);
+
 #endif /* _VARS_H_ */
 

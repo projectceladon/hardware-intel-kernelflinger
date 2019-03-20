@@ -63,6 +63,7 @@
 #define BOOTLOADER_POLICY_MASK		L"BPM"
 #endif
 #define ROLLBACK_INDEX_FMT		L"RollbackIndex_%04x"
+#define LOADED_SLOT		L"LoadedSlot"
 
 #ifdef BOOTLOADER_POLICY
 typedef union {
@@ -1049,4 +1050,17 @@ EFI_STATUS write_efi_rollback_index(UINTN rollback_index_slot, uint64_t rollback
 
 	return ret;
 }
+
+EFI_STATUS set_efi_loaded_slot(UINT8 slot)
+{
+	return set_efi_variable(&fastboot_guid, LOADED_SLOT,
+				sizeof(slot), &slot, FALSE, FALSE);
+}
+
+EFI_STATUS get_efi_loaded_slot(UINT8 *slot)
+{
+	return get_efi_variable_byte(&fastboot_guid, LOADED_SLOT,
+				slot);
+}
+
 #endif // defined(SECURE_STORAGE_EFIVAR) && defined(USE_AVB)
