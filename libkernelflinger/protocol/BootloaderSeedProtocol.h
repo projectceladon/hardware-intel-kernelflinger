@@ -73,7 +73,7 @@ typedef struct {
 typedef
 EFI_STATUS
 (EFIAPI *BLS_PROTOCOL_GET_SEED_INFO_LIST) (
-  IN OUT BOOTLOADER_SEED_INFO_LIST *buf;
+  IN OUT BOOTLOADER_SEED_INFO_LIST *buf
   );
 
 
@@ -99,8 +99,8 @@ typedef struct {
 typedef
 EFI_STATUS
 (EFIAPI *BLS_PROTOCOL_GET_RPMB_KEY) (
-  IN OUT UINT8 *num_keys;
-  IN OUT BOOTLOADER_RPMB_KEY *buf;
+  IN OUT UINT8 *num_keys,
+  IN OUT BOOTLOADER_RPMB_KEY *buf
   );
 
 
@@ -117,7 +117,7 @@ typedef struct {
 typedef
 EFI_STATUS
 (EFIAPI *BLS_PROTOCOL_GET_ATTKB_ENC_KEY) (
-  IN OUT BOOTLOADER_ATTKB_ENC_KEY *buf;
+  IN OUT BOOTLOADER_ATTKB_ENC_KEY *buf
   );
 
 

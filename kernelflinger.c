@@ -69,6 +69,7 @@
 #include "protocol.h"
 #include "uefi_utils.h"
 #include "security_interface.h"
+#include "security_efi.h"
 #ifdef USE_TPM
 #include "tpm2_security.h"
 #endif
@@ -1034,13 +1035,14 @@ static VOID enter_fastboot_mode(UINT8 boot_state)
 	void *efiimage = NULL;
 	UINTN imagesize;
 	VOID *bootimage;
-        VOID *bootimage_p;
-        AvbSlotVerifyData *slot_data;
+	VOID *bootimage_p;
+	AvbSlotVerifyData *slot_data;
 
 	set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
 			&boot_state, FALSE, TRUE);
 	set_oemvars_update(TRUE);
-
+	//stop bootloader seed protocol when entering fastboot mode
+	stop_bls_proto();
 	for (;;) {
 		target = UNKNOWN_TARGET;
 
