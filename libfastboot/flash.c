@@ -465,9 +465,7 @@ static struct label_exception {
 #ifdef BOOTLOADER_POLICY
 	{ CONVERT_TO_WIDE(ACTION_AUTHORIZATION), authenticated_action },
 #endif
-#ifdef KEYBOX_PROVISION
 	{ L"keybox", flash_keybox }
-#endif
 };
 
 EFI_STATUS flash(VOID *data, UINTN size, CHAR16 *label)
