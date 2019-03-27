@@ -534,7 +534,7 @@ EFI_STATUS nvme_rpmb_write_data_half(void *rpmb_dev, UINT32 *write_counter, UINT
 	if (EFI_ERROR(ret))
 		return ret;
 
-	memcpy(buf + (blk_addr & 1) * NVME_RPMB_SECTOR_SIZE / 2, buffer, NVME_RPMB_SECTOR_SIZE);
+	memcpy(buf + (blk_addr & 1) * NVME_RPMB_SECTOR_SIZE / 2, buffer, NVME_RPMB_SECTOR_SIZE / 2);
 	ret = nvme_rpmb_write_data_impl(rpmb_dev, write_counter, 1, blk_addr / 2, buf, key, result);
 
 	return ret;

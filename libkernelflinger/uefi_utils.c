@@ -514,6 +514,9 @@ EFI_STATUS uefi_enter_binary(EFI_HANDLE part_handle, CHAR16 *path,
 	EFI_HANDLE image;
 	EFI_LOADED_IMAGE *loaded_image;
 
+	if (!part_handle)
+		return EFI_INVALID_PARAMETER;
+
 	edp = FileDevicePath(part_handle, path);
 	if (!edp) {
 		error(L"Couldn't generate a path");
