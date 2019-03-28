@@ -608,6 +608,13 @@ static enum boot_target choose_boot_target(CHAR16 **target_path, BOOLEAN *onesho
 		* in case of unexpected boot target in next boot. */
 		if(*oneshot == TRUE)
 			del_efi_variable(&loader_guid, LOADER_ENTRY_ONESHOT);
+		else {
+			/*The bootloader is expected to load and boot into recovery image upon seeting*/
+			/*boot-fastboot in the BCB command. Recovery the parse the BCB message and*/
+			/*switches to fastbootd mode*/
+			if (ret == FASTBOOT)
+				ret = RECOVERY;
+		}
 		goto out;
 	}
 

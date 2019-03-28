@@ -57,6 +57,7 @@
 #include "ioc_can.h"
 #endif
 #include "timer.h"
+#include "android.h"
 
 /* size of "INFO" "OKAY" or "FAIL" */
 #define CODE_LENGTH 4
@@ -947,6 +948,41 @@ static void cmd_reboot_bootloader(__attribute__((__unused__)) INTN argc,
 	fastboot_reboot(FASTBOOT, L"Rebooting to bootloader ...");
 }
 
+static void cmd_reboot_recovery(__attribute__((__unused__)) INTN argc,
+				  __attribute__((__unused__)) CHAR8 **argv)
+{
+	fastboot_reboot(RECOVERY,  L"Rebooting to recovery ...");
+}
+
+static void cmd_reboot_fastbootd(__attribute__((__unused__)) INTN argc,
+				  __attribute__((__unused__)) CHAR8 **argv)
+{
+	EFI_STATUS ret;
+
+	struct bootloader_message bcb;
+	ret = read_bcb(MISC_LABEL, &bcb);
+	if (EFI_ERROR(ret)) {
+		error(L"Unable to read BCB");
+		goto out;
+	}
+
+	/*To support fastbootd, the bootloader must  implemnet a new Boot Control Block*/
+	/*(BCB) command of boot-fastboot. To enter fastboot, bootloader should write boot-fastboot*/
+	/*into the command field of the BCB message*/
+	strcpy(bcb.command, "boot-fastboot");
+	/* We own the status field; clear it in case there is any stale data */
+	bcb.status[0] = '\0';
+
+	ret = write_bcb(MISC_LABEL, &bcb);
+	if (EFI_ERROR(ret)) {
+		error(L"Unable to update BCB contents!");
+		goto out;
+	}
+out:
+	fastboot_reboot(RECOVERY, L"Rebooting to fastbootd ...");
+}
+
+
 static void cmd_set_active(INTN argc, CHAR8 **argv)
 {
 	EFI_STATUS ret;
@@ -1210,6 +1246,8 @@ static struct fastboot_cmd COMMANDS[] = {
 	{ "continue",		LOCKED,		cmd_continue },
 	{ "reboot",		LOCKED,		cmd_reboot },
 	{ "reboot-bootloader",	LOCKED,		cmd_reboot_bootloader },
+	{ "reboot-recovery",	LOCKED,		cmd_reboot_recovery },
+	{ "reboot-fastboot",	LOCKED,		cmd_reboot_fastbootd },
 	{ "set_active",		UNLOCKED,	cmd_set_active }
 };
 #else
@@ -1248,6 +1286,10 @@ static EFI_STATUS fastboot_init()
 		efi_perror(ret, L"Couldn't disable watchdog timer");
 		/* Might as well continue even though this failed ... */
 	}
+
+	ret = fastboot_publish("is-userspace", "no");
+	if (EFI_ERROR(ret))
+		goto error;
 
 	ret = fastboot_publish("version", "0.4");
 	if (EFI_ERROR(ret))
