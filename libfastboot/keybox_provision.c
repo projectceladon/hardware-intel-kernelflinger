@@ -21,8 +21,6 @@
 #include <aes_gcm.h>
 #include <keybox_provision.h>
 
-#define RPMB_ATTKB_BLOCK_ADDR 60
-
 static struct gcm_key attkb_key = {0};
 static encrypted_attkb_t enc_kb;
 static UINT8 *start_kb_addr = NULL;
@@ -82,7 +80,7 @@ static EFI_STATUS write_attkb_data_real(UINT8 *start_kb_addr, UINTN write_sz)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
 	RPMB_RESPONSE_RESULT rpmb_result;
-	UINT16 blk_addr = RPMB_ATTKB_BLOCK_ADDR;
+	UINT16 blk_addr = ATTKB_META_BASE_ADDRESS;
 	UINT16 blk_cnt;
 	UINTN remain;
 	UINT16 i;
@@ -117,7 +115,7 @@ static EFI_STATUS write_attkb_data_real(UINT8 *start_kb_addr, UINTN write_sz)
 static EFI_STATUS write_attkb_data_sim(UINT8 *start_kb_addr, UINTN write_sz)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
-	UINT16 blk_addr = RPMB_ATTKB_BLOCK_ADDR;
+	UINT16 blk_addr = ATTKB_META_BASE_ADDRESS;
 	UINT32 byte_offset = blk_addr * RPMB_BLOCK_SIZE;
 
 	ret = simulate_write_rpmb_data(byte_offset, start_kb_addr, write_sz);
