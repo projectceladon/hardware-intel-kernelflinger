@@ -180,6 +180,11 @@ void set_rpmb_key(UINT8 *key)
 	memcpy(rpmb_key, key, RPMB_KEY_SIZE);
 }
 
+void get_rpmb_key(UINT8 *key)
+{
+	memcpy(key, rpmb_key, RPMB_KEY_SIZE);
+}
+
 EFI_STATUS clear_teedata_flag(void)
 {
 	EFI_STATUS ret;
