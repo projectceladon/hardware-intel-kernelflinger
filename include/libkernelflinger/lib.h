@@ -201,7 +201,7 @@ void qsort(void *base, size_t num, size_t width,
     __attribute__((weak));
 
 INTN StrcaseCmp(CHAR16 *s1, CHAR16 *s2);
-
+void StrToLower(CHAR16 *s);
 /*
  * misc
  */

@@ -1172,5 +1172,17 @@ INTN StrcaseCmp(CHAR16 *s1, CHAR16 *s2)
         return (*p2 == 0) ? 0 : -1;
 }
 
+void StrToLower(CHAR16 *s)
+{
+        if (s == NULL)
+                return;
+        while (*s != 0) {
+                if (*s >= L'A' && *s <= L'Z')
+                        *s += L'a' - L'A';
+                s++;
+        }
+        return;
+}
+
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
