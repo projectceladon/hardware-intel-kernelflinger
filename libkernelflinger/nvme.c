@@ -189,6 +189,19 @@ static EFI_STATUS nvme_erase_blocks(
 	UINT32 num;
 	EFI_LBA blk;
 
+	/* No UEFI platform can support NVME_CMD_WRITE_ZERROS correctly to erase blocks,
+	 * what's worse, this command can cause some platform crash. It's better to shift
+	 * this work to the following fill_zero
+	 */
+	if (is_UEFI()) {
+		/* workround as comment below */
+		if (end - start > 0x04000000) {
+			error(L"Warning: skip erasing 0x%X blocks this time !!!", end - start + 1);
+			return EFI_SUCCESS;
+		}
+		return EFI_UNSUPPORTED;
+	}
+
 	debug(L"nvme_erase_blocks: 0x%X blocks", end - start + 1);
 	dp = DevicePathFromHandle(handle);
 	if (!dp) {
