@@ -289,6 +289,7 @@ LOCAL_C_INCLUDES := $(LOCAL_PATH)/../include/libkernelflinger \
 		$(LOCAL_PATH)/../ \
 		$(LOCAL_PATH)/../avb \
 		$(LOCAL_PATH)/../libefiusb/protocol \
+		$(LOCAL_PATH)/../libsslsupport \
 		$(res_intermediates)
 
 ifeq ($(BOARD_AVB_ENABLE),true)

@@ -124,7 +124,8 @@ LOCAL_SRC_FILES += \
 endif
 
 LOCAL_C_INCLUDES := \
-	$(addprefix $(LOCAL_PATH)/,../libkernelflinger)
+	$(addprefix $(LOCAL_PATH)/,../libkernelflinger) \
+	$(addprefix $(LOCAL_PATH)/,../libsslsupport)
 
 include $(BUILD_EFI_STATIC_LIBRARY)
 

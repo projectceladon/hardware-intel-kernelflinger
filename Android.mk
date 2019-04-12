@@ -290,7 +290,8 @@ LOCAL_STATIC_LIBRARIES += libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
 endif
 
 LOCAL_C_INCLUDES += \
-	$(addprefix $(LOCAL_PATH)/,libkernelflinger)
+	$(addprefix $(LOCAL_PATH)/,libkernelflinger) \
+	$(addprefix $(LOCAL_PATH)/,libsslsupport)
 include $(BUILD_EFI_EXECUTABLE)  # For kernelflinger-$(TARGET_BUILD_VARIANT)
 
 
@@ -304,7 +305,8 @@ LOCAL_CFLAGS := $(SHARED_CFLAGS)
 LOCAL_SRC_FILES := installer.c
 LOCAL_MODULE_STEM := installer
 LOCAL_C_INCLUDES := \
-	$(addprefix $(LOCAL_PATH)/,libfastboot)
+	$(addprefix $(LOCAL_PATH)/,libfastboot) \
+	$(addprefix $(LOCAL_PATH)/,libsslsupport)
 
 ifeq ($(BOARD_AVB_ENABLE),true)
 kfins_intermediates := $(call intermediates-dir-for,EFI,kernelflingerins)
@@ -485,6 +487,8 @@ LOCAL_C_INCLUDES := \
 endif
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,libkernelflinger)
+LOCAL_C_INCLUDES := \
+	$(addprefix $(LOCAL_PATH)/,libsslsupport)
 include $(BUILD_ABL_EXECUTABLE)
 
 include $(CLEAR_VARS)
@@ -536,6 +540,8 @@ LOCAL_C_INCLUDES := \
 endif
 LOCAL_C_INCLUDES := \
 	$(addprefix $(LOCAL_PATH)/,libkernelflinger)
+LOCAL_C_INCLUDES := \
+	$(addprefix $(LOCAL_PATH)/,libsslsupport)
 include $(BUILD_ABL_EXECUTABLE)
 
 endif  #KERNELFLINGER_SUPPORT_NON_EFI_BOOT

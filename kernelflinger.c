@@ -35,6 +35,8 @@
 #include <efiapi.h>
 #include <efilib.h>
 
+#include "openssl_support.h"
+
 #include <openssl/sha.h>
 
 #include <fastboot.h>
