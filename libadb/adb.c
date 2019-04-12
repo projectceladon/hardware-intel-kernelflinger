@@ -60,7 +60,9 @@ typedef enum adb_state {
 	ADB_PROCESS_MSG
 } adb_state_t;
 
-static service_t *SERVICES[] = { &reboot_service, &sync_service };
+static service_t *SERVICES[] = {
+	&reboot_service, &sync_service, &shell_service
+};
 static adb_state_t adb_state;
 static adb_pkt_t adb_pkt_in;
 /* This buffer size is set to the minimum to avoid the waste of memory

@@ -18,6 +18,7 @@ LOCAL_SRC_FILES := \
 	adb_socket.c \
 	reboot_service.c \
 	sync_service.c \
-	reader.c
+	reader.c \
+	shell_service.c
 
 include $(BUILD_EFI_STATIC_LIBRARY)

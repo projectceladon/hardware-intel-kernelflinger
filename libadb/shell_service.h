@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2019, Intel Corporation
  * All rights reserved.
  *
  * Authors: Jeremy Compostella <jeremy.compostella@intel.com>
@@ -30,26 +30,23 @@
  *
  */
 
-#ifndef _SERVICE_H_
-#define _SERVICE_H_
+#ifndef _SHELL_SERVICE_H_
+#define _SHELL_SERVICE_H_
 
 #include <efi.h>
-#include <efilib.h>
 
-#include "adb_socket.h"
+EFI_STATUS ss_printf(const CHAR16 *fmt, ...);
+EFI_STATUS ss_read_number(const char *arg, const char *name, UINT64 *value);
 
-/* adb service interface */
-typedef struct service {
+#ifndef __LP64__
+EFI_STATUS ss_pae_map(EFI_PHYSICAL_ADDRESS *address, UINT64 length);
+#endif
+
+typedef struct {
 	const char *name;
-	EFI_STATUS (*open)(const char *arg, void **context);
-	EFI_STATUS (*ready)(asock_t s);
-	EFI_STATUS (*close)(asock_t s);
-	EFI_STATUS (*okay)(asock_t s);
-	EFI_STATUS (*read)(asock_t s, unsigned char *data, UINT32 length);
-} service_t;
+	const char *summary;
+	const char *help;
+	EFI_STATUS (*main)(INTN argc, const char **argv);
+} shcmd_t;
 
-extern service_t sync_service;
-extern service_t reboot_service;
-extern service_t shell_service;
-
-#endif	/* _SERVICE_H_ */
+#endif	/*  _SHELL_SERVICE_H_ */

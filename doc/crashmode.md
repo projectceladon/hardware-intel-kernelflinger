@@ -30,7 +30,8 @@ of inactivity.
 
 With `userdebug` and `eng` builds, Crashmode provides a way to
 retrieve some data from the device (Cf.
-[ADB support in Crashmode](#adb-support-in-crashmode)).
+[ADB support in Crashmode](#adb-support-in-crashmode)) and also
+perform some basic interaction with the device.
 
 *Important*: transitions between `Fastboot` and `Crashmode` with
 `fastboot oem reboot crashmode` and `adb reboot bootloader` do not
@@ -84,7 +85,7 @@ ADB support in Crashmode
 ------------------------
 
 In `userdebug` and `eng` builds, Crashmode also provide a way to
-retrieve some device data.
+retrieve data from the device and interact with the device.
 
 Crashmode adb implementation enumerates as `bootloader`.  It allows
 any script to detect that the device entered crashmode and use adb
@@ -117,6 +118,8 @@ Crashmode adb implementation is limited to the following commands:
 - pull gpt-factory-parts: retrieve the factory GPT partition table.
 - pull efivar:VAR_NAME[:GUID]: retrieve VAR_NAME EFI variable content.
 - pull bert-region: retrieve BERT region, prepended by "BERR" magic.
+- shell list: list all the shell commands
+- shell help COMMAND: print the help for COMMAND
 ```
 
 The optional `START` and `LENGTH` parameters allow to perform a
