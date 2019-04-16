@@ -41,6 +41,7 @@
 #include "hexdump.h"
 #include "ioport.h"
 #include "lsacpi.h"
+#include "lspartition.h"
 
 #define MAX_ARGS	8
 
@@ -63,6 +64,7 @@ static shcmd_t *SHCMD[] = {
 	&inw_shcmd,
 	&list_shcmd,
 	&lsacpi_shcmd,
+	&lspartition_shcmd,
 	&outb_shcmd,
 	&outl_shcmd,
 	&outw_shcmd

@@ -125,6 +125,7 @@ Crashmode adb implementation is limited to the following commands:
 - shell hexdump ADDRESS LENGTH: Hexdump a memory region
 - shell inb | inw | inl IOPORT: Perform a read operation on the given I/O port
 - shell outb | outw | outl IOPORT DATA: Perform a write operation on the given I/O port
+- shell lspartition: List the GPT partitions
 ```
 
 The optional `START` and `LENGTH` parameters allow to perform a
@@ -267,6 +268,22 @@ $ Usage:
   inb|inw|inl IOPORT
   outb|outw|outl IOPORT DATA
 $ adb shell outb 0xcf9 0x6
+```
+
+### shell lspartition
+
+The `shell lspartition` partition lists all the GPT partition with
+their offset on the disk and their size.
+
+```bash
+$ adb shell lspartition
+#   Name          Offset        Size (MB)
+-
+1   bootloader_a  0x0000100000        30
+2   bootloader_b  0x0001F00000        30
+3   boot_a        0x0003D00000        30
+4   boot_b        0x0005B00000        30
+[...]
 ```
 
 ### Example:
