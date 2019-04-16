@@ -122,6 +122,7 @@ Crashmode adb implementation is limited to the following commands:
 - shell help COMMAND: print the help for COMMAND
 - shell devmem ADDRESS [WIDTH [VALUE]]: read/write from physical address
 - shell lsacpi: list the ACPI tables
+- shell hexdump ADDRESS LENGTH: Hexdump a memory region
 ```
 
 The optional `START` and `LENGTH` parameters allow to perform a
@@ -234,6 +235,19 @@ MCFG  0x7AED6A80     60
 HPET  0x7AED6A40     56
 NHLT  0x7AED3AD0   1323
 TPM2  0x7AED6420     52
+```
+
+### shell hexdump command
+
+The `shell hexdump ADDRESS LENGTH` dumps memory bytes per bytes and
+print it in hexdump and ASCII.
+
+```bash
+$ adb shell hexdump 0x7aed6b50 0x40
+7AED6B50  46 41 43 50 0C 01 00 00  05 93 49 4E 54 45 4C 20  |FACP......INTEL |
+7AED6B60  45 44 4B 32 20 20 20 20  05 00 00 00 49 4E 54 4C  |EDK2    ....INTL|
+7AED6B70  0D 00 00 01 F0 CE ED 7A  60 6C ED 7A 01 02 09 00  |.......z`l.z....|
+7AED6B80  00 00 00 00 00 00 00 00  00 04 00 00 00 00 00 00  |................|
 ```
 
 ### Example:

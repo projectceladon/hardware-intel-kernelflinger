@@ -38,6 +38,7 @@
 #include "shell_service.h"
 
 #include "devmem.h"
+#include "hexdump.h"
 #include "lsacpi.h"
 
 #define MAX_ARGS	8
@@ -55,6 +56,7 @@ static shcmd_t help_shcmd, list_shcmd;
 static shcmd_t *SHCMD[] = {
 	&devmem_shcmd,
 	&help_shcmd,
+	&hexdump_shcmd,
 	&list_shcmd,
 	&lsacpi_shcmd
 };

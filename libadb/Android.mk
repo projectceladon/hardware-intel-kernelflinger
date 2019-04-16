@@ -21,6 +21,7 @@ LOCAL_SRC_FILES := \
 	reader.c \
 	shell_service.c \
 	devmem.c \
-	lsacpi.c
+	lsacpi.c \
+	hexdump.c
 
 include $(BUILD_EFI_STATIC_LIBRARY)
