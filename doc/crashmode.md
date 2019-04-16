@@ -120,6 +120,7 @@ Crashmode adb implementation is limited to the following commands:
 - pull bert-region: retrieve BERT region, prepended by "BERR" magic.
 - shell list: list all the shell commands
 - shell help COMMAND: print the help for COMMAND
+- shell devmem ADDRESS [WIDTH [VALUE]]: read/write from physical address
 ```
 
 The optional `START` and `LENGTH` parameters allow to perform a
@@ -197,6 +198,23 @@ The `pull bert-region` command retrieves the
 (ACPI Platform Error Interface, see
 [ACPI specification](http://uefi.org/specifications)) BERT (Boot Error
 Record Table) region prepended by `BERR` magic.
+
+### shell devmem Command
+
+The `shell devmem ADDRESS [WIDTH [VALUE]]` command perform a
+read/write access from physical `ADDRESS`.  It is designed to allow
+read/write accessed to and from registers.
+
+`ADDRESS` is the physical address to interact with.  `WIDTH` is the
+size of the transaction to use (8, 16, 32 or 64 bits).  If `WIDTH` is
+not set, `devmem` assumes a 32 bits width.  If the value `VALUE`
+parameter is supplied `devmem` writes this value to `ADDRESS`.
+
+```bash
+$ adb shell devmem 0x7aed6c60 32 0xdeadbeef
+$ adb shell devmem 0x7aed6c60
+0xDEADBEEF
+```
 
 ### Example:
 

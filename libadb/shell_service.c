@@ -37,6 +37,8 @@
 #include "service.h"
 #include "shell_service.h"
 
+#include "devmem.h"
+
 #define MAX_ARGS	8
 
 typedef struct {
@@ -50,6 +52,7 @@ typedef struct {
 
 static shcmd_t help_shcmd, list_shcmd;
 static shcmd_t *SHCMD[] = {
+	&devmem_shcmd,
 	&help_shcmd,
 	&list_shcmd
 };

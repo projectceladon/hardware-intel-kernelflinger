@@ -19,6 +19,7 @@ LOCAL_SRC_FILES := \
 	reboot_service.c \
 	sync_service.c \
 	reader.c \
-	shell_service.c
+	shell_service.c \
+	devmem.c
 
 include $(BUILD_EFI_STATIC_LIBRARY)
