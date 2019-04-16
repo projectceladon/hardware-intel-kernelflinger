@@ -38,6 +38,7 @@
 #include "shell_service.h"
 
 #include "devmem.h"
+#include "lsacpi.h"
 
 #define MAX_ARGS	8
 
@@ -54,7 +55,8 @@ static shcmd_t help_shcmd, list_shcmd;
 static shcmd_t *SHCMD[] = {
 	&devmem_shcmd,
 	&help_shcmd,
-	&list_shcmd
+	&list_shcmd,
+	&lsacpi_shcmd
 };
 
 static void free_shell_ctx(shell_ctx_t *ctx)

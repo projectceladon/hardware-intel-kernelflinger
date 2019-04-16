@@ -121,6 +121,7 @@ Crashmode adb implementation is limited to the following commands:
 - shell list: list all the shell commands
 - shell help COMMAND: print the help for COMMAND
 - shell devmem ADDRESS [WIDTH [VALUE]]: read/write from physical address
+- shell lsacpi: list the ACPI tables
 ```
 
 The optional `START` and `LENGTH` parameters allow to perform a
@@ -214,6 +215,25 @@ parameter is supplied `devmem` writes this value to `ADDRESS`.
 $ adb shell devmem 0x7aed6c60 32 0xdeadbeef
 $ adb shell devmem 0x7aed6c60
 0xDEADBEEF
+```
+
+### shell lsacpi command
+
+The `shell lsacpi` list all the ACPI table, their location in RAM and
+their size.
+
+```bash
+$ adb shell lsacpi
+Name   Address    Size
+-
+DSDT  0x7AED6C60  25218
+XSDT  0x7AEDCF30    100
+FACP  0x7AED6B50    268
+APIC  0x7AED6AC0    132
+MCFG  0x7AED6A80     60
+HPET  0x7AED6A40     56
+NHLT  0x7AED3AD0   1323
+TPM2  0x7AED6420     52
 ```
 
 ### Example:
