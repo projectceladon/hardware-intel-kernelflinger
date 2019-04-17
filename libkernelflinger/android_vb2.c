@@ -85,8 +85,11 @@ bool avb_update_stored_rollback_indexes_for_slot(AvbOps* ops, AvbSlotVerifyData*
         }
         return true;
 }
-
+#ifdef DYNAMIC_PARTITIONS
+#define AVB_ROOTFS_PREFIX L"rootwait ro init=/init"
+#else
 #define AVB_ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init"
+#endif
 #define DISABLE_AVB_ROOTFS_PREFIX L" root="
 
 static EFI_STATUS avb_prepend_command_line_rootfs(
@@ -113,7 +116,9 @@ EFI_STATUS prepend_slot_command_line(CHAR16 **cmdline16,
         VBDATA *vb_data)
 {
         EFI_STATUS ret = EFI_SUCCESS;
+#ifndef DYNAMIC_PARTITIONS
         EFI_GUID system_uuid;
+#endif
 
         avb_prepend_command_line_rootfs(cmdline16, boot_target);
 
@@ -129,6 +134,7 @@ EFI_STATUS prepend_slot_command_line(CHAR16 **cmdline16,
                 if (vb_data && vb_data->cmdline &&
                         (!avb_strstr(vb_data->cmdline,"root=")))
                 {
+#ifndef DYNAMIC_PARTITIONS
                         ret = gpt_get_partition_uuid(slot_label(SYSTEM_LABEL),
                                 &system_uuid, LOGICAL_UNIT_USER);
                         if (EFI_ERROR(ret)) {
@@ -143,6 +149,9 @@ EFI_STATUS prepend_slot_command_line(CHAR16 **cmdline16,
                                 &system_uuid);
                         if (EFI_ERROR(ret))
                                 return ret;
+#else
+                        debug(L"Enable Dynamic Partitions\n");
+#endif
                 }
         }
         return ret;

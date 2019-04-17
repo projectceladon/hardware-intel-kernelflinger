@@ -1070,7 +1070,16 @@ static EFI_STATUS setup_command_line(
                                    get_property_bootloader());
         if (EFI_ERROR(ret))
                 goto out;
-
+#if defined(DYNAMIC_PARTITIONS) && defined(USE_SLOT)
+        //BOARD_USES_RECOVERY_AS_BOOT is set to true, the recovery image is built as boot.img
+        //containing the recovery’s ramdisk. command line "androidboot.force_normal_boot=1" is
+        //mandatory for normal boot.
+        if(boot_target == NORMAL_BOOT) {
+                ret = prepend_command_line(&cmdline16, L"androidboot.force_normal_boot=1");
+                if (EFI_ERROR(ret))
+                        goto out;
+        }
+#endif
         ret = prepend_command_line(&cmdline16, L"androidboot.acpio_idx=%a ",
                                    acpi_loaded_table_idx_to_string());
         if (EFI_ERROR(ret))
@@ -1473,7 +1482,7 @@ EFI_STATUS android_image_start_buffer(
         struct boot_params *buf;
         void *parameter = NULL;
         EFI_STATUS ret;
-
+        BOOLEAN use_ramdisk = TRUE;
         if (!bootimage)
                 return EFI_INVALID_PARAMETER;
 
@@ -1524,9 +1533,10 @@ EFI_STATUS android_image_start_buffer(
                 efi_perror(ret, L"setup_command_line");
                 return ret;
         }
-
-        if (!recovery_in_boot_partition() || boot_target == RECOVERY ||
-            boot_target == MEMORY) {
+#ifndef DYNAMIC_PARTITIONS
+        use_ramdisk = !recovery_in_boot_partition() || boot_target == RECOVERY || boot_target == MEMORY;
+#endif
+        if (use_ramdisk) {
                 ret = setup_ramdisk(bootimage);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"setup_ramdisk");
