@@ -39,6 +39,7 @@
 
 #include "devmem.h"
 #include "hexdump.h"
+#include "ioport.h"
 #include "lsacpi.h"
 
 #define MAX_ARGS	8
@@ -57,8 +58,14 @@ static shcmd_t *SHCMD[] = {
 	&devmem_shcmd,
 	&help_shcmd,
 	&hexdump_shcmd,
+	&inb_shcmd,
+	&inl_shcmd,
+	&inw_shcmd,
 	&list_shcmd,
-	&lsacpi_shcmd
+	&lsacpi_shcmd,
+	&outb_shcmd,
+	&outl_shcmd,
+	&outw_shcmd
 };
 
 static void free_shell_ctx(shell_ctx_t *ctx)

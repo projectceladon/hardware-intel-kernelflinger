@@ -22,6 +22,7 @@ LOCAL_SRC_FILES := \
 	shell_service.c \
 	devmem.c \
 	lsacpi.c \
-	hexdump.c
+	hexdump.c \
+	ioport.c
 
 include $(BUILD_EFI_STATIC_LIBRARY)

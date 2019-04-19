@@ -123,6 +123,8 @@ Crashmode adb implementation is limited to the following commands:
 - shell devmem ADDRESS [WIDTH [VALUE]]: read/write from physical address
 - shell lsacpi: list the ACPI tables
 - shell hexdump ADDRESS LENGTH: Hexdump a memory region
+- shell inb | inw | inl IOPORT: Perform a read operation on the given I/O port
+- shell outb | outw | outl IOPORT DATA: Perform a write operation on the given I/O port
 ```
 
 The optional `START` and `LENGTH` parameters allow to perform a
@@ -248,6 +250,23 @@ $ adb shell hexdump 0x7aed6b50 0x40
 7AED6B60  45 44 4B 32 20 20 20 20  05 00 00 00 49 4E 54 4C  |EDK2    ....INTL|
 7AED6B70  0D 00 00 01 F0 CE ED 7A  60 6C ED 7A 01 02 09 00  |.......z`l.z....|
 7AED6B80  00 00 00 00 00 00 00 00  00 04 00 00 00 00 00 00  |................|
+```
+
+### shell inb, inw, inl, outb, outw and outl commands
+
+These commands proves direct access to I/O ports on the device.
+
+The `inb`, `inw` and `inl` commands perform a read operation on the
+given I/O port and print the result.
+
+The `outb`, `outw` and `outl` commands perform write operation to the
+given I/O port.
+
+```bash
+$ Usage:
+  inb|inw|inl IOPORT
+  outb|outw|outl IOPORT DATA
+$ adb shell outb 0xcf9 0x6
 ```
 
 ### Example:
