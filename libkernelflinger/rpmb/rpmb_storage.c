@@ -737,7 +737,11 @@ EFI_STATUS rpmb_key_init(void)
 	}
 
 	// Should output this info, since there maybe some error log about some keys failed at before.
-	error(L"Init RPMB key successfully");
+	log(L"Init RPMB key successfully\n");
+#ifdef USE_UI
+	if (is_UEFI())
+		ui_print(L"Init RPMB key successfully");
+#endif
 
 err_get_rpmb_key:
 	memset(key, 0, sizeof(key));

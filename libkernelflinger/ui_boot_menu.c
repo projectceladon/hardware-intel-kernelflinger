@@ -75,6 +75,14 @@ static EFI_STATUS ui_boot_menu_redraw(ui_boot_menu_t *menu, UINTN *y)
 		{ NULL, NULL, TRUE }
 	};
 
+	if (is_UEFI() == 0)
+	{
+		/*
+		 * For non-UEFI platform, currently do not support redraw UI by volume button
+		 */
+		return EFI_SUCCESS;
+	}
+
 	*y = menu->y;
 
 	ui_image_t *image = menu->actions[menu->cur].image;
