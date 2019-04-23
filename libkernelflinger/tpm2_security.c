@@ -456,8 +456,14 @@ EFI_STATUS tpm2_fuse_provision_seed(void)
 {
 	EFI_STATUS ret = EFI_SUCCESS;
 
+	// Check secure boot is enabled
+	if (!is_platform_secure_boot_enabled()) {
+		error(L"Secure boot is disabled, does not fuse trusty seed to TPM");
+		return EFI_SECURITY_VIOLATION;
+	}
+
 	ret = tpm2_delete_index(NV_INDEX_TRUSTYOS_SEED);
-	if (EFI_ERROR(ret)) {
+	if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
 		error(L"failed to delete NV_INDEX_TRUSTYOS_SEED");
 		return ret;
 	}
