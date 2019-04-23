@@ -274,6 +274,7 @@ EFI_STATUS tpm2_write_nvindex(TPMI_RH_NV_INDEX nv_index,
 		left_size -= cur_size;
 		written_size += cur_size;
 	}
+	memset(&nv_write_data, 0, sizeof(nv_write_data));
 
 	ret = Tpm2FlushContext(session_handle);
 	if (EFI_ERROR(ret)) {
@@ -351,6 +352,7 @@ EFI_STATUS tpm2_read_nvindex(TPMI_RH_NV_INDEX nv_index,
 		read_size += nv_read_data.size;
 	}
 	*data_size = read_size;
+	memset(&nv_read_data, 0, sizeof(nv_read_data));
 
 	ret = Tpm2FlushContext(session_handle);
 	if (EFI_ERROR(ret)) {
