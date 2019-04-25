@@ -554,20 +554,6 @@ EFI_STATUS tpm2_delete_index(UINT32 index)
 	return ret;
 }
 
-static void dump_data(
-		__attribute__((unused)) UINT8 *data,
-		__attribute__((unused)) UINT16 data_size)
-{
-#if 0  // Change to 1 for dump the data
-	CHAR16 buf[2048 * 2 + 2];
-	UINT16 i;
-
-	for (i = 0; i < data_size && i < sizeof(buf) / 2 - 1; i++)
-		SPrint(buf + i * 2, sizeof(buf) - i * 2, L"%02x", data[i]);
-	debug(L"Data: %s", buf);
-#endif
-}
-
 EFI_STATUS tpm2_fuse_trusty_seed(void)
 {
 	EFI_STATUS ret;
@@ -581,7 +567,6 @@ EFI_STATUS tpm2_fuse_trusty_seed(void)
 		error(L"Tpm2GetRandom failed");
 		goto out;
 	}
-	dump_data(trusty_seed.buffer, TRUSTY_SEED_SIZE);
 
 	config_index = NV_INDEX_TRUSTYOS_SEED - config_table[0].nv_index;
 	ret = create_index_and_write_lock(NV_INDEX_TRUSTYOS_SEED, config_table[config_index].attribute,
@@ -600,7 +585,6 @@ EFI_STATUS tpm2_fuse_trusty_seed(void)
 	}
 	if (memcmp(trusty_seed.buffer, read_seed, sizeof(read_seed))) {
 		error(L"Security error! Read trusty seed back but verify failed!");
-		dump_data(read_seed, TRUSTY_SEED_SIZE);
 		ret = EFI_SECURITY_VIOLATION;
 	}
 
@@ -636,7 +620,6 @@ EFI_STATUS tpm2_read_trusty_seed(UINT8 seed[TRUSTY_SEED_SIZE])
 		ret = EFI_COMPROMISED_DATA;
 		goto out;
 	}
-	dump_data(seed, TRUSTY_SEED_SIZE);
 	return EFI_SUCCESS;
 
 out:
