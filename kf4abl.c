@@ -180,7 +180,6 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 #ifndef __FORCE_FASTBOOT
 #ifdef USE_AVB
 	AvbOps *ops;
-	AvbPartitionData *acpi;
 	AvbSlotVerifyData *slot_data = NULL;
 #ifndef USE_SLOT
 	const char *slot_suffix = "";
@@ -197,7 +196,6 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 		"acpio",
 #endif
 		NULL};
-	VOID *acpiimage = NULL;
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
 
@@ -249,18 +247,9 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 	}
 #endif
 	param = slot_data;
-	for (int i = 1; requested_partitions[i] != NULL; i++) {
-		acpi = &slot_data->loaded_partitions[i];
-		acpiimage = acpi->data;
-		ret = install_acpi_table_from_partitions(acpiimage,
-							 acpi->partition_name,
-							 NORMAL_BOOT);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to install acpi table from %a image",
-				   acpi->partition_name);
-			goto fail;
-		}
-	}
+
+	ret = android_install_acpi_table_avb(requested_partitions, slot_data);
+	if (EFI_ERROR(ret)) goto fail;
 
 	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
 #ifdef USE_TRUSTY
@@ -718,7 +707,7 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
 	AvbOps *ops;
-	AvbPartitionData *boot, *acpi;
+	AvbPartitionData *boot;
 	AvbSlotVerifyData *slot_data = NULL;
 #ifndef USE_SLOT
 	const char *slot_suffix = "";
@@ -735,7 +724,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 #endif
 		NULL};
 	EFI_STATUS ret;
-	VOID *bootimage = NULL, *acpiimage = NULL;
+	VOID *bootimage = NULL;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	bool allow_verification_error = FALSE;
 	AvbSlotVerifyFlags flags;
@@ -833,18 +822,8 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	boot = &slot_data->loaded_partitions[0];
 	bootimage = boot->data;
 
-	for (int i = 1; requested_partitions[i] != NULL; i++) {
-		acpi = &slot_data->loaded_partitions[i];
-		acpiimage = acpi->data;
-		ret = install_acpi_table_from_partitions(acpiimage,
-							 acpi->partition_name,
-							 boot_target);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to install acpi table from %a image",
-				   acpi->partition_name);
-			goto fail;
-		}
-	}
+        ret = android_install_acpi_table_avb(requested_partitions, slot_data);
+        if (EFI_ERROR(ret)) goto fail;
 
 	ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
 			slot_data->vbmeta_images[0].vbmeta_size,
@@ -1035,24 +1014,6 @@ EFI_STATUS boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	BOOLEAN oneshot = FALSE;
 	UINT8 boot_state = BOOT_STATE_GREEN;
 	X509 *verifier_cert = NULL;
-	const char *acpi_part_names[] = {
-#ifdef USE_ACPI
-		"acpi",
-#endif
-#ifdef USE_ACPIO
-		"acpio",
-#endif
-		NULL};
-
-	for (int i = 0; acpi_part_names[i] != NULL; i++) {
-		ret = install_acpi_table_from_partitions(NULL, acpi_part_names[i],
-							 boot_target);
-		if (EFI_ERROR(ret)) {
-			efi_perror(ret, L"Failed to install acpi table from %a image",
-				   acpi_part_names[i]);
-			return ret;
-		}
-	}
 
 	debug(L"Loading boot image");
 	ret = load_boot_image(boot_target, target_path, &bootimage, oneshot);
@@ -1217,6 +1178,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 			return ret;
 		}
 	}
+
+	acpi_set_boot_target(target);
 
 	for (;;) {
 		switch (target) {

@@ -255,6 +255,7 @@ EFI_STATUS android_image_start_buffer(
                 IN const CHAR8 *abl_cmd_line);
 
 EFI_STATUS setup_acpi_table(VOID *bootimage, enum boot_target target);
+EFI_STATUS android_install_acpi_table(VOID);
 
 EFI_STATUS android_image_load_partition(
                 IN const CHAR16 *label,

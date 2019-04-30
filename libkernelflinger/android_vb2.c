@@ -284,6 +284,27 @@ EFI_STATUS get_avb_result(
 }
 
 
+EFI_STATUS android_install_acpi_table_avb(const char* const* requested_partitions,
+                                          AvbSlotVerifyData *slot_data)
+{
+        AvbPartitionData *acpi = NULL;
+        VOID *acpiimage = NULL;
+        EFI_STATUS ret = EFI_SUCCESS;
+
+        for (int i = 1; requested_partitions[i] != NULL; i++) {
+                acpi = &slot_data->loaded_partitions[i];
+                acpiimage = acpi->data;
+                ret = install_acpi_table_from_partitions(acpiimage,
+                                                         acpi->partition_name);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to install acpi table from %a image",
+                                   acpi->partition_name);
+                        return ret;
+                }
+        }
+        return ret;
+}
+
 EFI_STATUS android_image_load_partition_avb(
                 IN const char *label,
                 OUT VOID **bootimage_p,
@@ -296,7 +317,14 @@ EFI_STATUS android_image_load_partition_avb(
         AvbPartitionData *boot;
         AvbSlotVerifyResult verify_result = 0;
         AvbSlotVerifyFlags flags;
-        const char *requested_partitions[] = {label, NULL};
+        const char *requested_partitions[] = {label,
+#ifdef USE_ACPI
+                "acpi",
+#endif
+#ifdef USE_ACPIO
+                "acpio",
+#endif
+                NULL};
         VOID *bootimage = NULL;
         bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
         *bootimage_p = NULL;
@@ -341,6 +369,10 @@ EFI_STATUS android_image_load_partition_avb(
         boot = &(*slot_data)->loaded_partitions[0];
         bootimage = boot->data;
         *bootimage_p = bootimage;
+
+        ret = android_install_acpi_table_avb(requested_partitions, *slot_data);
+        if (EFI_ERROR(ret)) goto fail;
+
         return ret;
 fail:
         *boot_state = BOOT_STATE_RED;
@@ -361,7 +393,14 @@ EFI_STATUS android_image_load_partition_avb_ab(
         AvbABFlowResult flow_result;
         AvbPartitionData *boot;
         AvbSlotVerifyFlags flags;
-        const char *requested_partitions[] = {label, NULL};
+        const char *requested_partitions[] = {label,
+#ifdef USE_ACPI
+                "acpi",
+#endif
+#ifdef USE_ACPIO
+                "acpio",
+#endif
+                NULL};
         VOID *bootimage = NULL;
         bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
         *bootimage_p = NULL;
@@ -384,6 +423,10 @@ EFI_STATUS android_image_load_partition_avb_ab(
         boot = &(*slot_data)->loaded_partitions[0];
         bootimage = boot->data;
         *bootimage_p = bootimage;
+
+        ret = android_install_acpi_table_avb(requested_partitions, *slot_data);
+        if (EFI_ERROR(ret)) goto fail;
+
         return ret;
 fail:
         *boot_state = BOOT_STATE_RED;

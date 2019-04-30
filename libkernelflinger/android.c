@@ -570,7 +570,7 @@ EFI_STATUS setup_acpi_table(VOID *bootimage,
         if (aosp_header->header_version == 1) {
                 VOID *acpio;
                 acpio = bootimage + aosp_header->recovery_dtbo_offset;
-                return install_acpi_table_from_recovery_acpio(acpio, target);
+                return install_acpi_table_from_recovery_acpio(acpio);
         }
 #endif
 #ifdef USE_FIRSTSTAGE_MOUNT
@@ -1283,6 +1283,29 @@ out:
         return ret;
 }
 
+EFI_STATUS android_install_acpi_table(VOID)
+{
+        const char *acpi_part_names[] = {
+#ifdef USE_ACPI
+                "acpi",
+#endif
+#ifdef USE_ACPIO
+                "acpio",
+#endif
+                NULL};
+        EFI_STATUS ret = EFI_SUCCESS;
+
+        for (int i = 0; acpi_part_names[i] != NULL; i++) {
+                ret = install_acpi_table_from_partitions(NULL, acpi_part_names[i]);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"Failed to install acpi table from %a image",
+                                   acpi_part_names[i]);
+                        return ret;
+                }
+        }
+        return ret;
+}
+
 EFI_STATUS android_image_load_partition(
                 IN const CHAR16 *label,
                 OUT VOID **bootimage_p)
@@ -1332,7 +1355,10 @@ EFI_STATUS android_image_load_partition(
         }
 
         *bootimage_p = bootimage;
-        return EFI_SUCCESS;
+
+        ret = android_install_acpi_table();
+
+        return ret;
 }
 
 
@@ -1441,7 +1467,11 @@ EFI_STATUS android_image_load_file(
         if (memcmp(aosp_header->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
                 error(L"File does not appear to contain an Android boot image");
                 ret = EFI_INVALID_PARAMETER;
+                goto out;
         }
+
+        ret = android_install_acpi_table();
+
 out:
         if (delete) {
                 //this should close handle and flush FS

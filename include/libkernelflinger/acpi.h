@@ -156,15 +156,15 @@ UINT8 oem1_get_ia_apps_to_use(void);
 #define ACPI_TABLE_MAX_LOAD_NUM		256
 
 EFI_STATUS install_acpi_table_from_partitions(VOID *image,
-					      const char *part_name,
-					      enum boot_target target);
-EFI_STATUS install_acpi_table_from_recovery_acpio(VOID *image,
-						  enum boot_target target);
+					      const char *part_name);
+EFI_STATUS install_acpi_table_from_recovery_acpio(VOID *image);
 EFI_STATUS install_acpi_table(VOID *acpi_table, UINTN acpi_table_size,
 			      UINTN *tablekey);
 EFI_STATUS acpi_parse_selected_table_id(CHAR8 *selected_id_str,
 					UINT32 selected_id_str_len);
 EFI_STATUS acpi_image_get_length(const CHAR16 *label, struct ACPI_INFO **acpi_info);
 CHAR8 *acpi_loaded_table_idx_to_string(VOID);
+
+VOID acpi_set_boot_target(enum boot_target target);
 
 #endif /* __ACPI_H__ */

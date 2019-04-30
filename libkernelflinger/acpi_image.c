@@ -54,6 +54,18 @@ static struct ACPI_TABLE_LOADED {
 
 static CHAR8 loaded_idx_str[ACPI_TABLE_MAX_LOAD_NUM*4];
 
+static enum boot_target acpi_target = UNKNOWN_TARGET;
+
+VOID acpi_set_boot_target(enum boot_target target)
+{
+	acpi_target = target;
+}
+
+static enum boot_target acpi_get_boot_target(VOID)
+{
+	return acpi_target;
+}
+
 static UINT8 acpi_csum(VOID *base, UINT32 n)
 {
 	UINT8 *p;
@@ -332,10 +344,12 @@ static EFI_STATUS check_install_acpi_image(VOID *image, int is_acpio)
  * |  1   |   1   |   -    |   1    | recovery | inst(acpi)                         |
  */
 EFI_STATUS install_acpi_table_from_partitions(VOID *image,
-					      const char *part_name,
-					      enum boot_target target)
+					      const char *part_name)
 {
 	int is_acpio;
+	enum boot_target target;
+
+	target = acpi_get_boot_target();
 
 	if (!strcmp(part_name, "acpi")) {
 		is_acpio = 0;
@@ -355,8 +369,12 @@ EFI_STATUS install_acpi_table_from_partitions(VOID *image,
 		return check_install_acpi_image(image, is_acpio);
 }
 
-EFI_STATUS install_acpi_table_from_recovery_acpio(VOID *image, enum boot_target target)
+EFI_STATUS install_acpi_table_from_recovery_acpio(VOID *image)
 {
+	enum boot_target target;
+
+	target = acpi_get_boot_target();
+
 	if (!use_slot()) {
 		if (target == RECOVERY) {
 			debug(L"Install acpi table from recovery_acpio");

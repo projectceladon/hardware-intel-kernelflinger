@@ -44,6 +44,7 @@
 #include "vars.h"
 #include "lib.h"
 #include "security.h"
+#include "acpi.h"
 #include "android.h"
 #include "ux.h"
 #include "options.h"
@@ -1485,6 +1486,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 	debug(L"Loading boot image");
 
 	set_boottime_stamp(TM_AVB_START);
+	acpi_set_boot_target(boot_target);
 #ifdef USE_AVB
 	disable_slot_if_efi_loaded_slot_failed();
 	ret = avb_load_verify_boot_image(boot_target, target_path, &bootimage, oneshot, &boot_state, &vb_data);
