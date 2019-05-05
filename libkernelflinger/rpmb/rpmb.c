@@ -261,7 +261,7 @@ EFI_STATUS rpmb_init(EFI_HANDLE disk_handle)
 		}
 		error(L"init virtual media rpmb using pass through failed");
 		break;
-	case STORAGE_NVME:
+	/*case STORAGE_NVME:
 		storage_rpmb_ops = get_nvme_storage_rpmb_ops();
 		if (!storage_rpmb_ops) {
 			error(L"failed to get nvme rpmb operation instance");
@@ -272,7 +272,7 @@ EFI_STATUS rpmb_init(EFI_HANDLE disk_handle)
 			return EFI_SUCCESS;
 		}
 		error(L"init nvme rpmb failed");
-		break;
+		break;*/
 	default:
 		error(L"boot device not supported");
 		return EFI_NOT_FOUND;
