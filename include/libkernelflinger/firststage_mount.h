@@ -34,6 +34,9 @@
 #ifndef _FIRSTSTAGE_MOUNT_H_
 #define _FIRSTSTAGE_MOUNT_H_
 
-EFI_STATUS install_firststage_mount_ssdt(enum boot_target target);
+EFI_STATUS install_firststage_mount_aml(enum boot_target target);
+#ifdef AUTO_DISKBUS
+EFI_STATUS revise_diskbus_from_ssdt(CHAR8 *ssdt, UINTN ssdt_len);
+#endif
 
 #endif /* ifndef _FIRSTSTAGE_MOUNT_H_ */

@@ -38,9 +38,6 @@
 #include "rpmb_storage.h"
 #endif
 #include "acpi.h"
-#ifdef USE_FIRSTSTAGE_MOUNT
-#include "firststage_mount.h"
-#endif
 
 //Global AvbOps data structure
 static AvbOps *ops = NULL;

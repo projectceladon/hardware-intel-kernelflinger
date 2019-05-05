@@ -266,9 +266,10 @@ ifeq ($(KERNELFLINGER_USE_RPMB_SIMULATE),true)
 endif
 endif  # KERNELFLINGER_USE_RPMB
 
-ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE)|$(filter true, $(TARGET_USE_ACPI) $(TARGET_USE_ACPIO)),true|)
+ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE),true)
     LOCAL_CFLAGS += -DUSE_FIRSTSTAGE_MOUNT
     LOCAL_SRC_FILES += firststage_mount.c
+ifeq ($(filter true, $(TARGET_USE_ACPI) $(TARGET_USE_ACPIO)),)
     IASL := $(INTEL_PATH_BUILD)/acpi-tools/linux64/bin/iasl
     GEN := $(res_intermediates)/firststage_mount_cfg.h
     IASL_CFLAGS := $(filter -D%,$(subst -D ,-D,$(strip $(LOCAL_CFLAGS))))
@@ -277,7 +278,8 @@ ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE)|$(filter true, $(TARGET_USE_ACPI) $(TARGE
 $(GEN): $(FIRST_STAGE_MOUNT_CFG_FILE)
 	$(hide) $(IASL) -p $(@:.h=) $(IASL_CFLAGS) -tc $<
 	$(hide) mv $(@:.h=.hex) $@
-endif # BOARD_FIRSTSTAGE_MOUNT_ENABLE not TARGET_USE_ACPI not TARGET_USE_ACPIO
+endif # not TARGET_USE_ACPI not TARGET_USE_ACPIO
+endif # BOARD_FIRSTSTAGE_MOUNT_ENABLE
 
 ifeq ($(BOARD_DISK_BUS),ff.ff)
     LOCAL_CFLAGS += -DAUTO_DISKBUS

@@ -43,6 +43,9 @@
 #include "slot.h"
 #include "gpt.h"
 #include "dt_table.h"
+#ifdef USE_FIRSTSTAGE_MOUNT
+#include "firststage_mount.h"
+#endif
 #include "protocol/AcpiTableProtocol.h"
 #include "security.h"
 #include "targets.h"
@@ -242,6 +245,26 @@ CHAR8 *acpi_loaded_table_idx_to_string(VOID)
 	return loaded_idx_str;
 }
 
+#if defined(USE_FIRSTSTAGE_MOUNT) && defined(AUTO_DISKBUS)
+static EFI_STATUS check_revise_acpi_table(CHAR8 *ssdt, UINTN ssdt_len)
+{
+	EFI_STATUS ret = EFI_SUCCESS;
+	struct ACPI_DESC_HEADER *header;
+
+	header = (struct ACPI_DESC_HEADER *)ssdt;
+	if ((strncmp(header->oem_id, (CHAR8 *)"INTEL ", 6)) \
+	    || (strncmp(header->oem_table_id, (CHAR8 *)"android", 8)))
+		return EFI_SUCCESS;
+
+	ret = revise_diskbus_from_ssdt((CHAR8 *)ssdt, ssdt_len);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"ACPI: fail to revise diskbus");
+		return ret;
+	}
+	return ret;
+}
+#endif
+
 static EFI_STATUS acpi_image_parse_table(VOID *acpiimage, int is_acpio)
 {
 	struct dt_table_header *header = (struct dt_table_header *)(acpiimage);
@@ -270,6 +293,13 @@ static EFI_STATUS acpi_image_parse_table(VOID *acpiimage, int is_acpio)
 		if (acpi_csum(acpi_table, dt_size))
 			continue;
 
+#if defined(USE_FIRSTSTAGE_MOUNT) && defined(AUTO_DISKBUS)
+		ret = check_revise_acpi_table(acpi_table, dt_size);
+		if (EFI_ERROR(ret)) {
+			efi_perror(ret, L"Warning: fail to revise acpi_table");
+			continue;
+		}
+#endif
 		ret = install_acpi_table(acpi_table, dt_size, &tablekey);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Warning: acpi_table %d install failed.", i);

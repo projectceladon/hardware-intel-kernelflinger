@@ -574,7 +574,7 @@ EFI_STATUS setup_acpi_table(VOID *bootimage,
         }
 #endif
 #ifdef USE_FIRSTSTAGE_MOUNT
-        return install_firststage_mount_ssdt(target);
+        return install_firststage_mount_aml(target);
 #endif
         debug(L"Acpi table not setup");
         return EFI_SUCCESS;

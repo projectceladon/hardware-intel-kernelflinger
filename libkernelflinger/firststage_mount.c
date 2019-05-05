@@ -36,7 +36,9 @@
 
 #include "acpi.h"
 #include "firststage_mount.h"
+#if (!defined(USE_ACPI)) && (!defined(USE_ACPIO))
 #include "firststage_mount_cfg.h"
+#endif
 #include "lib.h"
 #include "protocol/AcpiTableProtocol.h"
 #include "storage.h"
@@ -59,7 +61,7 @@ static CHAR8 csum(void *base, UINTN n)
 	return sum;
 }
 
-static EFI_STATUS revise_diskbus_from_ssdt(CHAR8 *ssdt, UINTN ssdt_len)
+EFI_STATUS revise_diskbus_from_ssdt(CHAR8 *ssdt, UINTN ssdt_len)
 {
 	const CHAR8 *pattern = (CHAR8 *)"/0000:00:ff.ff/";
 	const UINTN diskbus_sufix_len = 6; /* Sample: "ff.ff/" or "ff.f//" */
@@ -119,26 +121,33 @@ static EFI_STATUS revise_diskbus_from_ssdt(CHAR8 *ssdt, UINTN ssdt_len)
 }
 #endif
 
-EFI_STATUS install_firststage_mount_ssdt(enum boot_target target)
+EFI_STATUS install_firststage_mount_aml(enum boot_target target)
 {
 	EFI_STATUS ret;
+	CHAR8 *ssdt;
 	UINTN ssdt_len;
 	UINTN TableKey;
+
+#if (!defined(USE_ACPI)) && (!defined(USE_ACPIO))
+	ssdt = AmlCode;
+	ssdt_len = sizeof(AmlCode);
+#else
+	return EFI_SUCCESS;
+#endif
 
 	if ((target == NORMAL_BOOT) || (target == RECOVERY) || (target == CHARGER)
 		|| (target == ESP_BOOTIMAGE) || (target == MEMORY)) {
 		debug(L"Install firststage_mount_ssdt, target=%d", target);
 
-		ssdt_len = sizeof(AmlCode);
 #ifdef AUTO_DISKBUS
-		ret = revise_diskbus_from_ssdt((CHAR8 *)AmlCode, ssdt_len);
+		ret = revise_diskbus_from_ssdt((CHAR8 *)ssdt, ssdt_len);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"ACPI: fail to revise diskbus");
 			return ret;
 		}
 #endif
 
-		ret = install_acpi_table(AmlCode, ssdt_len, &TableKey);
+		ret = install_acpi_table(ssdt, ssdt_len, &TableKey);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"Failed to install ssdt.");
 			return ret;

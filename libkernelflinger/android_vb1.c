@@ -38,9 +38,6 @@
 #include "rpmb_storage.h"
 #endif
 #include "acpi.h"
-#ifdef USE_FIRSTSTAGE_MOUNT
-#include "firststage_mount.h"
-#endif
 
 #define ROOTFS_PREFIX L"skip_initramfs rootwait ro init=/init root="
 
