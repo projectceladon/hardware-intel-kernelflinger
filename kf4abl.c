@@ -248,7 +248,7 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 #endif
 	param = slot_data;
 
-	ret = android_install_acpi_table_avb(requested_partitions, slot_data);
+	ret = android_install_acpi_table_avb(slot_data);
 	if (EFI_ERROR(ret)) goto fail;
 
 	set_boottime_stamp(TM_VERIFY_BOOT_DONE);
@@ -707,7 +707,6 @@ static EFI_STATUS start_boot_image(VOID *bootimage, UINT8 boot_state,
 EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 {
 	AvbOps *ops;
-	AvbPartitionData *boot;
 	AvbSlotVerifyData *slot_data = NULL;
 #ifndef USE_SLOT
 	const char *slot_suffix = "";
@@ -819,11 +818,14 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 	}
 #endif
 
-	boot = &slot_data->loaded_partitions[0];
-	bootimage = boot->data;
+	ret = android_query_image_from_avb_result(slot_data, "boot", &bootimage);
+	if (EFI_ERROR(ret) || (!get_bootimage_header(bootimage))) {
+		avb_error("Cannot find android image partition!\n");
+		goto fail;
+	}
 
-        ret = android_install_acpi_table_avb(requested_partitions, slot_data);
-        if (EFI_ERROR(ret)) goto fail;
+	ret = android_install_acpi_table_avb(slot_data);
+	if (EFI_ERROR(ret)) goto fail;
 
 	ret = avb_vbmeta_image_verify(slot_data->vbmeta_images[0].vbmeta_data,
 			slot_data->vbmeta_images[0].vbmeta_size,

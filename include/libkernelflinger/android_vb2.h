@@ -43,8 +43,12 @@ EFI_STATUS get_avb_result(
                 IN AvbSlotVerifyResult verify_result,
                 IN OUT UINT8 *boot_state);
 
-EFI_STATUS android_install_acpi_table_avb(const char* const* requested_partitions,
-                                          AvbSlotVerifyData *slot_data);
+EFI_STATUS android_query_image_from_avb_result(
+                IN AvbSlotVerifyData *slot_data,
+                IN const char *label,
+                OUT VOID **image);
+
+EFI_STATUS android_install_acpi_table_avb(AvbSlotVerifyData *slot_data);
 
 EFI_STATUS android_image_load_partition_avb(
                 IN const char *label,

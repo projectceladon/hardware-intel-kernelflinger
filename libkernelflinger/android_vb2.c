@@ -169,15 +169,30 @@ char *get_vb_cmdline(VBDATA *vb_data)
         return vb_data->cmdline;
 }
 
+EFI_STATUS android_query_image_from_avb_result(
+                IN AvbSlotVerifyData *slot_data,
+                IN const char *label,
+                OUT VOID **image)
+{
+        AvbPartitionData *pdata = NULL;
+
+        for (size_t n = 0; n < slot_data->num_loaded_partitions; ++n) {
+                pdata = &slot_data->loaded_partitions[n];
+                if (!strcmp(pdata->partition_name, label)) {
+                        *image = pdata->data;
+                        return EFI_SUCCESS;
+                }
+        }
+        *image = NULL;
+        return EFI_NOT_FOUND;
+}
+
 EFI_STATUS get_avb_flow_result(
                 IN AvbSlotVerifyData *slot_data,
                 IN bool allow_verification_error,
                 IN AvbABFlowResult flow_result,
                 IN OUT UINT8 *boot_state)
 {
-        AvbPartitionData *boot;
-        const struct boot_img_hdr *header;
-
         if (!slot_data || !boot_state)
                 return EFI_INVALID_PARAMETER;
 
@@ -185,15 +200,6 @@ EFI_STATUS get_avb_flow_result(
                 avb_error("No avb partition.\n");
                 return EFI_LOAD_ERROR;
         }
-
-        boot = &slot_data->loaded_partitions[0];
-        header = (const struct boot_img_hdr *)boot->data;
-        /* Check boot image header magic field. */
-        if (avb_memcmp(BOOT_MAGIC, header->magic, BOOT_MAGIC_SIZE)) {
-                avb_error("Wrong image header magic.\n");
-                return EFI_NOT_FOUND;
-        }
-        avb_debug("Image read success\n");
 
         switch (flow_result) {
         case AVB_AB_FLOW_RESULT_OK:
@@ -233,9 +239,6 @@ EFI_STATUS get_avb_result(
                 IN AvbSlotVerifyResult verify_result,
                 IN OUT UINT8 *boot_state)
 {
-        AvbPartitionData *boot;
-        const struct boot_img_hdr *header;
-
         if (!slot_data || !boot_state)
                 return EFI_INVALID_PARAMETER;
 
@@ -243,15 +246,6 @@ EFI_STATUS get_avb_result(
                 avb_error("No avb partition.\n");
                 return EFI_LOAD_ERROR;
         }
-
-        boot = &slot_data->loaded_partitions[0];
-        header = (const struct boot_img_hdr *)boot->data;
-        /* Check boot image header magic field. */
-        if (avb_memcmp(BOOT_MAGIC, header->magic, BOOT_MAGIC_SIZE)) {
-                avb_error("Wrong image header magic.\n");
-                return EFI_NOT_FOUND;
-        }
-        avb_debug("Image read success\n");
 
         switch (verify_result) {
         case AVB_SLOT_VERIFY_RESULT_OK:
@@ -284,21 +278,31 @@ EFI_STATUS get_avb_result(
 }
 
 
-EFI_STATUS android_install_acpi_table_avb(const char* const* requested_partitions,
-                                          AvbSlotVerifyData *slot_data)
+EFI_STATUS android_install_acpi_table_avb(AvbSlotVerifyData *slot_data)
 {
-        AvbPartitionData *acpi = NULL;
-        VOID *acpiimage = NULL;
+        const char *acpi_part_names[] = {
+#ifdef USE_ACPI
+                "acpi",
+#endif
+#ifdef USE_ACPIO
+                "acpio",
+#endif
+                NULL};
+        VOID *image = NULL;
         EFI_STATUS ret = EFI_SUCCESS;
 
-        for (int i = 1; requested_partitions[i] != NULL; i++) {
-                acpi = &slot_data->loaded_partitions[i];
-                acpiimage = acpi->data;
-                ret = install_acpi_table_from_partitions(acpiimage,
-                                                         acpi->partition_name);
+        for (int i = 0; acpi_part_names[i] != NULL; i++) {
+                ret = android_query_image_from_avb_result(slot_data,
+                                                    acpi_part_names[i], &image);
+                if (EFI_ERROR(ret)) {
+                        efi_perror(ret, L"'%a' image not found!", acpi_part_names[i]);
+                        return ret;
+                }
+                ret = install_acpi_table_from_partitions(image,
+                                                         acpi_part_names[i]);
                 if (EFI_ERROR(ret)) {
                         efi_perror(ret, L"Failed to install acpi table from %a image",
-                                   acpi->partition_name);
+                                   acpi_part_names[i]);
                         return ret;
                 }
         }
@@ -314,7 +318,6 @@ EFI_STATUS android_image_load_partition_avb(
         EFI_STATUS ret = EFI_SUCCESS;
         AvbOps *ops;
         const char *slot_suffix = "";
-        AvbPartitionData *boot;
         AvbSlotVerifyResult verify_result = 0;
         AvbSlotVerifyFlags flags;
         const char *requested_partitions[] = {label,
@@ -325,9 +328,7 @@ EFI_STATUS android_image_load_partition_avb(
                 "acpio",
 #endif
                 NULL};
-        VOID *bootimage = NULL;
         bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
-        *bootimage_p = NULL;
 
         ops = avb_init();
         if (! ops) {
@@ -366,11 +367,13 @@ EFI_STATUS android_image_load_partition_avb(
                 goto fail;
         }
 
-        boot = &(*slot_data)->loaded_partitions[0];
-        bootimage = boot->data;
-        *bootimage_p = bootimage;
+        ret = android_query_image_from_avb_result(*slot_data, label, bootimage_p);
+        if (EFI_ERROR(ret) || (!get_bootimage_header(*bootimage_p))) {
+                avb_error("Cannot find android image partition!\n");
+                goto fail;
+        }
 
-        ret = android_install_acpi_table_avb(requested_partitions, *slot_data);
+        ret = android_install_acpi_table_avb(*slot_data);
         if (EFI_ERROR(ret)) goto fail;
 
         return ret;
@@ -391,7 +394,6 @@ EFI_STATUS android_image_load_partition_avb_ab(
 #else
         EFI_STATUS ret = EFI_SUCCESS;
         AvbABFlowResult flow_result;
-        AvbPartitionData *boot;
         AvbSlotVerifyFlags flags;
         const char *requested_partitions[] = {label,
 #ifdef USE_ACPI
@@ -401,9 +403,7 @@ EFI_STATUS android_image_load_partition_avb_ab(
                 "acpio",
 #endif
                 NULL};
-        VOID *bootimage = NULL;
         bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
-        *bootimage_p = NULL;
 
         flags = AVB_SLOT_VERIFY_FLAGS_NONE;
         if (allow_verification_error)
@@ -420,11 +420,14 @@ EFI_STATUS android_image_load_partition_avb_ab(
         }
         slot_set_active_cached((*slot_data)->ab_suffix);
 
-        boot = &(*slot_data)->loaded_partitions[0];
-        bootimage = boot->data;
-        *bootimage_p = bootimage;
+        ret = android_query_image_from_avb_result(*slot_data, label, bootimage_p);
+        if (EFI_ERROR(ret) || (!get_bootimage_header(*bootimage_p))) {
+                avb_error("Cannot find android image partition!\n");
+                goto fail;
+        }
+        avb_debug("Image read success\n");
 
-        ret = android_install_acpi_table_avb(requested_partitions, *slot_data);
+        ret = android_install_acpi_table_avb(*slot_data);
         if (EFI_ERROR(ret)) goto fail;
 
         return ret;
