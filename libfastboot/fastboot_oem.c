@@ -323,6 +323,8 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 			is_ufs_set = TRUE;
 			types[total_types++] = STORAGE_UFS;
 			lun_str = (CHAR8 *)strcasestr((char *)argv[i], (char *)"@lun");
+			if (!lun_str)
+				continue;
 			if ((strlen(lun_str) > 4) && (lun_str[4] >= '0') &&
 			    (lun_str[4] <= ('0'+ UFS_MAX_LUN)))
 				user_lun = lun_str[4] - '0';

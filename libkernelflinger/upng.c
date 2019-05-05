@@ -262,6 +262,7 @@ static void huffman_tree_create_lengths(upng_t* upng, huffman_tree* tree,
 	/* initialize local vectors */
 	memset(blcount, 0, sizeof(blcount));
 	memset(nextcode, 0, sizeof(nextcode));
+	memset(tree1d, 0, sizeof(tree1d));
 
 	/* Step 1: count number of instances of each code length */
 	for (bits = 0; bits < tree->numcodes; bits++) {

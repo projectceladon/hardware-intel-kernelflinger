@@ -329,6 +329,7 @@ static void installer_split_and_joint_flash(CHAR16 **filename,
 	EFI_FILE *file[num];
 	UINT32 blk_count;
 
+	memset(file, 0, sizeof(file));
 	const UINTN HEADER_SIZE = offsetof(flash_buffer_t, d);
 	const UINTN MAX_DATA_SIZE = dl->max_size - HEADER_SIZE;
 	for (UINTN i = 0; i < num; i++) {
