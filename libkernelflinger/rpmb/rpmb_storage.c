@@ -750,6 +750,7 @@ EFI_STATUS rpmb_storage_init(void)
 				}
 				debug(L"Can't find physical RPMB, use simulate RPMB now");
 				real = FALSE;
+				ret = EFI_SUCCESS;
 			}
 		}
 	}
