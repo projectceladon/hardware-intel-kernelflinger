@@ -392,7 +392,7 @@ EFI_STATUS usb_start(UINT8 subclass, UINT8 protocol,
 		}
 		error(L"Self implemented USB device mode protocol running");
 #else
-		return ret;
+		return EFI_UNSUPPORTED;
 #endif // USE_SELF_USB_DEVICE_MODE_PROTOCOL
 	}
 
