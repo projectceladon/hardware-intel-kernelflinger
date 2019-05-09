@@ -564,6 +564,8 @@ EFI_STATUS setup_acpi_table(VOID *bootimage,
                             __attribute__((__unused__)) enum boot_target target)
 {
         struct boot_img_hdr *aosp_header;
+        struct XSDT_TABLE *xsdt;
+        EFI_STATUS ret;
 
         debug(L"Setup acpi table");
         aosp_header = (struct boot_img_hdr *)bootimage;
@@ -576,9 +578,26 @@ EFI_STATUS setup_acpi_table(VOID *bootimage,
         }
 #endif
 #ifdef USE_FIRSTSTAGE_MOUNT
-        return install_firststage_mount_ssdt(target);
-#endif
+        ret = get_xsdt_table(&xsdt);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"get xsdt failed");
+                return ret;
+        }
+        debug(L"XSDT address: %x, length: %d", xsdt, xsdt->header.length);
+        ret = install_firststage_mount_ssdt(target);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"install_firststage_mount_ssdt failed");
+                return ret;
+        }
+        ret = get_xsdt_table(&xsdt);
+        if (EFI_ERROR(ret)) {
+                efi_perror(ret, L"get xsdt failed");
+                return ret;
+        }
+        debug(L"XSDT address: %x, length: %d, after add XSDT for first-stage mount.", xsdt, xsdt->header.length);
+#else
         debug(L"Acpi table not setup");
+#endif
         return EFI_SUCCESS;
 }
 

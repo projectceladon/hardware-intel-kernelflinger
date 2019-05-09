@@ -167,4 +167,5 @@ EFI_STATUS acpi_parse_selected_table_id(CHAR8 *selected_id_str,
 EFI_STATUS acpi_image_get_length(const CHAR16 *label, struct ACPI_INFO **acpi_info);
 CHAR8 *acpi_loaded_table_idx_to_string(VOID);
 
+EFI_STATUS get_xsdt_table(struct XSDT_TABLE **xsdt);
 #endif /* __ACPI_H__ */

@@ -151,7 +151,7 @@ static EFI_STATUS acpi_verify_checksum(struct ACPI_DESC_HEADER *table)
 	return sum == 0 ? EFI_SUCCESS : EFI_CRC_ERROR;
 }
 
-static EFI_STATUS get_xsdt_table(struct XSDT_TABLE **xsdt)
+EFI_STATUS get_xsdt_table(struct XSDT_TABLE **xsdt)
 {
 	EFI_GUID acpi2_guid = ACPI_20_TABLE_GUID;
 	struct RSDP_TABLE *rsdp;
@@ -161,6 +161,7 @@ static EFI_STATUS get_xsdt_table(struct XSDT_TABLE **xsdt)
 	if (EFI_ERROR(ret)) {
 		goto out;
 	}
+	debug(L"RSDP address: %x", rsdp);
 
 	if (memcmp(rsdp->signature, RSDP_SIG, sizeof(RSDP_SIG))) {
 		ret = EFI_COMPROMISED_DATA;
