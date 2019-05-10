@@ -77,6 +77,45 @@ static EFI_STATUS heci_get_sec_mode (unsigned *sec_mode)
 	return ret;
 }
 
+BOOLEAN heci_is_eop_received(void)
+{
+	EFI_STATUS ret;
+	uint32_t EopStatus;
+	uint32_t HeciSendLength;
+	uint32_t HeciRecvLength;
+	GEN_END_OF_POST *GetEopStatus;
+	GEN_GET_EOP_STATUS_ACK __attribute__((__unused__)) *Resp;
+	uint32_t SeCMode;
+	uint8_t DataBuffer[sizeof(GEN_GET_EOP_STATUS_ACK)];
+
+	ret = heci_get_sec_mode(&SeCMode);
+	if (EFI_ERROR(ret) || (SeCMode != SEC_MODE_NORMAL)) {
+		return FALSE;
+	}
+	debug(L"GetSeCMode successful");
+	memset(DataBuffer, 0, sizeof(DataBuffer));
+	GetEopStatus = (GEN_END_OF_POST*)DataBuffer;
+	GetEopStatus->MKHIHeader.Fields.GroupId = EOP_GROUP_ID;
+	GetEopStatus->MKHIHeader.Fields.Command = EOP_GET_STATUS_ID;
+
+	HeciSendLength = sizeof(GEN_END_OF_POST);
+	HeciRecvLength = sizeof(DataBuffer);
+
+	ret = heci_send_w_ack (
+	             DataBuffer,
+	             HeciSendLength,
+	             &HeciRecvLength,
+	             BIOS_FIXED_HOST_ADDR,
+	             PREBOOT_FIXED_SEC_ADDR);
+	Resp = (GEN_GET_EOP_STATUS_ACK *)DataBuffer;
+	EopStatus = Resp->EopStatus & 0xFF;            /* 0 - received; other - not received */
+	if (EFI_ERROR(ret) || EopStatus) {
+		return FALSE;
+	}
+	debug(L"Eop has been received");
+
+	return TRUE;
+}
 /*
 * Send End of Post
  */

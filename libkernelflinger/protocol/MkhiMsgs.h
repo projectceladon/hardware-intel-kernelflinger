@@ -158,6 +158,11 @@ typedef struct _GEN_END_OF_POST_ACK {
         CBM_EOP_ACK_DATA    Data;
 } GEN_END_OF_POST_ACK;
 
+typedef struct _GEN_GET_EOP_STATUS_ACK {
+        MKHI_MESSAGE_HEADER Header;
+        UINT32              EopStatus;
+} GEN_GET_EOP_STATUS_ACK;
+
 typedef struct
 {
         MKHI_MESSAGE_HEADER     MkhiHeader;

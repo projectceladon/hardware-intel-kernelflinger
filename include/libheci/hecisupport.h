@@ -35,6 +35,7 @@
 
 #define EOP_GROUP_ID 0xFF
 #define EOP_CMD_ID   0xC
+#define EOP_GET_STATUS_ID  0X1D
 
 //EOP-REQ
 typedef struct _GEN_END_OF_POST
@@ -42,6 +43,7 @@ typedef struct _GEN_END_OF_POST
 	MKHI_MESSAGE_HEADER  MKHIHeader;
 } GEN_END_OF_POST;
 
+extern BOOLEAN heci_is_eop_received(void);
 extern EFI_STATUS heci_end_of_post(void);
 
 #endif   /*  _HECISUPPORT_H_  */

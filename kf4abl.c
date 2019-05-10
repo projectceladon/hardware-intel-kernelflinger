@@ -315,7 +315,9 @@ static EFI_STATUS enter_fastboot_mode(enum boot_target *target)
 #endif
 
 	/* Handle corner case that EOP not send before ABL jump to fastboot, will force EOP send.*/
-	heci_end_of_post();
+	if (!heci_is_eop_received()) {
+		heci_end_of_post();
+	}
 
 	for (;;) {
 		*target = UNKNOWN_TARGET;
