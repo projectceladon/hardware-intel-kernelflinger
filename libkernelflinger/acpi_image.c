@@ -265,6 +265,38 @@ static EFI_STATUS check_revise_acpi_table(CHAR8 *ssdt, UINTN ssdt_len)
 }
 #endif
 
+/* Parse and install ACPI table concatenated one after the other. */
+EFI_STATUS install_acpi_table_from_boot_acpi(VOID *acpiimage, UINTN total_size)
+{
+	EFI_STATUS ret;
+	UINTN offset = 0;
+	VOID *acpi_table;
+	struct ACPI_DESC_HEADER *acpi_header;
+	UINTN tablekey;
+
+	acpi_table = acpiimage;
+
+	while (offset < total_size) {
+		acpi_table += offset;
+		acpi_header = (struct ACPI_DESC_HEADER *)(acpi_table);
+		if (!acpi_header->length) break;
+		offset += acpi_header->length;
+
+		debug(L"ACPI table info: magic=0x%08x, size=%d",
+		      *(UINT32 *)(acpi_header), acpi_header->length);
+
+		if (acpi_csum(acpi_table, acpi_header->length))
+			continue;
+
+		ret = install_acpi_table(acpi_table, acpi_header->length,
+					 &tablekey);
+		if (EFI_ERROR(ret))
+			continue;
+	}
+
+	return EFI_SUCCESS;
+}
+
 static EFI_STATUS acpi_image_parse_table(VOID *acpiimage, int is_acpio)
 {
 	struct dt_table_header *header = (struct dt_table_header *)(acpiimage);

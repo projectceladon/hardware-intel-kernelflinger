@@ -501,8 +501,11 @@ UINTN bootimage_size(struct boot_img_hdr *aosp_header)
                pagealign(aosp_header, aosp_header->second_size) +
                aosp_header->page_size;
 
-        if (aosp_header->header_version == 1)
-                size += pagealign(aosp_header, aosp_header->recovery_dtbo_size);
+        if (aosp_header->header_version >= 1)
+                size += pagealign(aosp_header, aosp_header->recovery_acpio_size);
+
+        if (aosp_header->header_version == 2)
+                size += pagealign(aosp_header, aosp_header->acpi_size);
 
         return size;
 }
@@ -567,9 +570,9 @@ EFI_STATUS setup_acpi_table(VOID *bootimage,
         aosp_header = (struct boot_img_hdr *)bootimage;
 
 #ifdef USE_ACPIO
-        if (aosp_header->header_version == 1) {
+        if (aosp_header->header_version >= 1) {
                 VOID *acpio;
-                acpio = bootimage + aosp_header->recovery_dtbo_offset;
+                acpio = bootimage + aosp_header->recovery_acpio_offset;
                 return install_acpi_table_from_recovery_acpio(acpio);
         }
 #endif
@@ -1283,7 +1286,7 @@ out:
         return ret;
 }
 
-EFI_STATUS android_install_acpi_table(VOID)
+static EFI_STATUS android_install_acpi_table(VOID)
 {
         const char *acpi_part_names[] = {
 #ifdef USE_ACPI

@@ -293,6 +293,21 @@ EFI_STATUS android_install_acpi_table_avb(AvbSlotVerifyData *slot_data)
                 NULL};
         VOID *image = NULL;
         EFI_STATUS ret = EFI_SUCCESS;
+        struct boot_img_hdr *hdr;
+
+        android_query_image_from_avb_result(slot_data, "boot", &image);
+        if (image != NULL) {
+                hdr = (struct boot_img_hdr *)image;
+                if ((hdr->header_version > 1) && (hdr->acpi_size > 0)) {
+                        VOID *acpi_addr = image +
+                                pagealign(hdr, hdr->kernel_size) +
+                                pagealign(hdr, hdr->ramdisk_size) +
+                                pagealign(hdr, hdr->second_size) +
+                                pagealign(hdr, hdr->recovery_acpio_size) +
+                                hdr->page_size;
+                        install_acpi_table_from_boot_acpi(acpi_addr, hdr->acpi_size);
+                }
+        }
 
         for (int i = 0; acpi_part_names[i] != NULL; i++) {
                 ret = android_query_image_from_avb_result(slot_data,

@@ -65,9 +65,12 @@ struct boot_img_hdr
      * binary compatibility with older versions of mkbootimg */
     unsigned char extra_cmdline[BOOT_EXTRA_ARGS_SIZE];
 
-    uint32_t recovery_dtbo_size;   /* size of recovery dtbo image */
-    uint64_t recovery_dtbo_offset; /* offset in boot image */
+    uint32_t recovery_acpio_size;   /* size of recovery acpio image */
+    uint64_t recovery_acpio_offset; /* offset in boot image */
     uint32_t header_size;   /* size of boot image header in bytes */
+
+    uint32_t acpi_size;   /* size of acpi image */
+    uint64_t acpi_addr;   /* physical load addr */
 };
 
 /*
@@ -80,10 +83,16 @@ struct boot_img_hdr
 ** +-----------------+
 ** | second stage    | o pages
 ** +-----------------+
+** | recovery acpio  | p pages
+** +-----------------+
+** | acpi            | q pages
+** +-----------------+
 **
 ** n = (kernel_size + page_size - 1) / page_size
 ** m = (ramdisk_size + page_size - 1) / page_size
 ** o = (second_size + page_size - 1) / page_size
+** p = (recovery_acpio_size + page_size - 1) / page_size
+** q = (acpi_size + page_size - 1) / page_size
 **
 ** 0. all entities are page_size aligned in flash
 ** 1. kernel and ramdisk are required (size != 0)
@@ -255,7 +264,6 @@ EFI_STATUS android_image_start_buffer(
                 IN const CHAR8 *abl_cmd_line);
 
 EFI_STATUS setup_acpi_table(VOID *bootimage, enum boot_target target);
-EFI_STATUS android_install_acpi_table(VOID);
 
 EFI_STATUS android_image_load_partition(
                 IN const CHAR16 *label,
