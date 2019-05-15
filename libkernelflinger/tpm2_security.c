@@ -602,6 +602,27 @@ out:
 	return ret;
 }
 
+EFI_STATUS extend_trusty_seed_pcr_policy()
+{
+	EFI_STATUS                ret;
+	TPML_DIGEST_VALUES        Digests;
+	UINT32                    DigestSize = 0;
+	TPMI_DH_PCR               PcrHandle;
+
+	Digests.count = 1;
+	Digests.digests[0].hashAlg = TPM_ALG_SHA256;
+	PcrHandle = PCR_7;
+
+	DigestSize = GetHashSizeFromAlgo (Digests.digests[0].hashAlg);
+	memset((UINT8*)&Digests.digests[0].digest, 0, DigestSize);
+	ret =  Tpm2PcrExtend(PcrHandle, &Digests);
+	if (EFI_ERROR(ret)) {
+		error(L"Extend PCR fail");
+		return ret;
+	}
+	return EFI_SUCCESS;
+}
+
 EFI_STATUS tpm2_read_trusty_seed(UINT8 seed[TRUSTY_SEED_SIZE])
 {
 	EFI_STATUS ret;
@@ -626,6 +647,12 @@ EFI_STATUS tpm2_read_trusty_seed(UINT8 seed[TRUSTY_SEED_SIZE])
 		ret = EFI_COMPROMISED_DATA;
 		goto out;
 	}
+
+	ret2 = extend_trusty_seed_pcr_policy();
+	if (EFI_ERROR(ret2)) {
+		error(L"Extend trusty seed pcr policy fail");
+	}
+
 	return EFI_SUCCESS;
 
 out:
