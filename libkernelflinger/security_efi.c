@@ -65,7 +65,7 @@ static BOOTLOADER_SEED_PROTOCOL *get_bls_proto(void)
 		ret = LibLocateProtocol(&bls_guid, (void **)&bls_proto);
 
 	if (EFI_ERROR(ret) || !bls_proto)
-		error(L"Failed to locate bootloader seed protocol");
+		debug(L"Failed to locate bootloader seed protocol");
 
 	return bls_proto;
 }
