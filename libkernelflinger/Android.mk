@@ -7,13 +7,10 @@ include $(CLEAR_VARS)
 PNG2C := $(HOST_OUT_EXECUTABLES)/png2c$(HOST_EXECUTABLE_SUFFIX)
 GEN_FONTS := $(LOCAL_PATH)/tools/gen_fonts.sh
 
-res_intermediates := $(call intermediates-dir-for,STATIC_LIBRARIES,libkernelflinger)
+res_intermediates := $(call intermediates-dir-for,STATIC_LIBRARIES,libkernelflinger-$(TARGET_BUILD_VARIANT))
 
 font_res := $(res_intermediates)/res/font_res.h
 img_res := $(res_intermediates)/res/img_res.h
-
-$(LOCAL_PATH)/ui_font.c: $(font_res)
-$(LOCAL_PATH)/ui_image.c: $(img_res)
 
 ifndef TARGET_KERNELFLINGER_IMAGES_DIR
 TARGET_KERNELFLINGER_IMAGES_DIR := $(LOCAL_PATH)/res/images
@@ -49,16 +46,19 @@ else
     ELF_OUTPUT := elf32-i386
 endif
 
-$(res_intermediates)/%.o: $(TARGET_KERNELFLINGER_IMAGES_DIR)/%.png
+define res_intermediates_update
+$(res_intermediates)/$(1).o: $(TARGET_KERNELFLINGER_IMAGES_DIR)/$(1).png
 	$(hide) $(EFI_OBJCOPY) --input binary --output $(ELF_OUTPUT) \
-		--binary-architecture i386 $< $@
-	$(eval $@_old := $(subst .,_,$(subst /,_,$<)))
-	$(eval $@_new := $(subst .,_,$(notdir $<)))
+		--binary-architecture i386 $(TARGET_KERNELFLINGER_IMAGES_DIR)/$(1).png $(res_intermediates)/$(1).o
+	$(eval $@_old := $(subst .,_,$(subst /,_,$(TARGET_KERNELFLINGER_IMAGES_DIR)/$(1).png)))
+	$(eval $@_new := $(subst .,_,$(notdir $(TARGET_KERNELFLINGER_IMAGES_DIR)/$(1).png)))
 	$(hide) $(EFI_OBJCOPY) \
 		--redefine-sym _binary_$($@_old)_start=_binary_$($@_new)_start \
 		--redefine-sym _binary_$($@_old)_end=_binary_$($@_new)_end \
 		--redefine-sym _binary_$($@_old)_size=_binary_$($@_new)_size \
-	        $@ $@
+	        $(res_intermediates)/$(1).o $(res_intermediates)/$(1).o
+endef #define res_intermediates_update
+$(foreach variant,$(basename $(notdir $(KERNELFLINGER_IMAGES))),$(eval $(call res_intermediates_update,$(variant))))
 
 LOCAL_MODULE := libkernelflinger-$(TARGET_BUILD_VARIANT)
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/../include/libkernelflinger
@@ -203,6 +203,8 @@ ifneq ($(strip $(KERNELFLINGER_USE_UI)),false)
     LOCAL_GENERATED_SOURCES := \
         $(foreach file,$(KERNELFLINGER_IMAGES),\
 	    $(res_intermediates)/$(notdir $(file:png=o)))
+
+    LOCAL_GENERATED_SOURCES += $(img_res) $(font_res)
 else
     LOCAL_SRC_FILES += \
 	no_ui.c \
