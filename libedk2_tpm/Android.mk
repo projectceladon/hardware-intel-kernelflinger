@@ -22,7 +22,8 @@ LOCAL_SRC_FILES := \
         Tpm2Hierarchy.c \
         Tpm2Integrity.c \
         Tpm2Sequences.c \
-        Tpm2Session.c
+        Tpm2Session.c \
+        Tpm2Capability.c
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/include \
                     $(LOCAL_PATH)/../include/libkernelflinger \

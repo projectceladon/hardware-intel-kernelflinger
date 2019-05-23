@@ -35,6 +35,7 @@
 #include "Tcg2Protocol.h"
 #include "Tpm2CommandLib.h"
 #include "tpm2_security.h"
+#include "Tpm2Help.h"
 #include "security.h"
 
 #ifdef BUILD_ANDROID_THINGS
@@ -560,6 +561,79 @@ EFI_STATUS tpm2_delete_index(UINT32 index)
 	return ret;
 }
 
+EFI_STATUS tpm2_get_capability(
+		IN      TPM_CAP                   Capability,
+		IN      UINT32                    Property,
+		IN      UINT32                    PropertyCount,
+		OUT     TPMI_YES_NO               *MoreData,
+		OUT     TPMS_CAPABILITY_DATA      *CapabilityData
+		)
+{
+	EFI_STATUS ret;
+	UINT32 i;
+
+	ret = Tpm2GetCapability(Capability, Property, PropertyCount, MoreData, CapabilityData);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Call Tpm2GetCapability failed");
+		return ret;
+	}
+	debug(L"TPM2 capability: 0x%08x, data.tpmProperties.count: %d, more data: %d",
+			SwapBytes32(CapabilityData->capability), SwapBytes32(CapabilityData->data.tpmProperties.count), *MoreData);
+	for (i = 0; i < SwapBytes32(CapabilityData->data.tpmProperties.count); i++) {
+		debug(L"prop %d: property: 0x%08x, value: 0x%08x", i,
+				SwapBytes32(CapabilityData->data.tpmProperties.tpmProperty[i].property),
+				SwapBytes32(CapabilityData->data.tpmProperties.tpmProperty[i].value));
+	}
+
+	return ret;
+}
+
+EFI_STATUS tpm2_get_lockauth(BOOLEAN *lockauth)
+{
+	EFI_STATUS ret;
+	TPMI_YES_NO more_data;
+	TPMS_CAPABILITY_DATA cap_data;
+	UINT32 value;
+	TPMA_PERMANENT per;
+
+	ret = tpm2_get_capability(TPM_CAP_TPM_PROPERTIES, TPM_PT_PERMANENT, 1, &more_data, &cap_data);
+	if (EFI_ERROR(ret))
+		return ret;
+
+	if (SwapBytes32(cap_data.data.tpmProperties.count) <= 0) {
+		// Can't read the data
+		error(L"Get empty TPM capability data of TPM_PT_PERMANENT");
+		ret = EFI_NOT_FOUND;
+		return ret;
+	}
+
+	value = SwapBytes32(cap_data.data.tpmProperties.tpmProperty[0].value);
+	per = *(TPMA_PERMANENT *)&value;
+
+	*lockauth = per.lockoutAuthSet;
+
+	return ret;
+}
+
+EFI_STATUS tpm2_check_lockauth(void)
+{
+	EFI_STATUS ret;
+	BOOLEAN lockauth;
+	// Verify the LOCKOUT_AUTH
+	ret = tpm2_get_lockauth(&lockauth);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Check TPM LOCKOUT_AUTH failed");
+		return ret;
+	}
+
+	if (!lockauth) {
+		// Show a warning if not set
+		error(L"TPM LOCKOUT_AUTH is not set, set it can get higher security");
+	}
+
+	return ret;
+}
+
 EFI_STATUS tpm2_fuse_trusty_seed(void)
 {
 	EFI_STATUS ret;
@@ -592,8 +666,10 @@ EFI_STATUS tpm2_fuse_trusty_seed(void)
 	if (memcmp(trusty_seed.buffer, read_seed, sizeof(read_seed))) {
 		error(L"Security error! Read trusty seed back but verify failed!");
 		ret = EFI_SECURITY_VIOLATION;
+		goto out;
 	}
 
+	tpm2_check_lockauth();
 out:
 	// Always clear the memory
 	// Maybe be optimized?
@@ -737,6 +813,9 @@ EFI_STATUS tpm2_init(void)
 		// Success
 		if (NvPublic.nvPublic.dataSize == TRUSTY_SEED_SIZE) {
 			debug(L"Trusty seed already fused");
+
+			tpm2_check_lockauth();
+
 			return EFI_SUCCESS;
 		}
 
