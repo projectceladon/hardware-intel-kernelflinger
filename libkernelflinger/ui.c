@@ -174,6 +174,7 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 
 EFI_STATUS ui_display_vendor_splash(VOID)
 {
+	UINTN width, height, x, y, max_size;
 	ui_image_t *vendor;
 
 	if (!ui_is_ready())
@@ -195,7 +196,19 @@ EFI_STATUS ui_display_vendor_splash(VOID)
 		return EFI_UNSUPPORTED;
 	}
 
-	return ui_image_draw_scale(vendor, 0, 0 , graphic.width, graphic.height);
+	max_size = min(graphic.width, graphic.height) / 3;
+	if (vendor->width > vendor->height) {
+		width = max_size;
+		height = vendor->height * width / vendor->width;
+	} else {
+		height = max_size;
+		width = vendor->width * height / vendor->height;
+	}
+
+	x = (graphic.width / 2) - (width / 2);
+	y = (graphic.height / 2) - (height / 2);
+
+	return ui_image_draw_scale(vendor, x, y , width, height);
 }
 
 void ui_free(void)
