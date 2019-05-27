@@ -177,9 +177,15 @@ EFI_STATUS android_query_image_from_avb_result(
                 pdata = &slot_data->loaded_partitions[n];
                 if (!strcmp(pdata->partition_name, label)) {
                         *image = pdata->data;
-                        return EFI_SUCCESS;
+                        if (!strcmp(label, "boot") || !strcmp(label, "tos") ||
+                                !strcmp(label, "recovery")) {
+                                if (get_bootimage_header(*image))
+                                        return EFI_SUCCESS;
+                        } else
+                            return EFI_SUCCESS;
                 }
         }
+
         *image = NULL;
         return EFI_NOT_FOUND;
 }
@@ -365,7 +371,7 @@ EFI_STATUS android_image_load_partition_avb(
         }
 
         ret = android_query_image_from_avb_result(*slot_data, label, bootimage_p);
-        if (EFI_ERROR(ret) || (!get_bootimage_header(*bootimage_p))) {
+        if (EFI_ERROR(ret)) {
                 avb_error("Cannot find android image partition!\n");
                 goto fail;
         }
@@ -418,7 +424,7 @@ EFI_STATUS android_image_load_partition_avb_ab(
         slot_set_active_cached((*slot_data)->ab_suffix);
 
         ret = android_query_image_from_avb_result(*slot_data, label, bootimage_p);
-        if (EFI_ERROR(ret) || (!get_bootimage_header(*bootimage_p))) {
+        if (EFI_ERROR(ret)) {
                 avb_error("Cannot find android image partition!\n");
                 goto fail;
         }

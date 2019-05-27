@@ -821,7 +821,7 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 #endif
 
 	ret = android_query_image_from_avb_result(slot_data, "boot", &bootimage);
-	if (EFI_ERROR(ret) || (!get_bootimage_header(bootimage))) {
+	if (EFI_ERROR(ret)) {
 		avb_error("Cannot find android image partition!\n");
 		goto fail;
 	}
