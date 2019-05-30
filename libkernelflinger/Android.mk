@@ -139,7 +139,8 @@ LOCAL_SRC_FILES := \
 	timer.c \
 	nvme.c \
 	virtual_media.c \
-	general_block.c
+	general_block.c \
+	aes_gcm.c
 
 ifeq ($(KERNELFLINGER_SUPPORT_USB_STORAGE),true)
 	LOCAL_SRC_FILES += usb_storage.c \

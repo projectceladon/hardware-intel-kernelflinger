@@ -32,7 +32,8 @@ SHARED_SRC_FILES := \
 	intel_variables.c \
 	bootmgr.c \
 	hashes.c \
-	bootloader.c
+	bootloader.c \
+	keybox_provision.c
 
 ifneq ($(strip $(TARGET_BOOTLOADER_POLICY)),)
     SHARED_SRC_FILES += authenticated_action.c
