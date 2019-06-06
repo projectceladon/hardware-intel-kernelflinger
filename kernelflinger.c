@@ -771,14 +771,22 @@ static EFI_STATUS avb_load_verify_boot_image(
 	switch (boot_target) {
 	case NORMAL_BOOT:
 	case CHARGER:
+		if (!slot_data) {
+			ret = EFI_INVALID_PARAMETER;
+			break;
+		}
 		ret = android_image_load_partition_avb_ab("boot", bootimage, boot_state, slot_data);
-		if (ret == EFI_SUCCESS && slot_data)
+		if (ret == EFI_SUCCESS && *slot_data)
 			reboot_if_slot_is_different(*slot_data, boot_target);
 		break;
 	case RECOVERY:
+		if (!slot_data) {
+			ret = EFI_INVALID_PARAMETER;
+			break;
+		}
 		if (recovery_in_boot_partition()) {
 			ret = avb_load_verify_boot_image(NORMAL_BOOT, target_path, bootimage, oneshot, boot_state, slot_data);
-			if (ret == EFI_SUCCESS && slot_data)
+			if (ret == EFI_SUCCESS && *slot_data)
 				reboot_if_slot_is_different(*slot_data, boot_target);
 			break;
 		}
