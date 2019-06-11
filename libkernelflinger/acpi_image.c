@@ -53,7 +53,7 @@
 static struct ACPI_TABLE_LOADED {
 	UINTN index[ACPI_TABLE_MAX_LOAD_NUM];
 	UINT32 count;
-} loaded_table;
+} loaded_table[ACPI_SRC_TYPE_MAX];
 
 static CHAR8 loaded_idx_str[ACPI_TABLE_MAX_LOAD_NUM*4];
 
@@ -222,24 +222,27 @@ EFI_STATUS install_acpi_table(VOID *acpi_table, UINTN acpi_table_size,
 	return ret;
 }
 
-static VOID acpi_add_table_index(UINTN index)
+static VOID acpi_add_table_index(UINTN index, enum acpi_src_type type)
 {
-	if (loaded_table.count < ACPI_TABLE_MAX_LOAD_NUM) {
-		loaded_table.index[loaded_table.count] = index;
-		loaded_table.count++;
+	struct ACPI_TABLE_LOADED *tables = &loaded_table[type];
+	if (tables->count < ACPI_TABLE_MAX_LOAD_NUM) {
+		tables->index[tables->count] = index;
+		tables->count++;
 	}
 }
 
-CHAR8 *acpi_loaded_table_idx_to_string(VOID)
+CHAR8 *acpi_loaded_table_idx_to_string(enum acpi_src_type type)
 {
-	if (loaded_table.count > 0)
+	struct ACPI_TABLE_LOADED *tables = &loaded_table[type];
+	memset(loaded_idx_str, 0, sizeof(loaded_idx_str));
+	if (tables->count > 0)
 		efi_snprintf(loaded_idx_str, sizeof(loaded_idx_str),
-			     (CHAR8 *)"%d", loaded_table.index[0]);
+			     (CHAR8 *)"%d", tables->index[0]);
 
-	for (UINT32 i = 1; i < loaded_table.count; ++i) {
+	for (UINT32 i = 1; i < tables->count; ++i) {
 		efi_snprintf(loaded_idx_str, sizeof(loaded_idx_str),
 			     (CHAR8 *)"%a,%d", loaded_idx_str,
-			     loaded_table.index[i]);
+			     tables->index[i]);
 	}
 
 	return loaded_idx_str;
@@ -269,14 +272,13 @@ static EFI_STATUS check_revise_acpi_table(CHAR8 *ssdt, UINTN ssdt_len)
 EFI_STATUS install_acpi_table_from_boot_acpi(VOID *acpiimage, UINTN total_size)
 {
 	EFI_STATUS ret;
-	UINTN offset = 0;
 	VOID *acpi_table;
 	struct ACPI_DESC_HEADER *acpi_header;
 	UINTN tablekey;
 
 	acpi_table = acpiimage;
 
-	while (offset < total_size) {
+	for (UINTN i = 0, offset = 0; offset < total_size; i++) {
 		acpi_table += offset;
 		acpi_header = (struct ACPI_DESC_HEADER *)(acpi_table);
 		if (!acpi_header->length) break;
@@ -292,6 +294,8 @@ EFI_STATUS install_acpi_table_from_boot_acpi(VOID *acpiimage, UINTN total_size)
 					 &tablekey);
 		if (EFI_ERROR(ret))
 			continue;
+
+		acpi_add_table_index(i, BOOT_ACPI);
 	}
 
 	return EFI_SUCCESS;
@@ -339,7 +343,7 @@ static EFI_STATUS acpi_image_parse_table(VOID *acpiimage, int is_acpio)
 		}
 
 		if (is_acpio)
-			acpi_add_table_index(i);
+			acpi_add_table_index(i, ACPIO);
 	}
 
 	return EFI_SUCCESS;

@@ -142,6 +142,12 @@ struct ACPI_INFO {
 
 #pragma pack()
 
+enum acpi_src_type {
+	BOOT_ACPI = 0,
+	ACPIO,
+	ACPI_SRC_TYPE_MAX
+};
+
 /* Some ACPI table signatures, SSDT for instance, might appear several
  * times.  An extra table number can be appended to the supplied
  * SIGNATURE to specify which one is required.  For instance, with
@@ -163,7 +169,7 @@ EFI_STATUS install_acpi_table(VOID *acpi_table, UINTN acpi_table_size,
 EFI_STATUS acpi_parse_selected_table_id(CHAR8 *selected_id_str,
 					UINT32 selected_id_str_len);
 EFI_STATUS acpi_image_get_length(const CHAR16 *label, struct ACPI_INFO **acpi_info);
-CHAR8 *acpi_loaded_table_idx_to_string(VOID);
+CHAR8 *acpi_loaded_table_idx_to_string(enum acpi_src_type type);
 EFI_STATUS install_acpi_table_from_boot_acpi(VOID *acpiimage, UINTN total_size);
 
 VOID acpi_set_boot_target(enum boot_target target);

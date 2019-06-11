@@ -1083,8 +1083,13 @@ static EFI_STATUS setup_command_line(
                         goto out;
         }
 #endif
+        ret = prepend_command_line(&cmdline16, L"androidboot.acpi_idx=%a ",
+                                   acpi_loaded_table_idx_to_string(BOOT_ACPI));
+        if (EFI_ERROR(ret))
+                goto out;
+
         ret = prepend_command_line(&cmdline16, L"androidboot.acpio_idx=%a ",
-                                   acpi_loaded_table_idx_to_string());
+                                   acpi_loaded_table_idx_to_string(ACPIO));
         if (EFI_ERROR(ret))
                 goto out;
 
