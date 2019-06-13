@@ -271,6 +271,9 @@ static EFI_STATUS check_revise_acpi_table(CHAR8 *ssdt, UINTN ssdt_len)
 /* Parse and install ACPI table concatenated one after the other. */
 EFI_STATUS install_acpi_table_from_boot_acpi(VOID *acpiimage, UINTN total_size)
 {
+	if (loaded_table[BOOT_ACPI].count > 0)
+		return EFI_SUCCESS;
+
 	EFI_STATUS ret;
 	VOID *acpi_table;
 	struct ACPI_DESC_HEADER *acpi_header;
@@ -427,6 +430,9 @@ EFI_STATUS install_acpi_table_from_partitions(VOID *image,
 		error(L"Acpi table from partition %a not installed", part_name);
 		return EFI_NOT_FOUND;
 	}
+
+	if (is_acpio && (loaded_table[ACPIO].count > 0))
+		return EFI_SUCCESS;
 
 	debug(L"Install acpi table from %a-partition", part_name);
 	if (image == NULL)
