@@ -126,15 +126,20 @@ EFI_STATUS acpi_image_get_length(const CHAR16 *label, struct ACPI_INFO **acpi_in
 		return EFI_OUT_OF_RESOURCES;
 	}
 
-#if defined(USE_AVB) && defined(USE_ACPIO) && defined(USE_ACPI)
+#ifdef USE_AVB
 	/*
 	  If AVB case, get the image length from mixins' definition.
 	 */
+	(*current_acpi).img_size = 0;
+#ifdef USE_ACPIO
 	if (!StrnCmp(label, L"acpio_", 6))
 		(*current_acpi).img_size = BOARD_ACPIOIMAGE_PARTITION_SIZE;
-	else if (!StrnCmp(label, L"acpi_", 5))
+#endif
+#ifdef USE_ACPI
+	if (!StrnCmp(label, L"acpi_", 5))
 		(*current_acpi).img_size = BOARD_ACPIIMAGE_PARTITION_SIZE;
-	else {
+#endif
+	if ((*current_acpi).img_size == 0) {
 		error(L"%s is not acpio or acpi", label);
 		FreePool(current_acpi);
 		return EFI_INVALID_PARAMETER;

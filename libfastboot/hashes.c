@@ -44,7 +44,7 @@
 #include "android.h"
 #include "signature.h"
 #include "security.h"
-#if defined(USE_ACPIO) && defined(USE_ACPI)
+#if defined(USE_ACPIO) || defined(USE_ACPI)
 #include "acpi.h"
 #endif
 
@@ -912,7 +912,7 @@ EFI_STATUS get_fs_hash(const CHAR16 *label)
 	return report_hash(L"/", gparti.part.name, hash);
 }
 
-#if defined(USE_ACPIO) && defined(USE_ACPI)
+#if defined(USE_ACPIO) || defined(USE_ACPI)
 EFI_STATUS get_acpi_hash(const CHAR16 *label)
 {
 	EFI_STATUS ret;

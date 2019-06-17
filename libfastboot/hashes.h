@@ -45,7 +45,7 @@ EFI_STATUS get_boot_image_hash(const CHAR16 *label);
 EFI_STATUS get_bootloader_hash(const CHAR16 *label);
 EFI_STATUS get_fs_hash(const CHAR16 *label);
 EFI_STATUS set_hash_algorithm(const CHAR8 *algo);
-#if defined(USE_ACPIO) && defined(USE_ACPI)
+#if defined(USE_ACPIO) || defined(USE_ACPI)
 EFI_STATUS get_acpi_hash(const CHAR16 *label);
 #endif
 #endif	/* _HASHES_H_ */
