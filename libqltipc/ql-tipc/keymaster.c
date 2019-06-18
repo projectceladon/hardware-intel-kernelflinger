@@ -327,6 +327,10 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
         /* For AaaG, set enduser to TRUE for AttKB retrieval */
         if (is_boot_device_virtual())
             enduser = true;
+
+#ifdef FASTBOOT_KEYBOX_PROVISION
+        enduser = true;
+#endif
     }
 
     /* keybox not privisioned yet and is end user, then provision it */
