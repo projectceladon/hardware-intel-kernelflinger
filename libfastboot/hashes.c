@@ -854,6 +854,30 @@ static EFI_STATUS check_fec_header(struct gpt_partition_interface *gparti, UINT6
 }
 #endif
 
+#ifdef DYNAMIC_PARTITIONS
+EFI_STATUS get_super_image_hash(const CHAR16 *label)
+{
+	struct gpt_partition_interface gpart;
+	EFI_STATUS ret;
+	CHAR8 hash[EVP_MAX_MD_SIZE];
+	UINT64 len;
+
+	ret = gpt_get_partition_by_label(label, &gpart, LOGICAL_UNIT_USER);
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Partition %s not found", label);
+		return ret;
+	}
+
+	len = part_size(&gpart);
+	ret = hash_partition(&gpart, len, hash);
+	if (EFI_ERROR(ret)) {
+		return ret;
+	}
+
+	return report_hash(L"/", gpart.part.name, hash);
+}
+#endif
+
 EFI_STATUS get_fs_hash(const CHAR16 *label)
 {
 	static struct supported_fs {

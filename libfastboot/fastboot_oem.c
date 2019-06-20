@@ -257,11 +257,15 @@ static struct oem_hash {
 #ifdef USE_AVB
 	{ VBMETA_LABEL,		get_vbmeta_image_hash,	FALSE },
 #endif
+#ifdef DYNAMIC_PARTITIONS
+	{ SUPER_LABEL,		get_super_image_hash,	TRUE }
+#else
 #ifdef USE_PRODUCT
 	{ PRODUCT_LABEL,	get_fs_hash,		TRUE },
 #endif
 	{ SYSTEM_LABEL,		get_fs_hash,		TRUE },
 	{ VENDOR_LABEL,		get_fs_hash,		FALSE }
+#endif
 };
 
 static void cmd_oem_gethashes(INTN argc, CHAR8 **argv)

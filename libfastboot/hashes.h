@@ -48,4 +48,7 @@ EFI_STATUS set_hash_algorithm(const CHAR8 *algo);
 #if defined(USE_ACPIO) || defined(USE_ACPI)
 EFI_STATUS get_acpi_hash(const CHAR16 *label);
 #endif
+#ifdef DYNAMIC_PARTITIONS
+EFI_STATUS get_super_image_hash(const CHAR16 *label);
+#endif
 #endif	/* _HASHES_H_ */

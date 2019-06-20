@@ -106,6 +106,9 @@ extern const UINTN FASTBOOT_SECURED_VARS_SIZE;
 #define TOS_LABEL		L"tos"
 #define VBMETA_LABEL		L"vbmeta"
 #define PRODUCT_LABEL		L"product"
+#ifdef DYNAMIC_PARTITIONS
+#define SUPER_LABEL		L"super"
+#endif
 
 /*labels to trigger IFWI self update. Only for ABL*/
 #define IFWI_CAPSULE_UPDATE	L"IfwiCapsuleUpdate"
