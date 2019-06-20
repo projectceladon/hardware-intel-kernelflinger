@@ -246,10 +246,7 @@ EFI_STATUS start_trusty(VOID *tosimage)
 	trusty_ipc_init();
 	trusty_ipc_shutdown();
 
-	if (!heci_is_eop_received()) {
-		heci_end_of_post();
-	}
-
+	/* Since abl 1925_GP21, ABL will always send EOP before exit ABL */
 	return ret;
 
 fail:
