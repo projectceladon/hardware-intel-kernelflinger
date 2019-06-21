@@ -337,6 +337,12 @@ EFI_STATUS fill_zero(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
 	VOID *emptyblock;
 	VOID *aligned_emptyblock;
 
+#ifdef USERDEBUG
+		if(end - start > 0x04000000){
+			return EFI_SUCCESS;
+		}
+#endif
+
 	ret = alloc_aligned(&emptyblock, &aligned_emptyblock,
 			    bio->Media->BlockSize * N_BLOCK,
 			    bio->Media->IoAlign);
