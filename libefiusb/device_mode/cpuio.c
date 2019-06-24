@@ -49,7 +49,7 @@ UINT32 MmioRead32(UINTN address)
 	if (mCpuIo == NULL) {
 		ret = LibLocateProtocol (&gEfiCpuIo2ProtocolGuid,
 					 (VOID **) &mCpuIo);
-		if (EFI_ERROR(ret)) {
+		if (EFI_ERROR(ret) || (mCpuIo == NULL)) {
 			efi_perror(ret, L"Can't locate cpu io protocol");
 			return 0xFFFFFFFF;
 		}
@@ -78,7 +78,7 @@ UINT16 MmioRead16(UINTN address)
 	if (mCpuIo == NULL) {
 		ret = LibLocateProtocol (&gEfiCpuIo2ProtocolGuid,
 					 (VOID **) &mCpuIo);
-		if (EFI_ERROR(ret)) {
+		if (EFI_ERROR(ret) || (mCpuIo == NULL)) {
 			efi_perror(ret, L"Can't locate cpu io protocol");
 			return 0xFFFF;
 		}
@@ -107,7 +107,7 @@ UINT8 MmioRead8(UINTN address)
 	if (mCpuIo == NULL) {
 		ret = LibLocateProtocol (&gEfiCpuIo2ProtocolGuid,
 					 (VOID **) &mCpuIo);
-		if (EFI_ERROR(ret)) {
+		if (EFI_ERROR(ret) || (mCpuIo == NULL)) {
 			efi_perror(ret, L"Can't locate cpu io protocol");
 			return 0xFF;
 		}
@@ -135,7 +135,7 @@ UINT32 MmioWrite32(UINTN add, UINT32 data)
 	if (mCpuIo == NULL) {
 		ret = LibLocateProtocol (&gEfiCpuIo2ProtocolGuid,
 					 (VOID **) &mCpuIo);
-		if (EFI_ERROR(ret)) {
+		if (EFI_ERROR(ret) || (mCpuIo == NULL)) {
 			efi_perror(ret, L"Can't locate cpu io protocol");
 			return 0xFFFFFFFF;
 		}
@@ -163,7 +163,7 @@ UINT16 MmioWrite16(UINTN add, UINT16 data)
 	if (mCpuIo == NULL) {
 		ret = LibLocateProtocol (&gEfiCpuIo2ProtocolGuid,
 					 (VOID **) &mCpuIo);
-		if (EFI_ERROR(ret)) {
+		if (EFI_ERROR(ret) || (mCpuIo == NULL)) {
 			efi_perror(ret, L"Can't locate cpu io protocol");
 			return 0xFFFF;
 		}
@@ -191,7 +191,7 @@ UINT8 MmioWrite8(UINTN add, UINT8 data)
 	if (mCpuIo == NULL) {
 		ret = LibLocateProtocol (&gEfiCpuIo2ProtocolGuid,
 					 (VOID **) &mCpuIo);
-		if (EFI_ERROR(ret)) {
+		if (EFI_ERROR(ret) || (mCpuIo == NULL)) {
 			efi_perror(ret, L"Can't locate cpu io protocol");
 			return 0xFF;
 		}
