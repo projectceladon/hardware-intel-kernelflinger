@@ -39,7 +39,7 @@ LOCAL_SRC_FILES := \
 	keymaster_serializable.c \
 	rpmb_sim.c \
 
-ifeq ($(KERNELFLINGER_TRUSTY_PLATFORM),vsbl)
+ifeq ($(KERNELFLINGER_TRUSTY_PLATFORM),$(filter $(KERNELFLINGER_TRUSTY_PLATFORM), vsbl ovmf))
 LOCAL_CFLAGS += -DHYPERVISOR_ACRN
 endif
 
