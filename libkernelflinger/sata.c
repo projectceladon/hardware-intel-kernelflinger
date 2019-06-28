@@ -39,13 +39,13 @@
 #define BIT5				0x20
 #define BIT6				0x40
 #define BIT7				0x80
-#define ATA_TIMEOUT_NS			30000000
+#define ATA_TIMEOUT_NS			90000000
 #define BLOCK_SIZE			0x200
 #define MAX_SECTOR_PER_RANGE		0xFFFF
 #define ATA_CMD_DSM_TRIM_FEATURE	0x1
 #define PORT_MULTIPLIER_POS		0x4
 #define READ_ZERO_AFTER_TRIM_SUPPORTED 0x0020
-#define DETERMINISTIC_READ_AFTER_TRIM_SUPPORTED 0x0400
+#define DETERMINISTIC_READ_AFTER_TRIM_SUPPORTED 0x4000
 
 typedef struct lba_range_entry {
 	UINT16 lba[3];
@@ -110,6 +110,7 @@ static BOOLEAN is_dsm_trim_supported( UINT16 *max_dsm_block_nb)
 /* Deterministic Read Zero after TRIM */
 static BOOLEAN is_rzat_supported(void)
 {
+	debug(L"This SATA device additional supprote 0x%x", identify_data.additional_supported);
 	if ((identify_data.additional_supported & DETERMINISTIC_READ_AFTER_TRIM_SUPPORTED)
 	    && (identify_data.additional_supported & READ_ZERO_AFTER_TRIM_SUPPORTED))
 		return TRUE;
@@ -271,7 +272,7 @@ static EFI_STATUS ata_fill_zero(EFI_ATA_PASS_THRU_PROTOCOL *ata,
 					continue;
 				}
 			}
-			efi_perror(ret, L"Write Sectors Command Failed");
+			efi_perror(ret, L"Write Sectors Command Failed 0x%x", start);
 			break;
 		}
 
@@ -335,21 +336,10 @@ static EFI_STATUS sata_erase_blocks(EFI_HANDLE handle,
 		return EFI_SUCCESS;
 	} else {
 		debug(L"Deterministic Read Zero after TRIM unsupported");
-		debug(L"Fill zero manually");
 
-		/* flashing unlock (lock) will erase userdata partion, which is more
-		 * than 200G large, time consumption is unacceptable. since the
-		 * largest image is less than 8G,
-		 * partitions larger than 8G should not be cleaned at this time
-		 */
-
-		if ((end - start) < 0x1000000) {
-			ret = ata_fill_zero(ata, sata_dp, start, end);
-			if (!EFI_ERROR(ret))
-				return EFI_SUCCESS;
-		} else {
+		ret = ata_fill_zero(ata, sata_dp, start, end);
+		if (!EFI_ERROR(ret))
 			return EFI_SUCCESS;
-		}
 	}
 
 	return EFI_UNSUPPORTED;
