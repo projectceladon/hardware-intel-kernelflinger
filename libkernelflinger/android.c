@@ -460,7 +460,7 @@ static inline EFI_STATUS handover_jump(EFI_HANDLE image,
                 if (!EFI_ERROR(ret))
                         goto boot;
         }
-
+        efi_perror(ret, L"Jump to Android kernel now...");
         return ret;
 
 boot:
@@ -473,6 +473,7 @@ boot:
         /* Load GDT. */
         if (gdt)
                 asm volatile ("lgdt %0" :: "m" (*gdt));
+        efi_perror(ret, L"Jump to Android kernel now");
 
         asm volatile ("cli; jmp *%0"
                       : /* no outputs */
