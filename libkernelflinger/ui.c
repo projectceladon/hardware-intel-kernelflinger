@@ -146,14 +146,14 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 	}
 
 	/* Initialize log area */
-	margin = min(graphic.width, graphic.height) / 10;
+	margin = min(graphic.width, graphic.height) / 20;
 	if (!default_textarea) {
 		font = ui_font_get("12x22");
 		if (!font)
 			return EFI_UNSUPPORTED;
 
-		x = margin / font->cheight;
-		y = (graphic.width - (2 * margin)) / font->cwidth;
+		x = (graphic.height - (2 * margin)) / font->cheight;
+		y = (graphic.width  - (2 * margin)) / font->cwidth;
 		default_textarea = ui_textarea_create(x, y, font, &COLOR_YELLOW, NULL);
 		if (!default_textarea) {
 			efi_perror(EFI_OUT_OF_RESOURCES, L"Failed to build the textarea");
@@ -161,7 +161,7 @@ EFI_STATUS ui_init(UINTN *width_p, UINTN *height_p)
 		}
 
 		default_textarea_x = margin;
-		default_textarea_y = graphic.height - margin;
+		default_textarea_y = margin;
 	}
 
 	*width_p = graphic.width;

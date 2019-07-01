@@ -1520,7 +1520,8 @@ EFI_STATUS android_image_start_buffer(
                 }
         }
 
-        debug(L"Loading the kernel");
+        debug(L"Loading the kernel after 10 seconds");
+        ui_wait_for_input(10);
         ret = handover_kernel(bootimage, parent_image);
         efi_perror(ret, L"handover_kernel");
 
