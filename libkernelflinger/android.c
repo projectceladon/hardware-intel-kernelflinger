@@ -1265,6 +1265,9 @@ static EFI_STATUS handover_kernel(CHAR8 *bootimage, EFI_HANDLE parent_image)
         }
 #endif
 
+#ifndef USER
+        warning(L"Jump to Android Linux kernel now\n");
+#endif
         /* Free UI resources. */
         ui_free();
 
