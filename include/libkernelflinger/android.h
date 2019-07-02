@@ -71,7 +71,7 @@ struct boot_img_hdr
 
     uint32_t acpi_size;   /* size of acpi image */
     uint64_t acpi_addr;   /* physical load addr */
-};
+} __attribute__((packed)) ;
 
 /*
 ** +-----------------+ 

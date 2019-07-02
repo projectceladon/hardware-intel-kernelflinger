@@ -291,6 +291,12 @@ EFI_STATUS install_acpi_table_from_boot_acpi(VOID *acpiimage, UINTN total_size)
 		acpi_header = (struct ACPI_DESC_HEADER *)(acpi_table);
 		if (!acpi_header->length) break;
 		offset += acpi_header->length;
+		if (strncmp(acpi_header->signature, (CHAR8 *)"DSDT", 4))
+			continue; // only allow DSDT from Boot image
+
+		// if Boot image contains multi DSDT for different HW platforms,
+		// should check oem_table_id/oem_id which match with default one.
+		// unsupported so far.
 
 		debug(L"ACPI table info: magic=0x%08x, size=%d",
 		      *(UINT32 *)(acpi_header), acpi_header->length);
@@ -304,6 +310,7 @@ EFI_STATUS install_acpi_table_from_boot_acpi(VOID *acpiimage, UINTN total_size)
 			continue;
 
 		acpi_add_table_index(i, BOOT_ACPI);
+		break; // only allow one DSDT in ACPI
 	}
 
 	return EFI_SUCCESS;
