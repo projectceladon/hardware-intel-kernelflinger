@@ -346,7 +346,7 @@ EFI_STATUS android_image_load_partition_avb(
                 "acpio",
 #endif
                 NULL};
-        bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
+        bool allow_verification_error = device_is_unlocked();;
 
         ops = avb_init();
         if (! ops) {
@@ -421,7 +421,7 @@ EFI_STATUS android_image_load_partition_avb_ab(
                 "acpio",
 #endif
                 NULL};
-        bool allow_verification_error = *boot_state != BOOT_STATE_GREEN;
+        bool allow_verification_error = device_is_unlocked();
 
         flags = AVB_SLOT_VERIFY_FLAGS_NONE;
         if (allow_verification_error)

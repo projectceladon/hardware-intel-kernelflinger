@@ -54,7 +54,7 @@ EFI_STATUS load_tos_image(OUT VOID **bootimage)
         BOOLEAN b_secureboot = is_platform_secure_boot_enabled();
 
         if (!b_secureboot)
-                verify_state = BOOT_STATE_ORANGE;
+                verify_state = BOOT_STATE_YELLOW;
 #ifndef USER
         if (device_is_unlocked())
                 verify_state = BOOT_STATE_ORANGE;

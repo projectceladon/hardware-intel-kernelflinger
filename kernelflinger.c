@@ -1431,9 +1431,12 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 #ifdef USERDEBUG
 	debug(L"checking device state");
 
-	if (!is_platform_secure_boot_enabled() && !device_is_provisioning()) {
-		debug(L"uefi secure boot is disabled");
+	if (device_is_unlocked()) {
 		boot_state = BOOT_STATE_ORANGE;
+		debug(L"Device is unlocked");
+	} else if (!is_platform_secure_boot_enabled() && !device_is_provisioning()) {
+		debug(L"uefi secure boot is disabled");
+		boot_state = BOOT_STATE_YELLOW;
 		lock_prompted = TRUE;
 
 		/* Need to warn early, before we even enter Fastboot
@@ -1441,10 +1444,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
 		 * we don't ask again later
 		 */
 		boot_error(SECURE_BOOT_CODE, boot_state, NULL, 0);
-	} else  if (device_is_unlocked()) {
-		boot_state = BOOT_STATE_ORANGE;
-		debug(L"Device is unlocked");
 	}
+
 
 #ifdef USER
 	if (device_is_provisioning()) {

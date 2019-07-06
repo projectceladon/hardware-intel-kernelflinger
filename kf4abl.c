@@ -204,6 +204,11 @@ static EFI_STATUS process_bootimage(void *bootimage, UINTN imagesize)
 #endif
 	debug(L"Processing boot image");
 
+	if (device_is_unlocked()) {
+ 		boot_state = BOOT_STATE_ORANGE;
+ 	} else if (!is_platform_secure_boot_enabled())
+		boot_state  = BOOT_STATE_YELLOW;
+
 	ops = avb_init();
 	if (ops) {
 		if (ops->read_is_device_unlocked(ops, &allow_verification_error) != AVB_IO_RESULT_OK) {
@@ -738,6 +743,11 @@ EFI_STATUS avb_boot_android(enum boot_target boot_target, CHAR8 *abl_cmd_line)
 			requested_partitions[0] = "recovery";
 		}
 	}
+
+	if (device_is_unlocked()) {
+ 		boot_state = BOOT_STATE_ORANGE;
+ 	} else if (!is_platform_secure_boot_enabled())
+		boot_state  = BOOT_STATE_YELLOW;
 
 	ops = avb_init();
 	if (ops) {
