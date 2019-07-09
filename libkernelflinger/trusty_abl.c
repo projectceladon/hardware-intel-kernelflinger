@@ -97,7 +97,7 @@ struct tos_image_header {
 static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UINTN base,
 	UINTN size, trusty_boot_param_t *boot_param)
 {
-	UINT64 entry_addr;
+	UINT64 entry_addr = 0;
 
 	if (!param || !boot_param)
 		return EFI_INVALID_PARAMETER;
