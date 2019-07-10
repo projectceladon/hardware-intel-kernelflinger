@@ -708,6 +708,14 @@ EFI_STATUS get_boot_image_hash(const CHAR16 *label)
 
 #ifdef USE_AVB
 	len = part_size(&gparti);
+	if (!StrnCmp(label, L"boot_", 5)) {
+		if (len >= BOARD_BOOTIMAGE_PARTITION_SIZE)
+			len = BOARD_BOOTIMAGE_PARTITION_SIZE;
+		else {
+			error(L"%s image is larger than partition size", label);
+			return EFI_INVALID_PARAMETER;
+		}
+	}
 #else
 	ret = get_bootimage_len(&gparti, &len);
 	if (EFI_ERROR(ret))

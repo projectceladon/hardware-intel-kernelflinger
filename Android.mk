@@ -73,6 +73,8 @@ ifeq ($(KERNELFLINGER_USE_POWER_BUTTON),true)
     KERNELFLINGER_CFLAGS += -DUSE_POWER_BUTTON
 endif
 
+KERNELFLINGER_CFLAGS += -DBOARD_BOOTIMAGE_PARTITION_SIZE=$(BOARD_BOOTIMAGE_PARTITION_SIZE)
+
 # adb in crashmode allows to pull the entire RAM and MUST never be
 # disabled allowed on a USER build for security reasons:
 ifneq ($(TARGET_BUILD_VARIANT),user)
