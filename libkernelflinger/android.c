@@ -1455,7 +1455,7 @@ EFI_STATUS android_image_load_file(
                  * whatever... */
                 FreePool(bootimage);
                 bootimage = AllocatePool(buffersize);
-                if (!fileinfo) {
+                if (!bootimage) {
                         ret = EFI_OUT_OF_RESOURCES;
                         goto out;
                 }
