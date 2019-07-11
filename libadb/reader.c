@@ -1021,31 +1021,24 @@ struct reader {
 };
 
 #define MAX_ARGS		8
-#define READER_DELIMITER	":"
 
 EFI_STATUS reader_open(reader_ctx_t *ctx, char *args)
 {
-	UINTN argc;
+	EFI_STATUS ret;
+	INTN argc;
 	UINTN i;
-	char *argv[MAX_ARGS], *token, *saveptr;
+	char *argv[MAX_ARGS];
 	struct reader *reader = NULL;
 
 	if (!args || !ctx)
 		return EFI_INVALID_PARAMETER;
 
-	argv[0] = strtok_r((char *)args, READER_DELIMITER, &saveptr);
-	if (!argv[0])
-		return EFI_INVALID_PARAMETER;
-
-	for (argc = 1; argc < ARRAY_SIZE(argv); argc++) {
-		token = strtok_r(NULL, READER_DELIMITER, &saveptr);
-		if (!token)
-			break;
-		argv[argc] = token;
+	ret = string_to_argv(args, &argc, (CHAR8 **)argv,
+			     ARRAY_SIZE(argv), ":", ":");
+	if (EFI_ERROR(ret)) {
+		efi_perror(ret, L"Failed to split string into argv");
+		return ret;
 	}
-
-	if (token && strtok_r(NULL, READER_DELIMITER, &saveptr))
-		return EFI_INVALID_PARAMETER;
 
 	for (i = 0; i < ARRAY_SIZE(READERS); i++)
 		if (!strcmp((CHAR8 *)argv[0], (CHAR8 *)READERS[i].name)) {

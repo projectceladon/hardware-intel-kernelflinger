@@ -234,4 +234,7 @@ BOOLEAN no_device_unlock();
 
 UINT8 min_boot_state();
 
+EFI_STATUS string_to_argv(char *str, INTN *argc, CHAR8 *argv[], UINTN max_argc,
+                          const char *first_delim, const char *delim);
+
 #endif

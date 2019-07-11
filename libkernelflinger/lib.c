@@ -1184,5 +1184,30 @@ void StrToLower(CHAR16 *s)
         return;
 }
 
+EFI_STATUS string_to_argv(char *str, INTN *argc, CHAR8 *argv[], UINTN max_argc,
+                          const char *first_delim, const char *delim)
+{
+        char *saveptr, *token = NULL;
+
+        if (max_argc == 0)
+                return EFI_INVALID_PARAMETER;
+
+        argv[0] = (CHAR8 *)strtok_r((char *)str, first_delim, &saveptr);
+        if (!argv[0])
+                return EFI_INVALID_PARAMETER;
+
+        for (*argc = 1; (UINTN)*argc < max_argc; (*argc)++) {
+                token = strtok_r(NULL, delim, &saveptr);
+                if (!token)
+                        break;
+                argv[*argc] = (CHAR8 *)token;
+        }
+
+        if (token && strtok_r(NULL, delim, &saveptr))
+                return EFI_INVALID_PARAMETER;
+
+        return EFI_SUCCESS;
+}
+
 /* vim: softtabstop=8:shiftwidth=8:expandtab
  */
