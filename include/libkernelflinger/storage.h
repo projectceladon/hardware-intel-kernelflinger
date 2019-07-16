@@ -34,6 +34,7 @@
 #define _STORAGE_H_
 
 #include <efi.h>
+#include "timer.h"
 
 enum storage_type {
 	STORAGE_EMMC,
@@ -89,5 +90,6 @@ EFI_STATUS get_logical_block_size(UINTN *logical_blk_size);
 BOOLEAN is_boot_device_removable(void);
 BOOLEAN is_boot_device_virtual(void);
 EFI_STATUS set_logical_unit(UINT64 user_lun, UINT64 factory_lun);
+void print_progress(EFI_LBA done, EFI_LBA total, uint32_t sec, uint32_t *prev_sec, uint32_t *prev);
 
 #endif	/* _STORAGE_H_ */

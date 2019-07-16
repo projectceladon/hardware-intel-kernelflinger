@@ -280,25 +280,22 @@ EFI_STATUS storage_erase_blocks(EFI_HANDLE handle, EFI_BLOCK_IO *bio, EFI_LBA st
 	return cur_storage->erase_blocks(handle, bio, start, end);
 }
 
-#define PRINT_INTERVAL (3)
 EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 			    VOID *pattern, UINTN pattern_blocks)
 {
 	EFI_LBA lba;
 	UINT64 size;
-	UINT64 prev = 0, progress = 0;
-	uint32_t sec;
-	CHAR8 buf[128];
-	CHAR8 *pos = buf;
-	CHAR16 *temp;
+	uint32_t total, print_sec, print_prev;
 	EFI_STATUS ret;
 
 	debug(L"Fill lba %d -> %d", start, end);
 	if (end <= start)
 		return EFI_INVALID_PARAMETER;
 
+	total = end - start +1;
 	info_n(L"Erasing ");
-	sec = boottime_in_msec() / 1000;
+	print_sec = boottime_in_msec() / 1000;
+	print_prev = 0;
 	for (lba = start; lba <= end; lba += pattern_blocks) {
 		if (lba + pattern_blocks > end + 1)
 			size = end - lba + 1;
@@ -312,24 +309,9 @@ EFI_STATUS fill_with(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end,
 			return ret;
 		}
 
-		progress = (lba + size - start) * 50 / (end - start + 1);
-		if (boottime_in_msec() / 1000 - sec > PRINT_INTERVAL || progress == 50) {
-			for (; prev <= progress; prev++) {
-				if (prev % 5 == 0)
-					pos += strlen(itoa(prev * 2, pos, 10));
-				else
-					*pos++ = '.';
-			}
-			*pos = '\0';
-			temp = stra_to_str(buf);
-			if (temp) {
-				info_n(L"%s", temp);
-				FreePool(temp);
-			}
-			pos = buf;
-			sec = boottime_in_msec() / 1000;
-		}
+		print_progress(lba + size - start, total, boottime_in_msec() / 1000, &print_sec, &print_prev);
 	}
+	print_progress(total, total, boottime_in_msec() / 1000, &print_sec, &print_prev);
 	info_n(L"\n");
 
 	return EFI_SUCCESS;
@@ -533,4 +515,33 @@ BOOLEAN is_boot_device_removable(void)
 BOOLEAN is_boot_device_virtual(void)
 {
 	return cur_storage == &STORAGE(STORAGE_VIRTUAL);
+}
+
+#define PRINT_INTERVAL (3)
+void print_progress(EFI_LBA done, EFI_LBA total, uint32_t sec, uint32_t *print_sec, uint32_t *prev)
+{
+	UINT64 progress = 0;
+	CHAR8 buf[128];
+	CHAR8 *pos = buf;
+	CHAR16 *temp;
+	uint32_t print_prev = *prev;
+
+	progress = done * 50 / total;
+	if (sec - *print_sec > PRINT_INTERVAL || progress == 50) {
+		for (; print_prev <= progress; print_prev++) {
+			if (print_prev % 5 == 0)
+				pos += strlen(itoa(print_prev * 2, pos, 10));
+			else
+				*pos++ = '.';
+		}
+		*pos = '\0';
+		temp = stra_to_str(buf);
+		if (temp) {
+			info_n(L"%s", temp);
+			FreePool(temp);
+		}
+		pos = buf;
+		*print_sec = sec;
+		*prev = print_prev;
+	}
 }

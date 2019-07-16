@@ -38,7 +38,6 @@
 #include "protocol/DevicePath.h"
 #include "protocol/ufs.h"
 #include "UsbMassBot.h"
-#include "timer.h"
 
 #define EFI_SCSI_OP_WRITE_10      0x2A
 EFI_GUID
@@ -206,34 +205,6 @@ static EFI_STATUS scsi_write_same16(EFI_BLOCK_IO *bio,
 	return  EFI_SUCCESS;
 }
 
-#define PRINT_INTERVAL (3)
-static uint32_t print_sec, print_prev;
-static void print_progress(EFI_LBA done, EFI_LBA total, uint32_t sec)
-{
-	UINT64 progress = 0;
-	CHAR8 buf[128];
-	CHAR8 *pos = buf;
-	CHAR16 *temp;
-
-	progress = done * 50 / total;
-	if (sec - print_sec > PRINT_INTERVAL || progress == 50) {
-		for (; print_prev <= progress; print_prev++) {
-			if (print_prev % 5 == 0)
-				pos += strlen(itoa(print_prev * 2, pos, 10));
-			else
-				*pos++ = '.';
-		}
-		*pos = '\0';
-		temp = stra_to_str(buf);
-		if (temp) {
-			info_n(L"%s", temp);
-			FreePool(temp);
-		}
-		pos = buf;
-		print_sec = sec;
-	}
-}
-
 #define BLOCKS (0x2000)
 static EFI_STATUS clean_blocks(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
 {
@@ -275,8 +246,8 @@ static EFI_STATUS clean_blocks(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
 	size  =  end  - start + 1;
 
 	info_n(L"Erasing ");
-	print_sec = boottime_in_msec() / 1000;
-	print_prev = 0;
+	uint32_t print_sec = boottime_in_msec() / 1000;
+	uint32_t print_prev = 0;
 	for(blocks =  size / BLOCKS; blocks > 0; blocks--) {
 		*((UINT32 *) WriteCmd.Lba) = htobe32 (lba);
 		status = UsbBotExecCommandWithRetry (Context,
@@ -294,7 +265,7 @@ static EFI_STATUS clean_blocks(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
 			return status;
 		}
 
-		print_progress(lba - start, size, boottime_in_msec() / 1000);
+		print_progress(lba - start, size, boottime_in_msec() / 1000, &print_sec, &print_prev);
 		lba += BLOCKS;
 	}
 
@@ -313,7 +284,7 @@ static EFI_STATUS clean_blocks(EFI_BLOCK_IO *bio, EFI_LBA start, EFI_LBA end)
 		FreePool(emptyblock);
 		return status;
 	}
-	print_progress(size, size, boottime_in_msec() / 1000);
+	print_progress(size, size, boottime_in_msec() / 1000, &print_sec, &print_prev);
 	info_n(L"\n");
 
 	return EFI_SUCCESS;

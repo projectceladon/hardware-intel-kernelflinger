@@ -222,6 +222,12 @@ static EFI_STATUS ata_fill_zero(EFI_ATA_PASS_THRU_PROTOCOL *ata,
 		.Length = EFI_ATA_PASS_THRU_LENGTH_SECTOR_COUNT
 	};
 
+	EFI_LBA lba = start;
+	UINT32 size = end -start + 1;
+
+	info_n(L"Erasing ");
+	uint32_t print_sec = boottime_in_msec() / 1000;
+	uint32_t print_prev = 0;
 	while (start < end) {
 		acb.AtaSectorNumber = start;
 		acb.AtaCylinderLow = (start >> 8);
@@ -277,8 +283,12 @@ static EFI_STATUS ata_fill_zero(EFI_ATA_PASS_THRU_PROTOCOL *ata,
 		}
 
 		retry_count = 5;
+		print_progress(start - lba, size, boottime_in_msec() / 1000, &print_sec, &print_prev);
 		start += blocks;
 	}
+	if (!EFI_ERROR(ret))
+		print_progress(size, size, boottime_in_msec() / 1000, &print_sec, &print_prev);
+	info_n(L"\n");
 
 	FreePool(emptyblock);
 	return ret;
