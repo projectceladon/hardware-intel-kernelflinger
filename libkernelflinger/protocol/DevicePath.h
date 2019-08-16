@@ -37,11 +37,7 @@ Abstract:
 
 #pragma pack(1)
 
-typedef struct {
-  UINT8 Type;
-  UINT8 SubType;
-  UINT8 Length[2];
-} EFI_DEVICE_PATH_PROTOCOL;
+typedef EFI_DEVICE_PATH EFI_DEVICE_PATH_PROTOCOL;
 
 #pragma pack()
 

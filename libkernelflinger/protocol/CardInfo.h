@@ -72,11 +72,7 @@ typedef struct {
 	UINT8  Command_Status;
 } TASK_FILE;
 
-typedef struct {
-	UINT8 Type;
-	UINT8 SubType;
-	UINT8 Length[2];
-} EFI_DEVICE_PATH_PROTOCOL;
+typedef EFI_DEVICE_PATH EFI_DEVICE_PATH_PROTOCOL;
 
 typedef struct {
 	UINT16  Reserved0[10];
