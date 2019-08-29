@@ -115,8 +115,11 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 	struct storage *storage;
 	enum storage_type type;
 	EFI_HANDLE new_boot_device_handle = NULL;
+	PCI_DEVICE_PATH new_boot_device = { .Function = -1, .Device = -1 };
+	enum storage_type new_boot_device_type;
+	struct storage *new_storage;
 
-	cur_storage = NULL;
+	new_storage = NULL;
 	ret = uefi_call_wrapper(BS->LocateHandleBuffer, 5, ByProtocol,
 				&BlockIoProtocol, NULL, &nb_handle, &handles);
 	if (EFI_ERROR(ret)) {
@@ -124,7 +127,7 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 		return ret;
 	}
 
-	boot_device.Header.Type = 0;
+	new_boot_device.Header.Type = 0;
 	for (i = 0; i < nb_handle; i++) {
 		device_path = DevicePathFromHandle(handles[i]);
 		if (!device_path)
@@ -134,30 +137,30 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 		if (!pci)
 			continue;
 
-		if (boot_device.Function == pci->Function &&
-		    boot_device.Device == pci->Device &&
-		    boot_device.Header.Type == pci->Header.Type &&
-		    boot_device.Header.SubType == pci->Header.SubType)
+		if (new_boot_device.Function == pci->Function &&
+				new_boot_device.Device == pci->Device &&
+				new_boot_device.Header.Type == pci->Header.Type &&
+				new_boot_device.Header.SubType == pci->Header.SubType)
 			continue;
 
 		ret = identify_storage(device_path, filter, &storage, &type);
 		if (EFI_ERROR(ret))
 			continue;
 
-		if (!boot_device.Header.Type || boot_device_type >= type) {
-			memcpy(&boot_device, pci, sizeof(boot_device));
-			boot_device_type = type;
-			cur_storage = storage;
-			new_boot_device_handle = handles[i];
+		if (!new_boot_device.Header.Type || new_boot_device_type >= type) {
+				memcpy(&new_boot_device, pci, sizeof(new_boot_device));
+				new_boot_device_type = type;
+				new_storage = storage;
+				new_boot_device_handle = handles[i];
 			continue;
 		}
 
-		if (boot_device_type == type &&
-		    type != STORAGE_GENERAL_BLOCK &&
-		    filter > type) {
+		if (new_boot_device_type == type &&
+				type != STORAGE_GENERAL_BLOCK &&
+				filter > type) {
 			error(L"Multiple identifcal storage found! Can't make a decision");
-			cur_storage = NULL;
-			boot_device.Header.Type = 0;
+			new_storage = NULL;
+			new_boot_device.Header.Type = 0;
 			FreePool(handles);
 			return EFI_UNSUPPORTED;
 		}
@@ -165,11 +168,14 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 
 	FreePool(handles);
 
-	if (!cur_storage) {
-		error(L"No PCI storage found");
+	if (!new_storage) {
+		error(L"No PCI storage found for type %d", filter);
 		return EFI_UNSUPPORTED;
 	}
+	cur_storage = new_storage;
+	boot_device_type = new_boot_device_type;
 	boot_device_handle = new_boot_device_handle;
+	memcpy(&boot_device, &new_boot_device, sizeof(new_boot_device));
 
 	debug(L"%s storage selected", cur_storage->name);
 	return EFI_SUCCESS;

@@ -387,6 +387,7 @@ static void cmd_oem_set_storage(INTN argc, CHAR8 **argv)
 	for (i = 0; i < total_types; i++) {
 		if ((boot_device_type == types[i]) && (user_lun == UFS_DEFAULT_USER_LUN) &&
 		    (factory_lun == UFS_DEFAULT_FACTORY_LUN)) {
+			warning(L"Already use such type device");
 			fastboot_info("Already use such type device");
 			fastboot_okay("");
 			return;
