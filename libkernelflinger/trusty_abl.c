@@ -48,10 +48,12 @@
 #include "libelfloader.h"
 #include <uefi_utils.h>
 
-#define TRUSTY_MEM_SIZE        0x1000000
+#define TRUSTY_MEM_SIZE        0x1200000
+#define BARRIER_MEM_SIZE       0x100000
 #define TRUSTY_MEM_ALIGNED     (2*1024*1024)
 #define TRUSTY_MEM_MIN_ADDRESS 0x04000000
 #define TRUSTY_MEM_MAX_ADDRESS 0xFFFFFFFF
+#define TRUSTY_BOOT_PARAM_VERSION 1
 
 typedef struct trusty_boot_param {
 	/* Size of this structure */
@@ -70,8 +72,22 @@ typedef struct tos_startup_params {
 	/* Size of this structure */
 	uint32_t size_of_this_struct;
 	uint32_t version;
+
+	/* Memory layout:
+	 * barrier memory (1M bytes)
+	 * TEE memory  (16M bytes)
+	 * barrier memory (1M bytes)
+	 */
+	/* Start address of Tee memory,under 4G */
 	uint32_t runtime_addr;
+
+	/* Entry address of trusty */
 	uint32_t entry_point;
+
+	/* 16M */
+	uint32_t runtime_size;
+	/* 1MB */
+	uint32_t barrier_size;
 } __attribute__((packed)) trusty_startup_params_t;
 
 /* Make sure the header address is 8-byte aligned */
@@ -102,16 +118,19 @@ static EFI_STATUS init_trusty_startup_params(trusty_startup_params_t *param, UIN
 	if (!param || !boot_param)
 		return EFI_INVALID_PARAMETER;
 
-	if (!relocate_elf_image(base, size, boot_param->trusty_mem_base + 0x1000,
-				(boot_param->trusty_mem_size << 10) - 0x1000, &entry_addr)) {
+	if (!relocate_elf_image(base, size, boot_param->trusty_mem_base + 0x1000 + BARRIER_MEM_SIZE,
+				((boot_param->trusty_mem_size - 2*BARRIER_MEM_SIZE) << 10) - 0x1000, &entry_addr)) {
 		error(L"relocate tos image failed");
 		return EFI_INVALID_PARAMETER;
 	}
 
 	memset(param, 0, sizeof(trusty_startup_params_t));
 	param->size_of_this_struct = sizeof(trusty_startup_params_t);
-	param->runtime_addr = boot_param->trusty_mem_base;
+	param->runtime_addr = boot_param->trusty_mem_base + BARRIER_MEM_SIZE;
 	param->entry_point = entry_addr;
+	param->runtime_size = TRUSTY_MEM_SIZE - 2*BARRIER_MEM_SIZE;
+	param->barrier_size = BARRIER_MEM_SIZE;
+	param->version = TRUSTY_BOOT_PARAM_VERSION;
 
 	return EFI_SUCCESS;
 }
