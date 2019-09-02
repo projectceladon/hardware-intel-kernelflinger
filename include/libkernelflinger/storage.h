@@ -73,6 +73,7 @@ struct storage {
 
 #define STORAGE(X) storage_##X
 
+BOOLEAN is_same_device(EFI_DEVICE_PATH *p, EFI_DEVICE_PATH *e);
 EFI_STATUS identify_boot_device(enum storage_type type);
 PCI_DEVICE_PATH *get_boot_device(void);
 const char* get_boot_device_var(void);
@@ -91,5 +92,6 @@ BOOLEAN is_boot_device_removable(void);
 BOOLEAN is_boot_device_virtual(void);
 EFI_STATUS set_logical_unit(UINT64 user_lun, UINT64 factory_lun);
 void print_progress(EFI_LBA done, EFI_LBA total, uint32_t sec, uint32_t *prev_sec, uint32_t *prev);
+void set_exclude_device(EFI_HANDLE device);
 
 #endif	/* _STORAGE_H_ */

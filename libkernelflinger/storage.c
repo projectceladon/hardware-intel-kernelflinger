@@ -42,6 +42,7 @@ static struct storage *cur_storage;
 static PCI_DEVICE_PATH boot_device = { .Function = -1, .Device = -1 };
 static enum storage_type boot_device_type;
 static BOOLEAN initialized = FALSE;
+static EFI_DEVICE_PATH *exclude_device = NULL;
 
 // The EFI_HANDLE of boot device.
 // It maybe a handle to a partition of the kernelflinger loaded.
@@ -104,6 +105,44 @@ static EFI_STATUS identify_storage(EFI_DEVICE_PATH *device_path,
 	return EFI_UNSUPPORTED;
 }
 
+BOOLEAN is_same_device(EFI_DEVICE_PATH *p, EFI_DEVICE_PATH *e)
+{
+	if (!p)
+		return FALSE;
+	if (!e)
+		return FALSE;
+
+	while (!IsDevicePathEndType(p)) {
+		if (DevicePathType(p) == MEDIA_DEVICE_PATH) {
+			p = NextDevicePathNode(p);
+			continue;
+		}
+		while (!IsDevicePathEndType(e)) {
+			if (DevicePathType(e) == MEDIA_DEVICE_PATH) {
+				e = NextDevicePathNode(e);
+				continue;
+			}
+			break;
+		}
+		if (IsDevicePathEndType(e))
+			return FALSE;
+
+		if (DevicePathNodeLength(p) != DevicePathNodeLength(e))
+			return FALSE;
+		if (memcmp(p, e, DevicePathNodeLength(p)))
+			return FALSE;
+		e = NextDevicePathNode(e);
+		p = NextDevicePathNode(p);
+	}
+	while (!IsDevicePathEndType(e)) {
+		if (DevicePathType(e) != MEDIA_DEVICE_PATH)
+			return FALSE;
+		e = NextDevicePathNode(e);
+	}
+
+	return TRUE;
+}
+
 EFI_STATUS identify_boot_device(enum storage_type filter)
 {
 	EFI_STATUS ret;
@@ -135,6 +174,9 @@ EFI_STATUS identify_boot_device(enum storage_type filter)
 
 		pci = get_pci_device_path(device_path);
 		if (!pci)
+			continue;
+
+		if (is_same_device(device_path, exclude_device))
 			continue;
 
 		if (new_boot_device.Function == pci->Function &&
@@ -550,4 +592,22 @@ void print_progress(EFI_LBA done, EFI_LBA total, uint32_t sec, uint32_t *print_s
 		*print_sec = sec;
 		*prev = print_prev;
 	}
+}
+
+void set_exclude_device(EFI_HANDLE device)
+{
+	CHAR16 *dps;
+
+	if (device == NULL) {
+		exclude_device = NULL;
+		return;
+	}
+
+	exclude_device = DevicePathFromHandle(device);
+	if (exclude_device == NULL)
+		return;
+
+	dps = DevicePathToStr(exclude_device);
+	warning(L"Exclude device from installation: %s", dps);
+	FreePool(dps);
 }

@@ -942,6 +942,7 @@ static void usage(__attribute__((__unused__)) INTN argc,
 	Print(L"Usage: installer [OPTIONS | COMMANDS]\n");
 	Print(L"  installer is an EFI application acting like the fastboot command.\n\n");
 	Print(L" COMMANDS               fastboot commands (cf. the fastboot manual page)\n");
+	Print(L" -i                     include the device which is loaded from, must be the first option\n");
 	Print(L" --help, -h             print this help and exit\n");
 	Print(L" --version, -v          print Installer version and exit\n");
 	Print(L" --batch, -b FILE       run all the fastboot commands of FILE\n");
@@ -1041,6 +1042,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	void *efiimage;
 	UINTN imagesize;
 	enum boot_target target;
+	BOOLEAN include_self = FALSE;
 
 	InitializeLib(image, _table);
 	g_parent_image = image;
@@ -1075,9 +1077,22 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *_table)
 	if (options)
 		skip_whitespace((char **)&options);
 
+	/* Check options before build and run commands */
+	if (options) {
+		if (!strncmp(options, "-i", 2)) {
+			include_self = TRUE;
+			options += 2;
+			skip_whitespace((char **)&options);
+		}
+	}
+
 	if (!options || *options == '\0')
 		options = build_default_options();
 	store_command((char *)options, NULL);
+
+	/* Set do not install to the device which is loaded from */
+	if (!include_self)
+		set_exclude_device(loaded_img->DeviceHandle);
 
 	/* Initialize slot management. */
 	ret = slot_init();
