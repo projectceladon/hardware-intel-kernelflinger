@@ -41,11 +41,24 @@
  */
 static EFI_DEVICE_PATH *get_general_block_device_path(EFI_DEVICE_PATH *p)
 {
+	ACPI_HID_DEVICE_PATH *Acpi;
 	EFI_DEVICE_PATH *op = p;
-	for (; !IsDevicePathEndType(p); p = NextDevicePathNode(p))
+	for (; !IsDevicePathEndType(p); p = NextDevicePathNode(p)) {
 		if (DevicePathType(p) == MESSAGING_DEVICE_PATH
-				&& DevicePathSubType(p) == MSG_USB_DP)
+				&& DevicePathSubType(p) == MSG_USB_DP) {
+			// Ignore the USB
 			return NULL;
+		}
+		if (DevicePathType(p) == ACPI_DEVICE_PATH
+				&& DevicePathSubType(p) == ACPI_DP) {
+			Acpi = (ACPI_HID_DEVICE_PATH *)p;
+			if ((Acpi->HID & PNP_EISA_ID_MASK) == PNP_EISA_ID_CONST
+					&& EISA_ID_TO_NUM(Acpi-> HID) == 0x0604) {
+				// Ignore the Floppy
+				return NULL;
+			}
+		}
+	}
 
 	return op;
 }
