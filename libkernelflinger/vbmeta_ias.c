@@ -292,6 +292,10 @@ EFI_STATUS verify_vbmeta_ias(CHAR16 *label, CHAR16* fileName, BOOLEAN* verify_pa
 		return ret;
 	}
 
+	if (iasimage == NULL) {
+		error(L"Invalid ias image");
+		return EFI_INVALID_PARAMETER;
+	}
 	ret = verify_ias_image(iasimage,verify_pass);
 	if (EFI_ERROR(ret) || *verify_pass == FALSE) {
 		efi_perror(ret, L"Failed to verify_iasimage");
