@@ -50,7 +50,9 @@
 #define TCP_PORT	5555
 
 /* Protocol definitions */
-#define ADB_VERSION	0x01000000
+#define ADB_VERSION_MIN	0x01000000
+#define ADB_VERSION_MAX	0x01000001
+#define ADB_VERSION_SKIP_CHECKSUM	0x01000001
 #define SYSTEM_TYPE	"bootloader"
 
 /* Internal data */
@@ -71,6 +73,7 @@ static adb_pkt_t adb_pkt_in;
 unsigned char in_buf[ADB_MIN_PAYLOAD];
 
 UINT32 adb_max_payload;
+UINT32 adb_version;
 
 static UINT32 adb_pkt_sum(adb_pkt_t *pkt)
 {
@@ -93,7 +96,10 @@ EFI_STATUS adb_send_pkt(adb_pkt_t *pkt, UINT32 command, UINT32 arg0, UINT32 arg1
 	pkt->msg.arg1 = arg1;
 
 	pkt->msg.magic = pkt->msg.command ^ 0xFFFFFFFF;
-	pkt->msg.data_check = adb_pkt_sum(pkt);
+	if (adb_version < ADB_VERSION_SKIP_CHECKSUM)
+		pkt->msg.data_check = adb_pkt_sum(pkt);
+	else
+		pkt->msg.data_check = 0;
 
 	/* Some transport layer (USB in particular) might not support
 	   several writes in raw.  Wait for the TX event to send the
@@ -142,16 +148,22 @@ static void cmd_unsupported(adb_pkt_t *pkt)
 	error(L"'%a' adb message is not supported", cmd);
 }
 
+static BOOLEAN is_supported_adb_version(UINT32 ver)
+{
+	return ((ver >= ADB_VERSION_MIN) && (ver <= ADB_VERSION_MAX)) ? TRUE : FALSE;
+}
+
 static void cmd_connect(adb_pkt_t *pkt)
 {
 	EFI_STATUS ret;
 	static adb_pkt_t out_pkt;
 
-	if (pkt->msg.arg0 != ADB_VERSION) {
+	if (!is_supported_adb_version(pkt->msg.arg0)) {
 		error(L"Unsupported adb version 0x%08x", pkt->msg.arg0);
 		return;
 	}
 
+	adb_version = pkt->msg.arg0;
 	adb_max_payload = min((UINT32)ADB_MAX_PAYLOAD, pkt->msg.arg1);
 	debug(L"Negociated payload size is %d bytes", adb_max_payload);
 
@@ -297,7 +309,8 @@ static void adb_process_rx(void *buf, unsigned len)
 			return;
 		}
 
-		if (adb_pkt_in.msg.data_check != adb_pkt_sum(&adb_pkt_in)) {
+		if ((adb_version < ADB_VERSION_SKIP_CHECKSUM) &&
+		    (adb_pkt_in.msg.data_check != adb_pkt_sum(&adb_pkt_in))) {
 			error(L"Corrupted data detected");
 			return;
 		}
