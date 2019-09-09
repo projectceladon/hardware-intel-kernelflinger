@@ -513,7 +513,7 @@ static EFI_STATUS rpmb_read_counter_simulate(const void *key, RPMB_RESPONSE_RESU
 	UINT32 write_counter;
 
 	efi_ret = simulate_get_rpmb_counter(&write_counter, key, result);
-	if (EFI_ERROR(efi_ret)) {
+	if (EFI_ERROR(efi_ret) && *result != RPMB_RES_NO_AUTH_KEY_PROGRAM) {
 		efi_perror(efi_ret, L"Failed to read counter for simulate");
 		return efi_ret;
 	}
@@ -707,13 +707,8 @@ EFI_STATUS rpmb_key_init(void)
 		memcpy(key, out_key + i * RPMB_KEY_SIZE, RPMB_KEY_SIZE);
 		dump_rpmb_key(key);
 		ret = rpmb_read_counter_in_sim_real(key, &result);
-		if (ret == EFI_SUCCESS)
+		if (ret == EFI_SUCCESS || result == RPMB_RES_NO_AUTH_KEY_PROGRAM)
 			break;
-
-		if (result == RPMB_RES_NO_AUTH_KEY_PROGRAM) {
-			efi_perror(ret, L"key is not programmed, use the first derived key.");
-			break;
-		}
 
 		if (result != RPMB_RES_AUTH_FAILURE) {
 			efi_perror(ret, L"rpmb_read_counter unexpected error: %d.", result);
@@ -730,7 +725,7 @@ EFI_STATUS rpmb_key_init(void)
 		debug(L"RPMB seed/key changed to %d ", i);
 
 	if (!is_rpmb_programed()) {
-		debug(L"RPMB not programmed");
+		debug(L"RPMB key is not programmed, use the first derived key.");
 		ret = program_rpmb_key_in_sim_real(key);
 		if (EFI_ERROR(ret)) {
 			efi_perror(ret, L"RPMB key program failed");
@@ -743,10 +738,6 @@ EFI_STATUS rpmb_key_init(void)
 
 	// Should output this info, since there maybe some error log about some keys failed at before.
 	log(L"Init RPMB key successfully\n");
-#ifdef USE_UI
-	if (is_UEFI())
-		ui_print(L"Init RPMB key successfully");
-#endif
 
 err_get_rpmb_key:
 	memset(key, 0, sizeof(key));
