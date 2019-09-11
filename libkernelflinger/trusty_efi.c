@@ -400,6 +400,7 @@ EFI_STATUS start_trusty(VOID *tosimage)
                 return EFI_INVALID_PARAMETER;
 
         ret = start_tos_image(tosimage);
+        stop_bls_proto();
         if (EFI_ERROR(ret)) {
             efi_perror(ret, L"Failed to launch tos image");
             return ret;
