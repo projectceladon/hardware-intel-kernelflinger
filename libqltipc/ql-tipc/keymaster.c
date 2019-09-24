@@ -38,7 +38,6 @@
 static struct trusty_ipc_chan km_chan;
 static bool initialized;
 static int trusty_km_version = 2;
-extern struct rot_data_t g_rot_data;
 static const size_t max_send_size = 4000;
 
 #ifndef MIN
@@ -280,6 +279,8 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
 {
     int rc = TRUSTY_ERR_GENERIC;
 
+    struct rot_data_t* p_rot_data = NULL; 
+
     trusty_assert(dev);
 
     trusty_ipc_chan_init(&km_chan, dev);
@@ -304,13 +305,15 @@ int km_tipc_init(struct trusty_ipc_dev *dev)
         return TRUSTY_ERR_GENERIC;
     }
 
+    p_rot_data =  get_rot_data();
+
     /* sent the ROT information to trusty */
-    rc = trusty_set_boot_params(g_rot_data.osVersion,
-                g_rot_data.patchMonthYear,
-                g_rot_data.verifiedBootState,
-                g_rot_data.deviceLocked,
-                g_rot_data.keyHash256,
-                g_rot_data.keySize,
+    rc = trusty_set_boot_params(p_rot_data->osVersion,
+                p_rot_data->patchMonthYear,
+                p_rot_data->verifiedBootState,
+                p_rot_data->deviceLocked,
+                p_rot_data->keyHash256,
+                p_rot_data->keySize,
                 NULL,
                 0);
 
