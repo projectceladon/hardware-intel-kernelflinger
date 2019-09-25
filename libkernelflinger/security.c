@@ -47,6 +47,7 @@
 #include "lib.h"
 #include "vars.h"
 #include "life_cycle.h"
+#include "bokf.h"
 
 #ifdef USE_IPP_SHA256
 #include "sha256_ipps.h"
@@ -106,6 +107,7 @@ EFI_STATUS set_os_secure_boot(BOOLEAN secure)
 }
 
 #ifdef BOOTLOADER_POLICY
+#if 0
 static X509 *find_cert_in_pkcs7(PKCS7 *p7, const unsigned char *cert_sha256)
 {
         STACK_OF(X509) *certs = NULL;
@@ -198,98 +200,91 @@ static UINT64 get_signing_time(PKCS7 *p7)
         /* Note: no timezone management */
         return efi_time_to_ctime(&t);
 }
-
+#endif
 EFI_STATUS verify_pkcs7(const unsigned char *cert_sha256, UINTN cert_size,
                         const VOID *pkcs7, UINTN pkcs7_size,
                         VOID **data_p, int *size)
 {
-        X509 *x509;
-        PKCS7 *p7 = NULL;
-        X509_STORE *store = NULL;
-        BIO *p7_bio = NULL, *data_bio = NULL;
         VOID *payload = NULL;
-        UINT64 signing_time;
-        char *tmp;
-        int ret;
+        BOKF *bokf = BOKF_new();
+        ASN1_OCTET_STRING *os;
+        const EVP_MD *fdig = EVP_sha256();
+        EVP_MD_CTX mdctx;
+        X509_STORE *store = NULL;
+        X509_STORE_CTX cert_ctx;
+        unsigned char digest[SHA256_DIGEST_LENGTH];
+        unsigned int len;
+        int ret,i;
+        if (cert_size != SHA256_DIGEST_LENGTH)
+            error(L"Invalid SHA256 length for trusted certificate");
 
-        if (cert_size != SHA256_DIGEST_LENGTH) {
-                error(L"Invalid SHA256 length for trusted certificate");
-                goto done;
+        bokf = d2i_BOKF(NULL, (const unsigned char **)&pkcs7, pkcs7_size);
+        X509 *x509 = bokf->cert;
+        if (!X509_digest(x509, fdig, digest, &len)) {
+            error(L"Failed to compute X509 digest");
+            BOKF_free(bokf);
+            return EFI_INVALID_PARAMETER;
         }
+        if (!memcmp(cert_sha256, digest, sizeof(digest)))
+            debug(L"x509 digest verify success!!!");
 
-        p7_bio = BIO_new_mem_buf((void *)pkcs7, pkcs7_size);
-        if (!p7_bio) {
-                error(L"Failed to create PKCS7 BIO");
-                goto done;
+        EVP_PKEY *pkey = X509_get_pubkey(x509);
+        if (!pkey) {
+            debug(L"faile to read pubkey");
+            BOKF_free(bokf);
+            return EFI_INVALID_PARAMETER;
         }
-
-        p7 = d2i_PKCS7_bio(p7_bio, NULL);
-        if (!p7) {
-                error(L"Failed to read PKCS7");
-                goto done;
+        os = bokf->enc_digest;
+        EVP_MD_CTX_init(&mdctx);
+        ret = EVP_SignInit_ex(&mdctx, EVP_sha256(), NULL);
+        if(ret <= 0) {
+            debug(L"fail to init mdctx");
+            goto done;
         }
-
-        x509 = find_cert_in_pkcs7(p7, cert_sha256);
-        if (!x509) {
-                error(L"Could not find the root certificate");
-                goto done;
+        ret = EVP_SignUpdate(&mdctx, bokf->data->data, bokf->data->length);
+        if (ret <= 0) {
+           error(L"faile to sign updata");
+           goto done;
         }
-
-        signing_time = get_signing_time(p7);
-        if (!signing_time)
-                goto done;
-
+        ret =  EVP_VerifyFinal(&mdctx, os->data, os->length, pkey);
+        if (ret <= 0 ) {
+            error(L"Fail to verify the data");
+            goto done;
+        }
+        EVP_MD_CTX_cleanup(&mdctx);
         store = X509_STORE_new();
         if (!store) {
-                error(L"Failed to create x509 store");
-                goto done;
+          error(L"Failed to create x509 store");
+          goto done;
         }
-
         ret = X509_STORE_add_cert(store, x509);
         if (ret != 1) {
-                error(L"Failed to add trusted certificate to store");
-                goto done;
+            error(L"Failed to add trusted certificate to store");
+            goto done;
         }
-
-        data_bio = BIO_new(BIO_s_mem());
-        if (!data_bio) {
-                error(L"Failed to create data BIO");
-                goto done;
+        if (!X509_STORE_CTX_init(&cert_ctx, store, x509,NULL)) {
+            debug(L"fail to X509_STORE_CTX_init");
+            goto done;
         }
-
-        EVP_add_digest(EVP_sha256());
-        X509_VERIFY_PARAM_set_time(store->param, signing_time);
-        ret = PKCS7_verify(p7, NULL, store, NULL, data_bio, 0);
-        if (ret != 1) {
-                error(L"PKCS7 verification failed");
-                goto done;
+        i = X509_verify_cert(&cert_ctx);
+        if (i <= 0) {
+            error(L"Fail to read x509 cert");
+            goto done;
         }
-
-        *size = BIO_get_mem_data(data_bio, &tmp);
-        if (*size == -1) {
-                error(L"Failed to get PKCS7 data");
-                goto done;
-        }
-
+        X509_STORE_CTX_cleanup(&cert_ctx);
+        *size = bokf->data->length + 1;
         payload = AllocatePool(*size);
         if (!payload) {
-                error(L"Failed to allocate data buffer");
-                goto done;
+           error(L"Failed to allocate data buffer");
+           goto done;
         }
-
-        memcpy(payload, tmp, *size);
+        memcpy(payload, bokf->data->data, *size);
         *data_p = payload;
-
 done:
-        if (p7_bio)
-                BIO_free(p7_bio);
-        if (p7)
-                PKCS7_free(p7);
+        if (bokf)
+            BOKF_free(bokf);
         if (store)
-                X509_STORE_free(store);
-        if (data_bio)
-                BIO_free(data_bio);
-
+            X509_STORE_free(store);
         return payload ? EFI_SUCCESS : EFI_INVALID_PARAMETER;
 }
 #endif  /* BOOTLOADER_POLICY */
