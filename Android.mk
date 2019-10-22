@@ -536,3 +536,56 @@ LOCAL_C_INCLUDES := \
 include $(BUILD_ABL_EXECUTABLE)
 
 endif  #KERNELFLINGER_SUPPORT_NON_EFI_BOOT
+
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := kf4aic-$(TARGET_BUILD_VARIANT)
+LOCAL_STATIC_LIBRARIES := \
+	$(SHARED_STATIC_LIBRARIES)
+
+LOCAL_CFLAGS := $(SHARED_CFLAGS)
+LOCAL_SRC_FILES := kf4aic.c
+LOCAL_MODULE_STEM := kf4aic
+
+LOCAL_OBJCOPY_FLAGS := -j .oemkeys
+
+LOCAL_C_INCLUDES += \
+	$(addprefix $(LOCAL_PATH)/,include/libkernelflinger) \
+	$(addprefix $(LOCAL_PATH)/,libsslsupport)
+LOCAL_C_INCLUDES += $(addprefix $(LOCAL_PATH)/,avb)
+
+ifeq ($(TARGET_USE_TRUSTY),true)
+    LOCAL_STATIC_LIBRARIES += libqltipc-$(TARGET_BUILD_VARIANT)
+endif
+LOCAL_STATIC_LIBRARIES += libavb_kernelflinger-$(TARGET_BUILD_VARIANT)
+
+keys4aic_intermediates := $(call intermediates-dir-for,EFI,keys)
+
+AIC_VERITY_CERT := $(keys4aic_intermediates)/verity.cer
+AIC_PADDED_VERITY_CERT := $(keys4aic_intermediates)/verity.padded.cer
+AIC_OEMCERT_OBJ := $(keys4aic_intermediates)/oemcert.o
+
+$(AIC_VERITY_CERT): $(INTEL_PATH_BUILD)/testkeys/xbl_default.x509.pem $(OPENSSL)
+	$(transform-pem-cert-to-der-cert)
+
+$(AIC_PADDED_VERITY_CERT): $(AIC_VERITY_CERT)
+	$(call pad-binary, 4096)
+
+ifeq ($(TARGET_IAFW_ARCH),x86_64)
+    ELF_OUTPUT := elf64-x86-64
+else
+    ELF_OUTPUT := elf32-i386
+endif
+
+aic_sym_binary := $(shell echo _binary_$(AIC_PADDED_VERITY_CERT) | sed "s/[\/\.-]/_/g")
+$(AIC_OEMCERT_OBJ): $(AIC_PADDED_VERITY_CERT)
+	mkdir -p $(@D) && \
+	$(EFI_OBJCOPY) --input binary --output $(ELF_OUTPUT) --binary-architecture i386 $< $@ && \
+	$(EFI_OBJCOPY) --redefine-sym $(aic_sym_binary)_start=_binary_oemcert_start \
+                       --redefine-sym $(aic_sym_binary)_end=_binary_oemcert_end \
+                       --redefine-sym $(aic_sym_binary)_size=_binary_oemcert_size \
+                       --rename-section .data=.oemkeys $@ $@
+
+LOCAL_GENERATED_SOURCES := $(AIC_OEMCERT_OBJ)
+
+include $(BUILD_EFI_EXECUTABLE) # For kf4aic-$(TARGET_BUILD_VARIANT)
