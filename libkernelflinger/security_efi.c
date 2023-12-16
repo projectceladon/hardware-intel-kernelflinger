@@ -215,7 +215,7 @@ EFI_STATUS get_seeds(IN UINT32 *num_seeds, OUT VOID *seed_list)
 			efi_perror(ret, L"Failed to read trusty seed from TPM");
 			return ret;
 		}
-		debug(L"Success read seed from TPM");
+		debug(L">>>Success read seed from TPM<<<");
 		*num_seeds = 1;
 		tmp = (seed_info_t *)seed_list;
 		tmp->svn = BOOTLOADER_SEED_MAX_ENTRIES - 1;

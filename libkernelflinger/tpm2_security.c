@@ -634,6 +634,26 @@ EFI_STATUS tpm2_check_lockauth(void)
 	return ret;
 }
 
+static void dump_data(
+		__attribute__((unused)) UINT8 *data,
+		__attribute__((unused)) UINT16 data_size)
+{
+#if 0  // Change to 1 for dump the data
+	CHAR16 buf[2048 * 2 + 2];
+	UINT16 i;
+
+	for (i = 0; i < data_size && i < sizeof(buf) / 2 - 1; i++)
+		SPrint(buf + i * 2, sizeof(buf) - i * 2, L"%02x", data[i]);
+	debug(L"Data: %s", buf);
+#endif
+	UINT16 i;
+
+	Print(L"Trusty seed:\n");
+	for(i=0; i < data_size; i++)
+		Print(L"0x%x ", data[i]);
+	Print(L"\n");
+}
+
 EFI_STATUS tpm2_fuse_trusty_seed(void)
 {
 	EFI_STATUS ret;
@@ -723,6 +743,9 @@ EFI_STATUS tpm2_read_trusty_seed(UINT8 seed[TRUSTY_SEED_SIZE])
 		ret = EFI_COMPROMISED_DATA;
 		goto out;
 	}
+
+        Print(L"Success to read trusty seed from TPM\n");
+        dump_data(seed, TRUSTY_SEED_SIZE);
 
 	ret2 = extend_trusty_seed_pcr_policy();
 	if (EFI_ERROR(ret2)) {
